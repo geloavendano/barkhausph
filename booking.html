@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Book a Stay - Barkhaus</title>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:      #0F1C26;
+    --surface: #1A3044;
+    --raised:  #1F3D55;
+    --border:  rgba(77,150,185,0.30);
+    --mid:     #6AAEC8;
+    --cream:   #F0EDE6;
+    --cream-m: #B8D4E0;
+    --blue:    #4D96B9;
+    --yellow:  #FFCE58;
+    --error:   #FF6B6B;
+    --success: #6BCB77;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body { background: var(--bg); color: var(--cream); font-family: "Nunito", sans-serif; font-weight: 400; min-height: 100svh; overflow-x: hidden; }
+
+  /* ── HEADER ── */
+  .booking-header { position: sticky; top: 0; z-index: 100; background: rgba(15,28,38,0.92); backdrop-filter: blur(12px); border-bottom: 0.5px solid var(--border); padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; }
+  .header-logo { font-family: "Fredoka One", cursive; font-size: 20px; color: var(--cream); text-decoration: none; }
+  .header-logo span { color: var(--yellow); }
+  .header-back { font-size: 12px; color: var(--mid); text-decoration: none; display: flex; align-items: center; gap: 4px; font-weight: 600; }
+
+  /* ── PROGRESS BAR ── */
+  .progress-wrap { padding: 16px 20px 0; }
+  .progress-bar { height: 4px; background: var(--surface); border-radius: 4px; overflow: hidden; }
+  .progress-fill { height: 100%; background: linear-gradient(to right, var(--blue), var(--yellow)); border-radius: 4px; transition: width 0.4s cubic-bezier(0.4,0,0.2,1); }
+  .progress-steps { display: flex; justify-content: space-between; margin-top: 8px; }
+  .progress-step { font-size: 9px; font-weight: 700; letter-spacing: 0.05em; color: var(--mid); text-transform: uppercase; transition: color 0.3s; }
+  .progress-step.active { color: var(--yellow); }
+  .progress-step.done { color: var(--blue); }
+
+  /* ── MAIN CONTAINER ── */
+  .booking-main { max-width: 560px; margin: 0 auto; padding: 24px 20px 100px; }
+
+  /* ── STEP PANELS ── */
+  .step-panel { display: none; animation: fadeUp 0.35s ease forwards; }
+  .step-panel.active { display: block; }
+  @keyframes fadeUp { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+
+  .step-eyebrow { font-size: 9px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--yellow); font-weight: 700; margin-bottom: 6px; }
+  .step-title { font-family: "Fredoka One", cursive; font-size: 26px; color: var(--cream); margin-bottom: 4px; }
+  .step-subtitle { font-size: 13px; color: var(--cream-m); line-height: 1.6; margin-bottom: 24px; font-weight: 500; }
+
+  /* ── OPTION CARDS (location, service) ── */
+  .option-grid { display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px; }
+  .option-card { background: var(--surface); border: 1.5px solid var(--border); border-radius: 16px; padding: 18px 20px; cursor: pointer; transition: border-color 0.2s, background 0.2s, transform 0.15s; display: flex; align-items: center; gap: 16px; }
+  .option-card:active { transform: scale(0.98); }
+  .option-card.selected { border-color: var(--yellow); background: rgba(255,206,88,0.08); }
+  .option-card.selected .option-radio { border-color: var(--yellow); background: var(--yellow); }
+  .option-card.selected .option-radio::after { opacity: 1; }
+  .option-radio { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--mid); flex-shrink: 0; position: relative; transition: all 0.2s; }
+  .option-radio::after { content: ""; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 8px; height: 8px; border-radius: 50%; background: var(--bg); opacity: 0; transition: opacity 0.2s; }
+  .option-info { flex: 1; }
+  .option-name { font-family: "Fredoka One", cursive; font-size: 18px; color: var(--cream); margin-bottom: 2px; }
+  .option-detail { font-size: 12px; color: var(--cream-m); line-height: 1.5; font-weight: 500; }
+  .option-icon { font-size: 28px; flex-shrink: 0; }
+  .option-badge { font-size: 9px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; background: rgba(77,150,185,0.2); color: var(--blue); border: 1px solid rgba(77,150,185,0.3); border-radius: 20px; padding: 3px 8px; margin-top: 4px; display: inline-block; }
+
+  /* ── FORM FIELDS ── */
+  .form-group { margin-bottom: 18px; }
+  .form-label { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--mid); margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+  .form-label .required { color: var(--yellow); }
+  .form-input, .form-select, .form-textarea {
+    width: 100%; background: var(--surface); border: 1.5px solid var(--border);
+    border-radius: 12px; padding: 13px 16px; color: var(--cream);
+    font-family: "Nunito", sans-serif; font-size: 14px; font-weight: 500;
+    outline: none; transition: border-color 0.2s; -webkit-appearance: none;
+  }
+  .form-input:focus, .form-select:focus, .form-textarea:focus { border-color: var(--blue); }
+  .form-input::placeholder, .form-textarea::placeholder { color: rgba(184,212,224,0.4); }
+  .form-select option { background: var(--surface); color: var(--cream); }
+  .form-textarea { resize: vertical; min-height: 80px; line-height: 1.6; }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .form-hint { font-size: 11px; color: var(--mid); margin-top: 5px; font-weight: 500; }
+  .form-error { font-size: 11px; color: var(--error); margin-top: 5px; font-weight: 600; display: none; }
+  .form-input.has-error, .form-select.has-error { border-color: var(--error); }
+
+  /* ── DATE / TIME PICKER GRID ── */
+  .timeslot-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 4px; }
+  .timeslot { background: var(--surface); border: 1.5px solid var(--border); border-radius: 10px; padding: 10px 6px; text-align: center; font-size: 13px; font-weight: 600; color: var(--cream-m); cursor: pointer; transition: all 0.2s; }
+  .timeslot:active { transform: scale(0.96); }
+  .timeslot.selected { border-color: var(--yellow); background: rgba(255,206,88,0.1); color: var(--yellow); }
+  .timeslot.unavailable { opacity: 0.35; cursor: not-allowed; text-decoration: line-through; }
+
+  /* ── ANIMAL TYPE SELECTOR ── */
+  .animal-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 4px; }
+  .animal-btn { background: var(--surface); border: 1.5px solid var(--border); border-radius: 12px; padding: 14px 8px; text-align: center; cursor: pointer; transition: all 0.2s; }
+  .animal-btn.selected { border-color: var(--blue); background: rgba(77,150,185,0.12); }
+  .animal-btn .animal-emoji { font-size: 26px; display: block; margin-bottom: 4px; }
+  .animal-btn .animal-label { font-size: 11px; font-weight: 700; color: var(--cream-m); }
+  .animal-btn.selected .animal-label { color: var(--blue); }
+
+  /* ── FILE UPLOAD ── */
+  .file-upload { background: var(--surface); border: 1.5px dashed var(--border); border-radius: 12px; padding: 20px; text-align: center; cursor: pointer; transition: border-color 0.2s; }
+  .file-upload:hover { border-color: var(--blue); }
+  .file-upload input { display: none; }
+  .file-upload-icon { font-size: 28px; margin-bottom: 6px; }
+  .file-upload-text { font-size: 13px; color: var(--cream-m); font-weight: 500; }
+  .file-upload-sub { font-size: 11px; color: var(--mid); margin-top: 3px; }
+  .file-list { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+  .file-item { background: rgba(77,150,185,0.1); border: 1px solid rgba(77,150,185,0.25); border-radius: 8px; padding: 8px 12px; font-size: 12px; color: var(--cream-m); display: flex; justify-content: space-between; align-items: center; }
+  .file-remove { color: var(--error); cursor: pointer; font-size: 14px; font-weight: 700; }
+
+  /* ── WAIVER ── */
+  .waiver-box { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; max-height: 160px; overflow-y: auto; font-size: 12px; color: var(--cream-m); line-height: 1.7; margin-bottom: 14px; scrollbar-width: thin; scrollbar-color: var(--mid) transparent; }
+  .waiver-box h4 { font-family: "Fredoka One", cursive; font-size: 15px; color: var(--cream); margin-bottom: 8px; }
+  .waiver-box p { margin-bottom: 8px; }
+  .checkbox-row { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 14px; cursor: pointer; }
+  .checkbox-box { width: 22px; height: 22px; border: 2px solid var(--mid); border-radius: 6px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; transition: all 0.2s; margin-top: 1px; }
+  .checkbox-box.checked { background: var(--blue); border-color: var(--blue); }
+  .checkbox-box.checked::after { content: ""; width: 5px; height: 9px; border: 2px solid var(--bg); border-top: none; border-left: none; transform: rotate(45deg) translate(-1px,-1px); display: block; }
+  .checkbox-label { font-size: 13px; color: var(--cream-m); line-height: 1.55; font-weight: 500; }
+  .checkbox-label strong { color: var(--cream); }
+
+  /* ── SAVE DETAILS BANNER ── */
+  .save-banner { background: rgba(77,150,185,0.12); border: 1px solid rgba(77,150,185,0.3); border-radius: 12px; padding: 14px 16px; display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+  .save-banner-text { flex: 1; font-size: 13px; color: var(--cream-m); font-weight: 500; }
+  .save-banner-text strong { color: var(--cream); display: block; margin-bottom: 2px; }
+  .toggle { width: 44px; height: 24px; background: var(--raised); border-radius: 12px; position: relative; cursor: pointer; transition: background 0.2s; flex-shrink: 0; }
+  .toggle.on { background: var(--blue); }
+  .toggle::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform 0.2s; }
+  .toggle.on::after { transform: translateX(20px); }
+
+  /* ── SUMMARY CARD ── */
+  .summary-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px; margin-bottom: 16px; }
+  .summary-row { display: flex; justify-content: space-between; align-items: flex-start; padding: 8px 0; border-bottom: 0.5px solid var(--border); gap: 12px; }
+  .summary-row:last-child { border-bottom: none; }
+  .summary-key { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--mid); flex-shrink: 0; }
+  .summary-val { font-size: 13px; color: var(--cream); font-weight: 600; text-align: right; }
+
+  /* ── BOTTOM NAV ── */
+  .bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(15,28,38,0.96); border-top: 0.5px solid var(--border); padding: 14px 20px 20px; display: flex; gap: 12px; max-width: 560px; margin: 0 auto; backdrop-filter: blur(12px); z-index: 50; left: 50%; transform: translateX(-50%); width: 100%; }
+  .btn-back { flex: 0 0 auto; padding: 14px 20px; background: var(--surface); border: 1px solid var(--border); border-radius: 50px; font-size: 13px; font-weight: 700; color: var(--cream-m); cursor: pointer; font-family: "Nunito", sans-serif; transition: background 0.2s; }
+  .btn-back:active { background: var(--raised); }
+  .btn-next { flex: 1; padding: 14px; background: var(--yellow); color: var(--bg); border: none; border-radius: 50px; font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; font-family: "Nunito", sans-serif; transition: opacity 0.2s, transform 0.15s; }
+  .btn-next:active { transform: scale(0.97); }
+  .btn-next:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-submit { flex: 1; padding: 14px; background: var(--blue); color: #fff; border: none; border-radius: 50px; font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; font-family: "Nunito", sans-serif; transition: opacity 0.2s; }
+
+  /* ── SUCCESS SCREEN ── */
+  .success-screen { text-align: center; padding: 40px 0; display: none; }
+  .success-screen.active { display: block; animation: fadeUp 0.5s ease forwards; }
+  .success-icon { font-size: 64px; margin-bottom: 16px; }
+  .success-title { font-family: "Fredoka One", cursive; font-size: 30px; color: var(--cream); margin-bottom: 8px; }
+  .success-msg { font-size: 14px; color: var(--cream-m); line-height: 1.65; max-width: 320px; margin: 0 auto 32px; font-weight: 500; }
+  .success-ref { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 20px; display: inline-block; margin-bottom: 28px; }
+  .success-ref-label { font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--mid); font-weight: 700; margin-bottom: 4px; }
+  .success-ref-num { font-family: "Fredoka One", cursive; font-size: 22px; color: var(--yellow); }
+  .btn-home { display: inline-block; padding: 14px 40px; background: var(--yellow); color: var(--bg); border-radius: 50px; font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; text-decoration: none; }
+
+  /* ── DIVIDER ── */
+  .section-divider { border: none; border-top: 0.5px solid var(--border); margin: 20px 0; }
+
+  /* ── SERVICE SPEC ROWS ── */
+  .spec-info { background: rgba(77,150,185,0.08); border: 1px solid rgba(77,150,185,0.2); border-radius: 10px; padding: 12px 14px; font-size: 12px; color: var(--cream-m); line-height: 1.6; margin-bottom: 16px; }
+  .spec-info strong { color: var(--blue); }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="booking-header">
+  <a href="index.html" class="header-back">
+    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+    Back
+  </a>
+  <a href="index.html" class="header-logo">BARK<span>HAUS</span></a>
+  <div style="width:48px"></div>
+</header>
+
+<!-- PROGRESS -->
+<div class="progress-wrap">
+  <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:14%"></div></div>
+  <div class="progress-steps">
+    <span class="progress-step active" id="ps1">Location</span>
+    <span class="progress-step" id="ps2">Service</span>
+    <span class="progress-step" id="ps3">Schedule</span>
+    <span class="progress-step" id="ps4">Pet</span>
+    <span class="progress-step" id="ps5">Specs</span>
+    <span class="progress-step" id="ps6">You</span>
+    <span class="progress-step" id="ps7">Waiver</span>
+  </div>
+</div>
+
+<div class="booking-main">
+
+<!-- ══ STEP 1: LOCATION ══ -->
+<div class="step-panel active" id="step1">
+  <p class="step-eyebrow">Step 1 of 7</p>
+  <h1 class="step-title">Pick a branch</h1>
+  <p class="step-subtitle">Choose the Barkhaus location you would like to visit.</p>
+  <div class="option-grid">
+    <div class="option-card" onclick="selectOption(this,'location','estancia')" data-value="estancia">
+      <div class="option-radio"></div>
+      <div class="option-info">
+        <p class="option-name">Estancia</p>
+        <p class="option-detail">2nd Floor Main Wing, Estancia Mall<br>Capitol Commons, Pasig City</p>
+        <p class="option-detail" style="margin-top:4px;color:var(--mid)">Mon-Thu 11AM-9PM &nbsp;|&nbsp; Fri-Sun 10AM-10PM</p>
+      </div>
+      <span class="option-icon">🏬</span>
+    </div>
+    <div class="option-card" onclick="selectOption(this,'location','eastwood')" data-value="eastwood">
+      <div class="option-radio"></div>
+      <div class="option-info">
+        <p class="option-name">Eastwood</p>
+        <p class="option-detail">4th Floor, Eastwood Mall<br>Libis, Quezon City</p>
+        <p class="option-detail" style="margin-top:4px;color:var(--mid)">Open daily 10AM-10PM</p>
+      </div>
+      <span class="option-icon">🏢</span>
+    </div>
+  </div>
+</div>
+
+<!-- ══ STEP 2: SERVICE ══ -->
+<div class="step-panel" id="step2">
+  <p class="step-eyebrow">Step 2 of 7</p>
+  <h1 class="step-title">Choose a service</h1>
+  <p class="step-subtitle">What would you like to book for your pet?</p>
+  <div class="option-grid">
+    <div class="option-card" onclick="selectOption(this,'service','grooming')" data-value="grooming">
+      <div class="option-radio"></div>
+      <div class="option-info">
+        <p class="option-name">Grooming</p>
+        <p class="option-detail">Bath, blowdry, haircut and styling by our expert groomers.</p>
+        <span class="option-badge">Select a time slot</span>
+      </div>
+      <span class="option-icon">✂️</span>
+    </div>
+    <div class="option-card" onclick="selectOption(this,'service','hotel')" data-value="hotel">
+      <div class="option-radio"></div>
+      <div class="option-info">
+        <p class="option-name">Pet Hotel</p>
+        <p class="option-detail">Overnight or multi-day boarding with 24/7 attentive care.</p>
+        <span class="option-badge">Check-in & out dates</span>
+      </div>
+      <span class="option-icon">🏨</span>
+    </div>
+    <div class="option-card" onclick="selectOption(this,'service','daycare')" data-value="daycare">
+      <div class="option-radio"></div>
+      <div class="option-info">
+        <p class="option-name">Daycare</p>
+        <p class="option-detail">Drop off your pet for a full day of supervised play and care.</p>
+        <span class="option-badge">Select a date</span>
+      </div>
+      <span class="option-icon">☀️</span>
+    </div>
+  </div>
+</div>
+
+<!-- ══ STEP 3: SCHEDULE ══ -->
+<div class="step-panel" id="step3">
+  <p class="step-eyebrow">Step 3 of 7</p>
+  <h1 class="step-title" id="scheduleTitle">Pick a schedule</h1>
+  <p class="step-subtitle" id="scheduleSubtitle">Choose when you would like to come in.</p>
+
+  <!-- GROOMING: date + timeslots -->
+  <div id="scheduleGrooming">
+    <div class="form-group">
+      <label class="form-label">Date <span class="required">*</span></label>
+      <input type="date" class="form-input" id="groomDate">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Preferred Time Slot <span class="required">*</span></label>
+      <div class="timeslot-grid" id="groomSlots">
+        <div class="timeslot" onclick="selectSlot(this)">9:00 AM</div>
+        <div class="timeslot" onclick="selectSlot(this)">10:00 AM</div>
+        <div class="timeslot" onclick="selectSlot(this)">11:00 AM</div>
+        <div class="timeslot" onclick="selectSlot(this)">1:00 PM</div>
+        <div class="timeslot" onclick="selectSlot(this)">2:00 PM</div>
+        <div class="timeslot" onclick="selectSlot(this)">3:00 PM</div>
+        <div class="timeslot" onclick="selectSlot(this)">4:00 PM</div>
+        <div class="timeslot" onclick="selectSlot(this)">5:00 PM</div>
+        <div class="timeslot unavailable" onclick="selectSlot(this)">6:00 PM</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- HOTEL: check-in / check-out -->
+  <div id="scheduleHotel" style="display:none;">
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Check-in Date <span class="required">*</span></label>
+        <input type="date" class="form-input" id="hotelCheckin" onchange="updateCheckout()">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Check-out Date <span class="required">*</span></label>
+        <input type="date" class="form-input" id="hotelCheckout">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Drop-off Time</label>
+        <select class="form-select" id="hotelDropoffTime">
+          <option value="">Select time</option>
+          <option>9:00 AM</option><option>10:00 AM</option><option>11:00 AM</option>
+          <option>12:00 PM</option><option>1:00 PM</option><option>2:00 PM</option>
+          <option>3:00 PM</option><option>4:00 PM</option><option>5:00 PM</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Pick-up Time</label>
+        <select class="form-select" id="hotelPickupTime">
+          <option value="">Select time</option>
+          <option>9:00 AM</option><option>10:00 AM</option><option>11:00 AM</option>
+          <option>12:00 PM</option><option>1:00 PM</option><option>2:00 PM</option>
+          <option>3:00 PM</option><option>4:00 PM</option><option>5:00 PM</option>
+        </select>
+      </div>
+    </div>
+    <div id="nightsDisplay" class="spec-info" style="display:none;">
+      <strong id="nightsCount"></strong>
+    </div>
+  </div>
+
+  <!-- DAYCARE: date only -->
+  <div id="scheduleDaycare" style="display:none;">
+    <div class="form-group">
+      <label class="form-label">Date <span class="required">*</span></label>
+      <input type="date" class="form-input" id="daycareDate">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Drop-off Time</label>
+      <select class="form-select" id="daycareTime">
+        <option value="">Select time</option>
+        <option>8:00 AM</option><option>9:00 AM</option><option>10:00 AM</option>
+        <option>11:00 AM</option><option>12:00 PM</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+<!-- ══ STEP 4: PET DETAILS ══ -->
+<div class="step-panel" id="step4">
+  <p class="step-eyebrow">Step 4 of 7</p>
+  <h1 class="step-title">Tell us about your pet</h1>
+  <p class="step-subtitle">We want to make sure we take great care of them.</p>
+
+  <div class="form-group">
+    <label class="form-label">Pet Name <span class="required">*</span></label>
+    <input type="text" class="form-input" id="petName" placeholder="e.g. Mochi" maxlength="40">
+  </div>
+
+  <div class="form-group">
+    <label class="form-label">Animal Type <span class="required">*</span></label>
+    <div class="animal-grid">
+      <div class="animal-btn" onclick="selectAnimal(this,'dog')"><span class="animal-emoji">🐶</span><span class="animal-label">Dog</span></div>
+      <div class="animal-btn" onclick="selectAnimal(this,'cat')"><span class="animal-emoji">🐱</span><span class="animal-label">Cat</span></div>
+      <div class="animal-btn" onclick="selectAnimal(this,'rabbit')"><span class="animal-emoji">🐰</span><span class="animal-label">Rabbit</span></div>
+      <div class="animal-btn" onclick="selectAnimal(this,'bird')"><span class="animal-emoji">🐦</span><span class="animal-label">Bird</span></div>
+      <div class="animal-btn" onclick="selectAnimal(this,'hamster')"><span class="animal-emoji">🐹</span><span class="animal-label">Hamster</span></div>
+      <div class="animal-btn" onclick="selectAnimal(this,'other')"><span class="animal-emoji">🐾</span><span class="animal-label">Other</span></div>
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label class="form-label">Breed <span class="required">*</span></label>
+    <input type="text" class="form-input" id="petBreed" placeholder="e.g. Golden Retriever, Mixed" maxlength="60">
+  </div>
+
+  <div class="form-row">
+    <div class="form-group">
+      <label class="form-label">Age</label>
+      <input type="number" class="form-input" id="petAgeNum" placeholder="e.g. 2" min="0" max="30">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Unit</label>
+      <select class="form-select" id="petAgeUnit">
+        <option value="years">Years</option>
+        <option value="months">Months</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label class="form-label">Known Medical Issues or Allergies</label>
+    <textarea class="form-textarea" id="petMedical" placeholder="e.g. allergic to chicken, hip dysplasia, currently on medication... (leave blank if none)"></textarea>
+  </div>
+
+  <div class="form-group">
+    <label class="form-label">Vaccine Records <span style="color:var(--mid);text-transform:none;letter-spacing:0;font-weight:500;font-size:10px;">(optional but encouraged)</span></label>
+    <div class="file-upload" onclick="document.getElementById('vaccineFiles').click()">
+      <input type="file" id="vaccineFiles" multiple accept="image/*,.pdf" onchange="handleFiles(this)">
+      <div class="file-upload-icon">📋</div>
+      <div class="file-upload-text">Upload vaccine records</div>
+      <div class="file-upload-sub">JPG, PNG or PDF - up to 5 files</div>
+    </div>
+    <div class="file-list" id="fileList"></div>
+  </div>
+</div>
+
+<!-- ══ STEP 5: SERVICE SPECS ══ -->
+<div class="step-panel" id="step5">
+  <p class="step-eyebrow">Step 5 of 7</p>
+  <h1 class="step-title">Service details</h1>
+  <p class="step-subtitle" id="specsSubtitle">A few more details to help us prepare.</p>
+
+  <!-- GROOMING SPECS -->
+  <div id="specsGrooming">
+    <div class="form-group">
+      <label class="form-label">Groom Type <span class="required">*</span></label>
+      <select class="form-select" id="groomType">
+        <option value="">Select...</option>
+        <option>Full groom (bath, blowdry, haircut)</option>
+        <option>Bath and blowdry only</option>
+        <option>Haircut only</option>
+        <option>Nail trim only</option>
+        <option>Ear cleaning only</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Pet Size</label>
+      <select class="form-select" id="groomSize">
+        <option value="">Select size...</option>
+        <option>Extra Small (under 5kg)</option>
+        <option>Small (5-10kg)</option>
+        <option>Medium (10-20kg)</option>
+        <option>Large (20-35kg)</option>
+        <option>Extra Large (35kg+)</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Coat Condition</label>
+      <select class="form-select" id="groomCoat">
+        <option value="">Select...</option>
+        <option>Normal - no tangles</option>
+        <option>Some matting - minor detangling needed</option>
+        <option>Heavy matting - extra time required</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Special Requests</label>
+      <textarea class="form-textarea" id="groomNotes" placeholder="e.g. keep the face fluffy, sensitive skin, scared of dryers..."></textarea>
+    </div>
+  </div>
+
+  <!-- HOTEL SPECS -->
+  <div id="specsHotel" style="display:none;">
+    <div class="form-group">
+      <label class="form-label">Room Type <span class="required">*</span></label>
+      <select class="form-select" id="hotelRoomType">
+        <option value="">Select...</option>
+        <option>Standard room</option>
+        <option>Deluxe room</option>
+        <option>Suite (for larger breeds)</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Feeding Instructions</label>
+      <textarea class="form-textarea" id="hotelFeeding" placeholder="e.g. 1 cup twice a day, dry kibble only, no treats..."></textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Medications / Special Care</label>
+      <textarea class="form-textarea" id="hotelMeds" placeholder="e.g. 1 tablet after breakfast, anxiety wrap at night..."></textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Emergency Contact for this stay</label>
+      <input type="text" class="form-input" id="hotelEmContact" placeholder="Name and phone number">
+    </div>
+  </div>
+
+  <!-- DAYCARE SPECS -->
+  <div id="specsDaycare" style="display:none;">
+    <div class="form-group">
+      <label class="form-label">Temperament</label>
+      <select class="form-select" id="daycareTemp">
+        <option value="">Select...</option>
+        <option>Friendly with all dogs</option>
+        <option>Friendly but can be shy</option>
+        <option>Selective with other dogs</option>
+        <option>First time in daycare</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Preferred Group Size</label>
+      <select class="form-select" id="daycareGroup">
+        <option value="">No preference</option>
+        <option>Small group (under 5 dogs)</option>
+        <option>Standard group</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Any notes for our staff</label>
+      <textarea class="form-textarea" id="daycareNotes" placeholder="Anything we should know about how your pet behaves or prefers..."></textarea>
+    </div>
+  </div>
+</div>
+
+<!-- ══ STEP 6: OWNER DETAILS ══ -->
+<div class="step-panel" id="step6">
+  <p class="step-eyebrow">Step 6 of 7</p>
+  <h1 class="step-title">Your details</h1>
+  <p class="step-subtitle">So we know who is dropping off this very important guest.</p>
+
+  <div class="save-banner" id="saveBanner">
+    <div class="save-banner-text">
+      <strong>Save details for next time</strong>
+      Your info will be stored locally on this device only.
+    </div>
+    <div class="toggle" id="saveToggle" onclick="toggleSave()"></div>
+  </div>
+
+  <div class="form-row">
+    <div class="form-group">
+      <label class="form-label">First Name <span class="required">*</span></label>
+      <input type="text" class="form-input" id="ownerFirst" placeholder="Juan">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Last Name <span class="required">*</span></label>
+      <input type="text" class="form-input" id="ownerLast" placeholder="dela Cruz">
+    </div>
+  </div>
+  <div class="form-group">
+    <label class="form-label">Email Address <span class="required">*</span></label>
+    <input type="email" class="form-input" id="ownerEmail" placeholder="juan@email.com">
+  </div>
+  <div class="form-group">
+    <label class="form-label">Mobile Number <span class="required">*</span></label>
+    <input type="tel" class="form-input" id="ownerPhone" placeholder="+63 9XX XXX XXXX">
+  </div>
+  <div class="form-group">
+    <label class="form-label">How did you hear about us?</label>
+    <select class="form-select" id="ownerSource">
+      <option value="">Select...</option>
+      <option>Instagram</option>
+      <option>Facebook</option>
+      <option>TikTok</option>
+      <option>Friend or family referral</option>
+      <option>Walk-in / saw the branch</option>
+      <option>Google search</option>
+      <option>Other</option>
+    </select>
+  </div>
+</div>
+
+<!-- ══ STEP 7: WAIVER ══ -->
+<div class="step-panel" id="step7">
+  <p class="step-eyebrow">Step 7 of 7</p>
+  <h1 class="step-title">Waivers &amp; consent</h1>
+  <p class="step-subtitle">Please read and agree to the following before confirming your booking.</p>
+
+  <div class="waiver-box">
+    <h4>General Terms &amp; Liability Waiver</h4>
+    <p>By confirming this booking, you acknowledge that Barkhaus Pet Hotel is not liable for any illness, injury, death, escape, or loss of your pet during their stay, unless caused by gross negligence on our part.</p>
+    <p>You confirm that your pet is current on vaccinations and is free from contagious diseases. You authorize Barkhaus staff to seek emergency veterinary care if deemed necessary, and you agree to cover the costs of such care.</p>
+    <p>Barkhaus reserves the right to refuse service if a pet is deemed a safety risk to other pets or staff.</p>
+  </div>
+  <div class="checkbox-row" onclick="toggleCheck('waiverGeneral')">
+    <div class="checkbox-box" id="waiverGeneral"></div>
+    <span class="checkbox-label">I have read and agree to the <strong>General Terms and Liability Waiver</strong>.</span>
+  </div>
+
+  <div class="waiver-box">
+    <h4>Health &amp; Vaccination Declaration</h4>
+    <p>I declare that my pet is up to date on core vaccinations (Rabies, DHPP for dogs; FVRCP for cats) and has not shown symptoms of illness in the past 14 days.</p>
+    <p>I understand that Barkhaus may request proof of vaccination at the time of drop-off and may refuse entry if records are incomplete or outdated.</p>
+  </div>
+  <div class="checkbox-row" onclick="toggleCheck('waiverVaccine')">
+    <div class="checkbox-box" id="waiverVaccine"></div>
+    <span class="checkbox-label">I confirm my pet is <strong>vaccinated and healthy</strong> as declared above.</span>
+  </div>
+
+  <div class="waiver-box">
+    <h4>Photo &amp; Media Consent</h4>
+    <p>I consent to Barkhaus photographing or recording my pet during their stay for use on social media, marketing materials, and our website. No identifying owner information will be shared without separate consent.</p>
+  </div>
+  <div class="checkbox-row" onclick="toggleCheck('waiverMedia')">
+    <div class="checkbox-box" id="waiverMedia"></div>
+    <span class="checkbox-label">I <strong>consent</strong> to photos and videos of my pet being used by Barkhaus.</span>
+  </div>
+
+  <hr class="section-divider">
+  <p class="step-subtitle" style="margin-bottom:16px;">Booking summary</p>
+  <div class="summary-card" id="bookingSummary"></div>
+</div>
+
+<!-- ══ SUCCESS ══ -->
+<div class="success-screen" id="successScreen">
+  <div class="success-icon">🐾</div>
+  <h2 class="success-title">You are all set!</h2>
+  <p class="success-msg">Your booking request has been received. We will confirm it via email or SMS within 24 hours.</p>
+  <div class="success-ref">
+    <div class="success-ref-label">Booking Reference</div>
+    <div class="success-ref-num" id="refNum">BH-000000</div>
+  </div>
+  <br>
+  <a href="index.html" class="btn-home">Back to Home</a>
+</div>
+
+</div><!-- /booking-main -->
+
+<!-- BOTTOM NAV -->
+<div class="bottom-nav" id="bottomNav">
+  <button class="btn-back" id="btnBack" onclick="prevStep()" style="display:none">Back</button>
+  <button class="btn-next" id="btnNext" onclick="nextStep()">Continue</button>
+</div>
+
+<script>
+var currentStep = 1;
+var totalSteps = 7;
+var booking = {
+  location: null, service: null,
+  groomDate: null, groomSlot: null,
+  hotelCheckin: null, hotelCheckout: null, hotelDropoff: null, hotelPickup: null,
+  daycareDate: null, daycareTime: null,
+  petName: null, petAnimal: null, petBreed: null, petAge: null, petAgeUnit: null, petMedical: null,
+  groomType: null, groomSize: null, groomCoat: null, groomNotes: null,
+  hotelRoom: null, hotelFeeding: null, hotelMeds: null, hotelEmContact: null,
+  daycareTemp: null, daycareGroup: null, daycareNotes: null,
+  ownerFirst: null, ownerLast: null, ownerEmail: null, ownerPhone: null, ownerSource: null,
+};
+var saveDetails = false;
+var uploadedFiles = [];
+
+// ── INIT ──
+(function init() {
+  // Set min date for all date inputs to today
+  var today = new Date().toISOString().split('T')[0];
+  ['groomDate','hotelCheckin','hotelCheckout','daycareDate'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.min = today;
+  });
+
+  // Load saved owner details
+  try {
+    var saved = localStorage.getItem('barkhaus_owner');
+    if (saved) {
+      var d = JSON.parse(saved);
+      if (d.first) document.getElementById('ownerFirst').value = d.first;
+      if (d.last)  document.getElementById('ownerLast').value  = d.last;
+      if (d.email) document.getElementById('ownerEmail').value = d.email;
+      if (d.phone) document.getElementById('ownerPhone').value = d.phone;
+      saveDetails = true;
+      document.getElementById('saveToggle').classList.add('on');
+    }
+  } catch(e) {}
+
+  updateProgress();
+})();
+
+// ── NAVIGATION ──
+function nextStep() {
+  if (!validateStep(currentStep)) return;
+  collectStep(currentStep);
+  if (currentStep === totalSteps) {
+    submitBooking();
+    return;
+  }
+  goToStep(currentStep + 1);
+}
+
+function prevStep() {
+  if (currentStep > 1) goToStep(currentStep - 1);
+}
+
+function goToStep(n) {
+  document.getElementById('step' + currentStep).classList.remove('active');
+  currentStep = n;
+  var panel = document.getElementById('step' + currentStep);
+  if (panel) panel.classList.add('active');
+  updateProgress();
+  updateBottomNav();
+  window.scrollTo(0, 0);
+
+  // Show correct schedule sub-panel
+  if (currentStep === 3) showSchedulePanel();
+  if (currentStep === 5) showSpecsPanel();
+  if (currentStep === 7) buildSummary();
+}
+
+function updateProgress() {
+  var pct = Math.round((currentStep / totalSteps) * 100);
+  document.getElementById('progressFill').style.width = pct + '%';
+  for (var i = 1; i <= totalSteps; i++) {
+    var el = document.getElementById('ps' + i);
+    if (!el) continue;
+    el.classList.remove('active','done');
+    if (i === currentStep) el.classList.add('active');
+    else if (i < currentStep) el.classList.add('done');
+  }
+}
+
+function updateBottomNav() {
+  var back = document.getElementById('btnBack');
+  var next = document.getElementById('btnNext');
+  back.style.display = currentStep > 1 ? '' : 'none';
+  if (currentStep === totalSteps) {
+    next.textContent = 'Confirm Booking';
+    next.className = 'btn-submit';
+  } else {
+    next.textContent = 'Continue';
+    next.className = 'btn-next';
+  }
+}
+
+// ── OPTION SELECTION ──
+function selectOption(el, key, value) {
+  var grid = el.closest('.option-grid');
+  grid.querySelectorAll('.option-card').forEach(function(c) { c.classList.remove('selected'); });
+  el.classList.add('selected');
+  booking[key] = value;
+}
+
+function selectSlot(el) {
+  if (el.classList.contains('unavailable')) return;
+  document.querySelectorAll('.timeslot').forEach(function(t) { t.classList.remove('selected'); });
+  el.classList.add('selected');
+  booking.groomSlot = el.textContent;
+}
+
+function selectAnimal(el, value) {
+  document.querySelectorAll('.animal-btn').forEach(function(b) { b.classList.remove('selected'); });
+  el.classList.add('selected');
+  booking.petAnimal = value;
+}
+
+// ── SCHEDULE PANELS ──
+function showSchedulePanel() {
+  ['scheduleGrooming','scheduleHotel','scheduleDaycare'].forEach(function(id) {
+    document.getElementById(id).style.display = 'none';
+  });
+  if (booking.service === 'grooming') {
+    document.getElementById('scheduleGrooming').style.display = '';
+    document.getElementById('scheduleTitle').textContent = 'Pick a grooming slot';
+    document.getElementById('scheduleSubtitle').textContent = 'Choose your preferred date and time.';
+  } else if (booking.service === 'hotel') {
+    document.getElementById('scheduleHotel').style.display = '';
+    document.getElementById('scheduleTitle').textContent = 'Check-in & check-out';
+    document.getElementById('scheduleSubtitle').textContent = 'When will your pet be staying with us?';
+  } else if (booking.service === 'daycare') {
+    document.getElementById('scheduleDaycare').style.display = '';
+    document.getElementById('scheduleTitle').textContent = 'Pick a daycare date';
+    document.getElementById('scheduleSubtitle').textContent = 'What day will your pet be joining us?';
+  }
+}
+
+function updateCheckout() {
+  var cin = document.getElementById('hotelCheckin').value;
+  if (!cin) return;
+  var next = new Date(cin);
+  next.setDate(next.getDate() + 1);
+  document.getElementById('hotelCheckout').min = next.toISOString().split('T')[0];
+  calcNights();
+}
+
+function calcNights() {
+  var cin = document.getElementById('hotelCheckin').value;
+  var cout = document.getElementById('hotelCheckout').value;
+  var disp = document.getElementById('nightsDisplay');
+  if (cin && cout) {
+    var d1 = new Date(cin), d2 = new Date(cout);
+    var nights = Math.round((d2-d1)/(1000*60*60*24));
+    if (nights > 0) {
+      document.getElementById('nightsCount').textContent = nights + ' night' + (nights>1?'s':'') + ' selected';
+      disp.style.display = '';
+    }
+  }
+}
+
+document.getElementById('hotelCheckout').addEventListener('change', calcNights);
+
+// ── SPECS PANELS ──
+function showSpecsPanel() {
+  ['specsGrooming','specsHotel','specsDaycare'].forEach(function(id) {
+    document.getElementById(id).style.display = 'none';
+  });
+  var map = {grooming:'specsGrooming', hotel:'specsHotel', daycare:'specsDaycare'};
+  if (map[booking.service]) document.getElementById(map[booking.service]).style.display = '';
+  var subs = {
+    grooming: 'Help our groomers prepare for your pet.',
+    hotel: 'Help our team care for your pet during their stay.',
+    daycare: 'Help our staff give your pet the best day.'
+  };
+  document.getElementById('specsSubtitle').textContent = subs[booking.service] || '';
+}
+
+// ── FILE UPLOAD ──
+function handleFiles(input) {
+  var list = document.getElementById('fileList');
+  for (var i = 0; i < input.files.length; i++) {
+    (function(file) {
+      uploadedFiles.push(file);
+      var item = document.createElement('div');
+      item.className = 'file-item';
+      item.innerHTML = '📎 ' + file.name + '<span class="file-remove" onclick="removeFile(this,\'' + file.name + '\')">x</span>';
+      list.appendChild(item);
+    })(input.files[i]);
+  }
+}
+
+function removeFile(el, name) {
+  uploadedFiles = uploadedFiles.filter(function(f){ return f.name !== name; });
+  el.closest('.file-item').remove();
+}
+
+// ── SAVE TOGGLE ──
+function toggleSave() {
+  saveDetails = !saveDetails;
+  document.getElementById('saveToggle').classList.toggle('on', saveDetails);
+}
+
+// ── CHECKBOX WAIVER ──
+function toggleCheck(id) {
+  var el = document.getElementById(id);
+  el.classList.toggle('checked');
+}
+
+// ── COLLECT STEP DATA ──
+function collectStep(step) {
+  if (step === 3) {
+    booking.groomDate = document.getElementById('groomDate').value;
+    booking.hotelCheckin = document.getElementById('hotelCheckin').value;
+    booking.hotelCheckout = document.getElementById('hotelCheckout').value;
+    booking.hotelDropoff = document.getElementById('hotelDropoffTime').value;
+    booking.hotelPickup = document.getElementById('hotelPickupTime').value;
+    booking.daycareDate = document.getElementById('daycareDate').value;
+    booking.daycareTime = document.getElementById('daycareTime').value;
+  }
+  if (step === 4) {
+    booking.petName = document.getElementById('petName').value;
+    booking.petBreed = document.getElementById('petBreed').value;
+    booking.petAge = document.getElementById('petAgeNum').value;
+    booking.petAgeUnit = document.getElementById('petAgeUnit').value;
+    booking.petMedical = document.getElementById('petMedical').value;
+  }
+  if (step === 5) {
+    booking.groomType = document.getElementById('groomType').value;
+    booking.groomSize = document.getElementById('groomSize').value;
+    booking.groomCoat = document.getElementById('groomCoat').value;
+    booking.groomNotes = document.getElementById('groomNotes').value;
+    booking.hotelRoom = document.getElementById('hotelRoomType').value;
+    booking.hotelFeeding = document.getElementById('hotelFeeding').value;
+    booking.hotelMeds = document.getElementById('hotelMeds').value;
+    booking.hotelEmContact = document.getElementById('hotelEmContact').value;
+    booking.daycareTemp = document.getElementById('daycareTemp').value;
+    booking.daycareGroup = document.getElementById('daycareGroup').value;
+    booking.daycareNotes = document.getElementById('daycareNotes').value;
+  }
+  if (step === 6) {
+    booking.ownerFirst = document.getElementById('ownerFirst').value;
+    booking.ownerLast  = document.getElementById('ownerLast').value;
+    booking.ownerEmail = document.getElementById('ownerEmail').value;
+    booking.ownerPhone = document.getElementById('ownerPhone').value;
+    booking.ownerSource = document.getElementById('ownerSource').value;
+    if (saveDetails) {
+      try {
+        localStorage.setItem('barkhaus_owner', JSON.stringify({
+          first: booking.ownerFirst, last: booking.ownerLast,
+          email: booking.ownerEmail, phone: booking.ownerPhone
+        }));
+      } catch(e) {}
+    } else {
+      try { localStorage.removeItem('barkhaus_owner'); } catch(e) {}
+    }
+  }
+}
+
+// ── VALIDATE ──
+function validateStep(step) {
+  if (step === 1 && !booking.location) { alert('Please select a branch.'); return false; }
+  if (step === 2 && !booking.service)  { alert('Please select a service.'); return false; }
+  if (step === 3) {
+    if (booking.service === 'grooming') {
+      if (!document.getElementById('groomDate').value) { alert('Please select a date.'); return false; }
+      if (!booking.groomSlot) { alert('Please select a time slot.'); return false; }
+    }
+    if (booking.service === 'hotel') {
+      if (!document.getElementById('hotelCheckin').value || !document.getElementById('hotelCheckout').value) {
+        alert('Please select check-in and check-out dates.'); return false;
+      }
+    }
+    if (booking.service === 'daycare' && !document.getElementById('daycareDate').value) {
+      alert('Please select a date.'); return false;
+    }
+  }
+  if (step === 4) {
+    if (!document.getElementById('petName').value.trim()) { alert('Please enter your pet\'s name.'); return false; }
+    if (!booking.petAnimal) { alert('Please select your pet\'s animal type.'); return false; }
+    if (!document.getElementById('petBreed').value.trim()) { alert('Please enter your pet\'s breed.'); return false; }
+  }
+  if (step === 6) {
+    var first = document.getElementById('ownerFirst').value.trim();
+    var last  = document.getElementById('ownerLast').value.trim();
+    var email = document.getElementById('ownerEmail').value.trim();
+    var phone = document.getElementById('ownerPhone').value.trim();
+    if (!first || !last) { alert('Please enter your full name.'); return false; }
+    if (!email || !email.includes('@')) { alert('Please enter a valid email address.'); return false; }
+    if (!phone) { alert('Please enter your mobile number.'); return false; }
+  }
+  if (step === 7) {
+    var w1 = document.getElementById('waiverGeneral').classList.contains('checked');
+    var w2 = document.getElementById('waiverVaccine').classList.contains('checked');
+    if (!w1 || !w2) { alert('Please agree to all required waivers to proceed.'); return false; }
+  }
+  return true;
+}
+
+// ── SUMMARY ──
+function buildSummary() {
+  collectStep(6);
+  var svcLabels = { grooming:'Grooming', hotel:'Pet Hotel', daycare:'Daycare' };
+  var locLabels = { estancia:'Estancia (Pasig)', eastwood:'Eastwood (QC)' };
+  var schedStr = '';
+  if (booking.service === 'grooming') schedStr = booking.groomDate + ' at ' + (booking.groomSlot || '-');
+  else if (booking.service === 'hotel') schedStr = 'Check-in: ' + booking.hotelCheckin + '  /  Check-out: ' + booking.hotelCheckout;
+  else if (booking.service === 'daycare') schedStr = booking.daycareDate;
+
+  var rows = [
+    ['Branch', locLabels[booking.location] || '-'],
+    ['Service', svcLabels[booking.service] || '-'],
+    ['Schedule', schedStr || '-'],
+    ['Pet', (booking.petName || '-') + ' the ' + (booking.petAnimal || '-')],
+    ['Breed', booking.petBreed || '-'],
+    ['Owner', (document.getElementById('ownerFirst').value + ' ' + document.getElementById('ownerLast').value).trim() || '-'],
+    ['Email', document.getElementById('ownerEmail').value || '-'],
+    ['Mobile', document.getElementById('ownerPhone').value || '-'],
+  ];
+  document.getElementById('bookingSummary').innerHTML = rows.map(function(r) {
+    return '<div class="summary-row"><span class="summary-key">' + r[0] + '</span><span class="summary-val">' + r[1] + '</span></div>';
+  }).join('');
+}
+
+// ── SUBMIT ──
+function submitBooking() {
+  collectStep(7);
+  // Generate a booking reference
+  var ref = 'BH-' + Math.random().toString(36).substr(2,6).toUpperCase();
+  document.getElementById('refNum').textContent = ref;
+
+  // Hide booking panels, show success
+  for (var i = 1; i <= 7; i++) {
+    var el = document.getElementById('step'+i);
+    if (el) el.classList.remove('active');
+  }
+  document.getElementById('bottomNav').style.display = 'none';
+  document.getElementById('successScreen').classList.add('active');
+  document.querySelector('.progress-wrap').style.display = 'none';
+}
+</script>
+</body>
+</html>

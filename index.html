@@ -7,13 +7,13 @@
 <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg:      #1A1D2E;
-    --surface: #252840;
-    --raised:  #2E3352;
-    --border:  rgba(74,144,196,0.22);
-    --mid:     #7A9EC0;
+    --bg:      #0F1C26;   /* deep blue-tinted dark */
+    --surface: #1A3044;   /* blue-tinted surface */
+    --raised:  #1F3D55;   /* blue-tinted raised */
+    --border:  rgba(77,150,185,0.30);
+    --mid:     #6AAEC8;
     --cream:   #F0EDE6;
-    --cream-m: #B8CCE0;
+    --cream-m: #B8D4E0;
     --blue:    #4D96B9;
     --yellow:  #FFCE58;
   }
@@ -27,9 +27,9 @@
   #hero { align-items: center; justify-content: center; text-align: center; padding: 60px 32px 64px; }
   .hero-bg { position: absolute; inset: 0; z-index: 0; }
   .hero-bg img { width:100%; height:100%; object-fit:cover; object-position:center top; }
-  .hero-bg::after { content:""; position:absolute; inset:0; background: linear-gradient(to bottom, rgba(26,29,46,0.55) 0%, rgba(26,29,46,0.22) 35%, rgba(26,29,46,0.80) 100%); }
+  .hero-bg::after { content:""; position:absolute; inset:0; background: linear-gradient(to bottom, rgba(15,28,38,0.55) 0%, rgba(15,28,38,0.15) 35%, rgba(15,28,38,0.82) 100%), linear-gradient(135deg, rgba(77,150,185,0.12) 0%, transparent 60%); }
   .hero-content { position:relative; z-index:1; display:flex; flex-direction:column; align-items:center; }
-  .hero-logo { width:200px; height:auto; object-fit:contain; margin-bottom:14px; opacity:0; animation:fadeUp 0.7s ease 0.1s forwards; }
+  .hero-logo { width:200px; height:auto; object-fit:contain; margin-bottom:14px; opacity:0; animation:fadeUp 0.7s ease 0.1s forwards; filter: drop-shadow(0 0 20px rgba(77,150,185,0.5)); }
   .hero-submark { font-size:10px; letter-spacing:0.28em; text-transform:uppercase; color:var(--yellow); margin-bottom:36px; font-weight:600; opacity:0; animation:fadeUp 0.7s ease 0.3s forwards; }
   .hero-title { font-family:"Fredoka One",cursive; font-size:clamp(42px,11vw,66px); line-height:1.1; color:var(--cream); margin-bottom:20px; opacity:0; animation:fadeUp 0.8s ease 0.45s forwards; text-shadow:0 2px 20px rgba(0,0,0,0.4); }
   .hero-title span { color:var(--yellow); }
@@ -41,14 +41,14 @@
 
   /* ══ LOCATIONS ══ */
   #locations { flex-direction:column; }
-  .loc-tabs { position:absolute; top:20px; left:50%; transform:translateX(-50%); z-index:10; display:flex; background:rgba(26,29,46,0.70); border:0.5px solid var(--border); border-radius:30px; padding:4px; backdrop-filter:blur(10px); gap:2px; }
+  .loc-tabs { position:absolute; top:20px; left:50%; transform:translateX(-50%); z-index:10; display:flex; background:rgba(15,28,38,0.70); border:0.5px solid var(--border); border-radius:30px; padding:4px; backdrop-filter:blur(10px); gap:2px; }
   .loc-tab { font-size:12px; font-weight:700; color:var(--mid); padding:7px 20px; border-radius:26px; cursor:pointer; transition:background 0.25s,color 0.25s; white-space:nowrap; letter-spacing:0.04em; }
   .loc-tab.active { background:var(--yellow); color:var(--bg); }
   .loc-slides-wrap { position:absolute; inset:0; display:flex; transition:transform 0.65s cubic-bezier(0.4,0,0.2,1); }
   .loc-slide { min-width:100%; height:100%; position:relative; flex-shrink:0; }
   .loc-slide-img { position:absolute; inset:0; overflow:hidden; }
   .loc-slide-img img { width:100%; height:100%; object-fit:cover; }
-  .loc-gradient { position:absolute; inset:0; background:linear-gradient(to top, rgba(26,29,46,0.98) 0%, rgba(26,29,46,0.85) 25%, rgba(26,29,46,0.42) 50%, rgba(26,29,46,0.06) 100%); pointer-events:none; }
+  .loc-gradient { position:absolute; inset:0; background:linear-gradient(to top, rgba(15,28,38,0.98) 0%, rgba(15,28,38,0.85) 25%, rgba(15,28,38,0.42) 50%, rgba(15,28,38,0.06) 100%); pointer-events:none; }
   .loc-thumbs { position:absolute; bottom:216px; left:0; right:0; display:flex; gap:8px; padding:0 24px; z-index:5; overflow-x:auto; scrollbar-width:none; }
   .loc-thumbs::-webkit-scrollbar { display:none; }
   .loc-thumb { width:56px; height:56px; border-radius:8px; border:2px solid transparent; background:rgba(46,51,82,0.5); flex-shrink:0; cursor:pointer; transition:border-color 0.2s; overflow:hidden; }
@@ -95,7 +95,7 @@
   /* ══ SERVICES ══ */
   #services { scroll-snap-align:start; height:100svh; overflow:hidden; position:relative; }
   #paws-bg { position:absolute; inset:0; width:100%; height:100%; z-index:0; }
-  .paws-vignette { position:absolute; inset:0; z-index:1; background:radial-gradient(ellipse 100% 100% at 50% 50%, rgba(26,29,46,0.10) 0%, rgba(26,29,46,0.65) 100%); pointer-events:none; }
+  .paws-vignette { position:absolute; inset:0; z-index:1; background:radial-gradient(ellipse 100% 100% at 50% 50%, rgba(15,28,38,0.10) 0%, rgba(15,28,38,0.65) 100%); pointer-events:none; }
   .services-inner { position:relative; z-index:2; width:100%; height:100%; display:flex; flex-direction:column; padding:24px 0 12px; }
   .services-header { text-align:center; padding:0 24px 10px; flex-shrink:0; }
   .services-eyebrow { font-size:9px; letter-spacing:0.22em; text-transform:uppercase; color:var(--yellow); margin-bottom:4px; font-weight:700; }
@@ -110,11 +110,11 @@
   .stone-card { overflow:hidden; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:14px 10px; opacity:0; transform:translateY(20px); transition:opacity 0.6s ease, transform 0.6s ease; cursor:pointer; position:relative; }
   .stone-card.visible { opacity:1; transform:translateY(0); }
   /* Paw pad shape — main large pad with organic blob border-radius */
-  .stone-card:nth-child(1) { border-radius:44% 56% 52% 48% / 48% 44% 56% 52%; background:var(--surface); border:1.5px solid rgba(74,144,196,0.25); flex:1; }
-  .stone-card:nth-child(2) { border-radius:52% 48% 44% 56% / 56% 52% 44% 48%; background:var(--raised); border:1.5px solid rgba(245,200,66,0.2); flex:1; }
-  .stone-card:nth-child(3) { border-radius:48% 52% 56% 44% / 52% 48% 44% 56%; background:var(--surface); border:1.5px solid rgba(74,144,196,0.25); flex:1; }
-  .stone-card:nth-child(4) { border-radius:54% 46% 48% 52% / 46% 54% 52% 48%; background:var(--raised); border:1.5px solid rgba(245,200,66,0.2); width:calc(50% - 4px); max-width:calc(50% - 4px); }
-  .stone-card:nth-child(5) { border-radius:46% 54% 50% 50% / 54% 46% 50% 50%; background:var(--surface); border:1.5px solid rgba(74,144,196,0.25); width:calc(50% - 4px); max-width:calc(50% - 4px); }
+  .stone-card:nth-child(1) { border-radius:44% 56% 52% 48% / 48% 44% 56% 52%; background:var(--surface); border:1.5px solid rgba(77,150,185,0.4); flex:1; }
+  .stone-card:nth-child(2) { border-radius:52% 48% 44% 56% / 56% 52% 44% 48%; background:var(--raised); border:1.5px solid rgba(255,206,88,0.35); flex:1; }
+  .stone-card:nth-child(3) { border-radius:48% 52% 56% 44% / 52% 48% 44% 56%; background:var(--surface); border:1.5px solid rgba(77,150,185,0.4); flex:1; }
+  .stone-card:nth-child(4) { border-radius:54% 46% 48% 52% / 46% 54% 52% 48%; background:var(--raised); border:1.5px solid rgba(255,206,88,0.35); width:calc(50% - 4px); max-width:calc(50% - 4px); }
+  .stone-card:nth-child(5) { border-radius:46% 54% 50% 50% / 54% 46% 50% 50%; background:var(--surface); border:1.5px solid rgba(77,150,185,0.4); width:calc(50% - 4px); max-width:calc(50% - 4px); }
 
   .stone-eyebrow { font-size:7px; letter-spacing:0.24em; text-transform:uppercase; color:var(--yellow); margin-bottom:3px; font-weight:700; }
   .stone-name { font-family:"Fredoka One",cursive; font-size:16px; line-height:1.15; color:var(--cream); margin-bottom:3px; }
@@ -162,7 +162,9 @@
   .products-title { font-family:"Fredoka One",cursive; font-size:28px; color:var(--cream); }
   .products-grid { flex:1; display:grid; grid-template-columns:repeat(2,1fr); gap:10px; padding:0 16px 8px; overflow-y:auto; scrollbar-width:none; align-content:start; }
   .products-grid::-webkit-scrollbar { display:none; }
-  .product-card { background:var(--surface); border:0.5px solid var(--border); border-radius:16px; overflow:hidden; display:flex; flex-direction:column; }
+  .product-card { background:var(--surface); border:0.5px solid var(--border); border-radius:16px; overflow:hidden; display:flex; flex-direction:column; transition: border-color 0.2s, transform 0.2s; }
+  .product-card:nth-child(odd) { border-color: rgba(77,150,185,0.35); }
+  .product-card:nth-child(even) { border-color: rgba(255,206,88,0.28); }
   .product-img { width:100%; aspect-ratio:1; background:var(--raised); display:flex; align-items:center; justify-content:center; overflow:hidden; }
   .product-img img { width:100%; height:100%; object-fit:cover; }
   .product-img-placeholder { font-size:36px; }
@@ -197,10 +199,26 @@
   .footer-legal { font-size:10px; color:var(--mid); font-weight:500; }
 
   /* ══ FLOAT NAV ══ */
-  .float-nav { position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(80px); background:rgba(37,40,64,0.92); border:0.5px solid var(--border); border-radius:40px; padding:8px 8px 8px 20px; display:flex; align-items:center; gap:16px; z-index:200; transition:transform 0.4s cubic-bezier(0.4,0,0.2,1); white-space:nowrap; backdrop-filter:blur(12px); }
+  .float-nav { position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(80px); background:rgba(10,20,30,0.92); border:0.5px solid var(--border); border-radius:40px; padding:8px 8px 8px 20px; display:flex; align-items:center; gap:16px; z-index:200; transition:transform 0.4s cubic-bezier(0.4,0,0.2,1); white-space:nowrap; backdrop-filter:blur(12px); }
   .float-nav.visible { transform:translateX(-50%) translateY(0); }
   .float-nav-logo { font-family:"Fredoka One",cursive; font-size:15px; color:var(--cream); cursor:pointer; letter-spacing:0.04em; }
   .float-nav-book { background:var(--yellow); color:var(--bg); font-size:11px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; padding:9px 20px; border-radius:30px; text-decoration:none; }
+
+
+  /* ══ SERVICE MODAL CAROUSEL ══ */
+  .svc-carousel { position:relative; width:100%; height:220px; overflow:hidden; border-radius:14px; margin-bottom:16px; background:var(--raised); flex-shrink:0; }
+  .svc-carousel-track { display:flex; height:100%; transition:transform 0.4s cubic-bezier(0.4,0,0.2,1); }
+  .svc-carousel-slide { min-width:100%; height:100%; flex-shrink:0; overflow:hidden; }
+  .svc-carousel-slide img { width:100%; height:100%; object-fit:cover; display:block; }
+  .svc-carousel-btn { position:absolute; top:50%; transform:translateY(-50%); width:32px; height:32px; border-radius:50%; background:rgba(15,28,38,0.65); border:1px solid rgba(255,255,255,0.2); color:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; z-index:5; backdrop-filter:blur(4px); transition:background 0.2s; }
+  .svc-carousel-btn:active { background:rgba(15,28,38,0.9); }
+  .svc-carousel-prev { left:10px; }
+  .svc-carousel-next { right:10px; }
+  .svc-carousel-dots { position:absolute; bottom:8px; left:0; right:0; display:flex; justify-content:center; gap:5px; z-index:5; }
+  .svc-carousel-dot { width:6px; height:6px; border-radius:50%; background:rgba(255,255,255,0.4); transition:background 0.2s, transform 0.2s; cursor:pointer; }
+  .svc-carousel-dot.active { background:#FFCE58; transform:scale(1.3); }
+  .svc-carousel[data-count="1"] .svc-carousel-btn,
+  .svc-carousel[data-count="1"] .svc-carousel-dots { display:none; }
 
   @keyframes fadeUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
   @keyframes pulse { 0%,100% { opacity:0.3; } 50% { opacity:1; } }
@@ -365,8 +383,15 @@
       </div>
     </div>
     <div class="svc-modal-body">
-      <div id="svc-modal-img-wrap" style="display:none;width:100%;height:200px;overflow:hidden;border-radius:12px;margin-bottom:16px;">
-        <img id="svc-modal-img" src="" alt="" style="width:100%;height:100%;object-fit:cover;">
+      <div class="svc-carousel" id="svc-carousel" style="display:none;">
+        <div class="svc-carousel-track" id="svc-carousel-track"></div>
+        <div class="svc-carousel-btn svc-carousel-prev" onclick="svcCarouselNav(-1)">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
+        </div>
+        <div class="svc-carousel-btn svc-carousel-next" onclick="svcCarouselNav(1)">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+        </div>
+        <div class="svc-carousel-dots" id="svc-carousel-dots"></div>
       </div>
       <div class="svc-modal-section">
         <p class="svc-modal-section-label">About this service</p>
@@ -544,6 +569,7 @@ const services = [
   {
     tag: 'Play',
     name: 'Play Park',
+    imgKey: 'playpark',
     desc: 'Our Play Park is a safe, supervised space where your dog can run, jump, and make friends. With separate areas for different sizes, every pup gets to play at their own pace.',
     features: [
       { label: 'Supervised play sessions', detail: 'Trained staff on-site at all times' },
@@ -555,6 +581,7 @@ const services = [
   {
     tag: 'Stay',
     name: 'Pet Hotel',
+    imgKey: 'hotel',
     desc: 'Your pet deserves a vacation too. Our Pet Hotel offers cozy, private accommodations with attentive care  -  so you can travel worry-free knowing your furry family member is in great hands.',
     features: [
       { label: 'Private rooms', detail: 'Comfortable beds and personal space' },
@@ -566,6 +593,7 @@ const services = [
   {
     tag: 'Care',
     name: 'Grooming',
+    imgKey: 'grooming',
     desc: 'From baths to blowouts, nail trims to full grooms  -  our grooming team treats every pet like a star. We use gentle, pet-safe products so your fur baby comes out looking and feeling their best.',
     features: [
       { label: 'Full bath & blow dry', detail: 'Breed-appropriate shampoos' },
@@ -577,6 +605,7 @@ const services = [
   {
     tag: 'Events',
     name: 'Events',
+    imgKey: 'events',
     desc: 'Throwing a party? Make it a Barkhaus party! From puppy birthdays to dog-friendly gatherings, we set the stage for an unforgettable celebration  -  with your furry guests as the stars.',
     features: [
       { label: 'Birthday packages', detail: 'Decorations, cake & more' },
@@ -588,6 +617,7 @@ const services = [
   {
     tag: 'Capture',
     name: 'Self-Shoot Studio',
+    imgKey: 'studio',
     desc: 'A studio designed just for pets and their parents. Set up your own shot, choose your background, and capture memories that\'ll last a lifetime  -  no experience needed, just bring the cuteness.',
     features: [
       { label: 'Multiple themed backdrops', detail: 'Swap and mix your favorites' },
@@ -598,22 +628,69 @@ const services = [
   },
 ];
 
+/* ── SERVICE MODAL CAROUSEL STATE ── */
+var svcCarIdx = 0;
+var svcCarImages = [];
+
+function buildSvcCarousel(images) {
+  var carousel = document.getElementById('svc-carousel');
+  var track = document.getElementById('svc-carousel-track');
+  var dots = document.getElementById('svc-carousel-dots');
+  if (!carousel || !track || !dots) return;
+
+  if (!images || !images.length) {
+    carousel.style.display = 'none';
+    return;
+  }
+
+  svcCarImages = images;
+  svcCarIdx = 0;
+  carousel.setAttribute('data-count', images.length);
+
+  track.innerHTML = images.map(function(src) {
+    return '<div class="svc-carousel-slide"><img src="' + src + '" alt=""></div>';
+  }).join('');
+
+  dots.innerHTML = images.map(function(_, i) {
+    return '<div class="svc-carousel-dot' + (i === 0 ? ' active' : '') + '" onclick="svcCarouselGo(' + i + ')"></div>';
+  }).join('');
+
+  track.style.transform = 'translateX(0)';
+  carousel.style.display = 'block';
+}
+
+function svcCarouselGo(idx) {
+  var track = document.getElementById('svc-carousel-track');
+  var dots = document.getElementById('svc-carousel-dots');
+  if (!track) return;
+  svcCarIdx = (idx + svcCarImages.length) % svcCarImages.length;
+  track.style.transform = 'translateX(-' + (svcCarIdx * 100) + '%)';
+  var dotEls = dots.querySelectorAll('.svc-carousel-dot');
+  dotEls.forEach(function(d, i) { d.classList.toggle('active', i === svcCarIdx); });
+}
+
+function svcCarouselNav(dir) {
+  svcCarouselGo(svcCarIdx + dir);
+}
+
 function openSvcModal(idx) {
-  const s = services[idx];
+  var s = services[idx];
   document.getElementById('svc-modal-tag').textContent = s.tag;
   document.getElementById('svc-modal-name').textContent = s.name;
   document.getElementById('svc-modal-desc').textContent = s.desc;
-  document.getElementById('svc-modal-features').innerHTML = s.features.map(f =>
-    `<div class="svc-modal-feature"><div class="svc-modal-feature-dot"></div><div class="svc-modal-feature-text"><strong>${f.label}</strong>${f.detail ? ' - ' + f.detail : ''}</div></div>`
-  ).join('');
-  // Show service image if available
-  const imgEl = document.getElementById('svc-modal-img');
-  const imgWrap = document.getElementById('svc-modal-img-wrap');
-  const svcKeys = ['playpark','hotel','grooming','events','studio'];
-  const imgSrc = (typeof BARKHAUS_IMAGES !== 'undefined' && BARKHAUS_IMAGES.services)
-    ? BARKHAUS_IMAGES.services[svcKeys[idx]] : null;
-  if (imgEl && imgSrc) { imgEl.src = imgSrc; if(imgWrap) imgWrap.style.display='block'; }
-  else if (imgWrap) imgWrap.style.display = 'none';
+  document.getElementById('svc-modal-features').innerHTML = s.features.map(function(f) {
+    return '<div class="svc-modal-feature"><div class="svc-modal-feature-dot"></div><div class="svc-modal-feature-text"><strong>' + f.label + '</strong>' + (f.detail ? ' - ' + f.detail : '') + '</div></div>';
+  }).join('');
+
+  // Build carousel from BARKHAUS_IMAGES.services[key] - supports array or single string
+  var imgs = [];
+  if (typeof BARKHAUS_IMAGES !== 'undefined' && BARKHAUS_IMAGES.services && s.imgKey) {
+    var src = BARKHAUS_IMAGES.services[s.imgKey];
+    if (Array.isArray(src)) imgs = src;
+    else if (src) imgs = [src];
+  }
+  buildSvcCarousel(imgs);
+
   document.getElementById('svc-modal-overlay').classList.add('open');
   document.body.style.overflow = 'hidden';
 }
@@ -626,6 +703,18 @@ function closeSvcModal() {
 function closeSvcModalOnOverlay(e) {
   if (e.target === document.getElementById('svc-modal-overlay')) closeSvcModal();
 }
+
+/* ── CAROUSEL SWIPE ── */
+(function() {
+  var startX = 0;
+  var el = document.getElementById('svc-carousel');
+  if (!el) return;
+  el.addEventListener('touchstart', function(e) { startX = e.touches[0].clientX; }, {passive:true});
+  el.addEventListener('touchend', function(e) {
+    var d = startX - e.changedTouches[0].clientX;
+    if (Math.abs(d) > 35) svcCarouselNav(d > 0 ? 1 : -1);
+  }, {passive:true});
+})();
 
 /* ── SERVICE CARD REVEAL ── */
 // Cards start visible immediately  -  no intersection observer needed since
@@ -749,7 +838,7 @@ if (svcSection) cardObs.observe(svcSection);
   function loop() {
     frame++;
     const w = canvas.width, h = canvas.height;
-    ctx.fillStyle = '#1A1D2E';
+    ctx.fillStyle = '#0F1C26';
     ctx.fillRect(0, 0, w, h);
 
     trails.forEach((trail, ti) => {
@@ -854,14 +943,26 @@ new IntersectionObserver(entries => {
 /* ── IMAGE INIT ── */
 (function initImages() {
   if (typeof BARKHAUS_IMAGES === 'undefined') return;
-  const heroEl = document.getElementById('img-hero');
+
+  // Hero
+  var heroEl = document.getElementById('img-hero');
   if (heroEl && BARKHAUS_IMAGES.hero) heroEl.src = BARKHAUS_IMAGES.hero;
-  ['b1','b2'].forEach(key => {
-    const imgs = BARKHAUS_IMAGES[key] || [];
-    const mainEl = document.querySelector('[data-img="'+key+'-main"]');
-    if (mainEl && imgs[0]) mainEl.src = imgs[0];
-    imgs.forEach((src,i) => {
-      const el = document.querySelector('[data-img="'+key+'-'+i+'"]');
+
+  // Branch location images
+  ['b1','b2'].forEach(function(key) {
+    var imgs = BARKHAUS_IMAGES[key] || [];
+    if (!imgs.length) return;
+
+    // Set main slide image (the large background)
+    var mainContainer = document.getElementById(key+'-main');
+    if (mainContainer) {
+      var mainImg = mainContainer.querySelector('img');
+      if (mainImg && imgs[0]) mainImg.src = imgs[0];
+    }
+
+    // Set thumbnail images
+    imgs.forEach(function(src, i) {
+      var el = document.querySelector('[data-img="'+key+'-'+i+'"]');
       if (el) el.src = src;
     });
   });
