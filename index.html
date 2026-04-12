@@ -14,8 +14,8 @@
     --mid:     #7A9EC0;
     --cream:   #F0EDE6;
     --cream-m: #B8CCE0;
-    --blue:    #4A90C4;
-    --yellow:  #F5C842;
+    --blue:    #4D96B9;
+    --yellow:  #FFCE58;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html { scroll-behavior: smooth; scroll-snap-type: y mandatory; }
@@ -205,6 +205,7 @@
   @keyframes fadeUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
   @keyframes pulse { 0%,100% { opacity:0.3; } 50% { opacity:1; } }
 </style>
+<script src="images.js"></script>
 </head>
 <body>
 
@@ -364,6 +365,9 @@
       </div>
     </div>
     <div class="svc-modal-body">
+      <div id="svc-modal-img-wrap" style="display:none;width:100%;height:200px;overflow:hidden;border-radius:12px;margin-bottom:16px;">
+        <img id="svc-modal-img" src="" alt="" style="width:100%;height:100%;object-fit:cover;">
+      </div>
       <div class="svc-modal-section">
         <p class="svc-modal-section-label">About this service</p>
         <p class="svc-modal-desc" id="svc-modal-desc"></p>
@@ -432,16 +436,16 @@ const locations = [
     key: 'b1',
     name: 'Estancia',
     addr: '2nd Floor Main Wing at Estancia Mall, Capitol Commons, Pasig City',
-    hours: 'Mon–Thu 11AM–9PM\nFri–Sun 10AM–10PM',
+    hours: 'Mon-Thu 11AM-9PM\nFri-Sun 10AM-10PM',
     maps: 'https://maps.app.goo.gl/YrzAVYHE8G6982gz8',
     mainId: 'b1-main', thumbsId: 'b1-thumbs',
     modal: {
       tag: 'Our first home',
       subtitle: 'Capitol Commons, Pasig City',
-      desc1: '[Estancia branch description — tell guests what makes this location special and what to expect when they visit.]',
-      desc2: '[Additional context — standout features, proximity to key areas, or what the vibe is like here.]',
+      desc1: '[Estancia branch description  -  tell guests what makes this location special and what to expect when they visit.]',
+      desc2: '[Additional context  -  standout features, proximity to key areas, or what the vibe is like here.]',
       element: '[BRANCH CHARACTER]',
-      elementDesc: '[One sentence describing the Estancia branch atmosphere — e.g. "Bright, lively and right in the heart of Capitol Commons, perfect for a quick visit or a full day out."]',
+      elementDesc: '[One sentence describing the Estancia branch atmosphere  -  e.g. "Bright, lively and right in the heart of Capitol Commons, perfect for a quick visit or a full day out."]',
       features: [
         { label: '[Feature 1]', detail: '[Detail]' },
         { label: '[Feature 2]', detail: '[Detail]' },
@@ -453,14 +457,14 @@ const locations = [
     key: 'b2',
     name: 'Eastwood',
     addr: '4th Floor Eastwood Mall, Libis, Quezon City',
-    hours: '10AM–10PM everyday',
+    hours: '10AM-10PM everyday',
     maps: 'https://maps.app.goo.gl/yPbYz7y2urnmLAuU6',
     mainId: 'b2-main', thumbsId: 'b2-thumbs',
     modal: {
       tag: 'Open every day',
       subtitle: 'Libis, Quezon City',
-      desc1: '[Eastwood branch description — what makes this location unique and different from Estancia.]',
-      desc2: '[Additional context — exclusive services, notable features, or the community around this branch.]',
+      desc1: '[Eastwood branch description  -  what makes this location unique and different from Estancia.]',
+      desc2: '[Additional context  -  exclusive services, notable features, or the community around this branch.]',
       element: '[BRANCH CHARACTER]',
       elementDesc: '[One sentence describing the Eastwood branch atmosphere.]',
       features: [
@@ -511,7 +515,7 @@ function openModal(idx) {
   document.getElementById('modal-element').textContent = m.element;
   document.getElementById('modal-element-desc').textContent = m.elementDesc;
   document.getElementById('modal-features').innerHTML = m.features.map(f =>
-    `<div class="loc-modal-feature"><div class="loc-modal-feature-dot"></div><div class="loc-modal-feature-text"><strong>${f.label}</strong>${f.detail ? ' — ' + f.detail : ''}</div></div>`
+    `<div class="loc-modal-feature"><div class="loc-modal-feature-dot"></div><div class="loc-modal-feature-text"><strong>${f.label}</strong>${f.detail ? ' - ' + f.detail : ''}</div></div>`
   ).join('');
   document.getElementById('modal-overlay').classList.add('open');
   document.body.style.overflow = 'hidden';
@@ -551,18 +555,18 @@ const services = [
   {
     tag: 'Stay',
     name: 'Pet Hotel',
-    desc: 'Your pet deserves a vacation too. Our Pet Hotel offers cozy, private accommodations with attentive care — so you can travel worry-free knowing your furry family member is in great hands.',
+    desc: 'Your pet deserves a vacation too. Our Pet Hotel offers cozy, private accommodations with attentive care  -  so you can travel worry-free knowing your furry family member is in great hands.',
     features: [
       { label: 'Private rooms', detail: 'Comfortable beds and personal space' },
       { label: '24/7 staff presence', detail: 'We never leave them alone' },
-      { label: 'Regular feeding & walks', detail: 'Follows your pet's schedule' },
-      { label: 'Daily photo updates', detail: 'See how they're doing anytime' },
+      { label: 'Regular feeding & walks', detail: 'Follows your pet\'s schedule' },
+      { label: 'Daily photo updates', detail: 'See how they\'re doing anytime' },
     ]
   },
   {
     tag: 'Care',
     name: 'Grooming',
-    desc: 'From baths to blowouts, nail trims to full grooms — our grooming team treats every pet like a star. We use gentle, pet-safe products so your fur baby comes out looking and feeling their best.',
+    desc: 'From baths to blowouts, nail trims to full grooms  -  our grooming team treats every pet like a star. We use gentle, pet-safe products so your fur baby comes out looking and feeling their best.',
     features: [
       { label: 'Full bath & blow dry', detail: 'Breed-appropriate shampoos' },
       { label: 'Haircut & styling', detail: 'Breed cuts or custom styles' },
@@ -573,7 +577,7 @@ const services = [
   {
     tag: 'Events',
     name: 'Events',
-    desc: 'Throwing a party? Make it a Barkhaus party! From puppy birthdays to dog-friendly gatherings, we set the stage for an unforgettable celebration — with your furry guests as the stars.',
+    desc: 'Throwing a party? Make it a Barkhaus party! From puppy birthdays to dog-friendly gatherings, we set the stage for an unforgettable celebration  -  with your furry guests as the stars.',
     features: [
       { label: 'Birthday packages', detail: 'Decorations, cake & more' },
       { label: 'Private event booking', detail: 'Reserve the space for your group' },
@@ -584,7 +588,7 @@ const services = [
   {
     tag: 'Capture',
     name: 'Self-Shoot Studio',
-    desc: 'A studio designed just for pets and their parents. Set up your own shot, choose your background, and capture memories that'll last a lifetime — no experience needed, just bring the cuteness.',
+    desc: 'A studio designed just for pets and their parents. Set up your own shot, choose your background, and capture memories that\'ll last a lifetime  -  no experience needed, just bring the cuteness.',
     features: [
       { label: 'Multiple themed backdrops', detail: 'Swap and mix your favorites' },
       { label: 'Ring light & props provided', detail: 'Everything you need, ready to go' },
@@ -600,8 +604,16 @@ function openSvcModal(idx) {
   document.getElementById('svc-modal-name').textContent = s.name;
   document.getElementById('svc-modal-desc').textContent = s.desc;
   document.getElementById('svc-modal-features').innerHTML = s.features.map(f =>
-    `<div class="svc-modal-feature"><div class="svc-modal-feature-dot"></div><div class="svc-modal-feature-text"><strong>${f.label}</strong>${f.detail ? ' — ' + f.detail : ''}</div></div>`
+    `<div class="svc-modal-feature"><div class="svc-modal-feature-dot"></div><div class="svc-modal-feature-text"><strong>${f.label}</strong>${f.detail ? ' - ' + f.detail : ''}</div></div>`
   ).join('');
+  // Show service image if available
+  const imgEl = document.getElementById('svc-modal-img');
+  const imgWrap = document.getElementById('svc-modal-img-wrap');
+  const svcKeys = ['playpark','hotel','grooming','events','studio'];
+  const imgSrc = (typeof BARKHAUS_IMAGES !== 'undefined' && BARKHAUS_IMAGES.services)
+    ? BARKHAUS_IMAGES.services[svcKeys[idx]] : null;
+  if (imgEl && imgSrc) { imgEl.src = imgSrc; if(imgWrap) imgWrap.style.display='block'; }
+  else if (imgWrap) imgWrap.style.display = 'none';
   document.getElementById('svc-modal-overlay').classList.add('open');
   document.body.style.overflow = 'hidden';
 }
@@ -616,17 +628,21 @@ function closeSvcModalOnOverlay(e) {
 }
 
 /* ── SERVICE CARD REVEAL ── */
+// Cards start visible immediately  -  no intersection observer needed since
+// the section is full-screen and cards are always "in" it when scrolled to.
+function revealServiceCards() {
+  document.querySelectorAll('.stone-card').forEach((c,i) => {
+    setTimeout(() => { c.classList.add('visible'); }, i * 100);
+  });
+}
+// Observe the services section to trigger reveal on scroll
 const cardObs = new IntersectionObserver(entries => {
   entries.forEach(e => {
-    if (e.isIntersecting) {
-      e.target.querySelectorAll('.stone-card').forEach((c,i) => {
-        c.style.transitionDelay = `${i*0.1}s`;
-        c.classList.add('visible');
-      });
-    }
+    if (e.isIntersecting) { revealServiceCards(); }
   });
-}, { threshold: 0.15 });
-document.querySelectorAll('#services').forEach(el => cardObs.observe(el));
+}, { threshold: 0.1 });
+const svcSection = document.getElementById('services');
+if (svcSection) cardObs.observe(svcSection);
 
 /* ── ANIMATED FOOTSTEPS BACKGROUND ── */
 (function() {
@@ -636,122 +652,142 @@ document.querySelectorAll('#services').forEach(el => cardObs.observe(el));
   resize();
   new ResizeObserver(resize).observe(canvas);
 
-  // Dog paw print
-  function drawDogPaw(x, y, size, alpha, angle) {
+  // Draw a single realistic paw print (main pad + 4 toe beans)
+  // isLeft: mirrors the print left/right for alternating feet
+  function drawPaw(x, y, size, alpha, travelAngle, isLeft) {
     ctx.save();
     ctx.globalAlpha = alpha;
     ctx.translate(x, y);
-    ctx.rotate(angle);
-    ctx.fillStyle = '#4A90C4';
-    // Main pad
+    // Rotate so toes point in travel direction
+    ctx.rotate(travelAngle - Math.PI / 2);
+    // Mirror for left/right foot
+    if (isLeft) ctx.scale(-1, 1);
+
+    ctx.fillStyle = '#4D96B9';
+
+    // Main heel pad  -  large heart-ish shape (two overlapping ellipses + triangle)
     ctx.beginPath();
-    ctx.ellipse(0, size*0.12, size*0.38, size*0.32, 0, 0, Math.PI*2);
+    ctx.ellipse(-size*0.18, size*0.05, size*0.22, size*0.28, -0.25, 0, Math.PI*2);
     ctx.fill();
-    // Toe pads
-    const toes = [[-size*0.30,-size*0.22],[- size*0.10,-size*0.38],[size*0.12,-size*0.38],[size*0.30,-size*0.22]];
-    toes.forEach(([tx,ty]) => {
+    ctx.beginPath();
+    ctx.ellipse( size*0.18, size*0.05, size*0.22, size*0.28,  0.25, 0, Math.PI*2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(-size*0.38, size*0.05);
+    ctx.lineTo( size*0.38, size*0.05);
+    ctx.lineTo(0, size*0.48);
+    ctx.closePath();
+    ctx.fill();
+
+    // 4 toe beans  -  two slightly inward, two outward, all tilted
+    const toeData = [
+      // [offsetX, offsetY, rx, ry, rotation]
+      [-size*0.36, -size*0.32, size*0.13, size*0.17,  0.4],
+      [-size*0.13, -size*0.48, size*0.13, size*0.17,  0.1],
+      [ size*0.13, -size*0.48, size*0.13, size*0.17, -0.1],
+      [ size*0.36, -size*0.32, size*0.13, size*0.17, -0.4],
+    ];
+    toeData.forEach(([tx, ty, rx, ry, rot]) => {
       ctx.beginPath();
-      ctx.ellipse(tx, ty, size*0.14, size*0.12, 0, 0, Math.PI*2);
+      ctx.ellipse(tx, ty, rx, ry, rot, 0, Math.PI*2);
       ctx.fill();
     });
+
     ctx.restore();
   }
 
-  // Cat paw print (slightly more round)
-  function drawCatPaw(x, y, size, alpha, angle) {
-    ctx.save();
-    ctx.globalAlpha = alpha;
-    ctx.translate(x, y);
-    ctx.rotate(angle);
-    ctx.fillStyle = '#F5C842';
-    // Main pad (rounder)
-    ctx.beginPath();
-    ctx.ellipse(0, size*0.08, size*0.34, size*0.30, 0, 0, Math.PI*2);
-    ctx.fill();
-    // 3 toe pads (cats)
-    const toes = [[-size*0.22,-size*0.28],[0,-size*0.38],[size*0.22,-size*0.28]];
-    toes.forEach(([tx,ty]) => {
-      ctx.beginPath();
-      ctx.ellipse(tx, ty, size*0.13, size*0.13, 0, 0, Math.PI*2);
-      ctx.fill();
-    });
-    ctx.restore();
-  }
-
-  // Trail system: each trail is a sequence of footsteps that appear one by one
+  // Each "trail" = one continuous walking path across the canvas.
+  // Steps come in LEFT/RIGHT pairs, offset sideways like real footsteps.
+  const TRAIL_COUNT = 4;
   const trails = [];
-  const TRAIL_COUNT = 5;
 
   function createTrail() {
-    const isDog = Math.random() > 0.4;
-    const startX = Math.random() * 100;
-    const startY = 110; // start below screen
-    const angle = -Math.PI/2 + (Math.random()-0.5)*0.6; // mostly upward
-    const stepLen = 10 + Math.random()*6;
-    const stepSide = 5 + Math.random()*3;
-    const size = 8 + Math.random() * 10;
+    // Random diagonal direction (mostly left-to-right or right-to-left, slightly angled)
+    const goRight = Math.random() > 0.5;
+    const startX  = goRight ? -8 : 108;          // % units
+    const startY  = 10 + Math.random() * 80;
+    const angle   = goRight
+      ? (Math.random() - 0.5) * 0.5              // rightward ± slight diagonal
+      : Math.PI + (Math.random() - 0.5) * 0.5;  // leftward
+
+    const stepFwd  = 7 + Math.random() * 4;      // forward distance per step (%)
+    const stepSide = 2.5 + Math.random() * 1.5;  // left-right offset per step (%)
+    const size     = 7 + Math.random() * 7;       // paw size in px
+    const numPairs = 5 + Math.floor(Math.random() * 5); // pairs of steps
+    const maxA     = 0.12 + Math.random() * 0.13;
+
+    // Pre-compute all step positions
     const steps = [];
     let cx = startX, cy = startY;
-    const numSteps = 6 + Math.floor(Math.random()*5);
-    for (let i = 0; i < numSteps; i++) {
-      const side = (i%2===0 ? 1 : -1) * stepSide;
-      cx += Math.cos(angle + Math.PI/2) * side / 100 * 5;
-      cy += Math.sin(angle) * stepLen;
-      steps.push({ x:cx, y:cy, alpha:0, maxAlpha: 0.08 + Math.random()*0.12, born:0 });
+    const perpAngle = angle + Math.PI / 2;
+
+    for (let p = 0; p < numPairs; p++) {
+      for (let foot = 0; foot < 2; foot++) {
+        // Alternate left/right offset
+        const side = (foot === 0 ? 1 : -1) * stepSide;
+        const sx = cx + Math.cos(perpAngle) * side + Math.cos(angle) * stepFwd * 0.5;
+        const sy = cy + Math.sin(perpAngle) * side + Math.sin(angle) * stepFwd * 0.5;
+        steps.push({ x: sx, y: sy, isLeft: foot === 0, alpha: 0, maxAlpha: maxA, born: 0 });
+      }
+      // Advance forward
+      cx += Math.cos(angle) * stepFwd;
+      cy += Math.sin(angle) * stepFwd;
     }
-    return { isDog, steps, size, angle, currentStep:0, stepDelay:0, active:true };
+
+    return { steps, size, angle, currentStep: 0, stepDelay: 0, done: false };
   }
 
-  for (let i=0;i<TRAIL_COUNT;i++) {
+  for (let i = 0; i < TRAIL_COUNT; i++) {
     const t = createTrail();
-    // Stagger starts
-    t.stepDelay = -Math.floor(Math.random()*120);
+    t.stepDelay = -Math.floor(Math.random() * 160);
     trails.push(t);
   }
 
   let frame = 0;
+  const STEP_INTERVAL = 22; // frames between each paw appearing
+
   function loop() {
     frame++;
     const w = canvas.width, h = canvas.height;
     ctx.fillStyle = '#1A1D2E';
     ctx.fillRect(0, 0, w, h);
 
-    // Subtle color stripes
-    for (let i=0;i<4;i++) {
-      const x = (i/4)*w + Math.sin(Date.now()*0.0001+i)*20;
-      ctx.fillStyle = 'rgba(74,144,196,0.015)';
-      ctx.fillRect(x,0,w*0.1,h);
-    }
-
     trails.forEach((trail, ti) => {
       trail.stepDelay++;
-      // Advance to next step every ~18 frames
-      if (trail.stepDelay > 0 && trail.stepDelay % 18 === 0 && trail.currentStep < trail.steps.length) {
+
+      // Stamp the next paw every STEP_INTERVAL frames
+      if (trail.stepDelay > 0 && trail.stepDelay % STEP_INTERVAL === 0
+          && trail.currentStep < trail.steps.length) {
         trail.steps[trail.currentStep].born = frame;
         trail.currentStep++;
       }
-      // Draw all born steps
-      trail.steps.forEach((step, si) => {
+
+      // Draw all stamped paws
+      trail.steps.forEach(step => {
         if (step.born === 0) return;
         const age = frame - step.born;
-        // Fade in fast, hold, then fade out slowly
-        if (age < 8) step.alpha = (age/8) * step.maxAlpha;
-        else if (age < 80) step.alpha = step.maxAlpha;
-        else step.alpha = Math.max(0, step.maxAlpha - (age-80)/60 * step.maxAlpha);
+        // Fade in quickly, hold, then slowly fade out
+        if      (age < 6)   step.alpha = (age / 6) * step.maxAlpha;
+        else if (age < 90)  step.alpha = step.maxAlpha;
+        else                step.alpha = Math.max(0, step.maxAlpha * (1 - (age - 90) / 70));
 
-        const px = (step.x/100)*w;
-        const py = (step.y/100)*h;
-        if (trail.isDog) drawDogPaw(px, py, trail.size, step.alpha, trail.angle);
-        else drawCatPaw(px, py, trail.size, step.alpha, trail.angle);
+        drawPaw(
+          (step.x / 100) * w,
+          (step.y / 100) * h,
+          trail.size,
+          step.alpha,
+          trail.angle,
+          step.isLeft
+        );
       });
 
-      // Reset trail when all steps have faded
-      const lastStep = trail.steps[trail.steps.length-1];
-      if (trail.currentStep >= trail.steps.length && lastStep.alpha <= 0.001) {
+      // Recycle trail once all paws have faded out
+      const last = trail.steps[trail.steps.length - 1];
+      if (trail.currentStep >= trail.steps.length && last.alpha <= 0.001) {
         trails[ti] = createTrail();
-        trails[ti].stepDelay = 0;
       }
     });
+
     requestAnimationFrame(loop);
   }
   requestAnimationFrame(loop);
@@ -762,7 +798,7 @@ const products = [
   {
     category: 'Nutrition',
     name: '[Product Name]',
-    desc: '[Short product description — 1 sentence.]',
+    desc: '[Short product description  -  1 sentence.]',
     price: '₱[price]',
     emoji: '🥩',
     img: ''
@@ -770,7 +806,7 @@ const products = [
   {
     category: 'Accessories',
     name: '[Product Name]',
-    desc: '[Short product description — 1 sentence.]',
+    desc: '[Short product description  -  1 sentence.]',
     price: '₱[price]',
     emoji: '🦮',
     img: ''
@@ -778,7 +814,7 @@ const products = [
   {
     category: 'Treats',
     name: '[Product Name]',
-    desc: '[Short product description — 1 sentence.]',
+    desc: '[Short product description  -  1 sentence.]',
     price: '₱[price]',
     emoji: '🦴',
     img: ''
@@ -786,7 +822,7 @@ const products = [
   {
     category: 'Wellness',
     name: '[Product Name]',
-    desc: '[Short product description — 1 sentence.]',
+    desc: '[Short product description  -  1 sentence.]',
     price: '₱[price]',
     emoji: '💊',
     img: ''
