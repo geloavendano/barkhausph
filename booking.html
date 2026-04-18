@@ -1631,16 +1631,170 @@ function buildSummary() {
   }
 }
 
+// ── SUPABASE CONFIG ──
+// Replace these with your actual Supabase project values
+var SUPABASE_URL      = 'https://dxttnbtfhpanyiyduevn.supabase.co';
+var SUPABASE_ANON_KEY = 'sb_publishable_6kYXE4GHS9Q5KKW9-sctsg_QdzE8Jni';
+var EDGE_FN_URL       = SUPABASE_URL + '/functions/v1/submit-booking';
+
 // ── SUBMIT ──
 function submitBooking() {
   collectStep(7);
-  var ref = 'BH-' + Math.random().toString(36).substr(2,6).toUpperCase();
-  document.getElementById('refNum').textContent = ref;
-  for (var i = 1; i <= 7; i++) { var el = document.getElementById('step'+i); if (el) el.classList.remove('active'); }
-  document.getElementById('stepEvents').classList.remove('active');
-  document.getElementById('bottomNav').style.display = 'none';
-  document.getElementById('successScreen').classList.add('active');
-  document.querySelector('.progress-wrap').style.display = 'none';
+
+  // Disable the confirm button and show loading state
+  var btn = document.getElementById('btnNext');
+  btn.textContent = 'Submitting...';
+  btn.disabled = true;
+
+  // Build the payload from booking state
+  var svc = booking.service;
+  var subtotal = 0;
+  if (svc === 'grooming') {
+    subtotal = (booking.groomServicePrice||0) + Object.values(booking.selectedAddons).reduce(function(a,b){return a+b;},0);
+  } else if (svc === 'hotel') {
+    subtotal = (booking.hotelBaseTotal||0) + (booking.hotelLateTotal||0);
+  } else if (svc === 'daycare') {
+    subtotal = booking.daycareTotal || 0;
+  }
+  var discRate   = booking.memberValid ? (MEMBER_DISCOUNT[svc] || 0) : 0;
+  var discAmt    = Math.round(subtotal * discRate);
+  var total      = subtotal - discAmt;
+
+  // Resolve groom service name for storage
+  var groomServiceName = '';
+  if (booking.groomService) {
+    var found = GROOM_SERVICES.find(function(s){ return s.key === booking.groomService; });
+    groomServiceName = found ? found.name : booking.groomService;
+  }
+
+  // Collect daycare hours from selects
+  var daycareDropoffHour = document.getElementById('daycareDropoff') ? parseInt(document.getElementById('daycareDropoff').value) || 0 : 0;
+  var daycarePickupHour  = document.getElementById('daycarePickup')  ? parseInt(document.getElementById('daycarePickup').value)  || 0 : 0;
+  var daycareDropoffVal  = document.getElementById('daycareDropoff') ? document.getElementById('daycareDropoff').options[document.getElementById('daycareDropoff').selectedIndex]?.text || '' : '';
+  var daycarePickupVal   = document.getElementById('daycarePickup')  ? document.getElementById('daycarePickup').options[document.getElementById('daycarePickup').selectedIndex]?.text  || '' : '';
+
+  // Hotel pickup
+  var hotelPickupSel = document.getElementById('hotelPickupTime');
+  var hotelPickupVal = hotelPickupSel ? (hotelPickupSel.options[hotelPickupSel.selectedIndex]?.text || '') : '';
+
+  // Waiver states
+  var waiverGeneral = document.getElementById('waiverGeneral').classList.contains('checked');
+  var waiverVaccine = document.getElementById('waiverVaccine').classList.contains('checked');
+  var waiverStudio  = document.getElementById('waiverStudio')  ? document.getElementById('waiverStudio').classList.contains('checked')  : false;
+  var waiverMedia   = document.getElementById('waiverMedia').classList.contains('checked');
+
+  var payload = {
+    // Location + service
+    location:            booking.location,
+    service:             booking.service,
+
+    // Schedule
+    groomDate:           booking.groomDate,
+    groomSlot:           booking.groomSlot,
+    preferredStylist:    booking.preferredStylist,
+    groomService:        booking.groomService,
+    groomServiceName:    groomServiceName,
+    groomCoat:           document.getElementById('groomCoat') ? document.getElementById('groomCoat').value : '',
+    groomNotes:          document.getElementById('groomNotes') ? document.getElementById('groomNotes').value : '',
+
+    hotelCheckin:        booking.hotelCheckin,
+    hotelCheckout:       booking.hotelCheckout,
+    hotelDropoff:        document.getElementById('hotelDropoffTime') ? document.getElementById('hotelDropoffTime').value : '',
+    hotelPickup:         hotelPickupVal,
+    hotelPickupHour:     booking.hotelPickupHour || 14,
+    hotelRoom:           document.getElementById('hotelRoomType') ? document.getElementById('hotelRoomType').value : '',
+    playparkConsent:     booking.playparkConsent,
+    hotelFeeding:        document.getElementById('hotelFeeding') ? document.getElementById('hotelFeeding').value : '',
+    hotelMeds:           document.getElementById('hotelMeds') ? document.getElementById('hotelMeds').value : '',
+    vetClinic:           document.getElementById('vetClinic') ? document.getElementById('vetClinic').value : '',
+    vetContact:          document.getElementById('vetContact') ? document.getElementById('vetContact').value : '',
+    vetAddress:          document.getElementById('vetAddress') ? document.getElementById('vetAddress').value : '',
+    emergencyName:       document.getElementById('emergencyName') ? document.getElementById('emergencyName').value : '',
+    emergencyPhone:      document.getElementById('emergencyPhone') ? document.getElementById('emergencyPhone').value : '',
+
+    daycareDate:         booking.daycareDate,
+    daycareDropoff:      daycareDropoffVal,
+    daycareDropoffHour:  daycareDropoffHour,
+    daycarePickup:       daycarePickupVal,
+    daycarePickupHour:   daycarePickupHour,
+    daycareTemp:         document.getElementById('daycareTemp') ? document.getElementById('daycareTemp').value : '',
+    daycareNotes:        document.getElementById('daycareNotes') ? document.getElementById('daycareNotes').value : '',
+
+    studioDate:          booking.studioDate,
+    studioSlot:          booking.studioSlot,
+
+    // Pet
+    petName:             booking.petName,
+    petAnimal:           booking.petAnimal,
+    petGender:           booking.petGender,
+    petBreed:            booking.petBreed,
+    petAge:              booking.petAge,
+    petAgeUnit:          booking.petAgeUnit,
+    petSize:             booking.petSize,
+    petMedical:          booking.petMedical,
+
+    // Membership
+    membershipId:        booking.memberValid ? booking.membershipId : null,
+
+    // Vaccines (hotel)
+    vaccines:            booking.vaccines,
+
+    // Add-ons (grooming)
+    addons:              booking.selectedAddons,
+
+    // Owner
+    ownerFirst:          booking.ownerFirst,
+    ownerLast:           booking.ownerLast,
+    ownerEmail:          booking.ownerEmail,
+    ownerPhone:          booking.ownerPhone,
+    ownerSource:         document.getElementById('ownerSource') ? document.getElementById('ownerSource').value : '',
+
+    // Waivers
+    waiverGeneral:       waiverGeneral,
+    waiverVaccine:       waiverVaccine,
+    waiverStudio:        waiverStudio,
+    waiverMedia:         waiverMedia,
+
+    // Financials
+    subtotal:            subtotal,
+    discountAmount:      discAmt,
+    total:               total,
+  };
+
+  fetch(EDGE_FN_URL, {
+    method:  'POST',
+    headers: {
+      'Content-Type':  'application/json',
+      'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+      'apikey':        SUPABASE_ANON_KEY,
+    },
+    body: JSON.stringify(payload),
+  })
+  .then(function(res) { return res.json(); })
+  .then(function(data) {
+    if (data.error) {
+      alert('Booking failed: ' + data.error + '\nPlease try again or contact us directly.');
+      btn.textContent = 'Confirm Booking';
+      btn.disabled = false;
+      return;
+    }
+    // Success - show confirmation screen
+    document.getElementById('refNum').textContent = data.ref_number || 'BH-000000';
+    for (var i = 1; i <= 7; i++) {
+      var el = document.getElementById('step' + i);
+      if (el) el.classList.remove('active');
+    }
+    document.getElementById('stepEvents').classList.remove('active');
+    document.getElementById('bottomNav').style.display = 'none';
+    document.getElementById('successScreen').classList.add('active');
+    document.querySelector('.progress-wrap').style.display = 'none';
+  })
+  .catch(function(err) {
+    console.error('Submit error:', err);
+    alert('Could not reach the server. Please check your connection and try again.');
+    btn.textContent = 'Confirm Booking';
+    btn.disabled = false;
+  });
 }
 </script>
 </body>
