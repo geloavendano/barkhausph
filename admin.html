@@ -312,22 +312,47 @@ async function loadBookings() {
   var branch  = branches[currentBranch];
   if (!branch || !branch.id) { renderTimeline([]); return; }
 
+  var select = 'id,ref_number,service,status,booking_date,member_discount_applied,' +
+    'owners(first_name,last_name,mobile),' +
+    'pets(name,animal_type,breed,size),' +
+    'grooming_details(timeslot,preferred_stylist,groom_service_name,coat_condition,special_requests),' +
+    'hotel_details(checkin_date,checkout_date,dropoff_time,pickup_time,room_type,playpark_consent,feeding_instructions,medications,emergency_name,emergency_phone),' +
+    'daycare_details(dropoff_time,pickup_time,hours_total,temperament,notes),' +
+    'studio_details(timeslot)';
+
   try {
-    // Fetch bookings for this date (grooming/daycare/studio) OR hotel stays covering this date
-    var bookings = await sbFetch('bookings',
-      'select=id,ref_number,service,status,booking_date,member_discount_applied,' +
-      'owners(first_name,last_name,mobile),' +
-      'pets(name,animal_type,breed,size),' +
-      'grooming_details(timeslot,preferred_stylist,groom_service_name,coat_condition,special_requests),' +
-      'hotel_details(checkin_date,checkout_date,dropoff_time,pickup_time,room_type,playpark_consent,feeding_instructions,medications,emergency_name,emergency_phone),' +
-      'daycare_details(dropoff_time,pickup_time,hours_total,temperament,notes),' +
-      'studio_details(timeslot)' +
+    // Query 1: grooming, daycare, studio by booking_date
+    var dayBookings = await sbFetch('bookings',
+      'select=' + select +
       '&branch_id=eq.' + branch.id +
-      '&or=(booking_date.eq.' + dateStr + ',and(service.eq.hotel,hotel_details.checkin_date.lte.' + dateStr + ',hotel_details.checkout_date.gte.' + dateStr + '))' +
+      '&booking_date=eq.' + dateStr +
+      '&service=not.eq.hotel' +
       '&status=not.in.(cancelled,rejected)' +
       '&order=created_at'
     );
-    allBookings = bookings || [];
+
+    // Query 2: hotel stays where checkin <= selected date <= checkout
+    // We fetch hotel bookings and filter in JS since nested column filtering
+    // isn't supported in the REST API or parameter
+    var hotelBookings = await sbFetch('bookings',
+      'select=' + select +
+      '&branch_id=eq.' + branch.id +
+      '&service=eq.hotel' +
+      '&status=not.in.(cancelled,rejected)' +
+      '&order=created_at'
+    );
+
+    // Filter hotel bookings to only those covering the selected date
+    var d = new Date(dateStr);
+    var hotelFiltered = (hotelBookings || []).filter(function(b) {
+      var hd = b.hotel_details;
+      if (!hd) return false;
+      var cin  = new Date(hd.checkin_date);
+      var cout = new Date(hd.checkout_date);
+      return cin <= d && d <= cout;
+    });
+
+    allBookings = (dayBookings || []).concat(hotelFiltered);
   } catch(e) {
     console.error('Load error:', e);
     allBookings = [];
