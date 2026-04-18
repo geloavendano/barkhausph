@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Book Now - Barkhaus</title>
 <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -66,7 +66,7 @@
   .form-group { margin-bottom: 18px; }
   .form-label { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--mid); margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
   .form-label .required { color: var(--yellow); }
-  .form-input, .form-select, .form-textarea { width: 100%; background: var(--surface); border: 1.5px solid var(--border); border-radius: 12px; padding: 13px 16px; color: var(--cream); font-family: "Nunito", sans-serif; font-size: 14px; font-weight: 500; outline: none; transition: border-color 0.2s; -webkit-appearance: none; }
+  .form-input, .form-select, .form-textarea { width: 100%; background: var(--surface); border: 1.5px solid var(--border); border-radius: 12px; padding: 13px 16px; color: var(--cream); font-family: "Nunito", sans-serif; font-size: 16px; font-weight: 500; outline: none; transition: border-color 0.2s; -webkit-appearance: none; }
   .form-input:focus, .form-select:focus, .form-textarea:focus { border-color: var(--blue); }
   .form-input::placeholder, .form-textarea::placeholder { color: rgba(184,212,224,0.4); }
   .form-select option { background: var(--surface); color: var(--cream); }
@@ -160,6 +160,9 @@
   .btn-back { flex: 0 0 auto; padding: 14px 20px; background: var(--surface); border: 1px solid var(--border); border-radius: 50px; font-size: 13px; font-weight: 700; color: var(--cream-m); cursor: pointer; font-family: "Nunito", sans-serif; transition: background 0.2s; }
   .btn-next { flex: 1; padding: 14px; background: var(--yellow); color: var(--bg); border: none; border-radius: 50px; font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; font-family: "Nunito", sans-serif; transition: opacity 0.2s; }
   .btn-submit { flex: 1; padding: 14px; background: var(--blue); color: #fff; border: none; border-radius: 50px; font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; font-family: "Nunito", sans-serif; }
+  .nav-total { display: none; flex-direction: column; align-items: flex-start; justify-content: center; flex-shrink: 0; }
+  .nav-total-label { font-size: 9px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--mid); }
+  .nav-total-val { font-family: "Fredoka One", cursive; font-size: 17px; color: var(--yellow); line-height: 1.1; }
 
   .section-label { font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--yellow); font-weight: 700; margin: 18px 0 10px; padding-bottom: 8px; border-bottom: 0.5px solid var(--border); }
   .info-box { background: rgba(77,150,185,0.08); border: 1px solid rgba(77,150,185,0.2); border-radius: 10px; padding: 12px 14px; font-size: 12px; color: var(--cream-m); line-height: 1.6; margin-bottom: 14px; }
@@ -202,7 +205,7 @@
 <header class="booking-header">
   <a href="index.html" class="header-back">
     <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
-    Back
+    Exit
   </a>
   <a href="index.html" class="header-logo">BARK<span>HAUS</span></a>
   <div style="width:48px"></div>
@@ -369,9 +372,10 @@
     <div id="groomScheduleSection" style="display:none">
       <p class="section-label">Date</p>
       <div class="form-group">
-        <input type="date" class="form-input" id="groomDate">
+        <input type="date" class="form-input" id="groomDate" onchange="onGroomDateChange()">
       </div>
 
+      <div id="stylistSection" style="display:none">
       <p class="section-label">Preferred pet stylist <span style="font-size:10px;color:var(--mid);text-transform:none;letter-spacing:0;font-weight:500">(optional)</span></p>
       <div class="stylist-grid" id="stylistGrid">
         <div class="stylist-btn selected" onclick="selectStylist(this,'any')">
@@ -391,7 +395,9 @@
           <span class="stylist-tag">Specialist: large dogs</span>
         </div>
       </div>
+      </div>
 
+      <div id="slotSection" style="display:none">
       <p class="section-label" style="margin-top:18px">Available time slots</p>
       <div class="timeslot-grid" id="groomSlots">
         <div class="timeslot" onclick="selectSlot(this)">9:00 AM</div>
@@ -404,57 +410,120 @@
         <div class="timeslot" onclick="selectSlot(this)">5:00 PM</div>
         <div class="timeslot unavailable">6:00 PM</div>
       </div>
+      </div>
     </div>
   </div>
 
-  <!-- HOTEL: check-in / checkout -->
+  <!-- HOTEL: pet size + check-in / checkout + late pickup -->
   <div id="scheduleHotel" style="display:none">
-    <div class="form-row">
-      <div class="form-group">
-        <label class="form-label">Check-in <span class="required">*</span></label>
-        <input type="date" class="form-input" id="hotelCheckin" onchange="updateCheckout()">
+    <p class="section-label">Pet size <span style="font-size:10px;color:var(--mid);text-transform:none;letter-spacing:0;font-weight:500">(dogs only for hotel)</span></p>
+    <div class="pet-type-grid" id="hotelSizeGrid">
+      <div class="pet-type-btn" onclick="selectHotelSize(this,'small_dog')">
+        <span class="pt-emoji">&#128054;</span>
+        <span class="pt-label">Small Dog</span>
+        <span class="pt-price">up to 10kg</span>
       </div>
-      <div class="form-group">
-        <label class="form-label">Check-out <span class="required">*</span></label>
-        <input type="date" class="form-input" id="hotelCheckout" onchange="calcNights()">
+      <div class="pet-type-btn" onclick="selectHotelSize(this,'medium_dog')">
+        <span class="pt-emoji">&#128054;</span>
+        <span class="pt-label">Medium Dog</span>
+        <span class="pt-price">10-20kg</span>
+      </div>
+      <div class="pet-type-btn" onclick="selectHotelSize(this,'large_dog')" style="grid-column:span 2">
+        <span class="pt-emoji">&#128054;</span>
+        <span class="pt-label">Large Dog</span>
+        <span class="pt-price">20-35kg</span>
       </div>
     </div>
-    <div class="form-row">
+
+    <div id="hotelDatesSection" style="display:none">
+      <div class="form-row" style="margin-top:4px">
+        <div class="form-group">
+          <label class="form-label">Check-in <span class="required">*</span></label>
+          <input type="date" class="form-input" id="hotelCheckin" onchange="updateCheckout()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Check-out <span class="required">*</span></label>
+          <input type="date" class="form-input" id="hotelCheckout" onchange="calcNights()">
+        </div>
+      </div>
       <div class="form-group">
         <label class="form-label">Drop-off time</label>
         <select class="form-select" id="hotelDropoffTime">
           <option value="">Select time</option>
           <option>9:00 AM</option><option>10:00 AM</option><option>11:00 AM</option>
-          <option>12:00 PM</option><option>1:00 PM</option><option>2:00 PM</option>
-          <option>3:00 PM</option><option>4:00 PM</option><option>5:00 PM</option>
+          <option>12:00 PM</option><option>1:00 PM</option>
         </select>
       </div>
-      <div class="form-group">
-        <label class="form-label">Pick-up time</label>
-        <select class="form-select" id="hotelPickupTime">
-          <option value="">Select time</option>
-          <option>9:00 AM</option><option>10:00 AM</option><option>11:00 AM</option>
-          <option>12:00 PM</option><option>1:00 PM</option><option>2:00 PM</option>
-          <option>3:00 PM</option><option>4:00 PM</option><option>5:00 PM</option>
-        </select>
+      <div class="info-box" id="nightsDisplay" style="display:none"><strong id="nightsCount"></strong></div>
+
+      <p class="section-label">Pick-up time</p>
+      <div class="info-box">Standard checkout is <strong>2:00 PM</strong>. Late pick-up up to 8:00 PM is <strong>+&#8369;100/hour</strong>. Holiday rates (Fri-Sun pricing) may apply on public holidays &mdash; our team will confirm.</div>
+      <select class="form-select" id="hotelPickupTime" onchange="calcHotelTotal()">
+        <option value="">Select pick-up time</option>
+        <option value="14">2:00 PM (standard)</option>
+        <option value="15">3:00 PM (+&#8369;100)</option>
+        <option value="16">4:00 PM (+&#8369;200)</option>
+        <option value="17">5:00 PM (+&#8369;300)</option>
+        <option value="18">6:00 PM (+&#8369;400)</option>
+        <option value="19">7:00 PM (+&#8369;500)</option>
+        <option value="20">8:00 PM (+&#8369;600)</option>
+      </select>
+
+      <div class="price-total" id="hotelPriceTotal" style="display:none;margin-top:16px">
+        <span class="price-total-label">Estimated total</span>
+        <span class="price-total-val" id="hotelTotalVal">&#8369;0</span>
       </div>
     </div>
-    <div class="info-box" id="nightsDisplay" style="display:none"><strong id="nightsCount"></strong></div>
   </div>
 
   <!-- DAYCARE -->
   <div id="scheduleDaycare" style="display:none">
-    <div class="form-group">
-      <label class="form-label">Date <span class="required">*</span></label>
-      <input type="date" class="form-input" id="daycareDate">
+    <p class="section-label">Pet size</p>
+    <div class="pet-type-grid" id="daycareSizeGrid">
+      <div class="pet-type-btn" onclick="selectDaycareSize(this,'small_dog')">
+        <span class="pt-emoji">&#128054;</span>
+        <span class="pt-label">Small Dog</span>
+        <span class="pt-price">&#8369;500 base</span>
+      </div>
+      <div class="pet-type-btn" onclick="selectDaycareSize(this,'medium_dog')">
+        <span class="pt-emoji">&#128054;</span>
+        <span class="pt-label">Medium Dog</span>
+        <span class="pt-price">&#8369;550 base</span>
+      </div>
+      <div class="pet-type-btn" onclick="selectDaycareSize(this,'large_dog')" style="grid-column:span 2">
+        <span class="pt-emoji">&#128054;</span>
+        <span class="pt-label">Large Dog</span>
+        <span class="pt-price">&#8369;650 base</span>
+      </div>
     </div>
-    <div class="form-group">
-      <label class="form-label">Drop-off time</label>
-      <select class="form-select" id="daycareTime">
-        <option value="">Select time</option>
-        <option>8:00 AM</option><option>9:00 AM</option><option>10:00 AM</option>
-        <option>11:00 AM</option><option>12:00 PM</option>
-      </select>
+
+    <div id="daycareDateSection" style="display:none">
+      <div class="form-group" style="margin-top:4px">
+        <label class="form-label">Date <span class="required">*</span></label>
+        <input type="date" class="form-input" id="daycareDate" onchange="onDaycareDateChange()">
+      </div>
+
+      <div id="daycareTimesSection" style="display:none">
+        <div class="info-box">Base rate covers up to <strong>3 hours</strong>. Each additional hour is <strong>+&#8369;100</strong>.</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Drop-off time <span class="required">*</span></label>
+            <select class="form-select" id="daycareDropoff" onchange="calcDaycareTotal()">
+              <option value="">Select time</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Pick-up time <span class="required">*</span></label>
+            <select class="form-select" id="daycarePickup" onchange="calcDaycareTotal()">
+              <option value="">Select time</option>
+            </select>
+          </div>
+        </div>
+        <div class="price-total" id="daycarePriceTotal" style="display:none">
+          <span class="price-total-label">Estimated total</span>
+          <span class="price-total-val" id="daycareTotalVal">&#8369;0</span>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -545,6 +614,23 @@
   <div class="form-group">
     <label class="form-label">Known medical issues or allergies</label>
     <textarea class="form-textarea" id="petMedical" placeholder="Leave blank if none"></textarea>
+  </div>
+
+  <!-- Membership -->
+  <p class="section-label">Barkhaus membership</p>
+  <div class="form-group">
+    <label class="form-label">Is your pet a registered Barkhaus member?</label>
+    <div class="gender-grid">
+      <div class="gender-btn" id="memberYes" onclick="setMembership(true)">Yes</div>
+      <div class="gender-btn" id="memberNo" onclick="setMembership(false)">No</div>
+    </div>
+  </div>
+  <div id="memberIdSection" style="display:none">
+    <div class="form-group">
+      <label class="form-label">Membership ID <span class="required">*</span></label>
+      <input type="text" class="form-input" id="membershipId" placeholder="e.g. BH-M001" oninput="validateMemberId()" style="text-transform:uppercase">
+    </div>
+    <div id="memberValidMsg" style="font-size:12px;font-weight:700;margin-top:-10px;margin-bottom:14px;display:none"></div>
   </div>
 
   <!-- Vaccine checkboxes — hotel only -->
@@ -796,27 +882,40 @@
 
 <div class="bottom-nav" id="bottomNav">
   <button class="btn-back" id="btnBack" onclick="prevStep()" style="display:none">Back</button>
+  <div class="nav-total" id="navTotal">
+    <span class="nav-total-label">Estimated</span>
+    <span class="nav-total-val" id="navTotalVal">&#8369;0</span>
+  </div>
   <button class="btn-next" id="btnNext" onclick="nextStep()">Continue</button>
 </div>
 
 <script>
-// ── PRICING TABLE ──
+// ── PRICING TABLES ──
 var GROOM_PRICES = {
-  bath_dry:    { small_dog:450, medium_dog:550, large_dog:650, giant_dog:750, cat:600 },
-  basic:       { small_dog:650, medium_dog:850, large_dog:1050, giant_dog:1250, cat:750 },
-  premium:     { small_dog:850, medium_dog:1050, large_dog:1250, giant_dog:1450, cat:900 },
-  face_trim:   { small_dog:200, medium_dog:250, large_dog:350, giant_dog:450, cat:400 }
+  bath_dry:  { small_dog:450, medium_dog:550, large_dog:650, giant_dog:750, cat:600 },
+  basic:     { small_dog:650, medium_dog:850, large_dog:1050, giant_dog:1250, cat:750 },
+  premium:   { small_dog:850, medium_dog:1050, large_dog:1250, giant_dog:1450, cat:900 },
+  face_trim: { small_dog:200, medium_dog:250, large_dog:350, giant_dog:450, cat:400 }
 };
 var GROOM_SERVICES = [
-  { key:'bath_dry',  name:'Bath and Dry',     duration:'30 minutes' },
-  { key:'basic',     name:'Basic Groom',       duration:'1 hour' },
-  { key:'premium',   name:'Premium Groom',     duration:'2 hours' },
-  { key:'face_trim', name:'Face Trim',          duration:'30 minutes' }
+  { key:'bath_dry',  name:'Bath and Dry',   duration:'30 minutes' },
+  { key:'basic',     name:'Basic Groom',     duration:'1 hour' },
+  { key:'premium',   name:'Premium Groom',   duration:'2 hours' },
+  { key:'face_trim', name:'Face Trim',       duration:'30 minutes' }
 ];
+var HOTEL_RATES = {
+  weekday: { small_dog:1200, medium_dog:1300, large_dog:1500 },
+  weekend: { small_dog:1300, medium_dog:1400, large_dog:1600 }
+};
+var DAYCARE_RATES = { small_dog:500, medium_dog:550, large_dog:650 };
 var PET_SIZE_LABELS = {
   small_dog:'Small Dog', medium_dog:'Medium Dog', large_dog:'Large Dog',
   giant_dog:'Giant Dog', cat:'Cat'
 };
+var VALID_MEMBER_IDS = ['BH-M001','BH-M002','BH-M003','BH-M004','BH-M005',
+  'BH-M010','BH-M020','BH-M030','BH-M100'];
+// Discount rates
+var MEMBER_DISCOUNT = { grooming:0.10, hotel:0.20, daycare:0.20 };
 
 // ── STATE ──
 var booking = {
@@ -824,10 +923,14 @@ var booking = {
   petSize: null, groomService: null, groomServicePrice: 0,
   selectedAddons: {}, groomSlot: null, groomDate: null,
   preferredStylist: 'any',
-  hotelCheckin: null, hotelCheckout: null,
-  daycareDate: null, studioDate: null, studioSlot: null,
+  hotelCheckin: null, hotelCheckout: null, hotelPickupHour: 14,
+  hotelBaseTotal: 0, hotelLateTotal: 0,
+  daycareDate: null, daycareDropoff: null, daycarePickup: null,
+  daycareBaseRate: 0, daycareTotal: 0,
+  studioDate: null, studioSlot: null,
   petName: null, petAnimal: null, petGender: null, petBreed: null,
   petAge: null, petAgeUnit: null, petMedical: null,
+  isMember: null, membershipId: null, memberValid: false,
   vaccines: {}, playparkConsent: null,
   ownerFirst: null, ownerLast: null, ownerEmail: null, ownerPhone: null
 };
@@ -910,6 +1013,36 @@ function updateBottomNav() {
   back.style.display = currentStep > 1 ? '' : 'none';
   next.textContent = currentStep === 7 ? 'Confirm Booking' : 'Continue';
   next.className = currentStep === 7 ? 'btn-submit' : 'btn-next';
+  updateNavTotal();
+}
+
+function updateNavTotal() {
+  var total = getRunningTotal();
+  var el = document.getElementById('navTotal');
+  if (total > 0) {
+    document.getElementById('navTotalVal').textContent = '\u20b1' + total.toLocaleString();
+    el.style.display = 'flex';
+  } else {
+    el.style.display = 'none';
+  }
+}
+
+function getRunningTotal() {
+  var svc = booking.service;
+  var raw = 0;
+  if (svc === 'grooming') {
+    raw = (booking.groomServicePrice || 0) +
+      Object.values(booking.selectedAddons).reduce(function(a,b){return a+b;},0);
+  } else if (svc === 'hotel') {
+    raw = (booking.hotelBaseTotal || 0) + (booking.hotelLateTotal || 0);
+  } else if (svc === 'daycare') {
+    raw = booking.daycareTotal || 0;
+  }
+  if (raw > 0 && booking.memberValid) {
+    var disc = MEMBER_DISCOUNT[svc] || 0;
+    raw = Math.round(raw * (1 - disc));
+  }
+  return raw;
 }
 
 // ── LOCATION ──
@@ -952,10 +1085,16 @@ function selectPetSize(el, val) {
   document.querySelectorAll('#petSizeGrid .pet-type-btn').forEach(function(b) { b.classList.remove('selected'); });
   el.classList.add('selected');
   booking.petSize = val;
+  booking.groomService = null;
+  booking.groomServicePrice = 0;
+  // Reset progressive sections
+  document.getElementById('groomScheduleSection').style.display = 'none';
+  document.getElementById('stylistSection').style.display = 'none';
+  document.getElementById('slotSection').style.display = 'none';
   renderGroomServices();
   document.getElementById('groomServiceSection').style.display = 'block';
-  document.getElementById('groomScheduleSection').style.display = 'block';
   updateGroomTotal();
+  updateNavTotal();
 }
 
 function renderGroomServices() {
@@ -987,6 +1126,16 @@ function selectGroomService(el, key, price) {
   booking.groomService = key;
   booking.groomServicePrice = price;
   updateGroomTotal();
+  // Progressive: show date section
+  document.getElementById('groomScheduleSection').style.display = 'block';
+  document.getElementById('stylistSection').style.display = 'none';
+  document.getElementById('slotSection').style.display = 'none';
+  booking.groomSlot = null;
+  booking.preferredStylist = 'any';
+  // Re-select "any" stylist
+  document.querySelectorAll('#stylistGrid .stylist-btn').forEach(function(b) { b.classList.remove('selected'); });
+  var anyBtn = document.querySelector('#stylistGrid .stylist-btn');
+  if (anyBtn) anyBtn.classList.add('selected');
 }
 
 function toggleAddon(el, key, price) {
@@ -999,20 +1148,43 @@ function toggleAddon(el, key, price) {
 function updateGroomTotal() {
   var base = booking.groomServicePrice || 0;
   var addons = Object.values(booking.selectedAddons).reduce(function(a,b){return a+b;}, 0);
-  var total = base + addons;
+  var subtotal = base + addons;
+  var discount = 0;
+  if (booking.memberValid && subtotal > 0) discount = Math.round(subtotal * MEMBER_DISCOUNT.grooming);
+  var total = subtotal - discount;
   var el = document.getElementById('groomPriceTotal');
-  if (total > 0) {
-    document.getElementById('groomTotalVal').textContent = '&#8369;' + total.toLocaleString();
+  if (subtotal > 0) {
+    var html = '\u20b1' + total.toLocaleString();
+    if (discount > 0) html = '<span style="text-decoration:line-through;opacity:0.5;font-size:14px">\u20b1' + subtotal.toLocaleString() + '</span> \u20b1' + total.toLocaleString();
+    document.getElementById('groomTotalVal').innerHTML = html;
     el.style.display = 'flex';
   } else {
     el.style.display = 'none';
   }
+  updateNavTotal();
 }
 
 function selectStylist(el, val) {
   document.querySelectorAll('#stylistGrid .stylist-btn').forEach(function(b) { b.classList.remove('selected'); });
   el.classList.add('selected');
   booking.preferredStylist = val;
+  // Progressive: show slots after stylist chosen
+  document.getElementById('slotSection').style.display = 'block';
+  booking.groomSlot = null;
+  document.querySelectorAll('#groomSlots .timeslot').forEach(function(t) { t.classList.remove('selected'); });
+}
+
+function onGroomDateChange() {
+  var val = document.getElementById('groomDate').value;
+  if (val) {
+    document.getElementById('stylistSection').style.display = 'block';
+    document.getElementById('slotSection').style.display = 'none';
+    booking.groomSlot = null;
+    booking.preferredStylist = 'any';
+    document.querySelectorAll('#stylistGrid .stylist-btn').forEach(function(b) { b.classList.remove('selected'); });
+    var anyBtn = document.querySelector('#stylistGrid .stylist-btn');
+    if (anyBtn) anyBtn.classList.add('selected');
+  }
 }
 
 function selectSlot(el) {
@@ -1057,24 +1229,179 @@ function calcNights() {
     if (nights > 0) {
       document.getElementById('nightsCount').innerHTML = '<strong>' + nights + ' night' + (nights > 1 ? 's' : '') + '</strong> selected';
       disp.style.display = '';
+      calcHotelTotal();
     }
   }
 }
 
+// ── HOTEL SIZE + PRICING ──
+function selectHotelSize(el, val) {
+  document.querySelectorAll('#hotelSizeGrid .pet-type-btn').forEach(function(b) { b.classList.remove('selected'); });
+  el.classList.add('selected');
+  booking.petSize = val;
+  document.getElementById('hotelDatesSection').style.display = 'block';
+  calcHotelTotal();
+}
+
+function calcHotelTotal() {
+  var cin = document.getElementById('hotelCheckin').value;
+  var cout = document.getElementById('hotelCheckout').value;
+  var size = booking.petSize;
+  if (!cin || !cout || !size) return;
+  var nights = Math.round((new Date(cout) - new Date(cin)) / 86400000);
+  if (nights <= 0) return;
+  // Calculate per night, checking weekday vs weekend
+  var baseTotal = 0;
+  for (var i = 0; i < nights; i++) {
+    var d = new Date(cin);
+    d.setDate(d.getDate() + i);
+    var dow = d.getDay(); // 0=Sun,1=Mon...6=Sat
+    var isWeekend = (dow === 0 || dow === 5 || dow === 6);
+    var rateTable = isWeekend ? HOTEL_RATES.weekend : HOTEL_RATES.weekday;
+    baseTotal += rateTable[size] || 0;
+  }
+  booking.hotelBaseTotal = baseTotal;
+  // Late checkout fee
+  var pickupHour = parseInt(document.getElementById('hotelPickupTime').value) || 14;
+  booking.hotelPickupHour = pickupHour;
+  var lateHours = Math.max(0, pickupHour - 14);
+  booking.hotelLateTotal = lateHours * 100;
+  var subtotal = baseTotal + booking.hotelLateTotal;
+  var discount = 0;
+  if (booking.memberValid) discount = Math.round(subtotal * MEMBER_DISCOUNT.hotel);
+  var total = subtotal - discount;
+  var el = document.getElementById('hotelPriceTotal');
+  if (subtotal > 0) {
+    var html = '\u20b1' + total.toLocaleString();
+    if (discount > 0) html = '<span style="text-decoration:line-through;opacity:0.5;font-size:14px">\u20b1' + subtotal.toLocaleString() + '</span> \u20b1' + total.toLocaleString();
+    if (lateHours > 0) html += '<span style="font-size:11px;display:block;color:var(--mid);margin-top:2px">incl. late pickup +\u20b1' + booking.hotelLateTotal.toLocaleString() + '</span>';
+    document.getElementById('hotelTotalVal').innerHTML = html;
+    el.style.display = 'flex';
+  }
+  updateNavTotal();
+}
+
+// ── DAYCARE SIZE + PRICING ──
+function selectDaycareSize(el, val) {
+  document.querySelectorAll('#daycareSizeGrid .pet-type-btn').forEach(function(b) { b.classList.remove('selected'); });
+  el.classList.add('selected');
+  booking.petSize = val;
+  booking.daycareBaseRate = DAYCARE_RATES[val] || 0;
+  document.getElementById('daycareDateSection').style.display = 'block';
+  document.getElementById('daycareTimesSection').style.display = 'none';
+  calcDaycareTotal();
+}
+
+function onDaycareDateChange() {
+  var d = document.getElementById('daycareDate').value;
+  if (!d) return;
+  // Determine branch hours for this date
+  var dow = new Date(d).getDay();
+  var loc = booking.location;
+  var startH, endH;
+  if (loc === 'estancia') {
+    // Mon-Thu: 11-21, Fri-Sun: 10-22
+    var isWeekday = (dow >= 1 && dow <= 4);
+    startH = isWeekday ? 11 : 10;
+    endH   = isWeekday ? 21 : 22;
+  } else {
+    // Eastwood daily 10-22
+    startH = 10;
+    endH   = 22;
+  }
+  // Build time options
+  var opts = '<option value="">Select time</option>';
+  for (var h = startH; h <= endH; h++) {
+    var label = h <= 12 ? h + ':00 ' + (h === 12 ? 'PM' : 'AM') : (h - 12) + ':00 PM';
+    if (h === 12) label = '12:00 PM';
+    opts += '<option value="' + h + '">' + label + '</option>';
+  }
+  document.getElementById('daycareDropoff').innerHTML = opts;
+  document.getElementById('daycarePickup').innerHTML = opts;
+  document.getElementById('daycareTimesSection').style.display = 'block';
+  calcDaycareTotal();
+}
+
+function calcDaycareTotal() {
+  var dropH = parseInt(document.getElementById('daycareDropoff').value);
+  var pickH = parseInt(document.getElementById('daycarePickup').value);
+  var base = booking.daycareBaseRate || 0;
+  if (!dropH || !pickH || !base || pickH <= dropH) {
+    document.getElementById('daycarePriceTotal').style.display = 'none';
+    return;
+  }
+  var hours = pickH - dropH;
+  var extra = Math.max(0, hours - 3);
+  var subtotal = base + (extra * 100);
+  booking.daycareTotal = subtotal;
+  var discount = 0;
+  if (booking.memberValid) discount = Math.round(subtotal * MEMBER_DISCOUNT.daycare);
+  var total = subtotal - discount;
+  var el = document.getElementById('daycarePriceTotal');
+  var html = '\u20b1' + total.toLocaleString();
+  if (discount > 0) html = '<span style="text-decoration:line-through;opacity:0.5;font-size:14px">\u20b1' + subtotal.toLocaleString() + '</span> \u20b1' + total.toLocaleString();
+  html += '<span style="font-size:11px;display:block;color:var(--mid);margin-top:2px">' + hours + ' hour' + (hours !== 1 ? 's' : '') + (extra > 0 ? ' (base + ' + extra + ' extra hr' + (extra > 1 ? 's' : '') + ')' : '') + '</span>';
+  document.getElementById('daycareTotalVal').innerHTML = html;
+  el.style.display = 'flex';
+  updateNavTotal();
+}
+
+// ── MEMBERSHIP ──
+function setMembership(val) {
+  booking.isMember = val;
+  document.getElementById('memberYes').classList.toggle('selected', val);
+  document.getElementById('memberNo').classList.toggle('selected', !val);
+  document.getElementById('memberIdSection').style.display = val ? 'block' : 'none';
+  if (!val) {
+    booking.memberValid = false;
+    booking.membershipId = null;
+    document.getElementById('membershipId').value = '';
+    var msg = document.getElementById('memberValidMsg');
+    msg.style.display = 'none';
+    refreshAllTotals();
+  }
+}
+
+function validateMemberId() {
+  var input = document.getElementById('membershipId');
+  var val = input.value.trim().toUpperCase();
+  var msg = document.getElementById('memberValidMsg');
+  if (val.length < 4) { msg.style.display = 'none'; booking.memberValid = false; refreshAllTotals(); return; }
+  var valid = VALID_MEMBER_IDS.indexOf(val) !== -1;
+  booking.memberValid = valid;
+  booking.membershipId = valid ? val : null;
+  msg.style.display = 'block';
+  if (valid) {
+    var disc = booking.service ? Math.round((MEMBER_DISCOUNT[booking.service] || 0) * 100) : 0;
+    msg.textContent = 'Member ID accepted' + (disc ? ' - ' + disc + '% discount applied' : '') + ' \u2713';
+    msg.style.color = 'var(--success)';
+  } else {
+    msg.textContent = 'Member ID not found. Please check and try again.';
+    msg.style.color = 'var(--error)';
+  }
+  refreshAllTotals();
+}
+
+function refreshAllTotals() {
+  var svc = booking.service;
+  if (svc === 'grooming') updateGroomTotal();
+  else if (svc === 'hotel') calcHotelTotal();
+  else if (svc === 'daycare') calcDaycareTotal();
+  updateNavTotal();
+}
+
 // ── PET PANEL ──
 function showPetPanel() {
-  // Vaccine + emergency sections
   var isHotel = booking.service === 'hotel';
   document.getElementById('vaccineSection').style.display = isHotel ? '' : 'none';
   document.getElementById('emergencySection').style.display = isHotel ? '' : 'none';
-  // Pet size: grooming pre-fills from step 3; hotel/daycare shows select
+  // Size: grooming + hotel + daycare all collect in step 3 now, show read-only for grooming
   var isGroom = booking.service === 'grooming';
   document.getElementById('petSizeGroupPet').style.display = isGroom ? '' : 'none';
-  document.getElementById('petSizeSelectGroup').style.display = (!isGroom && booking.service !== 'studio') ? '' : 'none';
+  document.getElementById('petSizeSelectGroup').style.display = 'none';
   if (isGroom && booking.petSize) {
     document.getElementById('petSizeDisplay').value = PET_SIZE_LABELS[booking.petSize] || '';
   }
-  // Render vaccines if hotel and animal known
   if (isHotel) renderVaccines();
 }
 
@@ -1181,12 +1508,19 @@ function validateStep(step) {
       if (!booking.groomSlot) { alert('Please select a time slot.'); return false; }
     }
     if (booking.service === 'hotel') {
+      if (!booking.petSize) { alert('Please select a pet size.'); return false; }
       if (!document.getElementById('hotelCheckin').value || !document.getElementById('hotelCheckout').value) {
         alert('Please select check-in and check-out dates.'); return false;
       }
     }
-    if (booking.service === 'daycare' && !document.getElementById('daycareDate').value) {
-      alert('Please select a date.'); return false;
+    if (booking.service === 'daycare') {
+      if (!booking.petSize) { alert('Please select a pet size.'); return false; }
+      if (!document.getElementById('daycareDate').value) { alert('Please select a date.'); return false; }
+      if (!document.getElementById('daycareDropoff').value) { alert('Please select a drop-off time.'); return false; }
+      if (!document.getElementById('daycarePickup').value) { alert('Please select a pick-up time.'); return false; }
+      var dH = parseInt(document.getElementById('daycareDropoff').value);
+      var pH = parseInt(document.getElementById('daycarePickup').value);
+      if (pH <= dH) { alert('Pick-up time must be after drop-off time.'); return false; }
     }
     if (booking.service === 'studio') {
       if (!document.getElementById('studioDate').value) { alert('Please select a date.'); return false; }
@@ -1198,8 +1532,9 @@ function validateStep(step) {
     if (!booking.petAnimal) { alert('Please select Dog or Cat.'); return false; }
     if (!booking.petGender) { alert('Please select your pet\'s sex.'); return false; }
     if (!document.getElementById('petBreed').value.trim()) { alert('Please enter your pet\'s breed.'); return false; }
-    if ((booking.service === 'hotel' || booking.service === 'daycare') && !document.getElementById('petSizeSelect').value) {
-      alert('Please select your pet\'s size.'); return false;
+    // Hotel size now comes from step 3, so no separate check needed
+    if (booking.isMember === true && !booking.memberValid) {
+      alert('Please enter a valid Membership ID or select No for membership.'); return false;
     }
   }
   if (step === 5) {
@@ -1226,27 +1561,32 @@ function buildSummary() {
   collectStep(6);
   var locLabels = { estancia:'Estancia (Pasig)', eastwood:'Eastwood (QC)' };
   var svcLabels = { grooming:'Grooming', hotel:'Pet Hotel', daycare:'Daycare', studio:'Self-Shoot Studio' };
+  var svc = booking.service;
+
   var schedStr = '';
-  if (booking.service === 'grooming') schedStr = (booking.groomDate || '-') + ' at ' + (booking.groomSlot || '-');
-  else if (booking.service === 'hotel') schedStr = 'Check-in: ' + (booking.hotelCheckin||'-') + ' / Check-out: ' + (booking.hotelCheckout||'-');
-  else if (booking.service === 'daycare') schedStr = booking.daycareDate || '-';
-  else if (booking.service === 'studio') schedStr = (booking.studioDate||'-') + ' at ' + (booking.studioSlot||'-');
+  if (svc === 'grooming') schedStr = (booking.groomDate||'-') + ' at ' + (booking.groomSlot||'-');
+  else if (svc === 'hotel') schedStr = 'Check-in: ' + (booking.hotelCheckin||'-') + ' / Check-out: ' + (booking.hotelCheckout||'-');
+  else if (svc === 'daycare') schedStr = booking.daycareDate || '-';
+  else if (svc === 'studio') schedStr = (booking.studioDate||'-') + ' at ' + (booking.studioSlot||'-');
 
   var groomDetail = '';
-  if (booking.service === 'grooming' && booking.groomService) {
-    groomDetail = GROOM_SERVICES.find(function(s){return s.key===booking.groomService;}).name;
-    var addonNames = Object.keys(booking.selectedAddons);
-    if (addonNames.length) groomDetail += ' + ' + addonNames.length + ' add-on(s)';
+  if (svc === 'grooming' && booking.groomService) {
+    var svcObj = GROOM_SERVICES.find(function(s){return s.key===booking.groomService;});
+    groomDetail = svcObj ? svcObj.name : '';
+    var addonCount = Object.keys(booking.selectedAddons).length;
+    if (addonCount) groomDetail += ' + ' + addonCount + ' add-on' + (addonCount > 1 ? 's' : '');
   }
 
   var rows = [
     ['Branch', locLabels[booking.location] || '-'],
-    ['Service', svcLabels[booking.service] || '-'],
+    ['Service', svcLabels[svc] || '-']
   ];
   if (groomDetail) rows.push(['Groom type', groomDetail]);
+  if (booking.petSize && svc !== 'studio') rows.push(['Pet size', PET_SIZE_LABELS[booking.petSize] || '-']);
   rows.push(['Schedule', schedStr || '-']);
   rows.push(['Pet', (booking.petName||'-') + ' (' + (booking.petAnimal||'-') + ', ' + (booking.petGender||'-') + ')']);
   rows.push(['Breed', booking.petBreed || '-']);
+  if (booking.memberValid) rows.push(['Membership', booking.membershipId || '-']);
   rows.push(['Owner', (document.getElementById('ownerFirst').value + ' ' + document.getElementById('ownerLast').value).trim() || '-']);
   rows.push(['Mobile', document.getElementById('ownerPhone').value || '-']);
 
@@ -1254,12 +1594,38 @@ function buildSummary() {
     return '<div class="summary-row"><span class="summary-key">' + r[0] + '</span><span class="summary-val">' + r[1] + '</span></div>';
   }).join('');
 
-  // Show total for grooming
+  // Price breakdown
+  var subtotal = 0;
+  if (svc === 'grooming') {
+    subtotal = (booking.groomServicePrice||0) + Object.values(booking.selectedAddons).reduce(function(a,b){return a+b;},0);
+  } else if (svc === 'hotel') {
+    subtotal = (booking.hotelBaseTotal||0) + (booking.hotelLateTotal||0);
+  } else if (svc === 'daycare') {
+    subtotal = booking.daycareTotal || 0;
+  }
+
   var totalEl = document.getElementById('summaryTotal');
-  if (booking.service === 'grooming' && booking.groomServicePrice) {
-    var addons = Object.values(booking.selectedAddons).reduce(function(a,b){return a+b;},0);
-    document.getElementById('summaryTotalVal').innerHTML = '&#8369;' + (booking.groomServicePrice + addons).toLocaleString();
-    totalEl.style.display = 'flex';
+  if (subtotal > 0) {
+    var discRate = booking.memberValid ? (MEMBER_DISCOUNT[svc] || 0) : 0;
+    var discAmt = Math.round(subtotal * discRate);
+    var total = subtotal - discAmt;
+    var bhtml = '<div class="summary-row"><span class="summary-key">Subtotal</span><span class="summary-val">\u20b1' + subtotal.toLocaleString() + '</span></div>';
+    if (svc === 'hotel' && booking.hotelLateTotal > 0) {
+      var baseOnly = booking.hotelBaseTotal || 0;
+      bhtml += '<div class="summary-row"><span class="summary-key">Base rate</span><span class="summary-val">\u20b1' + baseOnly.toLocaleString() + '</span></div>';
+      bhtml += '<div class="summary-row"><span class="summary-key">Late pickup fee</span><span class="summary-val">\u20b1' + booking.hotelLateTotal.toLocaleString() + '</span></div>';
+    }
+    if (discAmt > 0) {
+      var discPct = Math.round(discRate * 100);
+      bhtml += '<div class="summary-row"><span class="summary-key">Member discount (' + discPct + '%)</span><span class="summary-val" style="color:var(--success)">-\u20b1' + discAmt.toLocaleString() + '</span></div>';
+    }
+    bhtml += '<div class="summary-row" style="border-top:1.5px solid rgba(255,206,88,0.4);margin-top:4px;padding-top:10px"><span class="summary-key" style="color:var(--yellow)">Total</span><span class="summary-val" style="color:var(--yellow);font-size:18px">\u20b1' + total.toLocaleString() + '</span></div>';
+    totalEl.innerHTML = bhtml;
+    totalEl.style.display = 'block';
+    totalEl.style.padding = '0';
+    totalEl.style.background = 'none';
+    totalEl.style.border = 'none';
+    totalEl.style.borderRadius = '0';
   } else {
     totalEl.style.display = 'none';
   }
