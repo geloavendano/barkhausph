@@ -225,8 +225,8 @@
 // Replace with your actual Supabase values
 var SUPABASE_URL      = 'https://dxttnbtfhpanyiyduevn.supabase.co';
 var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4dHRuYnRmaHBhbnlpeWR1ZXZuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY1MjkyNDcsImV4cCI6MjA5MjEwNTI0N30.jrMk8-_Ga01TydNPUwCzlymf1W44PjaXXIUjCLALb2s';
-var ADMIN_PASSWORD    = 'greenhills2026';   // change this to something stronger
-
+var ADMIN_PASSWORD    = 'greenhills2026';  
+  
 // ── STATE ──
 var currentDate    = new Date();
 var currentBranch  = 0;
@@ -260,6 +260,8 @@ function checkPassword() {
 async function init() {
   await loadBranches();
   renderDateLabel();
+  var d = currentDate;
+  await loadMonthDots(d.getFullYear(), d.getMonth());
   renderMiniCal();
   await loadBookings();
 }
@@ -268,6 +270,7 @@ async function init() {
 async function sbFetch(path, params) {
   var url = SUPABASE_URL + '/rest/v1/' + path;
   if (params) url += '?' + params;
+  console.log('Fetching:', url);
   var res = await fetch(url, {
     headers: {
       'apikey':        SUPABASE_ANON_KEY,
@@ -275,7 +278,11 @@ async function sbFetch(path, params) {
       'Content-Type':  'application/json',
     }
   });
-  if (!res.ok) throw new Error('Supabase error: ' + res.status);
+  if (!res.ok) {
+    var body = await res.text();
+    console.error('Supabase ' + res.status + ':', body);
+    throw new Error('Supabase error: ' + res.status + ' - ' + body);
+  }
   return res.json();
 }
 
@@ -297,7 +304,7 @@ async function sbPatch(path, params, body) {
 // ── LOAD BRANCHES ──
 async function loadBranches() {
   try {
-    branches = await sbFetch('branches', 'select=id,name&order=name');
+    branches = await sbFetch('branches', 'select=id,name&order=created_at');
   } catch(e) {
     branches = [{ id: null, name: 'Estancia' }, { id: null, name: 'Eastwood' }];
   }
@@ -574,28 +581,64 @@ function renderDateLabel() {
     DAY_NAMES[d.getDay()] + ', ' + MONTH_NAMES[d.getMonth()] + ' ' + d.getDate() + ' ' + d.getFullYear();
 }
 
-function shiftDate(delta) {
+async function shiftDate(delta) {
   currentDate.setDate(currentDate.getDate() + delta);
+  var prevMonth = currentDate.getMonth();
   renderDateLabel();
+  // Reload dots if month changed
+  if (currentDate.getMonth() !== prevMonth) {
+    await loadMonthDots(currentDate.getFullYear(), currentDate.getMonth());
+  }
   renderMiniCal();
   loadBookings();
 }
 
-function goToday() {
+async function goToday() {
+  var prev = currentDate.getMonth();
   currentDate = new Date();
   renderDateLabel();
+  if (currentDate.getMonth() !== prev) {
+    await loadMonthDots(currentDate.getFullYear(), currentDate.getMonth());
+  }
   renderMiniCal();
   loadBookings();
 }
 
-function setBranch(idx, el) {
+async function setBranch(idx, el) {
   currentBranch = idx;
   document.querySelectorAll('.branch-tab').forEach(function(t) { t.classList.remove('active'); });
   el.classList.add('active');
+  await loadMonthDots(currentDate.getFullYear(), currentDate.getMonth());
+  renderMiniCal();
   loadBookings();
 }
 
 // ── MINI CALENDAR ──
+var calBookingDates = {};
+
+async function loadMonthDots(year, month) {
+  var branch = branches[currentBranch];
+  if (!branch || !branch.id) return;
+  var firstDay = year + '-' + String(month+1).padStart(2,'0') + '-01';
+  var lastDay  = year + '-' + String(month+1).padStart(2,'0') + '-' + new Date(year, month+1, 0).getDate();
+  try {
+    var rows = await sbFetch('bookings',
+      'select=booking_date' +
+      '&branch_id=eq.' + branch.id +
+      '&booking_date=gte.' + firstDay +
+      '&booking_date=lte.' + lastDay +
+      '&status=not.in.(cancelled,rejected)'
+    );
+    calBookingDates = {};
+    (rows || []).forEach(function(r) {
+      if (r.booking_date) calBookingDates[r.booking_date] = true;
+    });
+  } catch(e) {
+    console.error('Month dots error:', e);
+    calBookingDates = {};
+  }
+}
+
 function renderMiniCal() {
   var d   = new Date(currentDate);
   var y   = d.getFullYear();
@@ -609,33 +652,35 @@ function renderMiniCal() {
   var prev  = new Date(y, mon, 0).getDate();
 
   var html = '';
-  ['S','M','T','W','T','F','S'].forEach(function(d) {
-    html += '<div class="cal-dow">' + d + '</div>';
+  ['S','M','T','W','T','F','S'].forEach(function(dn) {
+    html += '<div class="cal-dow">' + dn + '</div>';
   });
 
-  // Prev month tail
   for (var i = 0; i < first; i++) {
     html += '<div class="cal-day other-month">' + (prev - first + i + 1) + '</div>';
   }
 
   for (var day = 1; day <= days; day++) {
+    var dateStr = y + '-' + String(mon+1).padStart(2,'0') + '-' + String(day).padStart(2,'0');
     var cls = 'cal-day';
     var isToday = (day === today.getDate() && mon === today.getMonth() && y === today.getFullYear());
     var isSel   = (day === currentDate.getDate() && mon === currentDate.getMonth() && y === currentDate.getFullYear());
     if (isToday) cls += ' is-today';
     else if (isSel) cls += ' is-selected';
-    // Dot for days with bookings (simplified - just show dots near current week)
-    var dayOffset = Math.abs(day - currentDate.getDate());
-    if (dayOffset > 0 && dayOffset <= 8 && (day % 3 !== 0)) cls += ' has-dot';
+    if (calBookingDates[dateStr]) cls += ' has-dot';
     html += '<div class="' + cls + '" onclick="jumpToDay(' + y + ',' + mon + ',' + day + ')">' + day + '</div>';
   }
 
   document.getElementById('calGrid').innerHTML = html;
 }
 
-function jumpToDay(y, m, d) {
+async function jumpToDay(y, m, d) {
+  var prevMonth = currentDate.getMonth();
   currentDate = new Date(y, m, d);
   renderDateLabel();
+  if (currentDate.getMonth() !== prevMonth) {
+    await loadMonthDots(y, m);
+  }
   renderMiniCal();
   loadBookings();
 }
