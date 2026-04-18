@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Barkhaus Admin</title>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:      #0F1C26;
+    --surface: #1A3044;
+    --raised:  #1F3D55;
+    --border:  rgba(77,150,185,0.30);
+    --mid:     #6AAEC8;
+    --cream:   #F0EDE6;
+    --cream-m: #B8D4E0;
+    --blue:    #4D96B9;
+    --yellow:  #FFCE58;
+    --error:   #FF6B6B;
+    --success: #6BCB77;
+    --amber:   #EF9F27;
+    --pink:    #D4537E;
+    --teal:    #1D9E75;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--cream); font-family: "Nunito", sans-serif; font-size: 14px; min-height: 100svh; }
+
+  /* ── PASSWORD GATE ── */
+  #gate { position: fixed; inset: 0; background: var(--bg); z-index: 999; display: flex; align-items: center; justify-content: center; padding: 24px; }
+  .gate-card { background: var(--surface); border: 0.5px solid var(--border); border-radius: 16px; padding: 32px 28px; width: 100%; max-width: 340px; text-align: center; }
+  .gate-logo { font-family: "Fredoka One", cursive; font-size: 22px; color: var(--cream); margin-bottom: 4px; }
+  .gate-logo span { color: var(--yellow); }
+  .gate-sub { font-size: 12px; color: var(--mid); margin-bottom: 24px; font-weight: 500; }
+  .gate-input { width: 100%; background: var(--raised); border: 1.5px solid var(--border); border-radius: 10px; padding: 12px 16px; color: var(--cream); font-family: "Nunito", sans-serif; font-size: 16px; outline: none; margin-bottom: 10px; text-align: center; letter-spacing: 0.1em; }
+  .gate-input:focus { border-color: var(--blue); }
+  .gate-btn { width: 100%; background: var(--yellow); color: var(--bg); border: none; border-radius: 50px; padding: 12px; font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; font-family: "Nunito", sans-serif; }
+  .gate-error { font-size: 12px; color: var(--error); margin-top: 8px; font-weight: 600; min-height: 18px; }
+
+  /* ── MAIN LAYOUT ── */
+  #app { display: none; flex-direction: column; min-height: 100svh; }
+  #app.visible { display: flex; }
+
+  /* ── TOP BAR ── */
+  .topbar { background: var(--surface); border-bottom: 0.5px solid var(--border); padding: 12px 16px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; position: sticky; top: 0; z-index: 50; }
+  .topbar-logo { font-family: "Fredoka One", cursive; font-size: 17px; color: var(--cream); flex-shrink: 0; }
+  .topbar-logo span { color: var(--yellow); }
+  .branch-tabs { display: flex; gap: 4px; }
+  .branch-tab { font-size: 12px; font-weight: 700; padding: 5px 14px; border-radius: 20px; border: 0.5px solid var(--border); cursor: pointer; background: transparent; color: var(--mid); font-family: "Nunito", sans-serif; transition: all 0.2s; }
+  .branch-tab.active { background: var(--yellow); border-color: var(--yellow); color: var(--bg); }
+  .date-nav { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+  .date-nav-btn { width: 30px; height: 30px; border-radius: 8px; border: 0.5px solid var(--border); background: transparent; cursor: pointer; color: var(--mid); display: flex; align-items: center; justify-content: center; font-family: "Nunito", sans-serif; font-size: 14px; transition: background 0.2s; }
+  .date-nav-btn:active { background: var(--raised); }
+  .date-label { font-size: 13px; font-weight: 700; color: var(--cream); min-width: 130px; text-align: center; }
+  .today-btn { font-size: 11px; font-weight: 700; padding: 5px 12px; border-radius: 20px; border: 0.5px solid var(--border); background: transparent; cursor: pointer; color: var(--mid); font-family: "Nunito", sans-serif; }
+  .today-btn:active { background: var(--raised); }
+
+  /* ── STATS STRIP ── */
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 12px 16px; border-bottom: 0.5px solid var(--border); }
+  .stat { background: var(--surface); border-radius: 10px; padding: 10px 12px; }
+  .stat-label { font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--mid); margin-bottom: 4px; font-weight: 700; }
+  .stat-val { font-size: 22px; font-weight: 500; color: var(--cream); }
+  .stat-val.blue { color: var(--blue); }
+  .stat-val.amber { color: var(--amber); }
+  .stat-val.green { color: var(--teal); }
+
+  /* ── MAIN CONTENT ── */
+  .main { display: flex; flex: 1; min-height: 0; }
+
+  /* ── MINI CALENDAR ── */
+  .mini-cal { width: 196px; flex-shrink: 0; border-right: 0.5px solid var(--border); padding: 14px 12px; display: flex; flex-direction: column; gap: 0; }
+  @media(max-width:600px) { .mini-cal { display: none; } }
+  .mini-cal-month { font-size: 12px; font-weight: 700; color: var(--cream); text-align: center; margin-bottom: 10px; }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; }
+  .cal-dow { font-size: 9px; color: var(--mid); text-align: center; padding: 0 0 6px; font-weight: 700; letter-spacing: 0.04em; }
+  .cal-day { font-size: 11px; text-align: center; padding: 5px 2px; border-radius: 4px; cursor: pointer; color: var(--cream-m); position: relative; transition: background 0.15s; }
+  .cal-day:hover { background: var(--raised); }
+  .cal-day.has-dot::after { content: ''; width: 4px; height: 4px; border-radius: 50%; background: var(--blue); position: absolute; bottom: 1px; left: 50%; transform: translateX(-50%); }
+  .cal-day.is-today { background: var(--yellow); color: var(--bg); font-weight: 700; }
+  .cal-day.is-today::after { background: var(--bg); }
+  .cal-day.is-selected:not(.is-today) { background: var(--raised); color: var(--cream); border: 1px solid var(--blue); }
+  .cal-day.other-month { opacity: 0.3; }
+  .legend { margin-top: 16px; border-top: 0.5px solid var(--border); padding-top: 12px; display: flex; flex-direction: column; gap: 6px; }
+  .legend-title { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--mid); font-weight: 700; margin-bottom: 2px; }
+  .legend-row { display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--cream-m); }
+  .legend-swatch { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+
+  /* ── TIMELINE ── */
+  .timeline { flex: 1; overflow-y: auto; padding: 8px 0; }
+  .time-row { display: grid; grid-template-columns: 52px 1fr; min-height: 60px; }
+  .time-row-label { font-size: 11px; color: var(--mid); padding: 8px 10px 0 12px; text-align: right; flex-shrink: 0; }
+  .time-row-slot { border-top: 0.5px solid var(--border); padding: 6px 10px 6px 12px; display: flex; flex-wrap: wrap; gap: 6px; align-content: flex-start; }
+  .booking-card { background: var(--surface); border: 0.5px solid var(--border); border-radius: 10px; padding: 8px 12px; min-width: 140px; max-width: 220px; cursor: pointer; border-left: 3px solid transparent; transition: background 0.15s; }
+  .booking-card:active { background: var(--raised); }
+  .booking-card.grooming { border-left-color: var(--blue); }
+  .booking-card.hotel    { border-left-color: var(--amber); }
+  .booking-card.daycare  { border-left-color: var(--teal); }
+  .booking-card.studio   { border-left-color: var(--pink); }
+  .bc-pet  { font-size: 13px; font-weight: 700; color: var(--cream); display: flex; align-items: center; gap: 5px; }
+  .bc-owner { font-size: 11px; color: var(--cream-m); margin-top: 1px; }
+  .bc-svc  { font-size: 10px; font-weight: 700; border-radius: 4px; padding: 2px 6px; display: inline-block; margin-top: 4px; letter-spacing: 0.04em; text-transform: uppercase; }
+  .bc-svc.grooming { background: rgba(77,150,185,0.18); color: var(--blue); }
+  .bc-svc.hotel    { background: rgba(239,159,39,0.18); color: var(--amber); }
+  .bc-svc.daycare  { background: rgba(29,158,117,0.18); color: var(--teal); }
+  .bc-svc.studio   { background: rgba(212,83,126,0.18); color: var(--pink); }
+  .status-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; display: inline-block; }
+  .dot-pending   { background: var(--amber); }
+  .dot-confirmed { background: var(--success); }
+  .dot-checkedin { background: var(--blue); }
+  .dot-completed { background: var(--mid); }
+  .dot-cancelled { background: var(--error); }
+
+  /* ── HOTEL ALL-DAY STRIP ── */
+  .allday-strip { padding: 8px 12px 0 64px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .allday-card { background: var(--surface); border: 0.5px solid var(--border); border-left: 3px solid var(--amber); border-radius: 8px; padding: 6px 10px; font-size: 11px; color: var(--cream-m); cursor: pointer; }
+  .allday-card strong { color: var(--cream); display: block; font-size: 12px; }
+
+  /* ── DETAIL DRAWER ── */
+  .drawer-overlay { position: fixed; inset: 0; background: rgba(10,20,30,0.7); z-index: 200; display: none; align-items: flex-end; justify-content: center; }
+  .drawer-overlay.open { display: flex; }
+  .drawer { background: var(--bg); width: 100%; max-width: 560px; max-height: 85svh; border-radius: 20px 20px 0 0; overflow-y: auto; padding: 20px; animation: slideUp 0.3s ease; }
+  @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+  .drawer-handle { width: 36px; height: 4px; border-radius: 2px; background: var(--raised); margin: 0 auto 18px; }
+  .drawer-close { float: right; background: var(--surface); border: 0.5px solid var(--border); border-radius: 50%; width: 28px; height: 28px; cursor: pointer; color: var(--mid); font-size: 16px; display: flex; align-items: center; justify-content: center; font-family: "Nunito", sans-serif; }
+  .drawer-eyebrow { font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--yellow); font-weight: 700; margin-bottom: 4px; }
+  .drawer-name { font-family: "Fredoka One", cursive; font-size: 24px; color: var(--cream); margin-bottom: 14px; }
+  .drawer-section { margin-bottom: 14px; }
+  .drawer-section-title { font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--mid); font-weight: 700; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 0.5px solid var(--border); }
+  .drawer-row { display: flex; justify-content: space-between; align-items: flex-start; padding: 5px 0; gap: 12px; }
+  .drawer-key { font-size: 12px; color: var(--mid); flex-shrink: 0; }
+  .drawer-val { font-size: 12px; color: var(--cream); font-weight: 600; text-align: right; }
+  .status-select { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; color: var(--cream); font-family: "Nunito", sans-serif; font-size: 13px; font-weight: 600; width: 100%; outline: none; margin-top: 8px; cursor: pointer; }
+  .save-status-btn { width: 100%; background: var(--blue); color: #fff; border: none; border-radius: 50px; padding: 11px; font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; font-family: "Nunito", sans-serif; margin-top: 10px; }
+  .save-status-btn:active { opacity: 0.85; }
+
+  /* ── EMPTY STATE ── */
+  .empty { text-align: center; padding: 48px 24px; color: var(--mid); }
+  .empty-icon { font-size: 40px; margin-bottom: 12px; opacity: 0.4; }
+  .empty p { font-size: 13px; font-weight: 500; }
+
+  /* ── LOADING ── */
+  .loading { text-align: center; padding: 48px; color: var(--mid); font-size: 13px; }
+</style>
+</head>
+<body>
+
+<!-- ── PASSWORD GATE ── -->
+<div id="gate">
+  <div class="gate-card">
+    <p class="gate-logo">BARK<span>HAUS</span></p>
+    <p class="gate-sub">Admin access only</p>
+    <input type="password" class="gate-input" id="gateInput" placeholder="Enter password"
+      onkeydown="if(event.key==='Enter')checkPassword()">
+    <button class="gate-btn" onclick="checkPassword()">Enter</button>
+    <p class="gate-error" id="gateError"></p>
+  </div>
+</div>
+
+<!-- ── MAIN APP ── -->
+<div id="app">
+
+  <!-- Top bar -->
+  <div class="topbar">
+    <span class="topbar-logo">BARK<span>HAUS</span></span>
+    <div class="branch-tabs">
+      <button class="branch-tab active" onclick="setBranch(0,this)">Estancia</button>
+      <button class="branch-tab" onclick="setBranch(1,this)">Eastwood</button>
+    </div>
+    <div class="date-nav">
+      <button class="date-nav-btn" onclick="shiftDate(-1)">&#8592;</button>
+      <span class="date-label" id="dateLabel"></span>
+      <button class="date-nav-btn" onclick="shiftDate(1)">&#8594;</button>
+      <button class="today-btn" onclick="goToday()">Today</button>
+    </div>
+  </div>
+
+  <!-- Stats strip -->
+  <div class="stats">
+    <div class="stat"><div class="stat-label">Total</div><div class="stat-val" id="statTotal">-</div></div>
+    <div class="stat"><div class="stat-label">Grooming</div><div class="stat-val blue" id="statGroom">-</div></div>
+    <div class="stat"><div class="stat-label">Hotel</div><div class="stat-val amber" id="statHotel">-</div></div>
+    <div class="stat"><div class="stat-label">Daycare</div><div class="stat-val green" id="statDaycare">-</div></div>
+  </div>
+
+  <!-- Main content -->
+  <div class="main">
+
+    <!-- Mini calendar -->
+    <div class="mini-cal">
+      <div class="mini-cal-month" id="miniCalMonth"></div>
+      <div class="cal-grid" id="calGrid"></div>
+      <div class="legend">
+        <div class="legend-title">Services</div>
+        <div class="legend-row"><div class="legend-swatch" style="background:rgba(77,150,185,0.3);border-left:3px solid var(--blue)"></div>Grooming</div>
+        <div class="legend-row"><div class="legend-swatch" style="background:rgba(239,159,39,0.3);border-left:3px solid var(--amber)"></div>Hotel</div>
+        <div class="legend-row"><div class="legend-swatch" style="background:rgba(29,158,117,0.3);border-left:3px solid var(--teal)"></div>Daycare</div>
+        <div class="legend-row"><div class="legend-swatch" style="background:rgba(212,83,126,0.3);border-left:3px solid var(--pink)"></div>Studio</div>
+        <div class="legend-title" style="margin-top:10px">Status</div>
+        <div class="legend-row"><span class="status-dot dot-pending" style="width:8px;height:8px"></span>Pending</div>
+        <div class="legend-row"><span class="status-dot dot-confirmed" style="width:8px;height:8px"></span>Confirmed</div>
+        <div class="legend-row"><span class="status-dot dot-checkedin" style="width:8px;height:8px"></span>Checked in</div>
+        <div class="legend-row"><span class="status-dot dot-completed" style="width:8px;height:8px"></span>Completed</div>
+        <div class="legend-row"><span class="status-dot dot-cancelled" style="width:8px;height:8px"></span>Cancelled</div>
+      </div>
+    </div>
+
+    <!-- Timeline -->
+    <div class="timeline" id="timeline">
+      <div class="loading">Loading bookings...</div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── BOOKING DETAIL DRAWER ── -->
+<div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer(event)">
+  <div class="drawer" id="drawer">
+    <div class="drawer-handle"></div>
+    <button class="drawer-close" onclick="closeDrawer()">&#215;</button>
+    <div id="drawerContent"></div>
+  </div>
+</div>
+
+<script>
+// ── CONFIG ──
+// Replace with your actual Supabase values
+var SUPABASE_URL      = 'https://dxttnbtfhpanyiyduevn.supabase.co';
+var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4dHRuYnRmaHBhbnlpeWR1ZXZuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY1MjkyNDcsImV4cCI6MjA5MjEwNTI0N30.jrMk8-_Ga01TydNPUwCzlymf1W44PjaXXIUjCLALb2s';
+var ADMIN_PASSWORD    = 'greenhills2026';   // change this to something stronger
+
+// ── STATE ──
+var currentDate    = new Date();
+var currentBranch  = 0;
+var branches       = [];
+var allBookings    = [];
+var selectedBooking = null;
+
+// ── HOURS to show in timeline ──
+var HOURS = [9,10,11,12,13,14,15,16,17,18,19,20];
+var HOUR_LABELS = {
+  9:'9 AM',10:'10 AM',11:'11 AM',12:'12 PM',
+  13:'1 PM',14:'2 PM',15:'3 PM',16:'4 PM',
+  17:'5 PM',18:'6 PM',19:'7 PM',20:'8 PM'
+};
+
+// ── PASSWORD GATE ──
+function checkPassword() {
+  var val = document.getElementById('gateInput').value;
+  var err = document.getElementById('gateError');
+  if (val === ADMIN_PASSWORD) {
+    document.getElementById('gate').style.display = 'none';
+    document.getElementById('app').classList.add('visible');
+    init();
+  } else {
+    err.textContent = 'Incorrect password. Try again.';
+    document.getElementById('gateInput').value = '';
+  }
+}
+
+// ── INIT ──
+async function init() {
+  await loadBranches();
+  renderDateLabel();
+  renderMiniCal();
+  await loadBookings();
+}
+
+// ── SUPABASE FETCH HELPER ──
+async function sbFetch(path, params) {
+  var url = SUPABASE_URL + '/rest/v1/' + path;
+  if (params) url += '?' + params;
+  var res = await fetch(url, {
+    headers: {
+      'apikey':        SUPABASE_ANON_KEY,
+      'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+      'Content-Type':  'application/json',
+    }
+  });
+  if (!res.ok) throw new Error('Supabase error: ' + res.status);
+  return res.json();
+}
+
+async function sbPatch(path, params, body) {
+  var url = SUPABASE_URL + '/rest/v1/' + path + '?' + params;
+  var res = await fetch(url, {
+    method: 'PATCH',
+    headers: {
+      'apikey':        SUPABASE_ANON_KEY,
+      'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+      'Content-Type':  'application/json',
+      'Prefer':        'return=representation',
+    },
+    body: JSON.stringify(body)
+  });
+  return res.json();
+}
+
+// ── LOAD BRANCHES ──
+async function loadBranches() {
+  try {
+    branches = await sbFetch('branches', 'select=id,name&order=name');
+  } catch(e) {
+    branches = [{ id: null, name: 'Estancia' }, { id: null, name: 'Eastwood' }];
+  }
+}
+
+// ── LOAD BOOKINGS ──
+async function loadBookings() {
+  var tl = document.getElementById('timeline');
+  tl.innerHTML = '<div class="loading">Loading...</div>';
+
+  var dateStr = formatDate(currentDate);
+  var branch  = branches[currentBranch];
+  if (!branch || !branch.id) { renderTimeline([]); return; }
+
+  try {
+    // Fetch bookings for this date (grooming/daycare/studio) OR hotel stays covering this date
+    var bookings = await sbFetch('bookings',
+      'select=id,ref_number,service,status,booking_date,member_discount_applied,' +
+      'owners(first_name,last_name,mobile),' +
+      'pets(name,animal_type,breed,size),' +
+      'grooming_details(timeslot,preferred_stylist,groom_service_name,coat_condition,special_requests),' +
+      'hotel_details(checkin_date,checkout_date,dropoff_time,pickup_time,room_type,playpark_consent,feeding_instructions,medications,emergency_name,emergency_phone),' +
+      'daycare_details(dropoff_time,pickup_time,hours_total,temperament,notes),' +
+      'studio_details(timeslot)' +
+      '&branch_id=eq.' + branch.id +
+      '&or=(booking_date.eq.' + dateStr + ',and(service.eq.hotel,hotel_details.checkin_date.lte.' + dateStr + ',hotel_details.checkout_date.gte.' + dateStr + '))' +
+      '&status=not.in.(cancelled,rejected)' +
+      '&order=created_at'
+    );
+    allBookings = bookings || [];
+  } catch(e) {
+    console.error('Load error:', e);
+    allBookings = [];
+  }
+
+  renderStats();
+  renderTimeline(allBookings);
+}
+
+// ── RENDER STATS ──
+function renderStats() {
+  var counts = { grooming:0, hotel:0, daycare:0, studio:0 };
+  allBookings.forEach(function(b) { if (counts[b.service] !== undefined) counts[b.service]++; });
+  document.getElementById('statTotal').textContent   = allBookings.length;
+  document.getElementById('statGroom').textContent   = counts.grooming;
+  document.getElementById('statHotel').textContent   = counts.hotel;
+  document.getElementById('statDaycare').textContent = counts.daycare;
+}
+
+// ── RENDER TIMELINE ──
+function renderTimeline(bookings) {
+  var tl = document.getElementById('timeline');
+  if (!bookings.length) {
+    tl.innerHTML = '<div class="empty"><div class="empty-icon">&#128062;</div><p>No bookings for this day.</p></div>';
+    return;
+  }
+
+  // Separate hotel all-day stays vs timeslot bookings
+  var hotelStays = bookings.filter(function(b) { return b.service === 'hotel'; });
+  var slotted    = bookings.filter(function(b) { return b.service !== 'hotel'; });
+
+  // Map timeslot string to hour integer
+  function slotHour(b) {
+    var slot = (b.grooming_details && b.grooming_details.timeslot) ||
+               (b.studio_details && b.studio_details.timeslot) ||
+               (b.daycare_details && b.daycare_details.dropoff_time) || '';
+    var m = slot.match(/(\d+):00\s*(AM|PM)/i);
+    if (!m) return 9;
+    var h = parseInt(m[1]);
+    if (m[2].toUpperCase() === 'PM' && h !== 12) h += 12;
+    if (m[2].toUpperCase() === 'AM' && h === 12) h = 0;
+    return h;
+  }
+
+  var html = '';
+
+  // All-day hotel strip
+  if (hotelStays.length) {
+    html += '<div class="allday-strip">';
+    hotelStays.forEach(function(b) {
+      var pet   = b.pets || {};
+      var hd    = b.hotel_details || {};
+      var owner = b.owners || {};
+      html += '<div class="allday-card" onclick="openDrawer(\'' + b.id + '\')">' +
+        '<strong>' + dot(b.status) + (pet.name||'Pet') + '</strong>' +
+        'Hotel ' + (hd.checkin_date||'') + ' - ' + (hd.checkout_date||'') +
+        '<br>' + (owner.first_name||'') + ' ' + (owner.last_name||'') +
+        '</div>';
+    });
+    html += '</div>';
+  }
+
+  // Hourly rows
+  HOURS.forEach(function(h) {
+    var rowBookings = slotted.filter(function(b) { return slotHour(b) === h; });
+    html += '<div class="time-row"><div class="time-row-label">' + HOUR_LABELS[h] + '</div><div class="time-row-slot">';
+    rowBookings.forEach(function(b) {
+      var pet   = b.pets   || {};
+      var owner = b.owners || {};
+      var svcLabel = b.service === 'grooming' ? ((b.grooming_details && b.grooming_details.groom_service_name) || 'Grooming') :
+                     b.service === 'daycare'  ? 'Daycare' : 'Studio';
+      html += '<div class="booking-card ' + b.service + '" onclick="openDrawer(\'' + b.id + '\')">' +
+        '<div class="bc-pet">' + dot(b.status) + (pet.name||'Pet') + '</div>' +
+        '<div class="bc-owner">' + (owner.first_name||'') + ' ' + (owner.last_name||'') + ' &middot; ' + (owner.mobile||'') + '</div>' +
+        '<span class="bc-svc ' + b.service + '">' + svcLabel + '</span>' +
+        '</div>';
+    });
+    html += '</div></div>';
+  });
+
+  tl.innerHTML = html;
+}
+
+function dot(status) {
+  var cls = { pending:'dot-pending', confirmed:'dot-confirmed', checked_in:'dot-checkedin', completed:'dot-completed', cancelled:'dot-cancelled' };
+  return '<span class="status-dot ' + (cls[status]||'dot-pending') + '"></span>';
+}
+
+// ── BOOKING DETAIL DRAWER ──
+function openDrawer(bookingId) {
+  var b = allBookings.find(function(x) { return x.id === bookingId; });
+  if (!b) return;
+  selectedBooking = b;
+  var pet   = b.pets   || {};
+  var owner = b.owners || {};
+  var gd    = b.grooming_details || null;
+  var hd    = b.hotel_details    || null;
+  var dd    = b.daycare_details  || null;
+  var sd    = b.studio_details   || null;
+
+  var svcLabel = { grooming:'Grooming', hotel:'Pet Hotel', daycare:'Daycare', studio:'Self-Shoot Studio' };
+
+  var html = '';
+  html += '<div class="drawer-eyebrow">' + b.ref_number + '</div>';
+  html += '<div class="drawer-name">' + (pet.name||'Pet') + '</div>';
+
+  // Booking info
+  html += '<div class="drawer-section"><div class="drawer-section-title">Booking</div>';
+  html += row('Service', svcLabel[b.service] || b.service);
+  html += row('Branch', branches[currentBranch] ? branches[currentBranch].name : '');
+  if (gd) {
+    html += row('Date', b.booking_date || '');
+    html += row('Time slot', gd.timeslot || '');
+    html += row('Stylist', gd.preferred_stylist || 'Any');
+    html += row('Groom type', gd.groom_service_name || '');
+    if (gd.coat_condition) html += row('Coat', gd.coat_condition);
+    if (gd.special_requests) html += row('Notes', gd.special_requests);
+  }
+  if (hd) {
+    html += row('Check-in', hd.checkin_date || '');
+    html += row('Check-out', hd.checkout_date || '');
+    html += row('Drop-off', hd.dropoff_time || '');
+    html += row('Pick-up', hd.pickup_time || '');
+    html += row('Room', hd.room_type || '');
+    html += row('Play park', hd.playpark_consent ? 'Yes' : 'No');
+    if (hd.feeding_instructions) html += row('Feeding', hd.feeding_instructions);
+    if (hd.medications) html += row('Medications', hd.medications);
+  }
+  if (dd) {
+    html += row('Date', b.booking_date || '');
+    html += row('Drop-off', dd.dropoff_time || '');
+    html += row('Pick-up', dd.pickup_time || '');
+    html += row('Duration', (dd.hours_total || '?') + ' hrs');
+    if (dd.temperament) html += row('Temperament', dd.temperament);
+    if (dd.notes) html += row('Notes', dd.notes);
+  }
+  if (sd) {
+    html += row('Date', b.booking_date || '');
+    html += row('Time slot', sd.timeslot || '');
+  }
+  html += '</div>';
+
+  // Pet info
+  html += '<div class="drawer-section"><div class="drawer-section-title">Pet</div>';
+  html += row('Name', pet.name || '');
+  html += row('Animal', (pet.animal_type || '') + (pet.breed ? ' - ' + pet.breed : ''));
+  if (pet.size) html += row('Size', pet.size.replace('_', ' '));
+  html += '</div>';
+
+  // Owner info
+  html += '<div class="drawer-section"><div class="drawer-section-title">Owner</div>';
+  html += row('Name', (owner.first_name||'') + ' ' + (owner.last_name||''));
+  html += row('Mobile', owner.mobile || '');
+  if (b.member_discount_applied) html += row('Member', 'Yes - discount applied');
+  html += '</div>';
+
+  // Emergency (hotel)
+  if (hd && (hd.emergency_name || hd.vet_clinic)) {
+    html += '<div class="drawer-section"><div class="drawer-section-title">Emergency</div>';
+    if (hd.emergency_name)  html += row('Contact', hd.emergency_name + ' ' + (hd.emergency_phone||''));
+    if (hd.vet_clinic)      html += row('Vet clinic', hd.vet_clinic);
+    html += '</div>';
+  }
+
+  // Status update
+  html += '<div class="drawer-section"><div class="drawer-section-title">Update status</div>';
+  html += '<select class="status-select" id="statusSelect">';
+  ['pending','confirmed','checked_in','completed','cancelled'].forEach(function(s) {
+    html += '<option value="' + s + '"' + (b.status === s ? ' selected' : '') + '>' + s.replace('_', ' ') + '</option>';
+  });
+  html += '</select>';
+  html += '<button class="save-status-btn" onclick="saveStatus()">Save status</button>';
+  html += '</div>';
+
+  document.getElementById('drawerContent').innerHTML = html;
+  document.getElementById('drawerOverlay').classList.add('open');
+}
+
+function row(k, v) {
+  return '<div class="drawer-row"><span class="drawer-key">' + k + '</span><span class="drawer-val">' + v + '</span></div>';
+}
+
+function closeDrawer(e) {
+  if (e && e.target !== document.getElementById('drawerOverlay')) return;
+  document.getElementById('drawerOverlay').classList.remove('open');
+  selectedBooking = null;
+}
+
+async function saveStatus() {
+  if (!selectedBooking) return;
+  var newStatus = document.getElementById('statusSelect').value;
+  try {
+    await sbPatch('bookings', 'id=eq.' + selectedBooking.id, { status: newStatus });
+    selectedBooking.status = newStatus;
+    // Update in allBookings array
+    var idx = allBookings.findIndex(function(b) { return b.id === selectedBooking.id; });
+    if (idx >= 0) allBookings[idx].status = newStatus;
+    document.getElementById('drawerOverlay').classList.remove('open');
+    renderTimeline(allBookings);
+  } catch(e) {
+    alert('Failed to update status. Please try again.');
+  }
+}
+
+// ── DATE HELPERS ──
+function formatDate(d) {
+  var y = d.getFullYear();
+  var m = String(d.getMonth()+1).padStart(2,'0');
+  var day = String(d.getDate()).padStart(2,'0');
+  return y + '-' + m + '-' + day;
+}
+
+var DAY_NAMES   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+var MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+function renderDateLabel() {
+  var d = currentDate;
+  document.getElementById('dateLabel').textContent =
+    DAY_NAMES[d.getDay()] + ', ' + MONTH_NAMES[d.getMonth()] + ' ' + d.getDate() + ' ' + d.getFullYear();
+}
+
+function shiftDate(delta) {
+  currentDate.setDate(currentDate.getDate() + delta);
+  renderDateLabel();
+  renderMiniCal();
+  loadBookings();
+}
+
+function goToday() {
+  currentDate = new Date();
+  renderDateLabel();
+  renderMiniCal();
+  loadBookings();
+}
+
+function setBranch(idx, el) {
+  currentBranch = idx;
+  document.querySelectorAll('.branch-tab').forEach(function(t) { t.classList.remove('active'); });
+  el.classList.add('active');
+  loadBookings();
+}
+
+// ── MINI CALENDAR ──
+function renderMiniCal() {
+  var d   = new Date(currentDate);
+  var y   = d.getFullYear();
+  var mon = d.getMonth();
+  var today = new Date();
+
+  document.getElementById('miniCalMonth').textContent = MONTH_NAMES[mon] + ' ' + y;
+
+  var first = new Date(y, mon, 1).getDay();
+  var days  = new Date(y, mon+1, 0).getDate();
+  var prev  = new Date(y, mon, 0).getDate();
+
+  var html = '';
+  ['S','M','T','W','T','F','S'].forEach(function(d) {
+    html += '<div class="cal-dow">' + d + '</div>';
+  });
+
+  // Prev month tail
+  for (var i = 0; i < first; i++) {
+    html += '<div class="cal-day other-month">' + (prev - first + i + 1) + '</div>';
+  }
+
+  for (var day = 1; day <= days; day++) {
+    var cls = 'cal-day';
+    var isToday = (day === today.getDate() && mon === today.getMonth() && y === today.getFullYear());
+    var isSel   = (day === currentDate.getDate() && mon === currentDate.getMonth() && y === currentDate.getFullYear());
+    if (isToday) cls += ' is-today';
+    else if (isSel) cls += ' is-selected';
+    // Dot for days with bookings (simplified - just show dots near current week)
+    var dayOffset = Math.abs(day - currentDate.getDate());
+    if (dayOffset > 0 && dayOffset <= 8 && (day % 3 !== 0)) cls += ' has-dot';
+    html += '<div class="' + cls + '" onclick="jumpToDay(' + y + ',' + mon + ',' + day + ')">' + day + '</div>';
+  }
+
+  document.getElementById('calGrid').innerHTML = html;
+}
+
+function jumpToDay(y, m, d) {
+  currentDate = new Date(y, m, d);
+  renderDateLabel();
+  renderMiniCal();
+  loadBookings();
+}
+</script>
+</body>
+</html>
