@@ -101,6 +101,8 @@
   .addon-price { font-size: 13px; font-weight: 700; color: var(--mid); }
   .addon-row.selected .addon-price { color: var(--blue); }
   .gender-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 4px; }
+  .gender-btn.locked-opt { pointer-events:none; opacity:0.55; }
+  .gender-btn.selected.locked-opt { opacity:1; border-color:var(--blue); background:rgba(77,150,185,0.12); color:var(--blue); }
   .gender-btn { background: var(--surface); border: 1.5px solid var(--border); border-radius: 12px; padding: 12px; text-align: center; cursor: pointer; transition: all 0.2s; font-weight: 700; font-size: 13px; color: var(--cream-m); }
   .gender-btn.selected { border-color: var(--blue); background: rgba(77,150,185,0.12); color: var(--blue); }
   .temp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 4px; }
@@ -339,7 +341,7 @@
         <span class="pt-price">35kg+</span>
       </div>
       <div class="pet-type-btn" onclick="selectGroomSize(this,'cat')" style="grid-column:span 2">
-        <span class="pt-emoji">&#128056;</span>
+        <span class="pt-emoji">&#128049;</span>
         <span class="pt-label">Cat</span>
         <span class="pt-price">any size</span>
       </div>
@@ -394,7 +396,7 @@
         <span class="pt-price">20-35kg</span>
       </div>
       <div class="pet-type-btn" id="hotelCatBtn" onclick="selectHotelSize(this,'cat')" style="grid-column:span 2">
-        <span class="pt-emoji">&#128056;</span>
+        <span class="pt-emoji">&#128049;</span>
         <span class="pt-label">Cat</span>
         <span class="pt-price" id="hotelCatNote">Eastwood only</span>
       </div>
@@ -445,7 +447,7 @@
         <span class="pt-price">&#8369;650 base</span>
       </div>
       <div class="pet-type-btn" id="daycareCatBtn" onclick="selectDaycareSize(this,'cat')" style="grid-column:span 2">
-        <span class="pt-emoji">&#128056;</span>
+        <span class="pt-emoji">&#128049;</span>
         <span class="pt-label">Cat</span>
         <span class="pt-price" id="daycareCatNote">Eastwood only</span>
       </div>
@@ -635,7 +637,7 @@
     <label class="form-label">Animal type <span class="required">*</span></label>
     <div class="gender-grid">
       <div class="gender-btn" id="petTypeDog" onclick="selectAnimalType(this,'dog')">&#128054; Dog</div>
-      <div class="gender-btn" id="petTypeCat" onclick="selectAnimalType(this,'cat')">&#128056; Cat</div>
+      <div class="gender-btn" id="petTypeCat" onclick="selectAnimalType(this,'cat')">&#128049; Cat</div>
     </div>
   </div>
 
@@ -939,8 +941,8 @@
 <script>
 
 // ── CONFIG ──
-var SUPABASE_URL      = 'https://YOUR_PROJECT_REF.supabase.co';
-var SUPABASE_ANON_KEY = 'YOUR_ANON_PUBLIC_KEY';
+var SUPABASE_URL      = 'https://dxttnbtfhpanyiyduevn.supabase.co';
+var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4dHRuYnRmaHBhbnlpeWR1ZXZuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY1MjkyNDcsImV4cCI6MjA5MjEwNTI0N30.jrMk8-_Ga01TydNPUwCzlymf1W44PjaXXIUjCLALb2s';
 var EDGE_FN_URL       = SUPABASE_URL + '/functions/v1/submit-booking';
 
 // ── PRICING TABLES ──
@@ -1247,26 +1249,42 @@ function showStep4Panel() {
 
 // ── STEP 5 PET PANEL ──
 function showPetPanel() {
-  var svc = booking.service;
-  var isHotel = svc === 'hotel';
+  var svc      = booking.service;
+  var isHotel  = svc === 'hotel';
+  var hasPetSize = !!booking.petSize; // true for grooming, hotel, daycare
+
   document.getElementById('emergencySection').style.display = isHotel ? '' : 'none';
   document.getElementById('secondCatSection').style.display = (isHotel && booking.hotelRoomType === 'villa') ? '' : 'none';
-  // Senior waiver only for grooming
   if (svc !== 'grooming') document.getElementById('seniorWaiverRow').style.display = 'none';
-  // Pre-fill animal type for grooming based on size
-  var isGroom = svc === 'grooming';
-  if (isGroom && booking.petSize) {
+
+  // ── Animal type: prepopulate and lock whenever petSize is known ──
+  var dogBtn = document.getElementById('petTypeDog');
+  var catBtn = document.getElementById('petTypeCat');
+  if (hasPetSize) {
     var animal = booking.petSize === 'cat' ? 'cat' : 'dog';
     booking.petAnimal = animal;
-    document.getElementById('petTypeDog').classList.toggle('selected', animal === 'dog');
-    document.getElementById('petTypeCat').classList.toggle('selected', animal === 'cat');
+    dogBtn.classList.toggle('selected', animal === 'dog');
+    catBtn.classList.toggle('selected', animal === 'cat');
+    dogBtn.classList.add('locked-opt');
+    catBtn.classList.add('locked-opt');
+  } else {
+    dogBtn.classList.remove('locked-opt');
+    catBtn.classList.remove('locked-opt');
   }
-  // Pet size display
-  document.getElementById('petSizeGroupPet').style.display = isGroom ? '' : 'none';
-  document.getElementById('petSizeSelectGroup').style.display = (!isGroom && svc !== 'studio') ? '' : 'none';
-  if (isGroom && booking.petSize) {
+
+  // ── Size: always show readonly display when petSize is already known ──
+  var sizeGroup  = document.getElementById('petSizeGroupPet');
+  var selectGroup = document.getElementById('petSizeSelectGroup');
+  if (hasPetSize) {
+    sizeGroup.style.display   = '';
+    selectGroup.style.display = 'none';
     document.getElementById('petSizeDisplay').value = PET_SIZE_LABELS[booking.petSize] || '';
+  } else {
+    // Studio: no size collected at all
+    sizeGroup.style.display   = 'none';
+    selectGroup.style.display = 'none';
   }
+
   renderVaccines();
   checkSeniorWaiver();
 }
@@ -1403,6 +1421,7 @@ function selectStylist(el, val) {
 function onGroomDateChange() {
   var val = document.getElementById('groomDate').value;
   if (val) {
+    booking.groomDate = val;
     document.getElementById('stylistSection').style.display = 'block';
     document.getElementById('groomSlotsSection').style.display = 'none';
     booking.groomSlot = null;
@@ -1889,7 +1908,11 @@ function collectStep(step) {
     booking.petAge    = document.getElementById('petAgeNum').value;
     booking.petAgeUnit = document.getElementById('petAgeUnit').value;
     booking.petMedical = document.getElementById('petMedical').value;
-    if (document.getElementById('petSizeSelect').value) booking.petSize = document.getElementById('petSizeSelect').value;
+    // petSize already set from step 3 for grooming/hotel/daycare; only read select for studio
+    if (!booking.petSize) {
+      var sel = document.getElementById('petSizeSelect');
+      if (sel && sel.value) booking.petSize = sel.value;
+    }
   }
   if (step === 6) {
     booking.ownerFirst = document.getElementById('ownerFirst').value;
@@ -1961,7 +1984,7 @@ function validateStep(step) {
     if (!booking.petAnimal) { alert('Please select Dog or Cat.'); return false; }
     if (!booking.petGender) { alert('Please select your pet\'s sex.'); return false; }
     if (!document.getElementById('petBreed').value.trim()) { alert('Please enter your pet\'s breed.'); return false; }
-    if ((booking.service === 'hotel' || booking.service === 'daycare') && !document.getElementById('petSizeSelect').value) {
+    if ((booking.service === 'hotel' || booking.service === 'daycare') && !booking.petSize) {
       alert('Please select your pet\'s size.'); return false;
     }
     if (!booking.petTemperament) { alert('Please select your pet\'s temperament.'); return false; }
@@ -2157,6 +2180,7 @@ function submitBooking() {
     ownerSource:document.getElementById('ownerSource')?document.getElementById('ownerSource').value:'',
     waiverGeneral:document.getElementById('waiverGeneral').classList.contains('checked'),
     waiverVaccine:document.getElementById('vaccineWaiver').classList.contains('checked'),
+    waiverSeniorMedical:document.getElementById('seniorWaiver')?document.getElementById('seniorWaiver').classList.contains('checked'):false,
     waiverStudio:document.getElementById('waiverStudio')?document.getElementById('waiverStudio').classList.contains('checked'):false,
     waiverMedia:document.getElementById('waiverMedia').classList.contains('checked'),
     subtotal:subtotal, discountAmount:discAmt, total:total
