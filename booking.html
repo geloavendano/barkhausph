@@ -83,6 +83,8 @@
   .svc-card-radio { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--mid); flex-shrink: 0; position: relative; transition: all 0.2s; }
   .svc-card.selected .svc-card-radio { border-color: var(--yellow); background: var(--yellow); }
   .svc-card.selected .svc-card-radio::after { content: ""; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 6px; height: 6px; border-radius: 50%; background: var(--bg); display: block; }
+  .svc-card-disabled { opacity: 0.45; cursor: not-allowed !important; }
+  .svc-card-disabled .svc-card-radio { border-color: var(--mid) !important; background: transparent !important; }
   .svc-card-info { flex: 1; }
   .svc-card-name { font-weight: 700; font-size: 14px; color: var(--cream); }
   .svc-card-duration { font-size: 11px; color: var(--mid); margin-top: 2px; }
@@ -406,35 +408,19 @@
         </div>
         <div class="form-group">
           <label class="form-label">Check-out <span class="required">*</span></label>
-          <input type="date" class="form-input" id="hotelCheckout" onchange="calcHotelTotal()">
+          <input type="date" class="form-input" id="hotelCheckout" onchange="onHotelCheckoutChange()">
         </div>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Drop-off time</label>
-        <select class="form-select" id="hotelDropoffTime">
-          <option value="">Select time</option>
-        </select>
       </div>
       <div class="info-box" id="nightsDisplay" style="display:none"><strong id="nightsCount"></strong></div>
 
-      <p class="section-label">Pick-up time</p>
-      <div class="info-box" style="margin-bottom:10px">Standard checkout is <strong>2:00 PM</strong>. Late pick-up up to 8:00 PM is <strong>+&#8369;100/hour</strong>. Holiday rates may apply on public holidays.</div>
-      <select class="form-select" id="hotelPickupTime" onchange="calcHotelTotal()">
-        <option value="">Select pick-up time</option>
-        <option value="14">On or before 2PM (standard)</option>
-        <option value="15">3:00 PM (+&#8369;100)</option>
-        <option value="16">4:00 PM (+&#8369;200)</option>
-        <option value="17">5:00 PM (+&#8369;300)</option>
-        <option value="18">6:00 PM (+&#8369;400)</option>
-        <option value="19">7:00 PM (+&#8369;500)</option>
-        <option value="20">8:00 PM (+&#8369;600)</option>
-      </select>
-      <div id="hotelCatRateNote" style="display:none" class="info-box" style="margin-top:10px">
-        Cat rates are determined by room type selected in the next step.
-      </div>
-      <div class="price-total" id="hotelPriceTotal" style="display:none;margin-top:16px">
-        <span class="price-total-label">Estimated total</span>
-        <span class="price-total-val" id="hotelTotalVal">&#8369;0</span>
+      <!-- Room availability -->
+      <div id="roomAvailSection" style="display:none">
+        <p class="section-label">Available rooms</p>
+        <div id="roomAvailLoading" style="display:none" class="info-box">Checking availability...</div>
+        <div id="roomAvailGrid" class="svc-grid"></div>
+        <div id="roomAvailNote" style="display:none" class="warn-box">
+          <strong>No rooms available</strong> for the selected dates and pet size. Please try different dates.
+        </div>
       </div>
     </div>
   </div>
@@ -582,11 +568,24 @@
   <!-- HOTEL SERVICE DETAILS -->
   <div id="hotelDetailsSection" style="display:none">
     <div class="form-group">
-      <label class="form-label">Room type <span class="required">*</span></label>
-      <select class="form-select" id="hotelRoomType" onchange="onHotelRoomChange()">
-        <option value="">Select room...</option>
+      <label class="form-label">Drop-off time <span class="required">*</span></label>
+      <select class="form-select" id="hotelDropoffTime">
+        <option value="">Select time</option>
       </select>
     </div>
+    <p class="section-label">Pick-up time</p>
+    <div class="info-box" style="margin-bottom:10px">Standard checkout is <strong>2:00 PM</strong>. Late pick-up up to 8:00 PM is <strong>+&#8369;100/hour</strong>. Holiday rates may apply on public holidays.</div>
+    <select class="form-select" id="hotelPickupTime" onchange="calcHotelTotal()">
+      <option value="">Select pick-up time</option>
+      <option value="14">On or before 2PM (standard)</option>
+      <option value="15">3:00 PM (+&#8369;100)</option>
+      <option value="16">4:00 PM (+&#8369;200)</option>
+      <option value="17">5:00 PM (+&#8369;300)</option>
+      <option value="18">6:00 PM (+&#8369;400)</option>
+      <option value="19">7:00 PM (+&#8369;500)</option>
+      <option value="20">8:00 PM (+&#8369;600)</option>
+    </select>
+    <hr class="divider">
     <div class="form-group">
       <label class="form-label">Play park consent</label>
       <div class="info-box" style="margin-bottom:10px">May we allow your pet to join the <strong>dog play park</strong> when space is available during their stay?</div>
@@ -1243,7 +1242,7 @@ function showStep4Panel() {
   document.getElementById('s4subtitle').textContent = t[1];
   var map = { grooming:'groomSchedSection', hotel:'hotelDetailsSection', daycare:'daycareDetailsSection' };
   if (map[booking.service]) document.getElementById(map[booking.service]).style.display = '';
-  if (booking.service === 'hotel') renderHotelRoomOptions();
+  if (booking.service === 'hotel') populateHotelDropoffTimes();
 }
 
 // ── STEP 5 PET PANEL ──
@@ -1251,7 +1250,7 @@ function showPetPanel() {
   var svc = booking.service;
   var isHotel = svc === 'hotel';
   document.getElementById('emergencySection').style.display = isHotel ? '' : 'none';
-  document.getElementById('secondCatSection').style.display = (isHotel && booking.petSize === 'cat') ? '' : 'none';
+  document.getElementById('secondCatSection').style.display = (isHotel && booking.hotelRoomType === 'villa') ? '' : 'none';
   // Senior waiver only for grooming
   if (svc !== 'grooming') document.getElementById('seniorWaiverRow').style.display = 'none';
   // Pre-fill animal type for grooming based on size
@@ -1422,16 +1421,45 @@ function selectSlot(el) {
 }
 
 // ── HOTEL SIZE + RATES ──
+// Room capacity per type (how many concurrent bookings allowed)
+var ROOM_CAPACITY = {
+  small_cage:    3,
+  medium_cage:   3,
+  large_cage:    2,
+  single_cabin:  4,
+  villa:         2
+};
+// Which room keys are available per pet size
+var ROOMS_FOR_SIZE = {
+  small_dog:  ['small_cage','medium_cage','large_cage'],
+  medium_dog: ['medium_cage','large_cage'],
+  large_dog:  ['large_cage'],
+  giant_dog:  ['large_cage'],
+  cat:        ['single_cabin','villa']
+};
+var ROOM_LABELS = {
+  small_cage:   'Small Dog Cage',
+  medium_cage:  'Medium Dog Cage',
+  large_cage:   'Large Dog Cage',
+  single_cabin: 'Single Cabin',
+  villa:        'Villa (up to 2 cats)'
+};
+
 function selectHotelSize(el, val) {
   if (el.classList.contains('disabled-opt')) return;
   document.querySelectorAll('#hotelSizeGrid .pet-type-btn').forEach(function(b){b.classList.remove('selected');});
   el.classList.add('selected');
   booking.petSize = val;
+  booking.hotelRoomType = null;
   document.getElementById('hotelDatesBody').style.display = 'block';
-  document.getElementById('hotelCatRateNote').style.display = val === 'cat' ? 'block' : 'none';
-  populateHotelDropoffTimes();
-  calcHotelTotal();
+  document.getElementById('roomAvailSection').style.display = 'none';
+  document.getElementById('roomAvailGrid').innerHTML = '';
+  // Reset dates to re-trigger availability check
+  document.getElementById('hotelCheckin').value  = '';
+  document.getElementById('hotelCheckout').value = '';
+  document.getElementById('nightsDisplay').style.display = 'none';
 }
+
 function populateHotelDropoffTimes() {
   var checkin = document.getElementById('hotelCheckin').value;
   var sel     = document.getElementById('hotelDropoffTime');
@@ -1450,124 +1478,207 @@ function populateHotelDropoffTimes() {
   }
   sel.innerHTML = html;
 }
+
 function onHotelCheckinChange() {
   var cin = document.getElementById('hotelCheckin').value;
   if (!cin) return;
   var next = new Date(cin + 'T00:00:00'); next.setDate(next.getDate() + 1);
   document.getElementById('hotelCheckout').min = next.toISOString().split('T')[0];
-  populateHotelDropoffTimes();
+  document.getElementById('hotelCheckout').value = '';
+  document.getElementById('nightsDisplay').style.display = 'none';
+  document.getElementById('roomAvailSection').style.display = 'none';
+}
+
+function onHotelCheckoutChange() {
+  var cin  = document.getElementById('hotelCheckin').value;
+  var cout = document.getElementById('hotelCheckout').value;
+  if (!cin || !cout) return;
+  var nights = Math.round((new Date(cout+' 00:00:00') - new Date(cin+' 00:00:00')) / 86400000);
+  if (nights <= 0) return;
+  document.getElementById('nightsCount').innerHTML =
+    '<strong>' + nights + ' night' + (nights>1?'s':'') + '</strong> selected';
+  document.getElementById('nightsDisplay').style.display = '';
+  booking.hotelCheckin  = cin;
+  booking.hotelCheckout = cout;
+  loadRoomAvailability();
+}
+
+async function loadRoomAvailability() {
+  var cin    = document.getElementById('hotelCheckin').value;
+  var cout   = document.getElementById('hotelCheckout').value;
+  var size   = booking.petSize;
+  if (!cin || !cout || !size) return;
+
+  var section  = document.getElementById('roomAvailSection');
+  var loading  = document.getElementById('roomAvailLoading');
+  var grid     = document.getElementById('roomAvailGrid');
+  var noteEl   = document.getElementById('roomAvailNote');
+
+  section.style.display  = '';
+  loading.style.display  = '';
+  grid.innerHTML         = '';
+  noteEl.style.display   = 'none';
+  booking.hotelRoomType  = null;
+
+  // Which rooms to check for this size
+  var roomKeys = ROOMS_FOR_SIZE[size] || [];
+
+  // Count existing confirmed hotel bookings that overlap this date range
+  var bookedCounts = {};
+  try {
+    var branch = await getSelectedBranchId();
+    if (branch) {
+      // Fetch all hotel_details rows that overlap the selected range for this branch
+      var rows = await sbFetchPublic('hotel_details',
+        'select=room_type,bookings!inner(branch_id,status)' +
+        '&bookings.branch_id=eq.' + branch +
+        '&bookings.status=not.in.(cancelled,rejected)' +
+        '&checkin_date=lte.' + cout +
+        '&checkout_date=gte.' + cin
+      );
+      (rows || []).forEach(function(r) {
+        if (r.room_type) bookedCounts[r.room_type] = (bookedCounts[r.room_type] || 0) + 1;
+      });
+    }
+  } catch(e) {
+    console.error('Availability check failed:', e);
+    // On error, show all rooms as available (fail open)
+  }
+
+  loading.style.display = 'none';
+
+  var anyAvailable = false;
+  grid.innerHTML = roomKeys.map(function(key) {
+    var label    = ROOM_LABELS[key] || key;
+    var capacity = ROOM_CAPACITY[key] || 2;
+    var booked   = bookedCounts[key] || 0;
+    var avail    = capacity - booked;
+    var isAvail  = avail > 0;
+    if (isAvail) anyAvailable = true;
+    var disabledClass = isAvail ? '' : ' svc-card-disabled';
+    var availLabel    = isAvail
+      ? '<span style="font-size:10px;color:var(--success);font-weight:700">' + avail + ' available</span>'
+      : '<span style="font-size:10px;color:var(--error);font-weight:700">Fully booked</span>';
+    return '<div class="svc-card' + disabledClass + '" id="room-opt-' + key + '"' +
+      (isAvail ? ' onclick="selectRoomFromAvail(this,\'' + key + '\')"' : '') + '>' +
+      '<div class="svc-card-radio"></div>' +
+      '<div class="svc-card-info"><div class="svc-card-name">' + label + '</div>' +
+      '<div class="svc-card-duration">' + availLabel + '</div></div>' +
+      '</div>';
+  }).join('');
+
+  if (!anyAvailable) {
+    noteEl.style.display = '';
+  }
+
+  // Recalc nights total
   calcNights();
 }
+
+function selectRoomFromAvail(el, key) {
+  document.querySelectorAll('#roomAvailGrid .svc-card').forEach(function(c){c.classList.remove('selected');});
+  el.classList.add('selected');
+  booking.hotelRoomType = key;
+  calcHotelTotal();
+  updateNavTotal();
+}
+
+async function getSelectedBranchId() {
+  if (!window._branchIds) {
+    try {
+      var rows = await sbFetchPublic('branches', 'select=id,name&order=created_at');
+      window._branchIds = rows || [];
+    } catch(e) { return null; }
+  }
+  var loc = booking.location;
+  var match = (window._branchIds).find(function(b) {
+    return (loc === 'estancia' && b.name.toLowerCase().includes('estancia')) ||
+           (loc === 'eastwood'  && b.name.toLowerCase().includes('eastwood'));
+  });
+  return match ? match.id : null;
+}
+
+async function sbFetchPublic(path, params) {
+  var url = SUPABASE_URL + '/rest/v1/' + path + (params ? '?' + params : '');
+  var res = await fetch(url, {
+    headers: {
+      'apikey':        SUPABASE_ANON_KEY,
+      'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+      'Content-Type':  'application/json',
+    }
+  });
+  if (!res.ok) throw new Error('Supabase ' + res.status);
+  return res.json();
+}
+
 function calcNights() {
   var cin  = document.getElementById('hotelCheckin').value;
   var cout = document.getElementById('hotelCheckout').value;
-  var disp = document.getElementById('nightsDisplay');
-  if (cin && cout) {
-    var nights = Math.round((new Date(cout+' 00:00:00') - new Date(cin+' 00:00:00')) / 86400000);
-    if (nights > 0) {
-      document.getElementById('nightsCount').innerHTML = '<strong>' + nights + ' night' + (nights>1?'s':'') + '</strong> selected';
-      disp.style.display = '';
-    }
+  if (!cin || !cout) return;
+  var nights = Math.round((new Date(cout+' 00:00:00') - new Date(cin+' 00:00:00')) / 86400000);
+  if (nights > 0) {
+    document.getElementById('nightsCount').innerHTML = '<strong>' + nights + ' night' + (nights>1?'s':'') + '</strong> selected';
+    document.getElementById('nightsDisplay').style.display = '';
   }
-  calcHotelTotal();
 }
+
 function calcHotelTotal() {
-  calcNights();
   var cin  = document.getElementById('hotelCheckin').value;
   var cout = document.getElementById('hotelCheckout').value;
   var size = booking.petSize;
-  if (!cin || !cout || !size || size === 'cat') {
-    booking.hotelBaseTotal = 0;
-    booking.hotelLateTotal = 0;
-    document.getElementById('hotelPriceTotal').style.display = 'none';
+  var room = booking.hotelRoomType;
+  if (!cin || !cout || !size || !room) {
+    document.getElementById('hotelDetailsPriceTotal').style.display = 'none';
     return;
   }
   var nights = Math.round((new Date(cout+' 00:00:00') - new Date(cin+' 00:00:00')) / 86400000);
   if (nights <= 0) return;
+
+  // Determine rate key for cats based on room
+  var rateSize = size;
+  if (size === 'cat') rateSize = (room === 'villa') ? 'large_dog' : 'small_dog';
+
   var baseTotal = 0;
   for (var i = 0; i < nights; i++) {
     var d   = new Date(cin + ' 00:00:00'); d.setDate(d.getDate() + i);
     var dow = d.getDay();
     var isWe = (dow === 0 || dow === 5 || dow === 6);
     var rates = isWe ? HOTEL_RATES.weekend : HOTEL_RATES.weekday;
-    baseTotal += rates[size] || 0;
+    baseTotal += rates[rateSize] || 0;
   }
   booking.hotelBaseTotal = baseTotal;
-  var pickupHour       = parseInt(document.getElementById('hotelPickupTime').value) || 14;
+
+  var pickupEl   = document.getElementById('hotelPickupTime');
+  var pickupHour = pickupEl ? (parseInt(pickupEl.value) || 14) : 14;
   booking.hotelPickupHour = pickupHour;
-  var lateHours        = Math.max(0, pickupHour - 14);
+  var lateHours  = Math.max(0, pickupHour - 14);
   booking.hotelLateTotal = lateHours * 100;
+
   var subtotal = baseTotal + booking.hotelLateTotal;
   var discount = booking.memberValid ? Math.round(subtotal * MEMBER_DISCOUNT.hotel) : 0;
   var total    = subtotal - discount;
-  var el = document.getElementById('hotelPriceTotal');
+
+  var el   = document.getElementById('hotelDetailsPriceTotal');
   var html = '\u20b1' + total.toLocaleString();
   if (discount > 0) html = '<span style="text-decoration:line-through;opacity:0.5;font-size:14px">\u20b1' + subtotal.toLocaleString() + '</span> \u20b1' + total.toLocaleString();
-  document.getElementById('hotelTotalVal').innerHTML = html;
+  document.getElementById('hotelDetailsTotalVal').innerHTML = html;
   el.style.display = 'flex';
   updateNavTotal();
 }
 
-// ── HOTEL ROOM OPTIONS ──
+// ── HOTEL ROOM OPTIONS (kept for compatibility but no longer used in step 4) ──
 function renderHotelRoomOptions() {
-  var size = booking.petSize;
-  var sel  = document.getElementById('hotelRoomType');
-  var opts = '<option value="">Select room...</option>';
-  if (size === 'small_dog') {
-    opts += '<option value="small_cage">Small Dog Cage</option>';
-    opts += '<option value="medium_cage">Medium Dog Cage</option>';
-    opts += '<option value="large_cage">Large Dog Cage</option>';
-  } else if (size === 'medium_dog') {
-    opts += '<option value="medium_cage">Medium Dog Cage</option>';
-    opts += '<option value="large_cage">Large Dog Cage</option>';
-  } else if (size === 'large_dog') {
-    opts += '<option value="large_cage">Large Dog Cage</option>';
-  } else if (size === 'cat') {
-    opts += '<option value="single_cabin">Single Cabin</option>';
-    opts += '<option value="villa">Villa (up to 2 cats)</option>';
-  } else {
-    opts += '<option value="standard">Standard Room</option>';
-    opts += '<option value="deluxe">Deluxe Room</option>';
-  }
-  sel.innerHTML = opts;
-  booking.hotelRoomType = null;
+  populateHotelDropoffTimes();
 }
+
 function onHotelRoomChange() {
-  var val = document.getElementById('hotelRoomType').value;
-  booking.hotelRoomType = val;
-  // Show Villa second cat section in pet step
+  var val = document.getElementById('hotelRoomType') ? document.getElementById('hotelRoomType').value : '';
+  booking.hotelRoomType = val || null;
   var secondCat = document.getElementById('secondCatSection');
-  if (secondCat) secondCat.style.display = (val === 'villa') ? '' : 'none';
-  // Recalc for cat rates
-  if (booking.petSize === 'cat') calcCatHotelTotal();
+  if (secondCat) secondCat.style.display = (booking.hotelRoomType === 'villa') ? '' : 'none';
+  calcHotelTotal();
 }
-function calcCatHotelTotal() {
-  var cin  = document.getElementById('hotelCheckin').value;
-  var cout = document.getElementById('hotelCheckout').value;
-  var room = booking.hotelRoomType;
-  if (!cin || !cout || !room) return;
-  var nights = Math.round((new Date(cout+' 00:00:00') - new Date(cin+' 00:00:00')) / 86400000);
-  if (nights <= 0) return;
-  var sizeKey  = (room === 'villa') ? 'large_dog' : 'small_dog';
-  var baseTotal = 0;
-  for (var i = 0; i < nights; i++) {
-    var d = new Date(cin + ' 00:00:00'); d.setDate(d.getDate() + i);
-    var isWe = ([0,5,6].indexOf(d.getDay()) !== -1);
-    baseTotal += (isWe ? HOTEL_RATES.weekend : HOTEL_RATES.weekday)[sizeKey];
-  }
-  booking.hotelBaseTotal = baseTotal;
-  var pickupHour = parseInt(document.getElementById('hotelPickupTime').value) || 14;
-  booking.hotelPickupHour = pickupHour;
-  var late  = Math.max(0, pickupHour - 14) * 100;
-  booking.hotelLateTotal = late;
-  var subtotal = baseTotal + late;
-  var discount = booking.memberValid ? Math.round(subtotal * MEMBER_DISCOUNT.hotel) : 0;
-  var total    = subtotal - discount;
-  var el = document.getElementById('hotelDetailsPriceTotal');
-  document.getElementById('hotelDetailsTotalVal').textContent = '\u20b1' + total.toLocaleString();
-  el.style.display = 'flex';
-  updateNavTotal();
-}
+
 function onHotelMedsChange() {
   var val = document.getElementById('hotelMeds').value.trim();
   document.getElementById('hotelMedsNote').style.display = val ? 'block' : 'none';
@@ -1747,7 +1858,7 @@ function validateMemberId() {
 function refreshAllTotals() {
   var svc = booking.service;
   if (svc === 'grooming') updateGroomTotal();
-  else if (svc === 'hotel') { calcHotelTotal(); if (booking.petSize==='cat') calcCatHotelTotal(); }
+  if (svc === 'hotel') calcHotelTotal();
   else if (svc === 'daycare') calcDaycareTotal();
   updateNavTotal();
 }
@@ -1811,12 +1922,13 @@ function validateStep(step) {
     }
     if (booking.service === 'hotel') {
       if (!booking.petSize) { alert('Please select a pet size.'); return false; }
-      if (booking.petSize !== 'cat' && booking.location === 'estancia' && booking.petSize === 'cat') {
+      if (booking.location === 'estancia' && booking.petSize === 'cat') {
         alert('Cat hotel is only available at Eastwood.'); return false;
       }
       if (!document.getElementById('hotelCheckin').value || !document.getElementById('hotelCheckout').value) {
         alert('Please select check-in and check-out dates.'); return false;
       }
+      if (!booking.hotelRoomType) { alert('Please select an available room.'); return false; }
     }
     if (booking.service === 'daycare') {
       if (!booking.petSize) { alert('Please select a pet size.'); return false; }
@@ -1840,7 +1952,8 @@ function validateStep(step) {
       if (!booking.groomSlot) { alert('Please select a time slot.'); return false; }
     }
     if (booking.service === 'hotel') {
-      if (!document.getElementById('hotelRoomType').value) { alert('Please select a room type.'); return false; }
+      if (!document.getElementById('hotelDropoffTime').value) { alert('Please select a drop-off time.'); return false; }
+      if (!document.getElementById('hotelPickupTime').value) { alert('Please select a pick-up time.'); return false; }
     }
   }
   if (step === 5) {
