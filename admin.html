@@ -7,143 +7,181 @@
 <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg:      #0F1C26;
-    --surface: #1A3044;
-    --raised:  #1F3D55;
-    --border:  rgba(77,150,185,0.30);
-    --mid:     #6AAEC8;
-    --cream:   #F0EDE6;
-    --cream-m: #B8D4E0;
-    --blue:    #4D96B9;
-    --yellow:  #FFCE58;
-    --error:   #FF6B6B;
-    --success: #6BCB77;
-    --amber:   #EF9F27;
-    --pink:    #D4537E;
-    --teal:    #1D9E75;
+    --bg:#0F1C26;--surface:#1A3044;--raised:#1F3D55;--border:rgba(77,150,185,0.30);
+    --mid:#6AAEC8;--cream:#F0EDE6;--cream-m:#B8D4E0;--blue:#4D96B9;--yellow:#FFCE58;
+    --error:#FF6B6B;--success:#6BCB77;--amber:#EF9F27;--pink:#D4537E;--teal:#1D9E75;
   }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: var(--bg); color: var(--cream); font-family: "Nunito", sans-serif; font-size: 14px; min-height: 100svh; }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--cream);font-family:"Nunito",sans-serif;font-size:14px;min-height:100svh;}
 
-  /* ── PASSWORD GATE ── */
-  #gate { position: fixed; inset: 0; background: var(--bg); z-index: 999; display: flex; align-items: center; justify-content: center; padding: 24px; }
-  .gate-card { background: var(--surface); border: 0.5px solid var(--border); border-radius: 16px; padding: 32px 28px; width: 100%; max-width: 340px; text-align: center; }
-  .gate-logo { font-family: "Fredoka One", cursive; font-size: 22px; color: var(--cream); margin-bottom: 4px; }
-  .gate-logo span { color: var(--yellow); }
-  .gate-sub { font-size: 12px; color: var(--mid); margin-bottom: 24px; font-weight: 500; }
-  .gate-input { width: 100%; background: var(--raised); border: 1.5px solid var(--border); border-radius: 10px; padding: 12px 16px; color: var(--cream); font-family: "Nunito", sans-serif; font-size: 16px; outline: none; margin-bottom: 10px; text-align: center; letter-spacing: 0.1em; }
-  .gate-input:focus { border-color: var(--blue); }
-  .gate-btn { width: 100%; background: var(--yellow); color: var(--bg); border: none; border-radius: 50px; padding: 12px; font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; font-family: "Nunito", sans-serif; }
-  .gate-error { font-size: 12px; color: var(--error); margin-top: 8px; font-weight: 600; min-height: 18px; }
+  /* GATE */
+  #gate{position:fixed;inset:0;background:var(--bg);z-index:999;display:flex;align-items:center;justify-content:center;padding:24px;}
+  .gate-card{background:var(--surface);border:0.5px solid var(--border);border-radius:16px;padding:32px 28px;width:100%;max-width:340px;text-align:center;}
+  .gate-logo{font-family:"Fredoka One",cursive;font-size:22px;color:var(--cream);margin-bottom:4px;}
+  .gate-logo span{color:var(--yellow);}
+  .gate-sub{font-size:12px;color:var(--mid);margin-bottom:24px;font-weight:500;}
+  .gate-input{width:100%;background:var(--raised);border:1.5px solid var(--border);border-radius:10px;padding:12px 16px;color:var(--cream);font-family:"Nunito",sans-serif;font-size:16px;outline:none;margin-bottom:10px;text-align:center;letter-spacing:0.1em;}
+  .gate-input:focus{border-color:var(--blue);}
+  .gate-btn{width:100%;background:var(--yellow);color:var(--bg);border:none;border-radius:50px;padding:12px;font-size:13px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;cursor:pointer;font-family:"Nunito",sans-serif;}
+  .gate-error{font-size:12px;color:var(--error);margin-top:8px;font-weight:600;min-height:18px;}
 
-  /* ── MAIN LAYOUT ── */
-  #app { display: none; flex-direction: column; min-height: 100svh; }
-  #app.visible { display: flex; }
+  /* APP LAYOUT */
+  #app{display:none;flex-direction:column;min-height:100svh;}
+  #app.visible{display:flex;}
 
-  /* ── TOP BAR ── */
-  .topbar { background: var(--surface); border-bottom: 0.5px solid var(--border); padding: 12px 16px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; position: sticky; top: 0; z-index: 50; }
-  .topbar-logo { font-family: "Fredoka One", cursive; font-size: 17px; color: var(--cream); flex-shrink: 0; }
-  .topbar-logo span { color: var(--yellow); }
-  .branch-tabs { display: flex; gap: 4px; }
-  .branch-tab { font-size: 12px; font-weight: 700; padding: 5px 14px; border-radius: 20px; border: 0.5px solid var(--border); cursor: pointer; background: transparent; color: var(--mid); font-family: "Nunito", sans-serif; transition: all 0.2s; }
-  .branch-tab.active { background: var(--yellow); border-color: var(--yellow); color: var(--bg); }
-  .date-nav { display: flex; align-items: center; gap: 6px; margin-left: auto; }
-  .date-nav-btn { width: 30px; height: 30px; border-radius: 8px; border: 0.5px solid var(--border); background: transparent; cursor: pointer; color: var(--mid); display: flex; align-items: center; justify-content: center; font-family: "Nunito", sans-serif; font-size: 14px; transition: background 0.2s; }
-  .date-nav-btn:active { background: var(--raised); }
-  .date-label { font-size: 13px; font-weight: 700; color: var(--cream); min-width: 130px; text-align: center; }
-  .today-btn { font-size: 11px; font-weight: 700; padding: 5px 12px; border-radius: 20px; border: 0.5px solid var(--border); background: transparent; cursor: pointer; color: var(--mid); font-family: "Nunito", sans-serif; }
-  .today-btn:active { background: var(--raised); }
+  /* TOP BAR */
+  .topbar{background:var(--surface);border-bottom:0.5px solid var(--border);padding:10px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;position:sticky;top:0;z-index:50;}
+  .topbar-logo{font-family:"Fredoka One",cursive;font-size:17px;color:var(--cream);flex-shrink:0;}
+  .topbar-logo span{color:var(--yellow);}
+  .branch-tabs{display:flex;gap:4px;}
+  .branch-tab{font-size:12px;font-weight:700;padding:5px 14px;border-radius:20px;border:0.5px solid var(--border);cursor:pointer;background:transparent;color:var(--mid);font-family:"Nunito",sans-serif;transition:all 0.2s;}
+  .branch-tab.active{background:var(--yellow);border-color:var(--yellow);color:var(--bg);}
+  .date-nav{display:flex;align-items:center;gap:6px;margin-left:auto;}
+  .date-nav-btn{width:30px;height:30px;border-radius:8px;border:0.5px solid var(--border);background:transparent;cursor:pointer;color:var(--mid);display:flex;align-items:center;justify-content:center;font-family:"Nunito",sans-serif;font-size:14px;transition:background 0.2s;}
+  .date-nav-btn:active{background:var(--raised);}
+  .date-label{font-size:13px;font-weight:700;color:var(--cream);min-width:130px;text-align:center;}
+  .today-btn{font-size:11px;font-weight:700;padding:5px 12px;border-radius:20px;border:0.5px solid var(--border);background:transparent;cursor:pointer;color:var(--mid);font-family:"Nunito",sans-serif;}
 
-  /* ── STATS STRIP ── */
-  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 12px 16px; border-bottom: 0.5px solid var(--border); }
-  .stat { background: var(--surface); border-radius: 10px; padding: 10px 12px; }
-  .stat-label { font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--mid); margin-bottom: 4px; font-weight: 700; }
-  .stat-val { font-size: 22px; font-weight: 500; color: var(--cream); }
-  .stat-val.blue { color: var(--blue); }
-  .stat-val.amber { color: var(--amber); }
-  .stat-val.green { color: var(--teal); }
+  /* STATS */
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:10px 14px;border-bottom:0.5px solid var(--border);}
+  .stat{background:var(--surface);border-radius:10px;padding:8px 10px;}
+  .stat-label{font-size:9px;letter-spacing:0.06em;text-transform:uppercase;color:var(--mid);margin-bottom:2px;font-weight:700;}
+  .stat-val{font-size:20px;font-weight:500;color:var(--cream);}
+  .stat-val.blue{color:var(--blue);}
+  .stat-val.amber{color:var(--amber);}
+  .stat-val.green{color:var(--teal);}
+  .stat-val.pink{color:var(--pink);}
+  .stat.hidden{display:none;}
 
-  /* ── MAIN CONTENT ── */
-  .main { display: flex; flex: 1; min-height: 0; }
+  /* FILTER BAR */
+  .filter-bar{padding:8px 14px;border-bottom:0.5px solid var(--border);display:flex;flex-direction:column;gap:6px;}
+  .filter-row{display:flex;gap:6px;flex-wrap:wrap;}
+  .filter-btn{font-size:11px;font-weight:700;padding:5px 12px;border-radius:20px;border:0.5px solid var(--border);cursor:pointer;background:transparent;color:var(--mid);font-family:"Nunito",sans-serif;transition:all 0.15s;display:flex;align-items:center;gap:4px;}
+  .filter-btn.active-g{background:rgba(77,150,185,0.15);border-color:var(--blue);color:var(--blue);}
+  .filter-btn.active-h{background:rgba(239,159,39,0.15);border-color:var(--amber);color:var(--amber);}
+  .filter-btn.active-d{background:rgba(29,158,117,0.15);border-color:var(--teal);color:var(--teal);}
+  .filter-btn.active-s{background:rgba(212,83,126,0.15);border-color:var(--pink);color:var(--pink);}
+  .filter-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
+  .sub-filter-row{display:flex;gap:6px;flex-wrap:wrap;padding-left:4px;}
+  .sub-filter-btn{font-size:10px;font-weight:600;padding:3px 10px;border-radius:20px;border:0.5px solid var(--border);cursor:pointer;background:transparent;color:var(--mid);font-family:"Nunito",sans-serif;transition:all 0.15s;}
+  .sub-filter-btn.active{background:var(--raised);border-color:var(--cream-m);color:var(--cream);}
 
-  /* ── MINI CALENDAR ── */
-  .mini-cal { width: 196px; flex-shrink: 0; border-right: 0.5px solid var(--border); padding: 14px 12px; display: flex; flex-direction: column; gap: 0; }
-  @media(max-width:600px) { .mini-cal { display: none; } }
-  .mini-cal-month { font-size: 12px; font-weight: 700; color: var(--cream); text-align: center; margin-bottom: 10px; }
-  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; }
-  .cal-dow { font-size: 9px; color: var(--mid); text-align: center; padding: 0 0 6px; font-weight: 700; letter-spacing: 0.04em; }
-  .cal-day { font-size: 11px; text-align: center; padding: 5px 2px; border-radius: 4px; cursor: pointer; color: var(--cream-m); position: relative; transition: background 0.15s; }
-  .cal-day:hover { background: var(--raised); }
-  .cal-day.has-dot::after { content: ''; width: 4px; height: 4px; border-radius: 50%; background: var(--blue); position: absolute; bottom: 1px; left: 50%; transform: translateX(-50%); }
-  .cal-day.is-today { background: var(--yellow); color: var(--bg); font-weight: 700; }
-  .cal-day.is-today::after { background: var(--bg); }
-  .cal-day.is-selected:not(.is-today) { background: var(--raised); color: var(--cream); border: 1px solid var(--blue); }
-  .cal-day.other-month { opacity: 0.3; }
-  .legend { margin-top: 16px; border-top: 0.5px solid var(--border); padding-top: 12px; display: flex; flex-direction: column; gap: 6px; }
-  .legend-title { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--mid); font-weight: 700; margin-bottom: 2px; }
-  .legend-row { display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--cream-m); }
-  .legend-swatch { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+  /* MAIN */
+  .main{display:flex;flex:1;min-height:0;}
 
-  /* ── TIMELINE ── */
-  .timeline { flex: 1; overflow-y: auto; padding: 8px 0; }
-  .time-row { display: grid; grid-template-columns: 52px 1fr; min-height: 60px; }
-  .time-row-label { font-size: 11px; color: var(--mid); padding: 8px 10px 0 12px; text-align: right; flex-shrink: 0; }
-  .time-row-slot { border-top: 0.5px solid var(--border); padding: 6px 10px 6px 12px; display: flex; flex-wrap: wrap; gap: 6px; align-content: flex-start; }
-  .booking-card { background: var(--surface); border: 0.5px solid var(--border); border-radius: 10px; padding: 8px 12px; min-width: 140px; max-width: 220px; cursor: pointer; border-left: 3px solid transparent; transition: background 0.15s; }
-  .booking-card:active { background: var(--raised); }
-  .booking-card.grooming { border-left-color: var(--blue); }
-  .booking-card.hotel    { border-left-color: var(--amber); }
-  .booking-card.daycare  { border-left-color: var(--teal); }
-  .booking-card.studio   { border-left-color: var(--pink); }
-  .bc-pet  { font-size: 13px; font-weight: 700; color: var(--cream); display: flex; align-items: center; gap: 5px; }
-  .bc-owner { font-size: 11px; color: var(--cream-m); margin-top: 1px; }
-  .bc-svc  { font-size: 10px; font-weight: 700; border-radius: 4px; padding: 2px 6px; display: inline-block; margin-top: 4px; letter-spacing: 0.04em; text-transform: uppercase; }
-  .bc-svc.grooming { background: rgba(77,150,185,0.18); color: var(--blue); }
-  .bc-svc.hotel    { background: rgba(239,159,39,0.18); color: var(--amber); }
-  .bc-svc.daycare  { background: rgba(29,158,117,0.18); color: var(--teal); }
-  .bc-svc.studio   { background: rgba(212,83,126,0.18); color: var(--pink); }
-  .status-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; display: inline-block; }
-  .dot-pending   { background: var(--amber); }
-  .dot-confirmed { background: var(--success); }
-  .dot-checkedin { background: var(--blue); }
-  .dot-completed { background: var(--mid); }
-  .dot-cancelled { background: var(--error); }
+  /* MINI CALENDAR */
+  .mini-cal{width:196px;flex-shrink:0;border-right:0.5px solid var(--border);padding:14px 12px;display:flex;flex-direction:column;}
+  .mini-cal-toggle{display:none;width:100%;padding:8px 14px;background:var(--surface);border:none;border-bottom:0.5px solid var(--border);color:var(--mid);font-family:"Nunito",sans-serif;font-size:12px;font-weight:700;cursor:pointer;text-align:left;gap:6px;}
+  @media(max-width:600px){
+    .mini-cal{display:none;position:absolute;top:0;left:0;right:0;z-index:40;background:var(--bg);width:100%;border-right:none;border-bottom:0.5px solid var(--border);max-height:70vh;overflow-y:auto;}
+    .mini-cal.mobile-open{display:flex;}
+    .mini-cal-toggle{display:flex;align-items:center;}
+    .main{flex-direction:column;}
+    .timeline{padding:8px 0;}
+  }
+  .mini-cal-month{font-size:12px;font-weight:700;color:var(--cream);text-align:center;margin-bottom:10px;}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;}
+  .cal-dow{font-size:9px;color:var(--mid);text-align:center;padding:0 0 6px;font-weight:700;letter-spacing:0.04em;}
+  .cal-day{font-size:11px;text-align:center;padding:5px 2px;border-radius:4px;cursor:pointer;color:var(--cream-m);position:relative;transition:background 0.15s;}
+  .cal-day:hover{background:var(--raised);}
+  .cal-day.has-dot::after{content:'';width:4px;height:4px;border-radius:50%;background:var(--blue);position:absolute;bottom:1px;left:50%;transform:translateX(-50%);}
+  .cal-day.is-today{background:var(--yellow);color:var(--bg);font-weight:700;}
+  .cal-day.is-today::after{background:var(--bg);}
+  .cal-day.is-selected:not(.is-today){background:var(--raised);color:var(--cream);border:1px solid var(--blue);}
+  .cal-day.other-month{opacity:0.3;}
+  .legend{margin-top:16px;border-top:0.5px solid var(--border);padding-top:12px;display:flex;flex-direction:column;gap:6px;}
+  .legend-title{font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--mid);font-weight:700;margin-bottom:2px;}
+  .legend-row{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--cream-m);}
+  .legend-swatch{width:10px;height:10px;border-radius:2px;flex-shrink:0;}
 
-  /* ── HOTEL ALL-DAY STRIP ── */
-  .allday-strip { padding: 8px 12px 0 64px; display: flex; flex-wrap: wrap; gap: 6px; }
-  .allday-card { background: var(--surface); border: 0.5px solid var(--border); border-left: 3px solid var(--amber); border-radius: 8px; padding: 6px 10px; font-size: 11px; color: var(--cream-m); cursor: pointer; }
-  .allday-card strong { color: var(--cream); display: block; font-size: 12px; }
+  /* INVENTORY section */
+  .inventory-section{padding:14px;border-top:0.5px solid var(--border);margin-top:8px;}
+  .inventory-title{font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--yellow);font-weight:700;margin-bottom:10px;}
+  .inv-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+  .inv-label{font-size:11px;color:var(--cream-m);flex:1;}
+  .inv-input{width:50px;background:var(--raised);border:1px solid var(--border);border-radius:6px;padding:4px 8px;color:var(--cream);font-family:"Nunito",sans-serif;font-size:12px;text-align:center;outline:none;}
+  .inv-save{font-size:10px;font-weight:700;padding:4px 10px;border-radius:20px;border:0.5px solid var(--blue);background:transparent;color:var(--blue);cursor:pointer;font-family:"Nunito",sans-serif;}
 
-  /* ── DETAIL DRAWER ── */
-  .drawer-overlay { position: fixed; inset: 0; background: rgba(10,20,30,0.7); z-index: 200; display: none; align-items: flex-end; justify-content: center; }
-  .drawer-overlay.open { display: flex; }
-  .drawer { background: var(--bg); width: 100%; max-width: 560px; max-height: 85svh; border-radius: 20px 20px 0 0; overflow-y: auto; padding: 20px; animation: slideUp 0.3s ease; }
-  @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
-  .drawer-handle { width: 36px; height: 4px; border-radius: 2px; background: var(--raised); margin: 0 auto 18px; }
-  .drawer-close { float: right; background: var(--surface); border: 0.5px solid var(--border); border-radius: 50%; width: 28px; height: 28px; cursor: pointer; color: var(--mid); font-size: 16px; display: flex; align-items: center; justify-content: center; font-family: "Nunito", sans-serif; }
-  .drawer-eyebrow { font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--yellow); font-weight: 700; margin-bottom: 4px; }
-  .drawer-name { font-family: "Fredoka One", cursive; font-size: 24px; color: var(--cream); margin-bottom: 14px; }
-  .drawer-section { margin-bottom: 14px; }
-  .drawer-section-title { font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--mid); font-weight: 700; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 0.5px solid var(--border); }
-  .drawer-row { display: flex; justify-content: space-between; align-items: flex-start; padding: 5px 0; gap: 12px; }
-  .drawer-key { font-size: 12px; color: var(--mid); flex-shrink: 0; }
-  .drawer-val { font-size: 12px; color: var(--cream); font-weight: 600; text-align: right; }
-  .status-select { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; color: var(--cream); font-family: "Nunito", sans-serif; font-size: 13px; font-weight: 600; width: 100%; outline: none; margin-top: 8px; cursor: pointer; }
-  .save-status-btn { width: 100%; background: var(--blue); color: #fff; border: none; border-radius: 50px; padding: 11px; font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; font-family: "Nunito", sans-serif; margin-top: 10px; }
-  .save-status-btn:active { opacity: 0.85; }
+  /* TIMELINE */
+  .timeline{flex:1;overflow-y:auto;padding:8px 0;position:relative;}
+  .time-row{display:grid;grid-template-columns:52px 1fr;min-height:60px;}
+  .time-row-label{font-size:11px;color:var(--mid);padding:8px 10px 0 12px;text-align:right;border-right:0.5px solid var(--border);}
+  .time-row-slot{border-top:0.5px solid var(--border);padding:6px 10px 6px 12px;display:flex;flex-wrap:wrap;gap:6px;align-content:flex-start;}
+  .booking-card{background:var(--surface);border:0.5px solid var(--border);border-radius:10px;padding:8px 12px;min-width:140px;max-width:240px;cursor:pointer;border-left:3px solid transparent;transition:background 0.15s;}
+  .booking-card:active{background:var(--raised);}
+  .booking-card.grooming{border-left-color:var(--blue);}
+  .booking-card.hotel{border-left-color:var(--amber);}
+  .booking-card.daycare{border-left-color:var(--teal);}
+  .booking-card.studio{border-left-color:var(--pink);}
+  .bc-pet{font-size:13px;font-weight:700;color:var(--cream);display:flex;align-items:center;gap:5px;}
+  .bc-owner{font-size:11px;color:var(--cream-m);margin-top:1px;}
+  .bc-meta{font-size:10px;color:var(--mid);margin-top:2px;}
+  .bc-svc{font-size:10px;font-weight:700;border-radius:4px;padding:2px 6px;display:inline-block;margin-top:4px;letter-spacing:0.04em;text-transform:uppercase;}
+  .bc-svc.grooming{background:rgba(77,150,185,0.18);color:var(--blue);}
+  .bc-svc.hotel{background:rgba(239,159,39,0.18);color:var(--amber);}
+  .bc-svc.daycare{background:rgba(29,158,117,0.18);color:var(--teal);}
+  .bc-svc.studio{background:rgba(212,83,126,0.18);color:var(--pink);}
+  .status-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;display:inline-block;}
+  .dot-pending{background:var(--amber);}
+  .dot-confirmed{background:var(--success);}
+  .dot-checkedin{background:var(--blue);}
+  .dot-completed{background:var(--mid);}
+  .dot-cancelled{background:var(--error);}
+  .allday-strip{padding:8px 12px 0 64px;display:flex;flex-wrap:wrap;gap:6px;}
+  .allday-card{background:var(--surface);border:0.5px solid var(--border);border-left:3px solid var(--amber);border-radius:8px;padding:6px 10px;font-size:11px;color:var(--cream-m);cursor:pointer;}
+  .allday-card strong{color:var(--cream);display:block;font-size:12px;}
 
-  /* ── EMPTY STATE ── */
-  .empty { text-align: center; padding: 48px 24px; color: var(--mid); }
-  .empty-icon { font-size: 40px; margin-bottom: 12px; opacity: 0.4; }
-  .empty p { font-size: 13px; font-weight: 500; }
+  /* DRAWER */
+  .drawer-overlay{position:fixed;inset:0;background:rgba(10,20,30,0.7);z-index:200;display:none;align-items:flex-end;justify-content:center;}
+  .drawer-overlay.open{display:flex;}
+  .drawer{background:var(--bg);width:100%;max-width:560px;max-height:90svh;border-radius:20px 20px 0 0;overflow-y:auto;padding:20px;animation:slideUp 0.3s ease;}
+  @keyframes slideUp{from{transform:translateY(100%);}to{transform:translateY(0);}}
+  .drawer-handle{width:36px;height:4px;border-radius:2px;background:var(--raised);margin:0 auto 18px;}
+  .drawer-close{float:right;background:var(--surface);border:0.5px solid var(--border);border-radius:50%;width:28px;height:28px;cursor:pointer;color:var(--mid);font-size:16px;display:flex;align-items:center;justify-content:center;font-family:"Nunito",sans-serif;}
+  .drawer-eyebrow{font-size:9px;letter-spacing:0.18em;text-transform:uppercase;color:var(--yellow);font-weight:700;margin-bottom:4px;}
+  .drawer-name{font-family:"Fredoka One",cursive;font-size:24px;color:var(--cream);margin-bottom:14px;}
+  .drawer-section{margin-bottom:14px;}
+  .drawer-section-title{font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--mid);font-weight:700;margin-bottom:8px;padding-bottom:6px;border-bottom:0.5px solid var(--border);}
+  .drawer-row{display:flex;justify-content:space-between;align-items:flex-start;padding:5px 0;gap:12px;}
+  .drawer-key{font-size:12px;color:var(--mid);flex-shrink:0;}
+  .drawer-val{font-size:12px;color:var(--cream);font-weight:600;text-align:right;}
+  .status-select{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--cream);font-family:"Nunito",sans-serif;font-size:13px;font-weight:600;width:100%;outline:none;margin-top:8px;cursor:pointer;}
+  .save-status-btn{width:100%;background:var(--blue);color:#fff;border:none;border-radius:50px;padding:11px;font-size:13px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;cursor:pointer;font-family:"Nunito",sans-serif;margin-top:10px;}
+  .edit-btn{width:100%;background:transparent;border:1px solid var(--border);border-radius:50px;padding:10px;font-size:12px;font-weight:700;color:var(--mid);cursor:pointer;font-family:"Nunito",sans-serif;margin-top:6px;}
 
-  /* ── LOADING ── */
-  .loading { text-align: center; padding: 48px; color: var(--mid); font-size: 13px; }
+  /* CHECKIN NOTES FORM */
+  .checkin-form{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;margin-top:10px;}
+  .checkin-form h4{font-family:"Fredoka One",cursive;font-size:16px;color:var(--cream);margin-bottom:14px;}
+  .form-group-adm{margin-bottom:12px;}
+  .form-label-adm{font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:var(--mid);font-weight:700;margin-bottom:6px;display:block;}
+  .form-input-adm,.form-textarea-adm{width:100%;background:var(--raised);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--cream);font-family:"Nunito",sans-serif;font-size:13px;outline:none;}
+  .form-textarea-adm{resize:vertical;min-height:70px;}
+  .checklist-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:0.5px solid rgba(77,150,185,0.12);}
+  .checklist-label{flex:1;font-size:12px;color:var(--cream-m);}
+  .yn-btns{display:flex;gap:6px;}
+  .yn-btn{font-size:11px;font-weight:700;padding:4px 12px;border-radius:20px;border:0.5px solid var(--border);cursor:pointer;background:transparent;color:var(--mid);font-family:"Nunito",sans-serif;transition:all 0.15s;}
+  .yn-btn.yes.active{background:rgba(107,203,119,0.18);border-color:var(--success);color:var(--success);}
+  .yn-btn.no.active{background:rgba(255,107,107,0.18);border-color:var(--error);color:var(--error);}
+  .remark-field{margin-top:6px;display:none;}
+  .remark-field.show{display:block;}
+  .save-checkin-btn{width:100%;background:var(--success);color:var(--bg);border:none;border-radius:50px;padding:11px;font-size:13px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;cursor:pointer;font-family:"Nunito",sans-serif;margin-top:12px;}
+
+  /* EDIT FORM */
+  .edit-form{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;margin-top:10px;}
+  .edit-form h4{font-family:"Fredoka One",cursive;font-size:16px;color:var(--cream);margin-bottom:14px;}
+  .save-edit-btn{width:100%;background:var(--yellow);color:var(--bg);border:none;border-radius:50px;padding:11px;font-size:13px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;cursor:pointer;font-family:"Nunito",sans-serif;margin-top:12px;}
+
+  .empty{text-align:center;padding:48px 24px;color:var(--mid);}
+  .empty p{font-size:13px;font-weight:500;}
+  .loading{text-align:center;padding:48px;color:var(--mid);font-size:13px;}
+  .info-badge{font-size:10px;font-weight:700;border-radius:4px;padding:2px 6px;display:inline-block;letter-spacing:0.04em;}
+  .info-badge.blue{background:rgba(77,150,185,0.18);color:var(--blue);}
+  .info-badge.amber{background:rgba(239,159,39,0.18);color:var(--amber);}
 </style>
 </head>
 <body>
 
-<!-- ── PASSWORD GATE ── -->
+<!-- GATE -->
 <div id="gate">
   <div class="gate-card">
     <p class="gate-logo">BARK<span>HAUS</span></p>
@@ -155,7 +193,7 @@
   </div>
 </div>
 
-<!-- ── MAIN APP ── -->
+<!-- APP -->
 <div id="app">
 
   <!-- Top bar -->
@@ -173,19 +211,45 @@
     </div>
   </div>
 
-  <!-- Stats strip -->
-  <div class="stats">
+  <!-- Stats -->
+  <div class="stats" id="statsBar">
     <div class="stat"><div class="stat-label">Total</div><div class="stat-val" id="statTotal">-</div></div>
     <div class="stat"><div class="stat-label">Grooming</div><div class="stat-val blue" id="statGroom">-</div></div>
     <div class="stat"><div class="stat-label">Hotel</div><div class="stat-val amber" id="statHotel">-</div></div>
     <div class="stat"><div class="stat-label">Daycare</div><div class="stat-val green" id="statDaycare">-</div></div>
+    <div class="stat hidden" id="statStudioWrap"><div class="stat-label">Studio</div><div class="stat-val pink" id="statStudio">-</div></div>
   </div>
 
-  <!-- Main content -->
+  <!-- Filter bar -->
+  <div class="filter-bar">
+    <div class="filter-row" id="filterRow">
+      <button class="filter-btn" id="fAll" onclick="setFilter('all',this)">All</button>
+      <button class="filter-btn" id="fGroom" onclick="setFilter('grooming',this)">
+        <span class="filter-dot" style="background:var(--blue)"></span>Grooming
+      </button>
+      <button class="filter-btn" id="fHotel" onclick="setFilter('hotel',this)">
+        <span class="filter-dot" style="background:var(--amber)"></span>Hotel
+      </button>
+      <button class="filter-btn" id="fDaycare" onclick="setFilter('daycare',this)">
+        <span class="filter-dot" style="background:var(--teal)"></span>Daycare
+      </button>
+      <button class="filter-btn" id="fStudio" onclick="setFilter('studio',this)" style="display:none">
+        <span class="filter-dot" style="background:var(--pink)"></span>Studio
+      </button>
+    </div>
+    <div class="sub-filter-row" id="subFilterRow" style="display:none"></div>
+  </div>
+
+  <!-- Mobile calendar toggle -->
+  <button class="mini-cal-toggle" id="calToggle" onclick="toggleMobileCal()">
+    &#128197; <span id="calToggleLabel">Show calendar</span>
+  </button>
+
+  <!-- Main -->
   <div class="main">
 
     <!-- Mini calendar -->
-    <div class="mini-cal">
+    <div class="mini-cal" id="miniCal">
       <div class="mini-cal-month" id="miniCalMonth"></div>
       <div class="cal-grid" id="calGrid"></div>
       <div class="legend">
@@ -201,6 +265,11 @@
         <div class="legend-row"><span class="status-dot dot-completed" style="width:8px;height:8px"></span>Completed</div>
         <div class="legend-row"><span class="status-dot dot-cancelled" style="width:8px;height:8px"></span>Cancelled</div>
       </div>
+      <!-- Inventory -->
+      <div class="inventory-section" id="inventorySection">
+        <div class="inventory-title">&#127968; Room Inventory</div>
+        <div id="inventoryGrid"></div>
+      </div>
     </div>
 
     <!-- Timeline -->
@@ -211,7 +280,7 @@
   </div>
 </div>
 
-<!-- ── BOOKING DETAIL DRAWER ── -->
+<!-- DRAWER -->
 <div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer(event)">
   <div class="drawer" id="drawer">
     <div class="drawer-handle"></div>
@@ -222,36 +291,44 @@
 
 <script>
 // ── CONFIG ──
-// Replace with your actual Supabase values
 var SUPABASE_URL      = 'https://dxttnbtfhpanyiyduevn.supabase.co';
 var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4dHRuYnRmaHBhbnlpeWR1ZXZuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY1MjkyNDcsImV4cCI6MjA5MjEwNTI0N30.jrMk8-_Ga01TydNPUwCzlymf1W44PjaXXIUjCLALb2s';
-var ADMIN_PASSWORD    = 'greenhills2026';  
-  
+var ADMIN_PASSWORD    = 'greenhills2026';
+
 // ── STATE ──
 var currentDate    = new Date();
 var currentBranch  = 0;
 var branches       = [];
 var allBookings    = [];
 var selectedBooking = null;
+var currentFilter  = 'all';
+var currentSubFilter = null;
+var calBookingDates = {};
+var inventoryData  = {};
+var mobilCalOpen   = false;
 
-// ── HOURS to show in timeline ──
-var HOURS = [9,10,11,12,13,14,15,16,17,18,19,20];
-var HOUR_LABELS = {
-  9:'9 AM',10:'10 AM',11:'11 AM',12:'12 PM',
-  13:'1 PM',14:'2 PM',15:'3 PM',16:'4 PM',
-  17:'5 PM',18:'6 PM',19:'7 PM',20:'8 PM'
+// ── STYLISTS & ROOM TYPES for sub-filters ──
+var STYLISTS   = ['Any','Alex','Jamie','Sam'];
+var ROOM_TYPES = {
+  small_cage:   'Small Cage',
+  medium_cage:  'Medium Cage',
+  large_cage:   'Large Cage',
+  single_cabin: 'Cat Cabin',
+  villa:        'Cat Villa'
 };
+var SVC_COLORS = { grooming:'active-g', hotel:'active-h', daycare:'active-d', studio:'active-s' };
 
-// ── PASSWORD GATE ──
+var HOURS = [9,10,11,12,13,14,15,16,17,18,19,20];
+var HOUR_LABELS = {9:'9 AM',10:'10 AM',11:'11 AM',12:'12 PM',13:'1 PM',14:'2 PM',15:'3 PM',16:'4 PM',17:'5 PM',18:'6 PM',19:'7 PM',20:'8 PM'};
+
+// ── PASSWORD ──
 function checkPassword() {
-  var val = document.getElementById('gateInput').value;
-  var err = document.getElementById('gateError');
-  if (val === ADMIN_PASSWORD) {
+  if (document.getElementById('gateInput').value === ADMIN_PASSWORD) {
     document.getElementById('gate').style.display = 'none';
     document.getElementById('app').classList.add('visible');
     init();
   } else {
-    err.textContent = 'Incorrect password. Try again.';
+    document.getElementById('gateError').textContent = 'Incorrect password.';
     document.getElementById('gateInput').value = '';
   }
 }
@@ -263,100 +340,94 @@ async function init() {
   var d = currentDate;
   await loadMonthDots(d.getFullYear(), d.getMonth());
   renderMiniCal();
+  await loadInventory();
   await loadBookings();
+  // Show studio filter for Eastwood (index 1)
+  updateBranchUI();
 }
 
-// ── SUPABASE FETCH HELPER ──
+function updateBranchUI() {
+  var isEast = currentBranch === 1;
+  document.getElementById('fStudio').style.display = isEast ? '' : 'none';
+  var studioStat = document.getElementById('statStudioWrap');
+  studioStat.classList.toggle('hidden', !isEast);
+  // resize stats grid
+  document.getElementById('statsBar').style.gridTemplateColumns = isEast ? 'repeat(5,1fr)' : 'repeat(4,1fr)';
+}
+
+// ── SUPABASE HELPERS ──
 async function sbFetch(path, params) {
   var url = SUPABASE_URL + '/rest/v1/' + path;
   if (params) url += '?' + params;
-  console.log('Fetching:', url);
   var res = await fetch(url, {
-    headers: {
-      'apikey':        SUPABASE_ANON_KEY,
-      'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
-      'Content-Type':  'application/json',
-    }
+    headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + SUPABASE_ANON_KEY, 'Content-Type': 'application/json' }
   });
-  if (!res.ok) {
-    var body = await res.text();
-    console.error('Supabase ' + res.status + ':', body);
-    throw new Error('Supabase error: ' + res.status + ' - ' + body);
-  }
+  if (!res.ok) { var b = await res.text(); throw new Error('Supabase ' + res.status + ': ' + b); }
   return res.json();
 }
-
 async function sbPatch(path, params, body) {
   var url = SUPABASE_URL + '/rest/v1/' + path + '?' + params;
   var res = await fetch(url, {
     method: 'PATCH',
-    headers: {
-      'apikey':        SUPABASE_ANON_KEY,
-      'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
-      'Content-Type':  'application/json',
-      'Prefer':        'return=representation',
-    },
+    headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + SUPABASE_ANON_KEY, 'Content-Type': 'application/json', 'Prefer': 'return=representation' },
+    body: JSON.stringify(body)
+  });
+  return res.json();
+}
+async function sbPost(path, body) {
+  var url = SUPABASE_URL + '/rest/v1/' + path;
+  var res = await fetch(url, {
+    method: 'POST',
+    headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + SUPABASE_ANON_KEY, 'Content-Type': 'application/json', 'Prefer': 'return=representation' },
     body: JSON.stringify(body)
   });
   return res.json();
 }
 
-// ── LOAD BRANCHES ──
+// ── BRANCHES ──
 async function loadBranches() {
-  try {
-    branches = await sbFetch('branches', 'select=id,name&order=created_at');
-  } catch(e) {
-    branches = [{ id: null, name: 'Estancia' }, { id: null, name: 'Eastwood' }];
-  }
+  try { branches = await sbFetch('branches', 'select=id,name&order=created_at'); } catch(e) { branches = []; }
 }
 
-// ── LOAD BOOKINGS ──
+// ── BOOKINGS ──
 async function loadBookings() {
-  var tl = document.getElementById('timeline');
-  tl.innerHTML = '<div class="loading">Loading...</div>';
-
+  document.getElementById('timeline').innerHTML = '<div class="loading">Loading...</div>';
   var dateStr = formatDate(currentDate);
   var branch  = branches[currentBranch];
   if (!branch || !branch.id) { renderTimeline([]); return; }
 
-  var select = 'id,ref_number,service,status,booking_date,member_discount_applied,' +
+  var select = 'id,ref_number,service,status,booking_date,' +
     'owners(first_name,last_name,mobile),' +
-    'pets(name,animal_type,breed,size),' +
-    'grooming_details(timeslot,preferred_stylist,groom_service_name,coat_condition,special_requests),' +
-    'hotel_details(checkin_date,checkout_date,dropoff_time,pickup_time,room_type,playpark_consent,feeding_instructions,medications,emergency_name,emergency_phone),' +
-    'daycare_details(dropoff_time,pickup_time,hours_total,temperament,notes),' +
-    'studio_details(timeslot)';
+    'pets(name,animal_type,breed,size,temperament),' +
+    'grooming_details(timeslot,preferred_stylist,groom_service_name,special_requests),' +
+    'hotel_details(checkin_date,checkout_date,dropoff_time,pickup_time,room_type,playpark_consent,feeding_instructions,medications,emergency_name,emergency_phone,vet_clinic,vet_contact),' +
+    'daycare_details(dropoff_time,pickup_time,hours_total,open_time,notes),' +
+    'studio_details(timeslot),' +
+    'booking_addons(addon_name,price),' +
+    'pet_vaccines(vaccine_name,confirmed),' +
+    'checkin_notes(general_remarks,addon_purchases,physical_inspection_notes,personal_items,vacc_complete,skin_coat_good,skin_coat_remarks,ears_nose_eyes_good,ears_nose_eyes_remarks,nails_good,nails_remarks,joints_good,joints_remarks)';
 
   try {
-    // Query 1: grooming, daycare, studio by booking_date
     var dayBookings = await sbFetch('bookings',
       'select=' + select +
       '&branch_id=eq.' + branch.id +
       '&booking_date=eq.' + dateStr +
       '&service=not.eq.hotel' +
       '&status=not.in.(cancelled,rejected)' +
-      '&order=created_at'
-    );
+      '&order=created_at');
 
-    // Query 2: hotel stays where checkin <= selected date <= checkout
-    // We fetch hotel bookings and filter in JS since nested column filtering
-    // isn't supported in the REST API or parameter
     var hotelBookings = await sbFetch('bookings',
       'select=' + select +
       '&branch_id=eq.' + branch.id +
       '&service=eq.hotel' +
       '&status=not.in.(cancelled,rejected)' +
-      '&order=created_at'
-    );
+      '&order=created_at');
 
-    // Filter hotel bookings to only those covering the selected date
     var d = new Date(dateStr);
     var hotelFiltered = (hotelBookings || []).filter(function(b) {
       var hd = b.hotel_details;
       if (!hd) return false;
-      var cin  = new Date(hd.checkin_date);
-      var cout = new Date(hd.checkout_date);
-      return cin <= d && d <= cout;
+      return new Date(hd.checkin_date) <= d && d <= new Date(hd.checkout_date);
     });
 
     allBookings = (dayBookings || []).concat(hotelFiltered);
@@ -366,10 +437,66 @@ async function loadBookings() {
   }
 
   renderStats();
-  renderTimeline(allBookings);
+  renderTimeline(filteredBookings());
 }
 
-// ── RENDER STATS ──
+// ── FILTER ──
+function filteredBookings() {
+  var list = allBookings;
+  if (currentFilter !== 'all') {
+    list = list.filter(function(b) { return b.service === currentFilter; });
+  }
+  if (currentSubFilter && currentFilter === 'grooming') {
+    list = list.filter(function(b) {
+      var s = currentSubFilter.toLowerCase();
+      if (s === 'any') return true;
+      var gd = b.grooming_details;
+      return gd && gd.preferred_stylist && gd.preferred_stylist.toLowerCase() === s;
+    });
+  }
+  if (currentSubFilter && currentFilter === 'hotel') {
+    list = list.filter(function(b) {
+      var hd = b.hotel_details;
+      return hd && hd.room_type === currentSubFilter;
+    });
+  }
+  return list;
+}
+
+function setFilter(svc, el) {
+  currentFilter = svc;
+  currentSubFilter = null;
+  document.querySelectorAll('.filter-btn').forEach(function(b) {
+    Object.values(SVC_COLORS).forEach(function(c){b.classList.remove(c);});
+  });
+  if (svc !== 'all' && SVC_COLORS[svc]) el.classList.add(SVC_COLORS[svc]);
+  else el.style.background = '';
+  // Render sub-filters
+  var subRow = document.getElementById('subFilterRow');
+  subRow.innerHTML = '';
+  subRow.style.display = 'none';
+  if (svc === 'grooming') {
+    subRow.style.display = 'flex';
+    subRow.innerHTML = STYLISTS.map(function(s) {
+      return '<button class="sub-filter-btn" onclick="setSubFilter(\'' + s.toLowerCase() + '\',this)">' + s + '</button>';
+    }).join('');
+  } else if (svc === 'hotel') {
+    subRow.style.display = 'flex';
+    subRow.innerHTML = Object.entries(ROOM_TYPES).map(function(e) {
+      return '<button class="sub-filter-btn" onclick="setSubFilter(\'' + e[0] + '\',this)">' + e[1] + '</button>';
+    }).join('');
+  }
+  renderTimeline(filteredBookings());
+}
+
+function setSubFilter(val, el) {
+  currentSubFilter = currentSubFilter === val ? null : val;
+  document.querySelectorAll('.sub-filter-btn').forEach(function(b){b.classList.remove('active');});
+  if (currentSubFilter) el.classList.add('active');
+  renderTimeline(filteredBookings());
+}
+
+// ── STATS ──
 function renderStats() {
   var counts = { grooming:0, hotel:0, daycare:0, studio:0 };
   allBookings.forEach(function(b) { if (counts[b.service] !== undefined) counts[b.service]++; });
@@ -377,26 +504,25 @@ function renderStats() {
   document.getElementById('statGroom').textContent   = counts.grooming;
   document.getElementById('statHotel').textContent   = counts.hotel;
   document.getElementById('statDaycare').textContent = counts.daycare;
+  document.getElementById('statStudio').textContent  = counts.studio;
 }
 
 // ── RENDER TIMELINE ──
 function renderTimeline(bookings) {
   var tl = document.getElementById('timeline');
   if (!bookings.length) {
-    tl.innerHTML = '<div class="empty"><div class="empty-icon">&#128062;</div><p>No bookings for this day.</p></div>';
+    tl.innerHTML = '<div class="empty"><p>No bookings for this day' + (currentFilter !== 'all' ? ' matching filter' : '') + '.</p></div>';
     return;
   }
 
-  // Separate hotel all-day stays vs timeslot bookings
   var hotelStays = bookings.filter(function(b) { return b.service === 'hotel'; });
   var slotted    = bookings.filter(function(b) { return b.service !== 'hotel'; });
 
-  // Map timeslot string to hour integer
   function slotHour(b) {
     var slot = (b.grooming_details && b.grooming_details.timeslot) ||
-               (b.studio_details && b.studio_details.timeslot) ||
-               (b.daycare_details && b.daycare_details.dropoff_time) || '';
-    var m = slot.match(/(\d+):00\s*(AM|PM)/i);
+               (b.studio_details   && b.studio_details.timeslot)   ||
+               (b.daycare_details  && b.daycare_details.dropoff_time) || '';
+    var m = slot.match(/(\d+)[:\s]?\d*\s*(AM|PM)/i);
     if (!m) return 9;
     var h = parseInt(m[1]);
     if (m[2].toUpperCase() === 'PM' && h !== 12) h += 12;
@@ -406,34 +532,41 @@ function renderTimeline(bookings) {
 
   var html = '';
 
-  // All-day hotel strip
   if (hotelStays.length) {
     html += '<div class="allday-strip">';
     hotelStays.forEach(function(b) {
-      var pet   = b.pets || {};
+      var pet   = b.pets          || {};
       var hd    = b.hotel_details || {};
-      var owner = b.owners || {};
+      var owner = b.owners        || {};
       html += '<div class="allday-card" onclick="openDrawer(\'' + b.id + '\')">' +
-        '<strong>' + dot(b.status) + (pet.name||'Pet') + '</strong>' +
-        'Hotel ' + (hd.checkin_date||'') + ' - ' + (hd.checkout_date||'') +
-        '<br>' + (owner.first_name||'') + ' ' + (owner.last_name||'') +
+        '<strong>' + dot(b.status) + (pet.name||'Pet') + ' &mdash; ' + animalIcon(pet.animal_type) + '</strong>' +
+        (hd.room_type ? '<span class="info-badge amber" style="margin-right:4px">' + (ROOM_TYPES[hd.room_type]||hd.room_type) + '</span>' : '') +
+        formatDateRange(hd.checkin_date, hd.checkout_date) + '<br>' +
+        (owner.first_name||'') + ' ' + (owner.last_name||'') +
         '</div>';
     });
     html += '</div>';
   }
 
-  // Hourly rows
   HOURS.forEach(function(h) {
-    var rowBookings = slotted.filter(function(b) { return slotHour(b) === h; });
+    var rowB = slotted.filter(function(b) { return slotHour(b) === h; });
     html += '<div class="time-row"><div class="time-row-label">' + HOUR_LABELS[h] + '</div><div class="time-row-slot">';
-    rowBookings.forEach(function(b) {
+    rowB.forEach(function(b) {
       var pet   = b.pets   || {};
       var owner = b.owners || {};
-      var svcLabel = b.service === 'grooming' ? ((b.grooming_details && b.grooming_details.groom_service_name) || 'Grooming') :
+      var gd    = b.grooming_details;
+      var dd    = b.daycare_details;
+      var sd    = b.studio_details;
+      var svcLabel = b.service === 'grooming' ? ((gd && gd.groom_service_name) || 'Grooming') :
                      b.service === 'daycare'  ? 'Daycare' : 'Studio';
+      var meta = [];
+      if (gd && gd.preferred_stylist && gd.preferred_stylist !== 'any') meta.push(gd.preferred_stylist);
+      if (dd && dd.pickup_time) meta.push('until ' + dd.pickup_time);
+      if (sd && sd.timeslot) meta.push(sd.timeslot);
       html += '<div class="booking-card ' + b.service + '" onclick="openDrawer(\'' + b.id + '\')">' +
-        '<div class="bc-pet">' + dot(b.status) + (pet.name||'Pet') + '</div>' +
+        '<div class="bc-pet">' + dot(b.status) + (pet.name||'Pet') + ' ' + animalIcon(pet.animal_type) + '</div>' +
         '<div class="bc-owner">' + (owner.first_name||'') + ' ' + (owner.last_name||'') + ' &middot; ' + (owner.mobile||'') + '</div>' +
+        (meta.length ? '<div class="bc-meta">' + meta.join(' &middot; ') + '</div>' : '') +
         '<span class="bc-svc ' + b.service + '">' + svcLabel + '</span>' +
         '</div>';
     });
@@ -443,6 +576,13 @@ function renderTimeline(bookings) {
   tl.innerHTML = html;
 }
 
+function animalIcon(type) {
+  return type === 'cat' ? '&#128049;' : '&#128054;';
+}
+function formatDateRange(cin, cout) {
+  if (!cin || !cout) return '';
+  return cin + ' to ' + cout;
+}
 function dot(status) {
   var cls = { pending:'dot-pending', confirmed:'dot-confirmed', checked_in:'dot-checkedin', completed:'dot-completed', cancelled:'dot-cancelled' };
   return '<span class="status-dot ' + (cls[status]||'dot-pending') + '"></span>';
@@ -453,95 +593,380 @@ function openDrawer(bookingId) {
   var b = allBookings.find(function(x) { return x.id === bookingId; });
   if (!b) return;
   selectedBooking = b;
-  var pet   = b.pets   || {};
-  var owner = b.owners || {};
+  renderDrawer(b);
+  document.getElementById('drawerOverlay').classList.add('open');
+}
+
+function renderDrawer(b) {
+  var pet   = b.pets           || {};
+  var owner = b.owners         || {};
   var gd    = b.grooming_details || null;
   var hd    = b.hotel_details    || null;
   var dd    = b.daycare_details  || null;
   var sd    = b.studio_details   || null;
+  var addons    = b.booking_addons || [];
+  var vaccines  = b.pet_vaccines  || [];
+  var cin_notes = b.checkin_notes  || null;
 
   var svcLabel = { grooming:'Grooming', hotel:'Pet Hotel', daycare:'Daycare', studio:'Self-Shoot Studio' };
-
   var html = '';
   html += '<div class="drawer-eyebrow">' + b.ref_number + '</div>';
-  html += '<div class="drawer-name">' + (pet.name||'Pet') + '</div>';
+  html += '<div class="drawer-name">' + (pet.name||'Pet') + ' ' + animalIcon(pet.animal_type) + '</div>';
 
   // Booking info
-  html += '<div class="drawer-section"><div class="drawer-section-title">Booking</div>';
-  html += row('Service', svcLabel[b.service] || b.service);
-  html += row('Branch', branches[currentBranch] ? branches[currentBranch].name : '');
+  html += section('Booking', [
+    ['Service',  svcLabel[b.service] || b.service],
+    ['Branch',   branches[currentBranch] ? branches[currentBranch].name : ''],
+    ['Status',   b.status.replace('_',' ')]
+  ]);
+
+  // Schedule details
+  var schedRows = [];
   if (gd) {
-    html += row('Date', b.booking_date || '');
-    html += row('Time slot', gd.timeslot || '');
-    html += row('Stylist', gd.preferred_stylist || 'Any');
-    html += row('Groom type', gd.groom_service_name || '');
-    if (gd.coat_condition) html += row('Coat', gd.coat_condition);
-    if (gd.special_requests) html += row('Notes', gd.special_requests);
+    schedRows.push(['Date',     b.booking_date||'-']);
+    schedRows.push(['Time',     gd.timeslot||'-']);
+    schedRows.push(['Stylist',  gd.preferred_stylist||'Any']);
+    schedRows.push(['Service',  gd.groom_service_name||'-']);
+    if (gd.special_requests) schedRows.push(['Notes', gd.special_requests]);
   }
   if (hd) {
-    html += row('Check-in', hd.checkin_date || '');
-    html += row('Check-out', hd.checkout_date || '');
-    html += row('Drop-off', hd.dropoff_time || '');
-    html += row('Pick-up', hd.pickup_time || '');
-    html += row('Room', hd.room_type || '');
-    html += row('Play park', hd.playpark_consent ? 'Yes' : 'No');
-    if (hd.feeding_instructions) html += row('Feeding', hd.feeding_instructions);
-    if (hd.medications) html += row('Medications', hd.medications);
+    schedRows.push(['Check-in',  hd.checkin_date||'-']);
+    schedRows.push(['Check-out', hd.checkout_date||'-']);
+    schedRows.push(['Drop-off',  hd.dropoff_time||'-']);
+    schedRows.push(['Pick-up',   hd.pickup_time||'-']);
+    schedRows.push(['Room',      ROOM_TYPES[hd.room_type]||hd.room_type||'-']);
+    schedRows.push(['Play park', hd.playpark_consent ? 'Yes' : 'No']);
+    if (hd.feeding_instructions) schedRows.push(['Feeding', hd.feeding_instructions]);
+    if (hd.medications) schedRows.push(['Medications', hd.medications]);
   }
   if (dd) {
-    html += row('Date', b.booking_date || '');
-    html += row('Drop-off', dd.dropoff_time || '');
-    html += row('Pick-up', dd.pickup_time || '');
-    html += row('Duration', (dd.hours_total || '?') + ' hrs');
-    if (dd.temperament) html += row('Temperament', dd.temperament);
-    if (dd.notes) html += row('Notes', dd.notes);
+    schedRows.push(['Date',     b.booking_date||'-']);
+    schedRows.push(['Drop-off', dd.dropoff_time||'-']);
+    schedRows.push(['Pick-up',  dd.open_time ? 'Open time' : (dd.pickup_time||'-')]);
+    schedRows.push(['Duration', dd.hours_total ? dd.hours_total + ' hrs' : '-']);
+    if (dd.notes) schedRows.push(['Notes', dd.notes]);
   }
   if (sd) {
-    html += row('Date', b.booking_date || '');
-    html += row('Time slot', sd.timeslot || '');
+    schedRows.push(['Date', b.booking_date||'-']);
+    schedRows.push(['Time', sd.timeslot||'-']);
   }
-  html += '</div>';
+  if (schedRows.length) html += section('Schedule', schedRows);
+
+  // Add-ons
+  if (addons.length) {
+    html += section('Add-ons', addons.map(function(a) { return [a.addon_name, a.price ? '\u20b1'+a.price : 'assessment']; }));
+  }
 
   // Pet info
-  html += '<div class="drawer-section"><div class="drawer-section-title">Pet</div>';
-  html += row('Name', pet.name || '');
-  html += row('Animal', (pet.animal_type || '') + (pet.breed ? ' - ' + pet.breed : ''));
-  if (pet.size) html += row('Size', pet.size.replace('_', ' '));
-  html += '</div>';
+  var petRows = [
+    ['Name',   pet.name||'-'],
+    ['Animal', (pet.animal_type||'-') + (pet.breed ? ' \u2014 ' + pet.breed : '')],
+  ];
+  if (pet.size) petRows.push(['Size', pet.size.replace(/_/g,' ')]);
+  if (pet.temperament) petRows.push(['Temperament', pet.temperament.replace(/_/g,' ')]);
+  if (pet.medical_notes) petRows.push(['Medical notes', pet.medical_notes]);
+  html += section('Pet', petRows);
 
-  // Owner info
-  html += '<div class="drawer-section"><div class="drawer-section-title">Owner</div>';
-  html += row('Name', (owner.first_name||'') + ' ' + (owner.last_name||''));
-  html += row('Mobile', owner.mobile || '');
-  if (b.member_discount_applied) html += row('Member', 'Yes - discount applied');
-  html += '</div>';
+  // Vaccines
+  if (vaccines.length) {
+    html += section('Vaccines', vaccines.map(function(v) { return [v.vaccine_name, v.confirmed ? '&#10003; Declared' : 'Not checked']; }));
+  }
 
   // Emergency (hotel)
   if (hd && (hd.emergency_name || hd.vet_clinic)) {
-    html += '<div class="drawer-section"><div class="drawer-section-title">Emergency</div>';
-    if (hd.emergency_name)  html += row('Contact', hd.emergency_name + ' ' + (hd.emergency_phone||''));
-    if (hd.vet_clinic)      html += row('Vet clinic', hd.vet_clinic);
-    html += '</div>';
+    var emRows = [];
+    if (hd.emergency_name) emRows.push(['Emergency', hd.emergency_name + (hd.emergency_phone ? ' / ' + hd.emergency_phone : '')]);
+    if (hd.vet_clinic) emRows.push(['Vet', hd.vet_clinic + (hd.vet_contact ? ' / ' + hd.vet_contact : '')]);
+    html += section('Emergency', emRows);
+  }
+
+  // Owner info
+  html += section('Owner', [
+    ['Name',   (owner.first_name||'') + ' ' + (owner.last_name||'')],
+    ['Mobile', owner.mobile||'-']
+  ]);
+
+  // Check-in notes (if exist)
+  if (cin_notes) {
+    var cnRows = [];
+    if (cin_notes.general_remarks) cnRows.push(['Remarks', cin_notes.general_remarks]);
+    if (cin_notes.addon_purchases) cnRows.push(['Add-on purchases', cin_notes.addon_purchases]);
+    if (cin_notes.physical_inspection_notes) cnRows.push(['Physical inspection', cin_notes.physical_inspection_notes]);
+    if (cin_notes.personal_items) cnRows.push(['Personal items', cin_notes.personal_items]);
+    var checks = [
+      ['Vaccination', cin_notes.vacc_complete],
+      ['Skin & coat', cin_notes.skin_coat_good],
+      ['Ears/nose/eyes', cin_notes.ears_nose_eyes_good],
+      ['Nails', cin_notes.nails_good],
+      ['Joints', cin_notes.joints_good]
+    ];
+    checks.forEach(function(c) {
+      if (c[1] !== null && c[1] !== undefined) cnRows.push([c[0], c[1] ? '&#10003; Pass' : '&#10007; Fail']);
+    });
+    if (cin_notes.skin_coat_remarks) cnRows.push(['Skin/coat remarks', cin_notes.skin_coat_remarks]);
+    if (cin_notes.ears_nose_eyes_remarks) cnRows.push(['Eyes/ears remarks', cin_notes.ears_nose_eyes_remarks]);
+    if (cin_notes.nails_remarks) cnRows.push(['Nails remarks', cin_notes.nails_remarks]);
+    if (cin_notes.joints_remarks) cnRows.push(['Joints remarks', cin_notes.joints_remarks]);
+    if (cnRows.length) html += section('Check-in notes', cnRows);
   }
 
   // Status update
   html += '<div class="drawer-section"><div class="drawer-section-title">Update status</div>';
-  html += '<select class="status-select" id="statusSelect">';
+  html += '<select class="status-select" id="statusSelect" onchange="onStatusChange(this.value)">';
   ['pending','confirmed','checked_in','completed','cancelled'].forEach(function(s) {
-    html += '<option value="' + s + '"' + (b.status === s ? ' selected' : '') + '>' + s.replace('_', ' ') + '</option>';
+    html += '<option value="' + s + '"' + (b.status === s ? ' selected' : '') + '>' + s.replace('_',' ') + '</option>';
   });
   html += '</select>';
   html += '<button class="save-status-btn" onclick="saveStatus()">Save status</button>';
   html += '</div>';
 
+  // Check-in notes form (shown when checked_in)
+  html += '<div id="checkinFormWrap" style="display:' + (b.status === 'checked_in' ? '' : 'none') + '">';
+  html += renderCheckinForm(b);
+  html += '</div>';
+
+  // Edit booking
+  html += '<button class="edit-btn" onclick="toggleEditForm()">&#9998; Edit booking details</button>';
+  html += '<div id="editFormWrap" style="display:none">';
+  html += renderEditForm(b);
+  html += '</div>';
+
   document.getElementById('drawerContent').innerHTML = html;
-  document.getElementById('drawerOverlay').classList.add('open');
 }
 
-function row(k, v) {
-  return '<div class="drawer-row"><span class="drawer-key">' + k + '</span><span class="drawer-val">' + v + '</span></div>';
+function section(title, rows) {
+  return '<div class="drawer-section"><div class="drawer-section-title">' + title + '</div>' +
+    rows.map(function(r) {
+      return '<div class="drawer-row"><span class="drawer-key">' + r[0] + '</span><span class="drawer-val">' + r[1] + '</span></div>';
+    }).join('') + '</div>';
 }
 
+function onStatusChange(val) {
+  var wrap = document.getElementById('checkinFormWrap');
+  if (wrap) wrap.style.display = val === 'checked_in' ? '' : 'none';
+}
+
+// ── CHECK-IN NOTES FORM ──
+function renderCheckinForm(b) {
+  var svc = b.service;
+  var cn  = b.checkin_notes || {};
+  var html = '<div class="checkin-form">';
+  html += '<h4>Check-in inspection</h4>';
+
+  if (svc === 'hotel') {
+    html += formTextarea('Physical inspection notes', 'ci_physical', cn.physical_inspection_notes||'');
+    html += formTextarea('Personal items brought', 'ci_items', cn.personal_items||'');
+    html += formTextarea('Add-on purchases', 'ci_addons', cn.addon_purchases||'');
+  }
+
+  if (svc === 'grooming') {
+    html += formTextarea('Remarks', 'ci_remarks', cn.general_remarks||'');
+    html += '<div class="drawer-section-title" style="margin-top:12px">Health checklist</div>';
+    html += checklistItem('Complete & updated vaccination', 'ci_vacc',  cn.vacc_complete,  null, null);
+    html += checklistItem('Skin & coat in good condition', 'ci_skin',  cn.skin_coat_good, 'ci_skin_r', cn.skin_coat_remarks);
+    html += checklistItem('Ears, nose, eyes in good condition','ci_eyes',cn.ears_nose_eyes_good,'ci_eyes_r',cn.ears_nose_eyes_remarks);
+    html += checklistItem('Nails intact and complete', 'ci_nails', cn.nails_good, 'ci_nails_r', cn.nails_remarks);
+    html += checklistItem('Joint mobility in good condition','ci_joints',cn.joints_good,'ci_joints_r',cn.joints_remarks);
+  }
+
+  if (svc === 'daycare') {
+    html += formTextarea('Remarks', 'ci_remarks', cn.general_remarks||'');
+    html += formTextarea('Add-on purchases', 'ci_addons', cn.addon_purchases||'');
+  }
+
+  html += '<button class="save-checkin-btn" onclick="saveCheckinNotes()">Save inspection notes</button>';
+  html += '</div>';
+  return html;
+}
+
+function formTextarea(label, id, val) {
+  return '<div class="form-group-adm"><label class="form-label-adm">' + label + '</label>' +
+    '<textarea class="form-textarea-adm" id="' + id + '">' + (val||'') + '</textarea></div>';
+}
+
+function checklistItem(label, id, val, remarkId, remarkVal) {
+  var yesActive = val === true  ? ' active' : '';
+  var noActive  = val === false ? ' active' : '';
+  var remarkShow = (val === false && remarkId) ? ' show' : '';
+  var html = '<div class="checklist-row">' +
+    '<span class="checklist-label">' + label + '</span>' +
+    '<div class="yn-btns">' +
+    '<button class="yn-btn yes' + yesActive + '" onclick="setYN(\'' + id + '\',true' + (remarkId ? ',\'' + remarkId + '\'' : '') + ',this)">Yes</button>' +
+    '<button class="yn-btn no'  + noActive  + '" onclick="setYN(\'' + id + '\',false' + (remarkId ? ',\'' + remarkId + '\'' : '') + ',this)">No</button>' +
+    '</div></div>';
+  if (remarkId) {
+    html += '<div class="remark-field' + remarkShow + '" id="' + remarkId + '_wrap">' +
+      '<textarea class="form-textarea-adm" id="' + remarkId + '" placeholder="Please describe...">' + (remarkVal||'') + '</textarea></div>';
+  }
+  return html;
+}
+
+function setYN(fieldId, val, remarkId, btn) {
+  var parent = btn.closest('.checklist-row');
+  parent.querySelectorAll('.yn-btn').forEach(function(b){b.classList.remove('active');});
+  btn.classList.add('active');
+  if (remarkId) {
+    var wrap = document.getElementById(remarkId + '_wrap');
+    if (wrap) wrap.classList.toggle('show', !val);
+  }
+}
+
+async function saveCheckinNotes() {
+  if (!selectedBooking) return;
+  var b   = selectedBooking;
+  var svc = b.service;
+  var payload = { booking_id: b.id, service: svc };
+
+  function getVal(id) { var el = document.getElementById(id); return el ? el.value.trim()||null : null; }
+  function getYN(id) {
+    var wrap = document.querySelector('[onclick*="setYN(\'' + id + '\'"]');
+    if (!wrap) return null;
+    var row = wrap.closest ? wrap.closest('.checklist-row') : null;
+    if (!row) return null;
+    var yes = row.querySelector('.yn-btn.yes.active');
+    var no  = row.querySelector('.yn-btn.no.active');
+    return yes ? true : (no ? false : null);
+  }
+
+  if (svc === 'hotel') {
+    payload.physical_inspection_notes = getVal('ci_physical');
+    payload.personal_items            = getVal('ci_items');
+    payload.addon_purchases           = getVal('ci_addons');
+  }
+  if (svc === 'grooming') {
+    payload.general_remarks        = getVal('ci_remarks');
+    payload.vacc_complete          = getYN('ci_vacc');
+    payload.skin_coat_good         = getYN('ci_skin');
+    payload.skin_coat_remarks      = getVal('ci_skin_r');
+    payload.ears_nose_eyes_good    = getYN('ci_eyes');
+    payload.ears_nose_eyes_remarks = getVal('ci_eyes_r');
+    payload.nails_good             = getYN('ci_nails');
+    payload.nails_remarks          = getVal('ci_nails_r');
+    payload.joints_good            = getYN('ci_joints');
+    payload.joints_remarks         = getVal('ci_joints_r');
+  }
+  if (svc === 'daycare') {
+    payload.general_remarks = getVal('ci_remarks');
+    payload.addon_purchases = getVal('ci_addons');
+  }
+
+  try {
+    var existing = b.checkin_notes;
+    if (existing) {
+      await sbPatch('checkin_notes', 'booking_id=eq.' + b.id, payload);
+    } else {
+      await sbPost('checkin_notes', payload);
+    }
+    alert('Inspection notes saved.');
+    closeDrawer();
+    await loadBookings();
+  } catch(e) {
+    alert('Failed to save: ' + e.message);
+  }
+}
+
+// ── EDIT FORM ──
+function renderEditForm(b) {
+  var gd = b.grooming_details || {};
+  var hd = b.hotel_details    || {};
+  var dd = b.daycare_details  || {};
+  var html = '<div class="edit-form"><h4>Edit booking</h4>';
+
+  if (b.service === 'grooming') {
+    html += formInput('Preferred stylist', 'ef_stylist', gd.preferred_stylist||'');
+    html += formInput('Time slot', 'ef_groom_slot', gd.timeslot||'');
+    html += formTextarea('Special requests', 'ef_groom_notes', gd.special_requests||'');
+  }
+  if (b.service === 'hotel') {
+    html += formInput('Check-in date', 'ef_cin',    hd.checkin_date||'');
+    html += formInput('Check-out date','ef_cout',   hd.checkout_date||'');
+    html += formInput('Drop-off time', 'ef_drop',   hd.dropoff_time||'');
+    html += formInput('Pick-up time',  'ef_pickup', hd.pickup_time||'');
+    html += formTextarea('Feeding instructions','ef_feed', hd.feeding_instructions||'');
+    html += formTextarea('Medications',          'ef_meds', hd.medications||'');
+  }
+  if (b.service === 'daycare') {
+    html += formInput('Drop-off time', 'ef_dd_drop', dd.dropoff_time||'');
+    html += formInput('Pick-up time',  'ef_dd_pick', dd.pickup_time||'');
+    html += formTextarea('Notes', 'ef_dd_notes', dd.notes||'');
+  }
+  html += formInput('Editor name (your name)', 'ef_editor', '');
+  html += '<button class="save-edit-btn" onclick="saveEdit()">Save changes</button>';
+  html += '</div>';
+  return html;
+}
+
+function formInput(label, id, val) {
+  return '<div class="form-group-adm"><label class="form-label-adm">' + label + '</label>' +
+    '<input type="text" class="form-input-adm" id="' + id + '" value="' + (val||'') + '"></div>';
+}
+
+function toggleEditForm() {
+  var w = document.getElementById('editFormWrap');
+  if (w) w.style.display = w.style.display === 'none' ? '' : 'none';
+}
+
+async function saveEdit() {
+  if (!selectedBooking) return;
+  var b   = selectedBooking;
+  var svc = b.service;
+  function getVal(id) { var el = document.getElementById(id); return el ? el.value.trim()||null : null; }
+
+  var changes = {};
+  var detailPatch = {};
+  var detailTable = null;
+
+  if (svc === 'grooming') {
+    detailTable = 'grooming_details';
+    var newStylist = getVal('ef_stylist');
+    var newSlot    = getVal('ef_groom_slot');
+    var newNotes   = getVal('ef_groom_notes');
+    var gd = b.grooming_details || {};
+    if (newStylist !== gd.preferred_stylist) { changes['preferred_stylist'] = {from:gd.preferred_stylist, to:newStylist}; detailPatch.preferred_stylist = newStylist; }
+    if (newSlot    !== gd.timeslot)          { changes['timeslot']          = {from:gd.timeslot, to:newSlot};             detailPatch.timeslot           = newSlot;    }
+    if (newNotes   !== gd.special_requests)  { changes['special_requests']  = {from:gd.special_requests, to:newNotes};   detailPatch.special_requests   = newNotes;   }
+  }
+  if (svc === 'hotel') {
+    detailTable = 'hotel_details';
+    var hd = b.hotel_details || {};
+    var fields = [['checkin_date','ef_cin'],['checkout_date','ef_cout'],['dropoff_time','ef_drop'],['pickup_time','ef_pickup'],['feeding_instructions','ef_feed'],['medications','ef_meds']];
+    fields.forEach(function(f) {
+      var newVal = getVal(f[1]);
+      if (newVal !== hd[f[0]]) { changes[f[0]] = {from:hd[f[0]], to:newVal}; detailPatch[f[0]] = newVal; }
+    });
+  }
+  if (svc === 'daycare') {
+    detailTable = 'daycare_details';
+    var dd = b.daycare_details || {};
+    var dfields = [['dropoff_time','ef_dd_drop'],['pickup_time','ef_dd_pick'],['notes','ef_dd_notes']];
+    dfields.forEach(function(f) {
+      var newVal = getVal(f[1]);
+      if (newVal !== dd[f[0]]) { changes[f[0]] = {from:dd[f[0]], to:newVal}; detailPatch[f[0]] = newVal; }
+    });
+  }
+
+  if (!Object.keys(changes).length) { alert('No changes to save.'); return; }
+
+  var editorName = getVal('ef_editor') || 'admin';
+  try {
+    if (detailTable && Object.keys(detailPatch).length) {
+      await sbPatch(detailTable, 'booking_id=eq.' + b.id, detailPatch);
+    }
+    // Log edit
+    await sbPost('booking_edits', {
+      booking_id:      b.id,
+      edited_by_name:  editorName,
+      field_changes:   JSON.stringify(changes)
+    });
+    alert('Changes saved.');
+    closeDrawer();
+    await loadBookings();
+  } catch(e) {
+    alert('Failed to save: ' + e.message);
+  }
+}
+
+// ── STATUS ──
 function closeDrawer(e) {
   if (e && e.target !== document.getElementById('drawerOverlay')) return;
   document.getElementById('drawerOverlay').classList.remove('open');
@@ -554,135 +979,155 @@ async function saveStatus() {
   try {
     await sbPatch('bookings', 'id=eq.' + selectedBooking.id, { status: newStatus });
     selectedBooking.status = newStatus;
-    // Update in allBookings array
     var idx = allBookings.findIndex(function(b) { return b.id === selectedBooking.id; });
     if (idx >= 0) allBookings[idx].status = newStatus;
-    document.getElementById('drawerOverlay').classList.remove('open');
-    renderTimeline(allBookings);
-  } catch(e) {
-    alert('Failed to update status. Please try again.');
-  }
+    if (newStatus !== 'checked_in') {
+      closeDrawer();
+      renderTimeline(filteredBookings());
+    }
+  } catch(e) { alert('Failed to update: ' + e.message); }
 }
 
-// ── DATE HELPERS ──
+// ── INVENTORY ──
+async function loadInventory() {
+  var branch = branches[currentBranch];
+  if (!branch || !branch.id) return;
+  try {
+    var rows = await sbFetch('room_inventory', 'select=room_type,total_units&branch_id=eq.' + branch.id);
+    inventoryData = {};
+    (rows||[]).forEach(function(r) { inventoryData[r.room_type] = r.total_units; });
+    renderInventory();
+  } catch(e) { console.error('Inventory load error:', e); }
+}
+
+function renderInventory() {
+  var grid = document.getElementById('inventoryGrid');
+  if (!grid) return;
+  var keys = Object.keys(ROOM_TYPES);
+  grid.innerHTML = keys.map(function(k) {
+    var units = inventoryData[k] !== undefined ? inventoryData[k] : 4;
+    return '<div class="inv-row">' +
+      '<span class="inv-label">' + ROOM_TYPES[k] + '</span>' +
+      '<input type="number" class="inv-input" id="inv_' + k + '" value="' + units + '" min="0" max="20">' +
+      '<button class="inv-save" onclick="saveInventory(\'' + k + '\')">Save</button>' +
+      '</div>';
+  }).join('');
+}
+
+async function saveInventory(roomType) {
+  var el     = document.getElementById('inv_' + roomType);
+  var units  = parseInt(el.value) || 0;
+  var branch = branches[currentBranch];
+  if (!branch || !branch.id) return;
+  try {
+    await sbPatch('room_inventory', 'branch_id=eq.' + branch.id + '&room_type=eq.' + roomType, { total_units: units });
+    inventoryData[roomType] = units;
+    el.style.borderColor = 'var(--success)';
+    setTimeout(function() { el.style.borderColor = ''; }, 1500);
+  } catch(e) { alert('Failed: ' + e.message); }
+}
+
+// ── MOBILE CALENDAR ──
+function toggleMobileCal() {
+  mobilCalOpen = !mobilCalOpen;
+  var cal = document.getElementById('miniCal');
+  var lbl = document.getElementById('calToggleLabel');
+  cal.classList.toggle('mobile-open', mobilCalOpen);
+  lbl.textContent = mobilCalOpen ? 'Hide calendar' : 'Show calendar';
+}
+
+// ── DATE ──
 function formatDate(d) {
-  var y = d.getFullYear();
-  var m = String(d.getMonth()+1).padStart(2,'0');
-  var day = String(d.getDate()).padStart(2,'0');
-  return y + '-' + m + '-' + day;
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
 }
-
 var DAY_NAMES   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 var MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
 function renderDateLabel() {
   var d = currentDate;
-  document.getElementById('dateLabel').textContent =
-    DAY_NAMES[d.getDay()] + ', ' + MONTH_NAMES[d.getMonth()] + ' ' + d.getDate() + ' ' + d.getFullYear();
+  document.getElementById('dateLabel').textContent = DAY_NAMES[d.getDay()] + ', ' + MONTH_NAMES[d.getMonth()] + ' ' + d.getDate() + ' ' + d.getFullYear();
 }
 
 async function shiftDate(delta) {
+  var prev = currentDate.getMonth();
   currentDate.setDate(currentDate.getDate() + delta);
-  var prevMonth = currentDate.getMonth();
   renderDateLabel();
-  // Reload dots if month changed
-  if (currentDate.getMonth() !== prevMonth) {
-    await loadMonthDots(currentDate.getFullYear(), currentDate.getMonth());
-  }
+  if (currentDate.getMonth() !== prev) await loadMonthDots(currentDate.getFullYear(), currentDate.getMonth());
   renderMiniCal();
-  loadBookings();
+  await loadBookings();
 }
-
 async function goToday() {
   var prev = currentDate.getMonth();
   currentDate = new Date();
   renderDateLabel();
-  if (currentDate.getMonth() !== prev) {
-    await loadMonthDots(currentDate.getFullYear(), currentDate.getMonth());
-  }
+  if (currentDate.getMonth() !== prev) await loadMonthDots(currentDate.getFullYear(), currentDate.getMonth());
   renderMiniCal();
-  loadBookings();
+  await loadBookings();
 }
-
 async function setBranch(idx, el) {
   currentBranch = idx;
-  document.querySelectorAll('.branch-tab').forEach(function(t) { t.classList.remove('active'); });
+  currentFilter = 'all';
+  currentSubFilter = null;
+  document.querySelectorAll('.branch-tab').forEach(function(t){t.classList.remove('active');});
   el.classList.add('active');
+  updateBranchUI();
   await loadMonthDots(currentDate.getFullYear(), currentDate.getMonth());
   renderMiniCal();
-  loadBookings();
+  await loadInventory();
+  await loadBookings();
+  // Reset filter UI
+  document.querySelectorAll('.filter-btn').forEach(function(b){
+    Object.values(SVC_COLORS).forEach(function(c){b.classList.remove(c);});
+  });
+  document.getElementById('subFilterRow').style.display = 'none';
 }
 
 // ── MINI CALENDAR ──
-var calBookingDates = {};
-
 async function loadMonthDots(year, month) {
   var branch = branches[currentBranch];
   if (!branch || !branch.id) return;
-  var firstDay = year + '-' + String(month+1).padStart(2,'0') + '-01';
-  var lastDay  = year + '-' + String(month+1).padStart(2,'0') + '-' + new Date(year, month+1, 0).getDate();
+  var first = year + '-' + String(month+1).padStart(2,'0') + '-01';
+  var last  = year + '-' + String(month+1).padStart(2,'0') + '-' + new Date(year, month+1, 0).getDate();
   try {
-    var rows = await sbFetch('bookings',
-      'select=booking_date' +
-      '&branch_id=eq.' + branch.id +
-      '&booking_date=gte.' + firstDay +
-      '&booking_date=lte.' + lastDay +
-      '&status=not.in.(cancelled,rejected)'
-    );
+    var rows = await sbFetch('bookings', 'select=booking_date&branch_id=eq.' + branch.id + '&booking_date=gte.' + first + '&booking_date=lte.' + last + '&status=not.in.(cancelled,rejected)');
     calBookingDates = {};
-    (rows || []).forEach(function(r) {
-      if (r.booking_date) calBookingDates[r.booking_date] = true;
-    });
-  } catch(e) {
-    console.error('Month dots error:', e);
-    calBookingDates = {};
-  }
+    (rows||[]).forEach(function(r) { if (r.booking_date) calBookingDates[r.booking_date] = true; });
+  } catch(e) { calBookingDates = {}; }
 }
 
 function renderMiniCal() {
-  var d   = new Date(currentDate);
-  var y   = d.getFullYear();
-  var mon = d.getMonth();
+  var y   = currentDate.getFullYear();
+  var mon = currentDate.getMonth();
   var today = new Date();
-
   document.getElementById('miniCalMonth').textContent = MONTH_NAMES[mon] + ' ' + y;
-
   var first = new Date(y, mon, 1).getDay();
   var days  = new Date(y, mon+1, 0).getDate();
   var prev  = new Date(y, mon, 0).getDate();
-
-  var html = '';
-  ['S','M','T','W','T','F','S'].forEach(function(dn) {
-    html += '<div class="cal-dow">' + dn + '</div>';
-  });
-
-  for (var i = 0; i < first; i++) {
-    html += '<div class="cal-day other-month">' + (prev - first + i + 1) + '</div>';
-  }
-
+  var html  = '';
+  ['S','M','T','W','T','F','S'].forEach(function(d){ html += '<div class="cal-dow">'+d+'</div>'; });
+  for (var i = 0; i < first; i++) html += '<div class="cal-day other-month">' + (prev-first+i+1) + '</div>';
   for (var day = 1; day <= days; day++) {
-    var dateStr = y + '-' + String(mon+1).padStart(2,'0') + '-' + String(day).padStart(2,'0');
+    var ds  = y + '-' + String(mon+1).padStart(2,'0') + '-' + String(day).padStart(2,'0');
     var cls = 'cal-day';
     var isToday = (day === today.getDate() && mon === today.getMonth() && y === today.getFullYear());
     var isSel   = (day === currentDate.getDate() && mon === currentDate.getMonth() && y === currentDate.getFullYear());
     if (isToday) cls += ' is-today';
     else if (isSel) cls += ' is-selected';
-    if (calBookingDates[dateStr]) cls += ' has-dot';
+    if (calBookingDates[ds]) cls += ' has-dot';
     html += '<div class="' + cls + '" onclick="jumpToDay(' + y + ',' + mon + ',' + day + ')">' + day + '</div>';
   }
-
   document.getElementById('calGrid').innerHTML = html;
 }
 
 async function jumpToDay(y, m, d) {
-  var prevMonth = currentDate.getMonth();
+  var prev = currentDate.getMonth();
   currentDate = new Date(y, m, d);
   renderDateLabel();
-  if (currentDate.getMonth() !== prevMonth) {
-    await loadMonthDots(y, m);
-  }
+  if (currentDate.getMonth() !== prev) await loadMonthDots(y, m);
   renderMiniCal();
-  loadBookings();
+  await loadBookings();
+  // Close mobile cal after selecting
+  if (mobilCalOpen) toggleMobileCal();
 }
 </script>
 </body>
