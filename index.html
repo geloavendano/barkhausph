@@ -1139,57 +1139,6 @@ if (svcSection) cardObs.observe(svcSection);
 })();
 
 /* ── PRODUCT CATALOG ── */
-const products = [
-  {
-    category: 'Nutrition',
-    name: '[Product Name]',
-    desc: '[Short product description  -  1 sentence.]',
-    price: '₱[price]',
-    emoji: '🥩',
-    img: ''
-  },
-  {
-    category: 'Accessories',
-    name: '[Product Name]',
-    desc: '[Short product description  -  1 sentence.]',
-    price: '₱[price]',
-    emoji: '🦮',
-    img: ''
-  },
-  {
-    category: 'Treats',
-    name: '[Product Name]',
-    desc: '[Short product description  -  1 sentence.]',
-    price: '₱[price]',
-    emoji: '🦴',
-    img: ''
-  },
-  {
-    category: 'Wellness',
-    name: '[Product Name]',
-    desc: '[Short product description  -  1 sentence.]',
-    price: '₱[price]',
-    emoji: '💊',
-    img: ''
-  },
-];
-
-(function renderProducts() {
-  const grid = document.getElementById('productsGrid');
-  grid.innerHTML = products.map(p => `
-    <div class="product-card">
-      <div class="product-img">
-        ${p.img ? `<img src="${p.img}" alt="${p.name}">` : `<span class="product-img-placeholder">${p.emoji}</span>`}
-      </div>
-      <div class="product-info">
-        <p class="product-category">${p.category}</p>
-        <p class="product-name">${p.name}</p>
-        <p class="product-desc">${p.desc}</p>
-        <p class="product-price">${p.price}</p>
-      </div>
-    </div>
-  `).join('');
-})();
 
 /* ── FLOAT NAV ── */
 new IntersectionObserver(entries => {
