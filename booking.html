@@ -912,6 +912,7 @@
   <a href="index.html" class="btn-home">Back to Home</a>
 </div>
 
+<div class="toast" id="toast"></div>
 </div><!-- /booking-main -->
 
 <div class="bottom-nav" id="bottomNav">
@@ -926,8 +927,9 @@
 <script>
 
 // ── CONFIG ──
-var SUPABASE_URL      = 'https://YOUR_PROJECT_REF.supabase.co';
-var SUPABASE_ANON_KEY = 'YOUR_ANON_PUBLIC_KEY';
+var SUPABASE_URL        = 'https://dxttnbtfhpanyiyduevn.supabase.co';
+var CREATE_PAYMENT_URL  = SUPABASE_URL + '/functions/v1/create-payment';
+var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4dHRuYnRmaHBhbnlpeWR1ZXZuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY1MjkyNDcsImV4cCI6MjA5MjEwNTI0N30.jrMk8-_Ga01TydNPUwCzlymf1W44PjaXXIUjCLALb2s';
 var EDGE_FN_URL       = SUPABASE_URL + '/functions/v1/submit-booking';
 
 // ── PRICING TABLES ──
@@ -2212,14 +2214,46 @@ function buildSummary() {
   document.getElementById('priceBreakdown').innerHTML = html || '<div class="price-line"><span class="price-line-label">No price estimate available</span><span class="price-line-val">-</span></div>';
 }
 
-// ── SUBMIT ──
-var SUPABASE_ANON_KEY_SUBMIT = SUPABASE_ANON_KEY;
+// ── SHOW TOAST ──
+function showToast(msg, duration) {
+  var t = document.getElementById('toast');
+  if (!t) return;
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(function() { t.classList.remove('show'); }, duration || 3000);
+}
+
+// ── HANDLE RETURN FROM PAYMONGO ──
+(function checkPaymentReturn() {
+  var params = new URLSearchParams(window.location.search);
+  var status = params.get('payment');
+  var ref    = params.get('ref');
+  if (!status) return;
+  // Clean URL
+  window.history.replaceState({}, '', window.location.pathname);
+  if (status === 'success' && ref) {
+    // Show success screen directly
+    document.getElementById('progressWrap').style.display = 'none';
+    document.getElementById('bottomNav').style.display = 'none';
+    document.getElementById('refNum').textContent = ref;
+    document.getElementById('successScreen').classList.add('active');
+  } else if (status === 'failed') {
+    // Will show toast after a short delay (DOM needs to load)
+    setTimeout(function() {
+      showToast('Payment was not completed. Please try again.', 5000);
+    }, 800);
+  }
+})();
+
+// ── SUBMIT (redirects to PayMongo) ──
 function submitBooking() {
   var btn = document.getElementById('btnNext');
-  btn.textContent = 'Submitting...';
+  btn.textContent = 'Processing...';
   btn.disabled = true;
+
+  // Build payload (reuse existing buildPayload logic)
   var svc = booking.service;
-  var subtotal = 0, discAmt = 0, total = 0;
+  var subtotal = 0;
   if (svc === 'grooming') {
     subtotal = (booking.groomServicePrice||0) + Object.keys(booking.selectedAddons).reduce(function(a,k){return a+(booking.selectedAddons[k]||0);},0);
   } else if (svc === 'hotel') {
@@ -2227,35 +2261,33 @@ function submitBooking() {
   } else if (svc === 'daycare') {
     subtotal = booking.daycareTotal || 0;
   }
-  var discRate = booking.memberValid ? (MEMBER_DISCOUNT[svc]||0) : 0;
-  discAmt = Math.round(subtotal * discRate);
-  total   = subtotal - discAmt;
+  var discRate = booking.memberValid ? (MEMBER_DISCOUNT[svc] || 0) : 0;
+  var discAmt  = Math.round(subtotal * discRate);
+  var total    = subtotal - discAmt;
+
   var groomServiceName = '';
   if (booking.groomService) {
-    var found = GROOM_SERVICES.find(function(s){return s.key===booking.groomService;});
+    var found = GROOM_SERVICES.find(function(s){ return s.key === booking.groomService; });
     groomServiceName = found ? found.name : booking.groomService;
   }
-  var daycareDropoffText = '';
-  var daycarePickupText  = '';
+
   var ddEl = document.getElementById('daycareDropoff');
   var dpEl = document.getElementById('daycarePickup');
-  if (ddEl && ddEl.options[ddEl.selectedIndex]) daycareDropoffText = ddEl.options[ddEl.selectedIndex].text;
-  if (dpEl && dpEl.options[dpEl.selectedIndex]) daycarePickupText  = dpEl.options[dpEl.selectedIndex].text;
-  var hotelPickupText = '';
+  var daycareDropoffText = ddEl && ddEl.options[ddEl.selectedIndex] ? ddEl.options[ddEl.selectedIndex].text : '';
+  var daycarePickupText  = dpEl && dpEl.options[dpEl.selectedIndex] ? dpEl.options[dpEl.selectedIndex].text  : '';
   var hpEl = document.getElementById('hotelPickupTime');
-  if (hpEl && hpEl.options[hpEl.selectedIndex]) hotelPickupText = hpEl.options[hpEl.selectedIndex].text;
+  var hotelPickupText = hpEl && hpEl.options[hpEl.selectedIndex] ? hpEl.options[hpEl.selectedIndex].text : '';
+
   var payload = {
     location:booking.location, service:booking.service,
     groomDate:booking.groomDate, groomSlot:booking.groomSlot,
-    preferredStylist:booking.preferredStylist,
-    preferredStylistId:booking.preferredStylistId || null,
+    preferredStylist:booking.preferredStylist, preferredStylistId:booking.preferredStylistId||null,
     groomService:booking.groomService, groomServiceName:groomServiceName,
     groomNotes:document.getElementById('groomNotes')?document.getElementById('groomNotes').value:'',
     hotelCheckin:booking.hotelCheckin, hotelCheckout:booking.hotelCheckout,
     hotelDropoff:document.getElementById('hotelDropoffTime')?document.getElementById('hotelDropoffTime').value:'',
-    hotelPickup:hotelPickupText, hotelPickupHour:booking.hotelPickupHour,
-    hotelRoom:booking.hotelRoomType || '',
-    hotelRoomId:booking.hotelRoomId || null,
+    hotelPickup:hotelPickupText, hotelPickupHour:booking.hotelPickupHour||14,
+    hotelRoom:booking.hotelRoomType||'', hotelRoomId:booking.hotelRoomId||null,
     playparkConsent:booking.playparkConsent,
     hotelFeeding:document.getElementById('hotelFeeding')?document.getElementById('hotelFeeding').value:'',
     hotelMeds:document.getElementById('hotelMeds')?document.getElementById('hotelMeds').value:'',
@@ -2285,34 +2317,47 @@ function submitBooking() {
     waiverSeniorMedical:document.getElementById('seniorWaiver')?document.getElementById('seniorWaiver').classList.contains('checked'):false,
     waiverStudio:document.getElementById('waiverStudio')?document.getElementById('waiverStudio').classList.contains('checked'):false,
     waiverMedia:document.getElementById('waiverMedia').classList.contains('checked'),
-    subtotal:subtotal, discountAmount:discAmt, total:total
+    subtotal:subtotal, discountAmount:discAmt, total:total,
   };
-  fetch(EDGE_FN_URL, {
-    method:'POST',
-    headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+SUPABASE_ANON_KEY, 'apikey':SUPABASE_ANON_KEY },
-    body:JSON.stringify(payload)
+
+  // Show loading state
+  document.getElementById('stepSummary').innerHTML =
+    '<div class="pay-loading">' +
+    '<div class="pay-loading-icon">&#128176;</div>' +
+    '<p class="pay-loading-text">Preparing your payment...</p>' +
+    '</div>';
+
+  fetch(CREATE_PAYMENT_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type':  'application/json',
+      'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+      'apikey':        SUPABASE_ANON_KEY,
+    },
+    body: JSON.stringify(payload),
   })
-  .then(function(res){return res.json();})
+  .then(function(res) { return res.json(); })
   .then(function(data) {
     if (data.error) {
-      alert('Booking failed: ' + data.error + '\nPlease try again or contact us directly.');
+      buildSummary();
+      updateBottomNavForSummary();
+      showToast('Could not create payment: ' + data.error, 5000);
       btn.textContent = 'Confirm Booking';
       btn.disabled = false;
       return;
     }
-    document.getElementById('refNum').textContent = data.ref_number || 'BH-000000';
-    document.getElementById('stepSummary').classList.remove('active');
-    document.getElementById('bottomNav').style.display = 'none';
-    document.getElementById('successScreen').classList.add('active');
+    // Redirect to PayMongo hosted payment page
+    window.location.href = data.checkout_url;
   })
   .catch(function(err) {
-    console.error('Submit error:', err);
-    alert('Could not reach the server. Please check your connection and try again.');
+    console.error('Payment error:', err);
+    buildSummary();
+    updateBottomNavForSummary();
+    showToast('Connection error. Please try again.', 5000);
     btn.textContent = 'Confirm Booking';
     btn.disabled = false;
   });
 }
-
 </script>
 </body>
 </html>
