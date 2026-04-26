@@ -178,6 +178,37 @@
   .yn-on-y{background:rgba(107,203,119,0.18);border-color:var(--success);color:var(--success);}
   .yn-on-n{background:rgba(255,107,107,0.18);border-color:var(--error);color:var(--error);}
 
+
+  /* ── MONTH CALENDAR OVERLAY ── */
+  .cal-overlay{position:fixed;inset:0;background:rgba(10,20,30,0.72);z-index:400;display:none;align-items:center;justify-content:center;}
+  .cal-overlay.open{display:flex;}
+  .cal-modal{background:var(--bg);border:0.5px solid var(--border);border-radius:18px;padding:20px;width:320px;animation:fadeIn 0.2s ease;}
+  @keyframes fadeIn{from{opacity:0;transform:scale(0.96);}to{opacity:1;transform:scale(1);}}
+  .cal-modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+  .cal-modal-month{font-family:"Fredoka One",cursive;font-size:18px;color:var(--cream);}
+  .cal-modal-nav{display:flex;gap:6px;}
+  .cal-modal-nav button{width:28px;height:28px;border-radius:6px;border:0.5px solid var(--border);background:transparent;cursor:pointer;color:var(--mid);font-family:"Nunito",sans-serif;font-size:13px;}
+  .cal-modal-close{font-size:16px;color:var(--mid);background:transparent;border:none;cursor:pointer;font-family:"Nunito",sans-serif;margin-left:8px;}
+  .cal-dow-row{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:4px;}
+  .cal-dow-cell{font-size:10px;font-weight:700;color:var(--mid);text-align:center;padding-bottom:4px;}
+  .cal-days-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;}
+  .cal-day-cell{height:38px;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;transition:background 0.12s;position:relative;}
+  .cal-day-cell:hover{background:var(--raised);}
+  .cal-day-cell.other{opacity:0.3;}
+  .cal-day-cell.is-today{background:var(--yellow);}
+  .cal-day-cell.is-today .cal-day-num{color:#3d2e00;font-weight:700;}
+  .cal-day-cell.is-selected:not(.is-today){background:var(--raised);outline:1.5px solid var(--blue);}
+  .cal-day-num{font-size:13px;color:var(--cream-m);}
+  .cal-day-dot{width:4px;height:4px;border-radius:50%;background:var(--blue);margin-top:1px;}
+  .cal-day-cell.is-today .cal-day-dot{background:#3d2e00;}
+
+  /* ── CURRENT TIME INDICATOR ── */
+  .time-now-line{position:absolute;left:0;right:0;height:2px;background:#FF6B6B;z-index:20;pointer-events:none;}
+  .time-now-dot{position:absolute;left:-4px;top:-4px;width:10px;height:10px;border-radius:50%;background:#FF6B6B;}
+
+  /* ── ROTATED NARROW CARD ── */
+  .bk-name-rotated{writing-mode:vertical-rl;text-orientation:mixed;transform:rotate(180deg);font-size:11px;font-weight:700;color:var(--cream);white-space:nowrap;overflow:hidden;max-height:100%;text-overflow:ellipsis;line-height:1.2;}
+
 </style>
 </head>
 <body>
@@ -199,7 +230,7 @@
     <span class="topbar-logo">BARK<span>HAUS</span></span>
     <div class="date-nav">
       <button class="dnb" onclick="shiftDate(-1)">&#8592;</button>
-      <span class="date-label" id="dateLabel"></span>
+      <span class="date-label" id="dateLabel" onclick="openCalOverlay()" style="cursor:pointer;text-decoration:underline dotted rgba(184,212,224,0.4)" title="Open calendar"></span>
       <button class="dnb" onclick="shiftDate(1)">&#8594;</button>
       <button class="today-btn" onclick="goToday()">Today</button>
     </div>
@@ -236,6 +267,24 @@
         </div>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- MONTH CALENDAR OVERLAY -->
+<div class="cal-overlay" id="calOverlay" onclick="closeCalOverlay(event)">
+  <div class="cal-modal">
+    <div class="cal-modal-head">
+      <span class="cal-modal-month" id="calModalMonth"></span>
+      <div style="display:flex;align-items:center;gap:4px">
+        <div class="cal-modal-nav">
+          <button onclick="shiftCalModal(-1)">&#8592;</button>
+          <button onclick="shiftCalModal(1)">&#8594;</button>
+        </div>
+        <button class="cal-modal-close" onclick="closeCalOverlay()">&#215;</button>
+      </div>
+    </div>
+    <div class="cal-dow-row" id="calDowRow"></div>
+    <div class="cal-days-grid" id="calDaysGrid"></div>
   </div>
 </div>
 
@@ -298,7 +347,7 @@
 
 var SUPABASE_URL      = 'https://dxttnbtfhpanyiyduevn.supabase.co';
 var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4dHRuYnRmaHBhbnlpeWR1ZXZuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY1MjkyNDcsImV4cCI6MjA5MjEwNTI0N30.jrMk8-_Ga01TydNPUwCzlymf1W44PjaXXIUjCLALb2s';
-var ADMIN_PASSWORD    = 'Greenhills2026';
+var ADMIN_PASSWORD    = 'greenhills2026';
 
 var COLORS_8 = ['#4D96B9','#EF9F27','#1D9E75','#D4537E','#9B95E8','#D85A30','#639922','#888780'];
 var COLOR_NAMES = {'#4D96B9':'Blue','#EF9F27':'Amber','#1D9E75':'Teal','#D4537E':'Pink','#9B95E8':'Purple','#D85A30':'Coral','#639922':'Green','#888780':'Gray'};
@@ -326,6 +375,7 @@ var editingRoom    = null;
 var editingGroomer = null;
 var currentBookingId = null;
 var breakRowCount  = 0;
+var calBookingDates = {};
 
 function checkPassword() {
   if (document.getElementById('gateInput').value === ADMIN_PASSWORD) {
@@ -344,6 +394,7 @@ async function init() {
   renderTimeLbls();
   await Promise.all([loadRooms(), loadGroomers()]);
   await loadGroomerBlocks();
+  await loadMonthDots(currentDate.getFullYear(), currentDate.getMonth());
   renderSidebar();
   renderTabs();
   await loadBookings();
@@ -522,6 +573,7 @@ function renderTimeline() {
   var positioned = layoutBks(filtered);
   var cardsHtml = positioned.map(function(item){ return renderCard(item); }).join('');
   document.getElementById('tlInner').innerHTML = gridHtml + breakHtml + cardsHtml;
+  renderTimeNowLine();
 }
 
 function parseMins(s) {
@@ -581,6 +633,15 @@ function renderCard(item) {
   else if (b.daycare_details) detailLine = 'Daycare';
   else if (b.studio_details)  detailLine = 'Studio';
   var ownerName = b.owners ? (b.owners.first_name||'') : '';
+  // Detect narrow cards - estimate pixel width
+  var tlEl = document.getElementById('tlInner');
+  var colW  = tlEl ? (tlEl.offsetWidth || 300) : 300;
+  var cardPx = colW / Math.max(item.total, 1);
+  var isNarrow = cardPx < 70;
+  if (isNarrow) {
+    return '<div class="bk" style="top:'+top+'px;height:'+ht+'px;left:'+l+';width:'+w+';background:'+bg+';border-left-color:'+color+';display:flex;align-items:center;justify-content:center;padding:3px 2px" onclick="openDrawer(\''+b.id+'\')">' +
+      '<div class="bk-name-rotated">'+sdot+' '+e(pet.name||'Pet')+'</div></div>';
+  }
   return '<div class="bk" style="top:'+top+'px;height:'+ht+'px;left:'+l+';width:'+w+';background:'+bg+';border-left-color:'+color+'" onclick="openDrawer(\''+b.id+'\')">'+
     '<div class="bk-pet">'+sdot+'<span style="font-size:12px">'+(pet.animal_type==='cat'?'&#128049;':'&#128054;')+'</span>'+e(pet.name||'Pet')+'</div>'+
     (ht>52?'<div class="bk-sub">'+e(detailLine)+'</div>':'')+(ht>72?'<div class="bk-sub">'+e(ownerName)+'</div>':'')+'</div>';
@@ -625,13 +686,14 @@ function buildDrawer(b) {
   html+='</div>';
   if(pet.medical_notes) html+='<div class="dr-medical"><p class="dr-medical-lbl">Medical notes</p><p class="dr-medical-txt">'+e(pet.medical_notes)+'</p></div>';
   if(pet.temperament||vaccines.length) {
-    html+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">';
+    html+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">';
     if(pet.temperament) html+='<span style="font-size:11px;padding:3px 9px;border-radius:20px;background:var(--surface);border:0.5px solid var(--border);color:var(--cream-m)">'+e(pet.temperament.replace(/_/g,' '))+'</span>';
     html+='</div>';
     if(vaccines.length) {
-      html+='<div class="dr-vacc-row">';
+      html+='<div class="dr-vacc-row" style="margin-bottom:6px">';
       vaccines.forEach(function(v){html+='<span class="dr-vacc" style="color:'+(v.confirmed?'var(--success)':'var(--error))')+'">&#'+(v.confirmed?'10003':'10005')+'; '+e(v.vaccine_name)+'</span>';});
       html+='</div>';
+      html+='<p style="font-size:10px;color:var(--mid);margin-bottom:10px">&#128203; Vaccine records on file - ask owner to present at check-in if not yet uploaded.</p>';
     }
   }
   // Service details
@@ -705,7 +767,7 @@ function openDrawer(bookingId) {
 async function saveStatus(bookingId) {
   var st=document.getElementById('statusSel').value;
   var ps=document.getElementById('payStatusSel').value;
-  try { await sbPatch('bookings','id=eq.'+bookingId,{status:st,payment_status:ps}); closeDrawer(); await loadBookings(); } catch(err){alert('Failed: '+err.message);}
+  try { await sbPatch('bookings','id=eq.'+bookingId,{status:st,payment_status:ps}); closeDrawer(); await loadBookings(); } catch(err){alert('Failed: '+errrr.message);}
 }
 
 /* ── CHECK-IN FORM ── */
@@ -905,12 +967,110 @@ function fmtDate(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2
 var DAYS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 var MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
 function renderDateLabel(){var d=currentDate;document.getElementById('dateLabel').textContent=DAYS[d.getDay()]+', '+MONTHS[d.getMonth()]+' '+d.getDate()+' '+d.getFullYear();}
-async function shiftDate(delta){currentDate.setDate(currentDate.getDate()+delta);renderDateLabel();await loadBookings();}
-async function goToday(){currentDate=new Date();renderDateLabel();await loadBookings();}
+async function shiftDate(delta){var prev=currentDate.getMonth();currentDate.setDate(currentDate.getDate()+delta);renderDateLabel();if(currentDate.getMonth()!==prev)await loadMonthDots(currentDate.getFullYear(),currentDate.getMonth());await loadBookings();}
+async function goToday(){var prev=currentDate.getMonth();currentDate=new Date();renderDateLabel();if(currentDate.getMonth()!==prev)await loadMonthDots(currentDate.getFullYear(),currentDate.getMonth());await loadBookings();}
 async function setBranch(idx,el){currentBranch=idx;activeFilter=null;document.querySelectorAll('.br-tab').forEach(function(t){t.classList.remove('on');});el.classList.add('on');await Promise.all([loadRooms(),loadGroomers()]);await loadGroomerBlocks();renderSidebar();renderTabs();await loadBookings();}
 
 /* ── UTILS ── */
 function e(s){return (s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+
+/* ── MONTH DOTS ── */
+async function loadMonthDots(year, month) {
+  var br = branches[currentBranch];
+  if (!br || !br.id) return;
+  var first = year + '-' + String(month+1).padStart(2,'0') + '-01';
+  var last  = year + '-' + String(month+1).padStart(2,'0') + '-' + new Date(year, month+1, 0).getDate();
+  try {
+    var rows = await sb('bookings','select=booking_date&branch_id=eq.'+br.id+'&booking_date=gte.'+first+'&booking_date=lte.'+last+'&status=not.in.(cancelled,rejected)');
+    calBookingDates = {};
+    (rows||[]).forEach(function(r){ if(r.booking_date) calBookingDates[r.booking_date]=true; });
+  } catch(e) { calBookingDates = {}; }
+}
+
+async function jumpToDay(y,m,d) {
+  var prev=currentDate.getMonth();
+  currentDate=new Date(y,m,d);
+  renderDateLabel();
+  if(currentDate.getMonth()!==prev) await loadMonthDots(y,m);
+  await loadBookings();
+}
+
+/* ── MONTH CALENDAR OVERLAY ── */
+var calModalDate = new Date();
+
+function openCalOverlay() {
+  calModalDate = new Date(currentDate);
+  renderCalModal();
+  document.getElementById('calOverlay').classList.add('open');
+}
+function closeCalOverlay(e) {
+  if (e && e.target !== document.getElementById('calOverlay')) return;
+  document.getElementById('calOverlay').classList.remove('open');
+}
+function shiftCalModal(delta) {
+  calModalDate.setMonth(calModalDate.getMonth() + delta);
+  renderCalModal();
+}
+function renderCalModal() {
+  var y = calModalDate.getFullYear(), mon = calModalDate.getMonth();
+  var today = new Date(), selDate = currentDate;
+  var MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  document.getElementById('calModalMonth').textContent = MONTHS[mon] + ' ' + y;
+  var dows = ['S','M','T','W','T','F','S'];
+  document.getElementById('calDowRow').innerHTML = dows.map(function(d){ return '<div class="cal-dow-cell">'+d+'</div>'; }).join('');
+  var first = new Date(y, mon, 1).getDay();
+  var days  = new Date(y, mon+1, 0).getDate();
+  var prev  = new Date(y, mon, 0).getDate();
+  var html  = '';
+  for (var i=0;i<first;i++) {
+    html += '<div class="cal-day-cell other"><span class="cal-day-num">'+(prev-first+i+1)+'</span></div>';
+  }
+  for (var d=1;d<=days;d++) {
+    var isToday   = d===today.getDate()   && mon===today.getMonth()   && y===today.getFullYear();
+    var isSel     = d===selDate.getDate() && mon===selDate.getMonth() && y===selDate.getFullYear();
+    var hasDot    = calBookingDates[y+'-'+String(mon+1).padStart(2,'0')+'-'+String(d).padStart(2,'0')];
+    var cls = 'cal-day-cell' + (isToday?' is-today':'') + (isSel&&!isToday?' is-selected':'');
+    html += '<div class="'+cls+'" onclick="jumpFromModal('+y+','+mon+','+d+')">' +
+      '<span class="cal-day-num">'+d+'</span>' +
+      (hasDot?'<div class="cal-day-dot"></div>':'') +
+      '</div>';
+  }
+  document.getElementById('calDaysGrid').innerHTML = html;
+}
+async function jumpFromModal(y,m,d) {
+  document.getElementById('calOverlay').classList.remove('open');
+  var prev = currentDate.getMonth();
+  currentDate = new Date(y,m,d);
+  renderDateLabel();
+  if (currentDate.getMonth()!==prev) await loadMonthDots(y,m);
+  renderMiniCal();
+  await loadBookings();
+}
+
+/* ── CURRENT TIME INDICATOR ── */
+function renderTimeNowLine() {
+  // Remove existing
+  var old = document.getElementById('timeNowLine');
+  if (old) old.remove();
+  var now = new Date();
+  var sel = currentDate;
+  var isToday = now.getFullYear()===sel.getFullYear() && now.getMonth()===sel.getMonth() && now.getDate()===sel.getDate();
+  if (!isToday) return;
+  var mins = now.getHours()*60 + now.getMinutes();
+  if (mins < DAY_START || mins > DAY_START + 11*60) return;
+  var top = (mins - DAY_START) * PX_PER_MIN;
+  var line = document.createElement('div');
+  line.id = 'timeNowLine';
+  line.className = 'time-now-line';
+  line.style.top = top + 'px';
+  line.innerHTML = '<div class="time-now-dot"></div>';
+  var inner = document.getElementById('tlInner');
+  if (inner) inner.appendChild(line);
+}
+
+/* ── ROTATED NARROW CARD LOGIC ── */
+var NARROW_THRESHOLD = 70; // px - cards narrower than this use rotated label
 
 </script>
 </body>
