@@ -533,22 +533,7 @@
     <div id="stylistSection" style="display:none">
       <p class="section-label">Preferred stylist <span style="font-size:10px;color:var(--mid);text-transform:none;letter-spacing:0;font-weight:500">(optional)</span></p>
       <div class="stylist-grid" id="stylistGrid">
-        <div class="stylist-btn selected" onclick="selectStylist(this,'any')">
-          <span class="stylist-name">Any available</span>
-          <span class="stylist-tag">Best availability</span>
-        </div>
-        <div class="stylist-btn" onclick="selectStylist(this,'stylist1')">
-          <span class="stylist-name">Alex</span>
-          <span class="stylist-tag">Senior groomer</span>
-        </div>
-        <div class="stylist-btn" onclick="selectStylist(this,'stylist2')">
-          <span class="stylist-name">Jamie</span>
-          <span class="stylist-tag">Specialist: cats</span>
-        </div>
-        <div class="stylist-btn" onclick="selectStylist(this,'stylist3')">
-          <span class="stylist-name">Sam</span>
-          <span class="stylist-tag">Specialist: large dogs</span>
-        </div>
+        <!-- Populated dynamically from DB -->
       </div>
     </div>
     <div id="groomSlotsSection" style="display:none">
@@ -941,8 +926,8 @@
 <script>
 
 // ── CONFIG ──
-var SUPABASE_URL      = 'https://dxttnbtfhpanyiyduevn.supabase.co';
-var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4dHRuYnRmaHBhbnlpeWR1ZXZuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY1MjkyNDcsImV4cCI6MjA5MjEwNTI0N30.jrMk8-_Ga01TydNPUwCzlymf1W44PjaXXIUjCLALb2s';
+var SUPABASE_URL      = 'https://YOUR_PROJECT_REF.supabase.co';
+var SUPABASE_ANON_KEY = 'YOUR_ANON_PUBLIC_KEY';
 var EDGE_FN_URL       = SUPABASE_URL + '/functions/v1/submit-booking';
 
 // ── PRICING TABLES ──
@@ -993,12 +978,17 @@ var VALID_MEMBER_IDS = ['BH-M001','BH-M002','BH-M003','BH-M004','BH-M005',
 var MEMBER_DISCOUNT = { grooming:0.10, hotel:0.20, daycare:0.20 };
 
 // ── STATE ──
+// Live data from DB (populated on init)
+var liveRooms    = [];   // rooms[] from Supabase for current branch
+var liveGroomers = [];   // groomers[] from Supabase for current branch
+var liveGroomerBlocks = []; // groomer_blocks[] for current branch groomers
+
 var booking = {
   location:null, service:null,
   petSize:null, groomService:null, groomServicePrice:0,
-  selectedAddons:{}, groomSlot:null, groomDate:null, preferredStylist:'any',
+  selectedAddons:{}, groomSlot:null, groomDate:null, preferredStylist:'any', preferredStylistId:null,
   hotelCheckin:null, hotelCheckout:null, hotelPickupHour:14,
-  hotelBaseTotal:0, hotelLateTotal:0, hotelRoomType:null,
+  hotelBaseTotal:0, hotelLateTotal:0, hotelRoomType:null, hotelRoomId:null, hotelRoomId:null,
   daycareDate:null, daycareDropoffHour:0, daycarePickupHour:0,
   daycareBaseRate:0, daycareTotal:0, daycareOpenTime:false,
   studioDate:null, studioSlot:null,
@@ -1176,6 +1166,10 @@ function selectLocation(el, val) {
   document.querySelectorAll('#step1 .option-card').forEach(function(c) { c.classList.remove('selected'); });
   el.classList.add('selected');
   booking.location = val;
+  // Reset live data for new branch
+  liveRooms = []; liveGroomers = []; liveGroomerBlocks = [];
+  window._branchIds = null;
+  loadLiveRoomsAndGroomers();
   var studioCard = document.getElementById('studioCard');
   if (val === 'estancia') {
     studioCard.classList.add('disabled');
@@ -1254,7 +1248,7 @@ function showPetPanel() {
   var hasPetSize = !!booking.petSize; // true for grooming, hotel, daycare
 
   document.getElementById('emergencySection').style.display = isHotel ? '' : 'none';
-  document.getElementById('secondCatSection').style.display = (isHotel && booking.hotelRoomType === 'villa') ? '' : 'none';
+  document.getElementById('secondCatSection').style.display = (isHotel && (booking.hotelRoomType === 'villa' || booking.hotelRoomId && liveRooms.find(function(r){return r.id===booking.hotelRoomId && r.room_type==='villa';}))) ? '' : 'none';
   if (svc !== 'grooming') document.getElementById('seniorWaiverRow').style.display = 'none';
 
   // ── Animal type: prepopulate and lock whenever petSize is known ──
@@ -1410,26 +1404,68 @@ function updateGroomTotal() {
 }
 
 // ── GROOMING SCHEDULE ──
-function selectStylist(el, val) {
+function selectStylist(el, val, groomerId) {
   document.querySelectorAll('#stylistGrid .stylist-btn').forEach(function(b){b.classList.remove('selected');});
   el.classList.add('selected');
-  booking.preferredStylist = val;
-  document.getElementById('groomSlotsSection').style.display = 'block';
-  document.querySelectorAll('#groomSlots .timeslot').forEach(function(t){t.classList.remove('selected');});
+  booking.preferredStylist   = val;
+  booking.preferredStylistId = groomerId || null;
   booking.groomSlot = null;
+  document.getElementById('groomSlotsSection').style.display = 'block';
+  renderGroomSlots();
+}
+
+function renderGroomSlots() {
+  var grid = document.getElementById('groomSlots');
+  if (!grid) return;
+  var groomerId = booking.preferredStylistId;
+  var dateVal   = booking.groomDate;
+  var dow = dateVal ? new Date(dateVal + 'T00:00:00').getDay() : -1;
+  var ALL_SLOTS = ['9:00 AM','10:00 AM','11:00 AM','1:00 PM','2:00 PM','3:00 PM','4:00 PM','5:00 PM'];
+  grid.innerHTML = ALL_SLOTS.filter(function(slot) {
+    // If a specific groomer is chosen, hide blocked slots
+    if (groomerId && dow >= 0) return !isSlotBlocked(slot, groomerId, dow);
+    return true;
+  }).map(function(slot) {
+    return '<div class="timeslot" onclick="selectSlot(this)">' + slot + '</div>';
+  }).join('');
 }
 function onGroomDateChange() {
   var val = document.getElementById('groomDate').value;
-  if (val) {
-    booking.groomDate = val;
-    document.getElementById('stylistSection').style.display = 'block';
-    document.getElementById('groomSlotsSection').style.display = 'none';
-    booking.groomSlot = null;
-    booking.preferredStylist = 'any';
-    document.querySelectorAll('#stylistGrid .stylist-btn').forEach(function(b){b.classList.remove('selected');});
-    var anyBtn = document.querySelector('#stylistGrid .stylist-btn');
-    if (anyBtn) anyBtn.classList.add('selected');
+  if (!val) return;
+  booking.groomDate = val;
+  booking.groomSlot = null;
+  booking.preferredStylist = 'any';
+  booking.preferredStylistId = null;
+  document.getElementById('stylistSection').style.display = 'block';
+  document.getElementById('groomSlotsSection').style.display = 'none';
+  renderStylistGrid();
+}
+
+function renderStylistGrid() {
+  var grid = document.getElementById('stylistGrid');
+  if (!grid) return;
+  var html = '';
+  var anyOnclick = "selectStylist(this,'any',null)";
+  html += '<div class="stylist-btn selected" onclick="' + anyOnclick + '">' +
+    '<span class="stylist-name">Any available</span>' +
+    '<span class="stylist-tag">Best availability</span></div>';
+  if (liveGroomers.length) {
+    html += liveGroomers.map(function(g) {
+      var colorDot = '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + (g.color||'#6AAEC8') + ';margin-right:4px;flex-shrink:0;vertical-align:middle"></span>';
+      var onclk = "selectStylist(this,'" + g.name.toLowerCase() + "','" + g.id + "')";
+      return '<div class="stylist-btn" onclick="' + onclk + '">' +
+        '<span class="stylist-name">' + colorDot + g.name + '</span>' +
+        '<span class="stylist-tag">Groomer</span></div>';
+    }).join('');
+  } else {
+    var fallback = ['Alex','Jamie','Sam','Paolo'];
+    html += fallback.map(function(name) {
+      var onclk = "selectStylist(this,'" + name.toLowerCase() + "',null)";
+      return '<div class="stylist-btn" onclick="' + onclk + '">' +
+        '<span class="stylist-name">' + name + '</span><span class="stylist-tag">Groomer</span></div>';
+    }).join('');
   }
+  grid.innerHTML = html;
 }
 function selectSlot(el) {
   if (el.classList.contains('unavailable')) return;
@@ -1523,81 +1559,92 @@ function onHotelCheckoutChange() {
 }
 
 async function loadRoomAvailability() {
-  var cin    = document.getElementById('hotelCheckin').value;
-  var cout   = document.getElementById('hotelCheckout').value;
-  var size   = booking.petSize;
+  var cin  = document.getElementById('hotelCheckin').value;
+  var cout = document.getElementById('hotelCheckout').value;
+  var size = booking.petSize;
   if (!cin || !cout || !size) return;
 
-  var section  = document.getElementById('roomAvailSection');
-  var loading  = document.getElementById('roomAvailLoading');
-  var grid     = document.getElementById('roomAvailGrid');
-  var noteEl   = document.getElementById('roomAvailNote');
+  var section = document.getElementById('roomAvailSection');
+  var loading = document.getElementById('roomAvailLoading');
+  var grid    = document.getElementById('roomAvailGrid');
+  var noteEl  = document.getElementById('roomAvailNote');
 
-  section.style.display  = '';
-  loading.style.display  = '';
-  grid.innerHTML         = '';
-  noteEl.style.display   = 'none';
-  booking.hotelRoomType  = null;
+  section.style.display = '';
+  loading.style.display = '';
+  grid.innerHTML        = '';
+  noteEl.style.display  = 'none';
+  booking.hotelRoomType = null;
+  booking.hotelRoomId   = null;
 
-  // Which rooms to check for this size
-  var roomKeys = ROOMS_FOR_SIZE[size] || [];
+  var eligibleRooms = liveRooms.filter(function(r) {
+    if (r.is_locked) return false;
+    if (!r.allowed_sizes || !r.allowed_sizes.length) return false;
+    return r.allowed_sizes.indexOf(size) !== -1;
+  });
 
-  // Count existing confirmed hotel bookings that overlap this date range
-  var bookedCounts = {};
+  var bookedRoomIds = {};
   try {
     var branch = await getSelectedBranchId();
     if (branch) {
-      // Fetch all hotel_details rows that overlap the selected range for this branch
       var rows = await sbFetchPublic('hotel_details',
-        'select=room_type,bookings!inner(branch_id,status)' +
+        'select=room_id,bookings!inner(branch_id,status)' +
         '&bookings.branch_id=eq.' + branch +
         '&bookings.status=not.in.(cancelled,rejected)' +
         '&checkin_date=lte.' + cout +
-        '&checkout_date=gte.' + cin
-      );
+        '&checkout_date=gte.' + cin);
       (rows || []).forEach(function(r) {
-        if (r.room_type) bookedCounts[r.room_type] = (bookedCounts[r.room_type] || 0) + 1;
+        if (r.room_id) bookedRoomIds[r.room_id] = (bookedRoomIds[r.room_id] || 0) + 1;
       });
     }
-  } catch(e) {
-    console.error('Availability check failed:', e);
-    // On error, show all rooms as available (fail open)
-  }
+  } catch(e) { console.error('Availability check failed:', e); }
 
   loading.style.display = 'none';
 
-  var anyAvailable = false;
-  grid.innerHTML = roomKeys.map(function(key) {
-    var label    = ROOM_LABELS[key] || key;
-    var capacity = ROOM_CAPACITY[key] || 2;
-    var booked   = bookedCounts[key] || 0;
-    var avail    = capacity - booked;
-    var isAvail  = avail > 0;
-    if (isAvail) anyAvailable = true;
-    var disabledClass = isAvail ? '' : ' svc-card-disabled';
-    var availLabel    = isAvail
-      ? '<span style="font-size:10px;color:var(--success);font-weight:700">' + avail + ' available</span>'
-      : '<span style="font-size:10px;color:var(--error);font-weight:700">Fully booked</span>';
-    return '<div class="svc-card' + disabledClass + '" id="room-opt-' + key + '"' +
-      (isAvail ? ' onclick="selectRoomFromAvail(this,\'' + key + '\')"' : '') + '>' +
-      '<div class="svc-card-radio"></div>' +
-      '<div class="svc-card-info"><div class="svc-card-name">' + label + '</div>' +
-      '<div class="svc-card-duration">' + availLabel + '</div></div>' +
-      '</div>';
-  }).join('');
-
-  if (!anyAvailable) {
-    noteEl.style.display = '';
+  if (!eligibleRooms.length) {
+    var roomKeys = ROOMS_FOR_SIZE[size] || [];
+    grid.innerHTML = roomKeys.map(function(key) {
+      var label = ROOM_LABELS[key] || key;
+      var fbOnclick = "selectRoomFromAvail(this,'" + key + "',null)";
+      return '<div class="svc-card" onclick="' + fbOnclick + '">' +
+        '<div class="svc-card-radio"></div>' +
+        '<div class="svc-card-info"><div class="svc-card-name">' + label + '</div>' +
+        '<div class="svc-card-duration"><span style="font-size:10px;color:var(--mid)">Loading room data...</span></div></div></div>';
+    }).join('');
+    calcNights();
+    return;
   }
 
-  // Recalc nights total
+  var anyAvailable = false;
+  grid.innerHTML = eligibleRooms.map(function(room) {
+    var booked  = bookedRoomIds[room.id] || 0;
+    var isAvail = booked === 0;
+    if (isAvail) anyAvailable = true;
+    var availLabel = isAvail
+      ? '<span style="font-size:10px;color:var(--success);font-weight:700">Available</span>'
+      : '<span style="font-size:10px;color:var(--error);font-weight:700">Fully booked</span>';
+    var colorDot = '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + (room.color||'#6AAEC8') + ';margin-right:6px;flex-shrink:0"></span>';
+    var cls = 'svc-card' + (isAvail ? '' : ' svc-card-disabled');
+    return '<div class="' + cls + '" id="room-opt-' + room.id + '"' +
+      (isAvail ? ' onclick="' + "selectRoomFromAvail(this,'" + room.room_type + "','" + room.id + "')" + '"' : '') + '>' +
+      '<div class="svc-card-radio"></div>' +
+      '<div class="svc-card-info">' +
+        '<div class="svc-card-name" style="display:flex;align-items:center">' + colorDot + room.name + '</div>' +
+        '<div class="svc-card-duration">' + availLabel + '</div>' +
+      '</div></div>';
+  }).join('');
+
+  if (!anyAvailable) noteEl.style.display = '';
   calcNights();
 }
 
-function selectRoomFromAvail(el, key) {
+function selectRoomFromAvail(el, key, roomId) {
   document.querySelectorAll('#roomAvailGrid .svc-card').forEach(function(c){c.classList.remove('selected');});
   el.classList.add('selected');
   booking.hotelRoomType = key;
+  booking.hotelRoomId   = roomId || null;
+  // Show second cat if villa selected
+  var secondCat = document.getElementById('secondCatSection');
+  if (secondCat) secondCat.style.display = (key === 'villa') ? '' : 'none';
   calcHotelTotal();
   updateNavTotal();
 }
@@ -1615,6 +1662,59 @@ async function getSelectedBranchId() {
            (loc === 'eastwood'  && b.name.toLowerCase().includes('eastwood'));
   });
   return match ? match.id : null;
+}
+
+async function loadLiveRoomsAndGroomers() {
+  var branchId = await getSelectedBranchId();
+  if (!branchId) return;
+  try {
+    liveRooms = await sbFetchPublic('rooms',
+      'select=id,name,color,room_type,pet_type,allowed_sizes,is_locked,schedule_restrictions' +
+      '&branch_id=eq.' + branchId +
+      '&active=eq.true&order=sort_order');
+  } catch(e) { liveRooms = []; }
+  try {
+    liveGroomers = await sbFetchPublic('groomers',
+      'select=id,name,color,schedule_restrictions,is_unavailable' +
+      '&branch_id=eq.' + branchId +
+      '&active=eq.true&is_unavailable=eq.false&order=sort_order');
+  } catch(e) { liveGroomers = []; }
+  if (liveGroomers.length) {
+    var gids = liveGroomers.map(function(g){return g.id;}).join(',');
+    try {
+      liveGroomerBlocks = await sbFetchPublic('groomer_blocks',
+        'select=groomer_id,label,start_time,end_time,days_of_week' +
+        '&groomer_id=in.(' + gids + ')&active=eq.true');
+    } catch(e) { liveGroomerBlocks = []; }
+  } else {
+    liveGroomerBlocks = [];
+  }
+}
+
+function getGroomerBlocksForDay(groomerId, dow) {
+  return liveGroomerBlocks.filter(function(bl) {
+    return bl.groomer_id === groomerId &&
+      (bl.days_of_week.length === 0 || bl.days_of_week.indexOf(dow) !== -1);
+  });
+}
+
+function isSlotBlocked(slotTime, groomerId, dow) {
+  var blocks = getGroomerBlocksForDay(groomerId, dow);
+  if (!blocks.length) return false;
+  // Parse slot to minutes
+  var sm = slotTime.match(/(\d+):(\d+)\s*(AM|PM)/i);
+  if (!sm) return false;
+  var h = parseInt(sm[1]), min = parseInt(sm[2]), ap = sm[3].toUpperCase();
+  if (ap === 'PM' && h !== 12) h += 12;
+  if (ap === 'AM' && h === 12) h = 0;
+  var slotMins = h * 60 + min;
+  return blocks.some(function(bl) {
+    var startParts = bl.start_time.split(':');
+    var endParts   = bl.end_time.split(':');
+    var blStart = parseInt(startParts[0])*60 + parseInt(startParts[1]);
+    var blEnd   = parseInt(endParts[0])*60   + parseInt(endParts[1]);
+    return slotMins >= blStart && slotMins < blEnd;
+  });
 }
 
 async function sbFetchPublic(path, params) {
@@ -2148,12 +2248,14 @@ function submitBooking() {
     location:booking.location, service:booking.service,
     groomDate:booking.groomDate, groomSlot:booking.groomSlot,
     preferredStylist:booking.preferredStylist,
+    preferredStylistId:booking.preferredStylistId || null,
     groomService:booking.groomService, groomServiceName:groomServiceName,
     groomNotes:document.getElementById('groomNotes')?document.getElementById('groomNotes').value:'',
     hotelCheckin:booking.hotelCheckin, hotelCheckout:booking.hotelCheckout,
     hotelDropoff:document.getElementById('hotelDropoffTime')?document.getElementById('hotelDropoffTime').value:'',
     hotelPickup:hotelPickupText, hotelPickupHour:booking.hotelPickupHour,
-    hotelRoom:document.getElementById('hotelRoomType')?document.getElementById('hotelRoomType').value:'',
+    hotelRoom:booking.hotelRoomType || '',
+    hotelRoomId:booking.hotelRoomId || null,
     playparkConsent:booking.playparkConsent,
     hotelFeeding:document.getElementById('hotelFeeding')?document.getElementById('hotelFeeding').value:'',
     hotelMeds:document.getElementById('hotelMeds')?document.getElementById('hotelMeds').value:'',
