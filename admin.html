@@ -39,7 +39,7 @@
   .sidebar{width:196px;flex-shrink:0;border-right:0.5px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--raised) transparent;transition:width 0.25s cubic-bezier(0.4,0,0.2,1);}
   .sidebar.collapsed{width:40px;overflow:hidden;}
   .sidebar.collapsed .sb-sec,.sidebar.collapsed .sb-div,.sidebar.collapsed .branch-tabs{display:none;}
-  .sb-toggle{width:100%;height:36px;background:transparent;border:none;border-bottom:0.5px solid var(--border);cursor:pointer;color:var(--mid);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;transition:background 0.15s;}
+  .sb-toggle{position:absolute;top:8px;right:8px;width:28px;height:28px;background:var(--surface);border:0.5px solid var(--border);border-radius:6px;cursor:pointer;color:var(--mid);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;transition:background 0.15s;}
   .sb-toggle:hover{background:var(--raised);}
   .fab{position:fixed;bottom:24px;right:24px;background:var(--yellow);color:#3d2e00;border:none;border-radius:50px;padding:11px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:"Nunito",sans-serif;z-index:50;display:flex;align-items:center;gap:6px;box-shadow:none;}
   .branch-tabs{display:flex;gap:4px;padding:8px;border-bottom:0.5px solid var(--border);}
@@ -209,6 +209,13 @@
   .bk-warn{background:rgba(239,159,39,0.1);border-radius:7px;padding:7px 10px;font-size:11px;color:var(--amber);margin-top:5px;}
   .bk-ibox{background:var(--surface);border-radius:7px;padding:8px 11px;font-size:12px;color:var(--mid);line-height:1.5;margin-bottom:10px;}
 
+
+  .skeleton{background:linear-gradient(90deg,var(--surface) 25%,var(--raised) 50%,var(--surface) 75%);background-size:200% 100%;animation:shimmer 1.4s infinite;border-radius:6px;}
+  @keyframes spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
+  @keyframes shimmer{0%{background-position:200% 0;}100%{background-position:-200% 0;}}
+  .sk-card{height:80px;margin:6px 10px 0;border-radius:8px;}
+  .sk-card-tall{height:160px;margin:6px 10px 0;border-radius:8px;}
+
   .yn-btn{font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;border:0.5px solid var(--border);background:transparent;color:var(--mid);cursor:pointer;font-family:"Nunito",sans-serif;}
   .yn-on-y{background:rgba(107,203,119,0.18);border-color:var(--success);color:var(--success);}
   .yn-on-n{background:rgba(255,107,107,0.18);border-color:var(--error);color:var(--error);}
@@ -270,7 +277,8 @@
 <div id="app">
   <div class="topbar">
     <span class="topbar-logo">BARK<span>HAUS</span></span>
-    <span id="adminGreeting" style="font-size:12px;color:var(--cream-m);margin-left:auto"></span>
+    <span id="adminGreeting" style="font-size:12px;color:var(--cream-m);margin-left:12px"></span>
+    <button id="refreshBtn" onclick="refreshNow()" style="margin-left:auto;font-size:11px;color:var(--mid);background:transparent;border:0.5px solid var(--border);border-radius:20px;padding:4px 12px;cursor:pointer;font-family:Nunito,sans-serif;display:flex;align-items:center;gap:5px"><span id="refreshIcon">&#8635;</span> Refresh</button>
     <button style="margin-left:8px;font-size:11px;color:var(--mid);background:transparent;border:0.5px solid var(--border);border-radius:20px;padding:4px 12px;cursor:pointer;font-family:Nunito,sans-serif" onclick="signOut()">Sign out</button>
     <div class="date-nav">
       <button class="dnb" onclick="shiftDate(-1)">&#8592;</button>
@@ -281,7 +289,7 @@
   </div>
   <div class="body">
     <aside class="sidebar" id="sidebar">
-      <button class="sb-toggle" onclick="toggleSidebar()" id="sbToggle" title="Toggle sidebar">&#8942;</button>
+      <button class="sb-toggle" onclick="toggleSidebar()" id="sbToggle" title="Toggle sidebar"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="1" width="12" height="12" rx="2" stroke="currentColor" stroke-width="1.2"/><line x1="5" y1="1" x2="5" y2="13" stroke="currentColor" stroke-width="1.2"/></svg></button>
       <div class="branch-tabs">
         <button class="br-tab on" onclick="setBranch(0,this)">Estancia</button>
         <button class="br-tab" onclick="setBranch(1,this)">Eastwood</button>
@@ -338,12 +346,12 @@
 <!-- BOOKING PANEL -->
 <div class="panel-overlay" id="bkOverlay" onclick="closeBkPanel(event)"></div>
 <div class="panel" id="bkPanel" style="width:420px">
-  <div class="panel-head">
-    <span class="panel-title" id="bkPanelTitle">Add booking</span>
-    <div style="display:flex;align-items:center;gap:8px">
-      <div style="display:flex;gap:4px" id="bkStepsBar"></div>
+  <div class="panel-head" style="flex-direction:column;align-items:stretch;gap:8px;padding-bottom:10px">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <span class="panel-title" id="bkPanelTitle">Add booking</span>
       <button class="panel-close" onclick="closeBkPanel()">&#215;</button>
     </div>
+    <div style="display:flex;gap:4px;flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px" id="bkStepsBar"></div>
   </div>
   <div class="panel-body" id="bkPanelBody" style="padding:14px"></div>
   <div class="panel-footer">
@@ -529,6 +537,13 @@ async function init() {
   startAutoRefresh();
 }
 
+async function refreshNow() {
+  var icon = document.getElementById('refreshIcon');
+  if (icon) { icon.style.display='inline-block'; icon.style.animation='spin 0.8s linear infinite'; }
+  await loadBookings();
+  if (icon) { icon.style.animation=''; }
+}
+
 function scrollToNow() {
   var now = new Date();
   var offset = (now.getHours()*60+now.getMinutes()-DAY_START)*PX_PER_MIN - 100;
@@ -613,7 +628,13 @@ async function loadGroomerBlocks() {
   try { groomerBlocks = await sb('groomer_blocks','select=*&groomer_id=in.('+ids+')&active=eq.true'); } catch(e) { groomerBlocks=[]; }
 }
 async function loadBookings() {
-  document.getElementById('tlInner').innerHTML = '<div style="padding:40px;color:var(--mid)">Loading...</div>';
+  // Skeleton loader
+  var skHtml = '';
+  for (var si=0; si<5; si++) {
+    var skTop = (si*110+20);
+    skHtml += '<div class="skeleton sk-card'+(si%3===0?' sk-card-tall':'')+'" style="top:'+skTop+'px;position:absolute;left:8px;right:8px;height:'+(si%3===0?'160':'80')+'px"></div>';
+  }
+  document.getElementById('tlInner').innerHTML = '<div style="position:relative;height:990px">'+skHtml+'</div>';
   var br = branches[currentBranch];
   if (!br || !br.id) { renderTimeline(); return; }
   var dateStr = fmtDate(currentDate);
@@ -899,7 +920,7 @@ function buildDrawer(b) {
   html+='</select>';
   html+='<button class="save-btn" onclick="saveStatus(\''+b.id+'\')">Update</button>';
   html+='</div>';
-  html+='<div class="dr-ctas"><button class="dr-btn-sec" onclick="alert(\'Edit booking - coming soon\')">Edit booking</button><button class="dr-btn-pri" onclick="closeDrawer()">Done</button></div>';
+  html+='<div class="dr-ctas"><button class="dr-btn-sec" onclick="editBookingFromDrawer()">Edit booking</button><button class="dr-btn-pri" onclick="closeDrawer()">Done</button></div>';
   return html;
 }
 
@@ -1471,7 +1492,6 @@ function toggleSidebar() {
   var sb  = document.getElementById('sidebar');
   var btn = document.getElementById('sbToggle');
   var collapsed = sb.classList.toggle('collapsed');
-  btn.textContent = collapsed ? '‣' : '⋮';
   btn.title = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
 }
 
@@ -1530,6 +1550,13 @@ var BK_STEP_NAMES=['Service','Schedule','Pet','Owner','Details','Summary'];
 var bkStep = 0;
 var bkEditing = null;
 var bk = {};
+
+
+function editBookingFromDrawer() {
+  if (!currentBookingId) return;
+  closeDrawer();
+  openBookingPanel(currentBookingId);
+}
 
 function bkReset() {
   var br = branches[currentBranch];
@@ -1961,7 +1988,8 @@ function bkRSum() {
       '<div class="fg"><label class="fl">Reference #</label>'+
       '<input type="text" class="fi" placeholder="Optional" value="'+bkE(bk.payref)+'" onchange="bk.payref=this.value"></div></div>';
   }
-  h += '<div class="fg"><label class="fl">Recorded by</label>'+
+  var recLabel = bkEditing ? 'Edited by' : 'Recorded by';
+  h += '<div class="fg"><label class="fl">'+recLabel+'</label>'+
     '<input type="text" class="fi" value="'+bkE(bk.recby)+'" onchange="bk.recby=this.value"></div>';
   return h;
 }
@@ -2065,15 +2093,20 @@ async function saveBkBooking() {
     var data = await res.json();
     if (data.error) throw new Error(data.error);
     // Update status/payment directly since admin may set confirmed/paid immediately
-    if (data.booking_id) {
-      await sbPatch('bookings','id=eq.'+data.booking_id,{status:bk.status,payment_status:bk.paysts});
+    var targetId = bkEditing || data.booking_id;
+    if (targetId) {
+      await sbPatch('bookings','id=eq.'+targetId,{status:bk.status,payment_status:bk.paysts});
       if (bk.paysts!=='unpaid' && bk.paymethod) {
-        await sbPost('payments',{booking_id:data.booking_id,amount:payload.total,type:'downpayment',method:bk.paymethod.toLowerCase().replace(/ \/ /g,'_').replace(/ /g,'_'),reference_number:bk.payref||null,recorded_by:bk.recby});
+        await sbPost('payments',{booking_id:targetId,amount:payload.total,type:'downpayment',method:bk.paymethod.toLowerCase().replace(/ \/ /g,'_').replace(/ /g,'_'),reference_number:bk.payref||null,recorded_by:bk.recby});
+      }
+      // Log edit if editing existing booking
+      if (bkEditing) {
+        await sbPost('booking_edits',{booking_id:bkEditing,edited_by_name:bk.recby,field_changes:JSON.stringify({admin_edit:true})});
       }
     }
     closeBkPanel();
     await loadBookings();
-    alert('Booking created: ' + (data.ref_number || 'done'));
+    alert(bkEditing ? 'Booking updated.' : 'Booking created: '+(data.ref_number||'done'));
   } catch(err) {
     alert('Failed to save booking: ' + err.message);
     if (btn) { btn.textContent = 'Save booking'; btn.disabled = false; }
