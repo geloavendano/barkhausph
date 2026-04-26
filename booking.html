@@ -1416,18 +1416,104 @@ function selectStylist(el, val, groomerId) {
   renderGroomSlots();
 }
 
-function renderGroomSlots() {
+// Duration in minutes per service key
+var GROOM_SLOT_MINS = { bath_dry:30, basic:60, premium:120, ala_carte:60 };
+
+// Parse a slot string like "9:00 AM" into minutes since midnight
+function slotToMins(slot) {
+  var m = slot.match(/(\d+):(\d+)\s*(AM|PM)/i);
+  if (!m) return -1;
+  var h = parseInt(m[1]), min = parseInt(m[2]), ap = m[3].toUpperCase();
+  if (ap === 'PM' && h !== 12) h += 12;
+  if (ap === 'AM' && h === 12) h = 0;
+  return h * 60 + min;
+}
+
+// Return all slot strings that a booking occupies based on its start slot + duration
+function occupiedSlots(startSlot, durationMins, allSlots) {
+  var startMins = slotToMins(startSlot);
+  if (startMins < 0) return [startSlot];
+  var endMins = startMins + durationMins;
+  return allSlots.filter(function(s) {
+    var sm = slotToMins(s);
+    return sm >= startMins && sm < endMins;
+  });
+}
+
+// Check whether selecting a given slot would overlap with any booked slot-range
+// Takes into account the CURRENT service duration the customer is booking
+function slotOverlapsBooked(candidateSlot, currentDurationMins, blockedRanges) {
+  var candStart = slotToMins(candidateSlot);
+  var candEnd   = candStart + currentDurationMins;
+  return blockedRanges.some(function(range) {
+    return candStart < range.end && candEnd > range.start;
+  });
+}
+
+async function renderGroomSlots() {
   var grid = document.getElementById('groomSlots');
   if (!grid) return;
-  var groomerId = booking.preferredStylistId;
-  var dateVal   = booking.groomDate;
-  var dow = dateVal ? new Date(dateVal + 'T00:00:00').getDay() : -1;
-  var ALL_SLOTS = ['9:00 AM','10:00 AM','11:00 AM','1:00 PM','2:00 PM','3:00 PM','4:00 PM','5:00 PM'];
-  grid.innerHTML = ALL_SLOTS.filter(function(slot) {
-    // If a specific groomer is chosen, hide blocked slots
-    if (groomerId && dow >= 0) return !isSlotBlocked(slot, groomerId, dow);
-    return true;
-  }).map(function(slot) {
+  var groomerId    = booking.preferredStylistId;
+  var dateVal      = booking.groomDate;
+  var serviceKey   = booking.groomService || 'basic';
+  var myDuration   = GROOM_SLOT_MINS[serviceKey] || 60;
+  var dow          = dateVal ? new Date(dateVal + 'T00:00:00').getDay() : -1;
+  var ALL_SLOTS    = ['9:00 AM','10:00 AM','11:00 AM','1:00 PM','2:00 PM','3:00 PM','4:00 PM','5:00 PM'];
+
+  grid.innerHTML = '<p style="font-size:12px;color:var(--mid);padding:8px 0">Checking availability...</p>';
+
+  // Build blocked time ranges from existing bookings
+  // Each range = { start: mins, end: mins } representing the full occupied window
+  var blockedRanges = [];
+  try {
+    var branchId = await getSelectedBranchId();
+    if (branchId && groomerId && dateVal) {
+      var rows = await sbFetchPublic('grooming_details',
+        'select=timeslot,groom_service_key,bookings!inner(booking_date,status,branch_id)' +
+        '&bookings.booking_date=eq.' + dateVal +
+        '&bookings.branch_id=eq.' + branchId +
+        '&bookings.status=not.in.(cancelled,rejected)' +
+        '&groomer_id=eq.' + groomerId);
+      (rows || []).forEach(function(r) {
+        if (!r.timeslot) return;
+        var dur   = GROOM_SLOT_MINS[r.groom_service_key || 'basic'] || 60;
+        var start = slotToMins(r.timeslot);
+        if (start >= 0) blockedRanges.push({ start: start, end: start + dur });
+      });
+    }
+  } catch(e) {
+    console.error('Slot availability check failed:', e);
+  }
+
+  // Also block groomer break times
+  var breakRanges = [];
+  if (groomerId && dow >= 0) {
+    getGroomerBlocksForDay(groomerId, dow).forEach(function(bl) {
+      var startParts = bl.start_time.split(':');
+      var endParts   = bl.end_time.split(':');
+      var bs = parseInt(startParts[0])*60 + parseInt(startParts[1]);
+      var be = parseInt(endParts[0])*60   + parseInt(endParts[1]);
+      breakRanges.push({ start: bs, end: be });
+    });
+  }
+
+  var allBlockedRanges = blockedRanges.concat(breakRanges);
+
+  var availableSlots = ALL_SLOTS.filter(function(slot) {
+    var slotStart = slotToMins(slot);
+    var slotEnd   = slotStart + myDuration;
+    // Check if this slot's full duration overlaps any blocked range
+    return !allBlockedRanges.some(function(range) {
+      return slotStart < range.end && slotEnd > range.start;
+    });
+  });
+
+  if (!availableSlots.length) {
+    grid.innerHTML = '<p style="font-size:12px;color:var(--error);padding:8px 0">No available slots for this date and service. Please select a different date or stylist.</p>';
+    return;
+  }
+
+  grid.innerHTML = availableSlots.map(function(slot) {
     return '<div class="timeslot" onclick="selectSlot(this)">' + slot + '</div>';
   }).join('');
 }
@@ -1584,21 +1670,29 @@ async function loadRoomAvailability() {
     return r.allowed_sizes.indexOf(size) !== -1;
   });
 
-  var bookedRoomIds = {};
+    var bookedRoomIds = {};
   try {
     var branch = await getSelectedBranchId();
     if (branch) {
-      var rows = await sbFetchPublic('hotel_details',
-        'select=room_id,bookings!inner(branch_id,status)' +
-        '&bookings.branch_id=eq.' + branch +
-        '&bookings.status=not.in.(cancelled,rejected)' +
-        '&checkin_date=lte.' + cout +
-        '&checkout_date=gte.' + cin);
-      (rows || []).forEach(function(r) {
-        if (r.room_id) bookedRoomIds[r.room_id] = (bookedRoomIds[r.room_id] || 0) + 1;
-      });
+      // Step 1: get all confirmed hotel booking IDs for this branch
+      var bookingRows = await sbFetchPublic('bookings',
+        'select=id&branch_id=eq.' + branch +
+        '&service=eq.hotel&status=not.in.(cancelled,rejected)');
+      if (bookingRows && bookingRows.length) {
+        var bookingIds = bookingRows.map(function(b){ return b.id; }).join(',');
+        // Step 2: get hotel_details overlapping our date range
+        var detailRows = await sbFetchPublic('hotel_details',
+          'select=room_id,room_type,checkin_date,checkout_date' +
+          '&booking_id=in.(' + bookingIds + ')' +
+          '&checkin_date=lte.' + cout +
+          '&checkout_date=gte.' + cin);
+        (detailRows || []).forEach(function(r) {
+          var key = r.room_id || r.room_type;
+          if (key) bookedRoomIds[key] = (bookedRoomIds[key] || 0) + 1;
+        });
+      }
     }
-  } catch(e) { console.error('Availability check failed:', e); }
+  } catch(e) { console.error('Hotel availability check failed:', e); }
 
   loading.style.display = 'none';
 
@@ -1618,7 +1712,7 @@ async function loadRoomAvailability() {
 
   var anyAvailable = false;
   grid.innerHTML = eligibleRooms.map(function(room) {
-    var booked  = bookedRoomIds[room.id] || 0;
+    var booked  = (bookedRoomIds[room.id] || 0) + (bookedRoomIds[room.room_type] || 0);
     var isAvail = booked === 0;
     if (isAvail) anyAvailable = true;
     var availLabel = isAvail
@@ -2325,7 +2419,17 @@ function submitBooking() {
     '<div class="pay-loading">' +
     '<div class="pay-loading-icon">&#128176;</div>' +
     '<p class="pay-loading-text">Preparing your payment...</p>' +
+    '<p id="payDebug" style="font-size:11px;color:var(--mid);margin-top:8px"></p>' +
     '</div>';
+
+  // 30-second timeout guard
+  var payTimeout = setTimeout(function() {
+    buildSummary();
+    updateBottomNavForSummary();
+    showToast('Request timed out. Please try again.', 5000);
+    btn.textContent = 'Confirm Booking';
+    btn.disabled = false;
+  }, 30000);
 
   fetch(CREATE_PAYMENT_URL, {
     method: 'POST',
@@ -2336,24 +2440,37 @@ function submitBooking() {
     },
     body: JSON.stringify(payload),
   })
-  .then(function(res) { return res.json(); })
+  .then(function(res) {
+    var dbg = document.getElementById('payDebug');
+    if (dbg) dbg.textContent = 'Status: ' + res.status;
+    return res.json();
+  })
   .then(function(data) {
+    clearTimeout(payTimeout);
     if (data.error) {
       buildSummary();
       updateBottomNavForSummary();
-      showToast('Could not create payment: ' + data.error, 5000);
+      showToast('Payment error: ' + data.error, 6000);
       btn.textContent = 'Confirm Booking';
       btn.disabled = false;
       return;
     }
-    // Redirect to PayMongo hosted payment page
+    if (!data.checkout_url) {
+      buildSummary();
+      updateBottomNavForSummary();
+      showToast('No checkout URL returned. Check edge function logs.', 6000);
+      btn.textContent = 'Confirm Booking';
+      btn.disabled = false;
+      return;
+    }
     window.location.href = data.checkout_url;
   })
   .catch(function(err) {
+    clearTimeout(payTimeout);
     console.error('Payment error:', err);
     buildSummary();
     updateBottomNavForSummary();
-    showToast('Connection error. Please try again.', 5000);
+    showToast('Connection error: ' + err.message, 6000);
     btn.textContent = 'Confirm Booking';
     btn.disabled = false;
   });
