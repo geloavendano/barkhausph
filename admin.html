@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Barkhaus Admin</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 
@@ -218,8 +219,15 @@
   <div class="gate-card">
     <p class="gate-logo">BARK<span>HAUS</span></p>
     <p class="gate-sub">Admin access only</p>
-    <input type="password" class="gate-input" id="gateInput" placeholder="Enter password" onkeydown="if(event.key==='Enter')checkPassword()">
-    <button class="gate-btn" onclick="checkPassword()">Enter</button>
+    <button class="gate-btn" id="gateBtn" onclick="signInWithGoogle()" style="display:flex;align-items:center;justify-content:center;gap:10px;background:#fff;color:#3c4043;font-family:'Nunito',sans-serif;font-size:14px;font-weight:500;border:1px solid #dadce0;border-radius:4px;padding:10px 24px;cursor:pointer;width:100%;letter-spacing:normal;text-transform:none">
+      <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
+        <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
+        <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853"/>
+        <path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
+        <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
+      </svg>
+      Sign in with Google
+    </button>
     <p class="gate-error" id="gateError"></p>
   </div>
 </div>
@@ -228,6 +236,7 @@
 <div id="app">
   <div class="topbar">
     <span class="topbar-logo">BARK<span>HAUS</span></span>
+    <button style="margin-left:4px;font-size:11px;color:var(--mid);background:transparent;border:0.5px solid var(--border);border-radius:20px;padding:4px 12px;cursor:pointer;font-family:Nunito,sans-serif" onclick="signOut()">Sign out</button>
     <div class="date-nav">
       <button class="dnb" onclick="shiftDate(-1)">&#8592;</button>
       <span class="date-label" id="dateLabel" onclick="openCalOverlay()" style="cursor:pointer;text-decoration:underline dotted rgba(184,212,224,0.4)" title="Open calendar"></span>
@@ -345,9 +354,9 @@
 
 <script>
 
-var SUPABASE_URL      = 'https://dxttnbtfhpanyiyduevn.supabase.co';
-var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4dHRuYnRmaHBhbnlpeWR1ZXZuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY1MjkyNDcsImV4cCI6MjA5MjEwNTI0N30.jrMk8-_Ga01TydNPUwCzlymf1W44PjaXXIUjCLALb2s';
-var ADMIN_PASSWORD    = 'greenhills2026';
+var SUPABASE_URL      = 'https://YOUR_PROJECT_REF.supabase.co';
+var SUPABASE_ANON_KEY = 'YOUR_ANON_PUBLIC_KEY';
+// ADMIN_PASSWORD removed - using Supabase Auth
 
 var COLORS_8 = ['#4D96B9','#EF9F27','#1D9E75','#D4537E','#9B95E8','#D85A30','#639922','#888780'];
 var COLOR_NAMES = {'#4D96B9':'Blue','#EF9F27':'Amber','#1D9E75':'Teal','#D4537E':'Pink','#9B95E8':'Purple','#D85A30':'Coral','#639922':'Green','#888780':'Gray'};
@@ -377,16 +386,75 @@ var currentBookingId = null;
 var breakRowCount  = 0;
 var calBookingDates = {};
 
-function checkPassword() {
-  if (document.getElementById('gateInput').value === ADMIN_PASSWORD) {
-    document.getElementById('gate').style.display = 'none';
-    document.getElementById('app').classList.add('visible');
-    init();
-  } else {
-    document.getElementById('gateError').textContent = 'Incorrect password.';
-    document.getElementById('gateInput').value = '';
+// ── SUPABASE AUTH CLIENT ──
+var supabaseClient = null;
+
+function initSupabaseClient() {
+  if (!supabaseClient && window.supabase) {
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  }
+  return supabaseClient;
+}
+
+async function signInWithGoogle() {
+  var errEl = document.getElementById('gateError');
+  var btn   = document.getElementById('gateBtn');
+  btn.disabled = true;
+  errEl.textContent = '';
+  try {
+    var client = initSupabaseClient();
+    var result = await client.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: window.location.href
+      }
+    });
+    if (result.error) throw result.error;
+    // Browser will redirect to Google - no further action needed here
+  } catch(err) {
+    errEl.textContent = err.message || 'Sign in failed. Please try again.';
+    btn.disabled = false;
   }
 }
+
+async function checkExistingSession() {
+  var client = initSupabaseClient();
+  if (!client) return;
+  var result = await client.auth.getSession();
+  if (result.data && result.data.session) {
+    // Verify this email is on the admin allowlist
+    var allowed = await verifyAdminAccess(result.data.session);
+    if (allowed) {
+      document.getElementById('gate').style.display = 'none';
+      document.getElementById('app').classList.add('visible');
+      init();
+    } else {
+      await client.auth.signOut();
+      document.getElementById('gateError').textContent = 'Access denied. Your account is not authorized.';
+    }
+  }
+}
+
+async function verifyAdminAccess(session) {
+  try {
+    var url = SUPABASE_URL + '/rest/v1/admin_users?select=email&email=eq.' + encodeURIComponent(session.user.email) + '&limit=1';
+    var res = await fetch(url, {
+      headers: {
+        'apikey':        SUPABASE_ANON_KEY,
+        'Authorization': 'Bearer ' + session.access_token,
+        'Content-Type':  'application/json'
+      }
+    });
+    var rows = await res.json();
+    return Array.isArray(rows) && rows.length > 0;
+  } catch(e) {
+    console.error('Allowlist check failed:', e);
+    return false;
+  }
+}
+
+// Override sbFetch to use session token
+var _sbFetchOrig = null;
 
 async function init() {
   await loadBranches();
@@ -410,20 +478,24 @@ function scrollToNow() {
 /* ── SUPABASE ── */
 async function sb(path, params) {
   var url = SUPABASE_URL+'/rest/v1/'+path+(params?'?'+params:'');
-  var res = await fetch(url, {headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY,'Content-Type':'application/json'}});
+  var res = await fetch(url, {headers: await getAuthHeaders()});
   if (!res.ok) { var t=await res.text(); throw new Error(res.status+': '+t); }
   return res.json();
 }
 async function sbPost(path, body) {
-  var res = await fetch(SUPABASE_URL+'/rest/v1/'+path, {method:'POST',headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(body)});
+  var hdrs = await getAuthHeaders();
+  hdrs['Prefer'] = 'return=representation';
+  var res = await fetch(SUPABASE_URL+'/rest/v1/'+path, {method:'POST',headers:hdrs,body:JSON.stringify(body)});
   return res.json();
 }
 async function sbPatch(path, params, body) {
-  var res = await fetch(SUPABASE_URL+'/rest/v1/'+path+'?'+params, {method:'PATCH',headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(body)});
+  var hdrs = await getAuthHeaders();
+  hdrs['Prefer'] = 'return=representation';
+  var res = await fetch(SUPABASE_URL+'/rest/v1/'+path+'?'+params, {method:'PATCH',headers:hdrs,body:JSON.stringify(body)});
   return res.json();
 }
 async function sbDelete(path, params) {
-  var res = await fetch(SUPABASE_URL+'/rest/v1/'+path+'?'+params, {method:'DELETE',headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY,'Content-Type':'application/json'}});
+  var res = await fetch(SUPABASE_URL+'/rest/v1/'+path+'?'+params, {method:'DELETE',headers: await getAuthHeaders()});
   return res.ok;
 }
 
@@ -962,6 +1034,29 @@ function toggleSidebar() {
   btn.title = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
 }
 
+async function signOut() {
+  var client = initSupabaseClient();
+  if (client) await client.auth.signOut();
+  document.getElementById('app').classList.remove('visible');
+  document.getElementById('gate').style.display = 'flex';
+  document.getElementById('gateEmail').value = '';
+  document.getElementById('gatePw').value    = '';
+}
+
+async function getAuthHeaders() {
+  var client = initSupabaseClient();
+  var base   = { 'apikey': SUPABASE_ANON_KEY, 'Content-Type': 'application/json' };
+  if (client) {
+    var sess = await client.auth.getSession();
+    if (sess.data && sess.data.session) {
+      base['Authorization'] = 'Bearer ' + sess.data.session.access_token;
+      return base;
+    }
+  }
+  base['Authorization'] = 'Bearer ' + SUPABASE_ANON_KEY;
+  return base;
+}
+
 /* ── DATE HELPERS ── */
 function fmtDate(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 var DAYS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
@@ -1072,6 +1167,13 @@ function renderTimeNowLine() {
 /* ── ROTATED NARROW CARD LOGIC ── */
 var NARROW_THRESHOLD = 70; // px - cards narrower than this use rotated label
 
+
+// Check for existing session on load
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", function() { initSupabaseClient(); checkExistingSession(); });
+} else {
+  initSupabaseClient(); checkExistingSession();
+}
 </script>
 </body>
 </html>
