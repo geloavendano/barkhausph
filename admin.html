@@ -37,11 +37,10 @@
   .body{display:flex;flex:1;overflow:hidden;}
   /* SIDEBAR */
   .sidebar{width:196px;flex-shrink:0;border-right:0.5px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--raised) transparent;transition:width 0.25s cubic-bezier(0.4,0,0.2,1);}
-  .sidebar.collapsed{width:40px;overflow:visible;}
-  .sidebar.collapsed .sb-sec,.sidebar.collapsed .sb-div,.sidebar.collapsed .branch-tabs{display:none;}
-  .sidebar.collapsed{overflow:hidden;}
-  .sidebar.collapsed .sb-toggle{position:fixed;left:12px;top:56px;}
-  .sb-toggle{position:absolute;top:8px;right:8px;width:28px;height:28px;z-index:5;background:var(--surface);border:0.5px solid var(--border);border-radius:6px;cursor:pointer;color:var(--mid);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;transition:background 0.15s;}
+
+  .sidebar.collapsed .sb-scroll{display:none;}
+  .sidebar.collapsed{width:40px;}
+  .sb-toggle{width:28px;height:28px;background:var(--surface);border:0.5px solid var(--border);border-radius:6px;cursor:pointer;color:var(--mid);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;transition:background 0.15s;}
   .sb-toggle:hover{background:var(--raised);}
   .fab{position:fixed;bottom:24px;right:24px;background:var(--yellow);color:#3d2e00;border:none;border-radius:50px;padding:11px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:"Nunito",sans-serif;z-index:50;display:flex;align-items:center;gap:6px;box-shadow:none;}
   .branch-tabs{display:flex;gap:4px;padding:8px;border-bottom:0.5px solid var(--border);}
@@ -213,6 +212,14 @@
 
 
   .skeleton{background:linear-gradient(90deg,var(--surface) 25%,var(--raised) 50%,var(--surface) 75%);background-size:200% 100%;animation:shimmer 1.4s infinite;border-radius:6px;}
+
+  @media(max-width:640px){
+    .topbar{grid-template-columns:auto 1fr auto !important;gap:4px;}
+    .topbar > div:first-child span:first-child{font-size:12px;}
+    .date-label{min-width:80px;font-size:11px;}
+    #refreshBtn span + *{display:none;}
+  }
+
   @keyframes spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
   @keyframes shimmer{0%{background-position:200% 0;}100%{background-position:-200% 0;}}
   .sk-card{height:80px;margin:6px 10px 0;border-radius:8px;}
@@ -296,7 +303,11 @@
   </div>
   <div class="body">
     <aside class="sidebar" id="sidebar">
-      <button class="sb-toggle" onclick="toggleSidebar()" id="sbToggle" title="Toggle sidebar"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="1" width="12" height="12" rx="2" stroke="currentColor" stroke-width="1.2"/><line x1="5" y1="1" x2="5" y2="13" stroke="currentColor" stroke-width="1.2"/></svg></button>
+      <!-- Toggle always visible at top, outside scroll area -->
+      <div style="display:flex;align-items:center;justify-content:flex-end;padding:6px 8px;border-bottom:0.5px solid var(--border);flex-shrink:0">
+        <button class="sb-toggle" onclick="toggleSidebar()" id="sbToggle" title="Toggle sidebar"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="1" width="12" height="12" rx="2" stroke="currentColor" stroke-width="1.2"/><line x1="5" y1="1" x2="5" y2="13" stroke="currentColor" stroke-width="1.2"/></svg></button>
+      </div>
+      <div class="sb-scroll" id="sbScroll">
       <div class="branch-tabs">
         <button class="br-tab on" onclick="setBranch(0,this)">Estancia</button>
         <button class="br-tab" onclick="setBranch(1,this)">Eastwood</button>
@@ -316,6 +327,7 @@
         <div id="groomerList"></div>
         <button class="sb-add-btn" onclick="openGroomerPanel(null)">+ Add groomer</button>
       </div>
+      </div><!-- /sb-scroll -->
     </aside>
     <div class="main-content">
       <div class="svc-tabs" id="svcTabs"></div>
@@ -861,8 +873,11 @@ function closeDrawer(e) {
 }
 
 function buildDrawer(b) {
-  var pet=b.pets||{},owner=b.owners||{},gd=b.grooming_details||null,hd=b.hotel_details||null,dd=b.daycare_details||null,sd=b.studio_details||null;
-  var addons=b.booking_addons||[],vaccines=b.pet_vaccines||[],cn=b.checkin_notes||null;
+  function dFirst(v){return Array.isArray(v)?(v[0]||null):(v||null);}
+  var pet=dFirst(b.pets)||{},owner=dFirst(b.owners)||{},gd=dFirst(b.grooming_details),hd=dFirst(b.hotel_details),dd=dFirst(b.daycare_details),sd=dFirst(b.studio_details);
+  var addons=Array.isArray(b.booking_addons)?b.booking_addons:(b.booking_addons?[b.booking_addons]:[]);
+  var vaccines=Array.isArray(b.pet_vaccines)?b.pet_vaccines:(b.pet_vaccines?[b.pet_vaccines]:[]);
+  var cn=dFirst(b.checkin_notes);
   var timeStr='';
   if(gd) timeStr=gd.timeslot||'';
   else if(hd) timeStr=(hd.checkin_date||'')+' to '+(hd.checkout_date||'');
@@ -1150,6 +1165,10 @@ function openGroomerPanel(groomerId) {
     // Sort order
     '<div class="fg"><label class="fl">Display order</label>'+
       '<input type="number" class="fi" id="gSortOrder" value="'+(g.sort_order||0)+'" min="0" style="width:80px"></div>';
+
+  document.getElementById('groomerDeleteBtn').style.display = editingGroomer ? '' : 'none';
+  document.getElementById('groomerOverlay').classList.add('open');
+  document.getElementById('groomerPanel').classList.add('open');
 }
 
 // Groomer-specific color picker (scoped to avoid colliding with room panel)
@@ -1561,8 +1580,9 @@ var bk = {};
 
 function editBookingFromDrawer() {
   if (!currentBookingId) return;
+  var id = currentBookingId;   // save before closeDrawer nulls it
   closeDrawer();
-  openBookingPanel(currentBookingId);
+  openBookingPanel(id);
 }
 
 function bkReset() {
@@ -1602,31 +1622,88 @@ function openBookingPanel(bookingId) {
 }
 
 function bkPrePopulate(b) {
-  bk.svc = b.service || 'grooming';
-  bk.status = b.status || 'confirmed';
+  // PostgREST returns one-to-many embeds as arrays - normalize to object
+  function first(v) { return Array.isArray(v) ? (v[0]||null) : (v||null); }
+
+  bk.svc    = b.service        || 'grooming';
+  bk.status = b.status         || 'confirmed';
   bk.paysts = b.payment_status || 'unpaid';
-  var pet = b.pets || {};
-  bk.pname = pet.name || '';
-  bk.panimal = pet.animal_type || 'dog';
-  bk.pgender = pet.gender || 'male';
-  bk.pbreed = pet.breed || '';
-  bk.ptemp = pet.temperament || '';
-  bk.pmed = pet.medical_notes || '';
-  bk.size = pet.size || 'small_dog';
-  var own = b.owners || {};
+
+  var pet = first(b.pets) || {};
+  bk.pname   = pet.name          || '';
+  bk.panimal = pet.animal_type   || 'dog';
+  bk.pgender = pet.gender        || 'male';
+  bk.pbreed  = pet.breed         || '';
+  bk.ptemp   = pet.temperament   || '';
+  bk.pmed    = pet.medical_notes || '';
+  bk.size    = pet.size          || 'small_dog';
+
+  var own = first(b.owners) || {};
   bk.ofirst = own.first_name || '';
   bk.olast  = own.last_name  || '';
   bk.oemail = own.email      || '';
   bk.ophone = own.mobile     || '';
-  var gd = b.grooming_details;
-  if (gd) { bk.gslot = gd.timeslot||''; bk.stylist = gd.preferred_stylist||'any'; bk.gsvc = gd.groom_service_key||'basic'; bk.gnotes = gd.special_requests||''; }
-  var hd = b.hotel_details;
-  if (hd) { bk.hcin=hd.checkin_date||''; bk.hcout=hd.checkout_date||''; bk.hroom=hd.room_type||''; bk.hroom_id=hd.room_id||null; bk.hpick=(hd.pickup_hour||14)+''; bk.hplay=!!hd.playpark_consent; bk.hfeed=hd.feeding_instructions||''; bk.hmeds=hd.medications||''; bk.hemerg=hd.emergency_name||''; bk.hemergp=hd.emergency_phone||''; bk.hvet=hd.vet_clinic||''; }
-  var dd = b.daycare_details;
-  if (dd) { bk.dcdate=b.booking_date||''; bk.dcdrop=dd.dropoff_time||'09:00'; bk.dcpick=dd.pickup_time||'17:00'; bk.dcopen=!!dd.open_time; bk.dcnotes=dd.notes||''; }
-  var sd = b.studio_details;
-  if (sd) { bk.stdate=b.booking_date||''; bk.stslot=sd.timeslot||''; }
-  if (bk.svc==='grooming') bk.gdate = b.booking_date||'';
+
+  var gd = first(b.grooming_details);
+  if (gd) {
+    bk.gsvc   = gd.groom_service_key  || 'basic';
+    bk.gslot  = gd.timeslot           || '';
+    bk.stylist= gd.preferred_stylist  || 'any';
+    bk.gnotes = gd.special_requests   || '';
+    bk.gdate  = b.booking_date        || '';
+  }
+
+  var hd = first(b.hotel_details);
+  if (hd) {
+    bk.hcin    = hd.checkin_date          || '';
+    bk.hcout   = hd.checkout_date         || '';
+    bk.hroom   = hd.room_type             || '';
+    bk.hroom_id= hd.room_id               || null;
+    bk.hpick   = String(hd.pickup_hour    || 14);
+    bk.hdrop   = hd.dropoff_time          || '10:00';
+    bk.hplay   = !!hd.playpark_consent;
+    bk.hfeed   = hd.feeding_instructions  || '';
+    bk.hmeds   = hd.medications           || '';
+    bk.hemerg  = hd.emergency_name        || '';
+    bk.hemergp = hd.emergency_phone       || '';
+    bk.hvet    = hd.vet_clinic            || '';
+    bk.hvetc   = hd.vet_contact           || '';
+    bk.hvetaddr= hd.vet_address           || '';
+  }
+
+  var dd = first(b.daycare_details);
+  if (dd) {
+    bk.dcdate  = b.booking_date  || '';
+    bk.dcdrop  = dd.dropoff_time || '09:00';
+    bk.dcpick  = dd.pickup_time  || '17:00';
+    bk.dcopen  = !!dd.open_time;
+    bk.dcnotes = dd.notes        || '';
+  }
+
+  var sd = first(b.studio_details);
+  if (sd) {
+    bk.stdate = b.booking_date || '';
+    bk.stslot = sd.timeslot    || '';
+  }
+
+  // Vaccines - map back from pet_vaccines array
+  var vaccArr = Array.isArray(b.pet_vaccines) ? b.pet_vaccines : [];
+  var vaccNames = bk.panimal === 'cat'
+    ? ['Anti-rabies','All-in-1 shot','Anti-parasitic']
+    : ['Anti-rabies','5/6/8-in-1 shot','Kennel Cough / Bordetella','Tick and flea treatment'];
+  bk.vacc = {};
+  vaccNames.forEach(function(name, i) {
+    var row = vaccArr.find(function(v){ return v.vaccine_name === name; });
+    if (row) bk.vacc[i] = !!row.confirmed;
+  });
+
+  // Add-ons
+  var addonArr = Array.isArray(b.booking_addons) ? b.booking_addons : [];
+  bk.addons = {};
+  addonArr.forEach(function(a) {
+    var match = AD_ADM.find(function(x){ return x.n === a.addon_name || x.k === a.addon_key; });
+    if (match) bk.addons[match.k] = true;
+  });
 }
 
 function closeBkPanel(e) {
