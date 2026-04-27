@@ -927,9 +927,9 @@
 <script>
 
 // ── CONFIG ──
-var SUPABASE_URL        = 'https://dxttnbtfhpanyiyduevn.supabase.co';
+var SUPABASE_URL        = 'https://YOUR_PROJECT_REF.supabase.co';
 var CREATE_PAYMENT_URL  = SUPABASE_URL + '/functions/v1/create-payment';
-var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4dHRuYnRmaHBhbnlpeWR1ZXZuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY1MjkyNDcsImV4cCI6MjA5MjEwNTI0N30.jrMk8-_Ga01TydNPUwCzlymf1W44PjaXXIUjCLALb2s';
+var SUPABASE_ANON_KEY = 'YOUR_ANON_PUBLIC_KEY';
 var EDGE_FN_URL       = SUPABASE_URL + '/functions/v1/submit-booking';
 
 // ── PRICING TABLES ──
@@ -2326,18 +2326,72 @@ function showToast(msg, duration) {
   // Clean URL
   window.history.replaceState({}, '', window.location.pathname);
   if (status === 'success' && ref) {
-    // Show success screen directly
-    document.getElementById('progressWrap').style.display = 'none';
-    document.getElementById('bottomNav').style.display = 'none';
-    document.getElementById('refNum').textContent = ref;
-    document.getElementById('successScreen').classList.add('active');
+    // Hide ALL steps and the step UI, show only success screen
+    document.querySelectorAll('.step-panel, #successScreen').forEach(function(el) {
+      el.classList.remove('active');
+    });
+    var pw = document.getElementById('progressWrap');
+    var bn = document.getElementById('bottomNav');
+    var ss = document.getElementById('successScreen');
+    var hd = document.querySelector('header.booking-header, .booking-header');
+    if (pw) pw.style.display = 'none';
+    if (bn) bn.style.display = 'none';
+    if (hd) hd.style.display = 'none';
+    if (ss) {
+      ss.style.display = '';
+      ss.classList.add('active');
+    }
+    var rn = document.getElementById('refNum');
+    if (rn) rn.textContent = ref;
+    // Clear session storage
+    try { sessionStorage.removeItem('bk_pending_ref'); } catch(e) {}
   } else if (status === 'failed') {
-    // Will show toast after a short delay (DOM needs to load)
     setTimeout(function() {
       showToast('Payment was not completed. Please try again.', 5000);
     }, 800);
   }
 })();
+
+// ── POLL FOR PAYMENT if ref is in sessionStorage (QR fallback) ──
+// When customer is redirected to PayMongo, store ref so we can
+// detect a successful payment even if PayMongo redirect doesn't fire
+setTimeout(checkStoredPaymentRef, 500);
+
+function storePaymentRef(ref) {
+  try { sessionStorage.setItem('bk_pending_ref', ref); } catch(e) {}
+}
+function checkStoredPaymentRef() {
+  try {
+    var ref = sessionStorage.getItem('bk_pending_ref');
+    if (!ref) return;
+    // Already on success screen - clear and stop
+    if (document.getElementById('successScreen') && document.getElementById('successScreen').classList.contains('active')) {
+      sessionStorage.removeItem('bk_pending_ref');
+      return;
+    }
+    // Show a "Did you pay?" recovery banner
+    var banner = document.getElementById('payReturnBanner');
+    if (banner) { banner.style.display = ''; banner.querySelector('.bk-ref').textContent = ref; }
+  } catch(e) {}
+}
+function confirmPaymentReturn(ref) {
+  try { sessionStorage.removeItem('bk_pending_ref'); } catch(e) {}
+  document.querySelectorAll('.step-panel, #successScreen').forEach(function(el) {
+    el.classList.remove('active');
+  });
+  var pw = document.getElementById('progressWrap');
+  var bn = document.getElementById('bottomNav');
+  var ss = document.getElementById('successScreen');
+  var hd = document.querySelector('.booking-header');
+  var rb = document.getElementById('payReturnBanner');
+  if (pw) pw.style.display = 'none';
+  if (bn) bn.style.display = 'none';
+  if (hd) hd.style.display = 'none';
+  if (rb) rb.style.display = 'none';
+  if (ss) { ss.style.display = ''; ss.classList.add('active'); }
+  var rn = document.getElementById('refNum');
+  if (rn) rn.textContent = ref;
+}
 
 // ── SUBMIT (redirects to PayMongo) ──
 function submitBooking() {
@@ -2463,6 +2517,7 @@ function submitBooking() {
       btn.disabled = false;
       return;
     }
+    storePaymentRef(data.ref_number);
     window.location.href = data.checkout_url;
   })
   .catch(function(err) {
