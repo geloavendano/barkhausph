@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html lang="en">
-  stopAuto();
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -44,7 +43,7 @@
   #locations { flex-direction:column; }
   .loc-tabs { position:absolute; top:20px; left:50%; transform:translateX(-50%); z-index:10; display:flex; background:rgba(15,28,38,0.70); border:0.5px solid var(--border); border-radius:30px; padding:4px; backdrop-filter:blur(10px); gap:2px; }
   .loc-tab { font-size:12px; font-weight:700; color:var(--mid); padding:7px 20px; border-radius:26px; cursor:pointer; transition:background 0.25s,color 0.25s; white-space:nowrap; letter-spacing:0.04em; }
-  .loc-tab-soon { opacity:0.55; cursor:default !important; pointer-events:none; }
+  .loc-tab-soon { opacity:0.55; cursor:pointer; }
   .soon-pill { font-size:8px; background:rgba(255,206,88,0.2); color:var(--yellow); border-radius:10px; padding:1px 6px; margin-left:3px; font-weight:700; letter-spacing:0.06em; vertical-align:middle; }
   .loc-tab.active { background:var(--yellow); color:var(--bg); }
   .loc-slides-wrap { position:absolute; inset:0; display:flex; transition:transform 0.65s cubic-bezier(0.4,0,0.2,1); }
@@ -233,7 +232,7 @@
   }
 
   /* ══ FOOTER ══ */
-  #footer-section { background:var(--bg); }
+  #footer-section { background:var(--bg); scroll-snap-align: end; scroll-snap-stop: always; }
   footer { padding:44px 28px 48px; width:100%; }
   .footer-logo { font-family:"Fredoka One",cursive; font-size:26px; color:var(--cream); margin-bottom:3px; letter-spacing:0.04em; }
   .footer-logo span { color:var(--yellow); }
@@ -312,9 +311,9 @@
 <!-- ══ FOLD 2 · LOCATIONS ══ -->
 <section class="snap-section" id="locations">
   <div class="loc-tabs">
-    <div class="loc-tab active" onclick="switchLoc(0)">Estancia</div>
-    <div class="loc-tab" onclick="switchLoc(1)">Eastwood</div>
-    <div class="loc-tab loc-tab-soon" onclick="switchLoc(2)" style="cursor:pointer">Greenhills <span class="soon-pill">Soon</span></div>
+    <div class="loc-tab active" onclick="switchLoc(0,true)">Estancia</div>
+    <div class="loc-tab" onclick="switchLoc(1,true)">Eastwood</div>
+    <div class="loc-tab loc-tab-soon" onclick="switchLoc(2,true)" style="cursor:pointer">Greenhills <span class="soon-pill">Soon</span></div>
   </div>
   <div class="loc-slides-wrap" id="locSlides">
 
@@ -356,9 +355,9 @@
 
   </div>
   <div class="loc-dots" id="locDots">
-    <div class="loc-dot active"></div>
-    <div class="loc-dot"></div>
-    <div class="loc-dot"></div>
+    <div class="loc-dot active" onclick="switchLoc(0,true)"></div>
+    <div class="loc-dot" onclick="switchLoc(1,true)"></div>
+    <div class="loc-dot" onclick="switchLoc(2,true)"></div>
   </div>
   <div class="loc-info">
     <p class="loc-info-name" id="locName">Estancia</p>
@@ -630,8 +629,9 @@ const locations = [
 
 let currentLoc = 0, autoTimer;
 
-function switchLoc(idx, resetTimer=true) {
-  if (resetTimer) stopAuto();
+function switchLoc(idx, userAction) {
+  // userAction=true means human clicked/swiped - stop auto rotation permanently
+  if (userAction) stopAuto();
   currentLoc = idx;
   document.getElementById('locSlides').style.transform = `translateX(${-idx*100}%)`;
   document.querySelectorAll('.loc-tab').forEach((t,i) => t.classList.toggle('active', i===idx));
@@ -642,10 +642,11 @@ function switchLoc(idx, resetTimer=true) {
   document.getElementById('locHours').innerHTML = l.hours.replace('\n','<br>');
   var mapsEl = document.getElementById('locMaps');
   if (mapsEl) { mapsEl.href = l.maps; mapsEl.style.display = l.maps === '#' ? 'none' : ''; }
-  if (resetTimer) restartAuto();
+  // Never call restartAuto here - auto-rotate only runs until first user interaction
 }
 
 function switchThumb(locKey, imgIdx, el) {
+  stopAuto();
   const loc = locations.find(l => l.key === locKey);
   const img = document.getElementById(loc.mainId).querySelector('img');
   if (locImages[locKey][imgIdx]) img.src = locImages[locKey][imgIdx];
@@ -658,7 +659,7 @@ var userNavigated = false;
 function restartAuto() {
   if (userNavigated) return; // user has taken control - don't restart
   clearInterval(autoTimer);
-  autoTimer = setInterval(() => switchLoc((currentLoc+1) % locations.length, false), 4500);
+  autoTimer = setInterval(() => { if (!userNavigated) switchLoc((currentLoc+1) % locations.length, false); }, 4500);
 }
 
 function stopAuto() {
@@ -697,7 +698,7 @@ let swipeStart = 0;
 document.getElementById('locations').addEventListener('touchstart', e => { swipeStart = e.touches[0].clientX; }, {passive:true});
 document.getElementById('locations').addEventListener('touchend', e => {
   const d = swipeStart - e.changedTouches[0].clientX;
-  if (Math.abs(d) > 40) switchLoc(Math.max(0, Math.min(1, currentLoc + (d>0?1:-1))));
+  if (Math.abs(d) > 40) switchLoc(Math.max(0, Math.min(2, currentLoc + (d>0?1:-1))), true);
 }, {passive:true});
 restartAuto();
 
@@ -948,7 +949,10 @@ function initSvcSlides() {
       var src = BARKHAUS_IMAGES.services[s.imgKey];
       imgs = Array.isArray(src) ? src : (src ? [src] : []);
     }
-    svcCarousels[i] = { idx: 0, imgs: imgs };
+    
+    // Demo: if only 1 image, repeat it to show carousel UI
+    if (imgs.length === 1) imgs = [imgs[0], imgs[0], imgs[0]];
+svcCarousels[i] = { idx: 0, imgs: imgs };
 
     var carouselHtml = buildSvcCarouselHtml(imgs, i);
 
