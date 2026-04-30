@@ -2394,10 +2394,13 @@ function confirmPaymentReturn(ref) {
 }
 
 // ── SUBMIT (redirects to PayMongo) ──
+var _submitting = false; // global lock - prevents double-submit on fast double-tap
+
 function submitBooking() {
+  if (_submitting) return; // already in flight
+  _submitting = true;
   var btn = document.getElementById('btnNext');
-  btn.textContent = 'Processing...';
-  btn.disabled = true;
+  if (btn) { btn.textContent = 'Processing...'; btn.disabled = true; }
 
   // Build payload (reuse existing buildPayload logic)
   var svc = booking.service;
@@ -2512,6 +2515,7 @@ function submitBooking() {
     if (!data.checkout_url) {
       buildSummary();
       updateBottomNavForSummary();
+      _submitting = false;
       showToast('No checkout URL returned. Check edge function logs.', 6000);
       btn.textContent = 'Confirm Booking';
       btn.disabled = false;
@@ -2521,13 +2525,13 @@ function submitBooking() {
     window.location.href = data.checkout_url;
   })
   .catch(function(err) {
+    _submitting = false;
     clearTimeout(payTimeout);
     console.error('Payment error:', err);
     buildSummary();
     updateBottomNavForSummary();
     showToast('Connection error: ' + err.message, 6000);
-    btn.textContent = 'Confirm Booking';
-    btn.disabled = false;
+    if (btn) { btn.textContent = 'Confirm Booking'; btn.disabled = false; }
   });
 }
 </script>
