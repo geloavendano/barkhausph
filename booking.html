@@ -124,7 +124,9 @@
   .file-list { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
   .file-item { background: rgba(77,150,185,0.1); border: 1px solid rgba(77,150,185,0.25); border-radius: 8px; padding: 8px 12px; font-size: 12px; color: var(--cream-m); display: flex; justify-content: space-between; align-items: center; }
   .file-remove { color: var(--error); cursor: pointer; font-size: 14px; font-weight: 700; }
-  .waiver-box { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; max-height: 160px; overflow-y: auto; font-size: 12px; color: var(--cream-m); line-height: 1.7; margin-bottom: 14px; scrollbar-width: thin; scrollbar-color: var(--mid) transparent; }
+  .waiver-list { padding-left:18px; margin:6px 0 0; }
+  .waiver-list li { font-size:12px; color:var(--cream-m); line-height:1.6; margin-bottom:8px; }
+  .waiver-box { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; max-height:220px; overflow-y: auto; font-size: 12px; color: var(--cream-m); line-height: 1.7; margin-bottom: 14px; scrollbar-width: thin; scrollbar-color: var(--mid) transparent; }
   .waiver-box h4 { font-family: "Fredoka One", cursive; font-size: 15px; color: var(--cream); margin-bottom: 8px; }
   .waiver-box p { margin-bottom: 8px; }
   .checkbox-row { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 14px; cursor: pointer; }
@@ -323,22 +325,22 @@
       <div class="pet-type-btn" onclick="selectGroomSize(this,'small_dog')">
         <span class="pt-emoji">&#128054;</span>
         <span class="pt-label">Small Dog</span>
-        <span class="pt-price">up to 10kg</span>
+        <span class="pt-price">Up to 6kg (13 lbs)</span>
       </div>
       <div class="pet-type-btn" onclick="selectGroomSize(this,'medium_dog')">
         <span class="pt-emoji">&#128054;</span>
         <span class="pt-label">Medium Dog</span>
-        <span class="pt-price">10-20kg</span>
+        <span class="pt-price">Up to 15kg (33 lbs)</span>
       </div>
       <div class="pet-type-btn" onclick="selectGroomSize(this,'large_dog')">
         <span class="pt-emoji">&#128054;</span>
         <span class="pt-label">Large Dog</span>
-        <span class="pt-price">20-35kg</span>
+        <span class="pt-price">Up to 30kg (66 lbs)</span>
       </div>
       <div class="pet-type-btn" onclick="selectGroomSize(this,'giant_dog')">
         <span class="pt-emoji">&#128054;</span>
         <span class="pt-label">Giant Dog</span>
-        <span class="pt-price">35kg+</span>
+        <span class="pt-price">Over 30kg (66 lbs)</span>
       </div>
       <div class="pet-type-btn" onclick="selectGroomSize(this,'cat')" style="grid-column:span 2">
         <span class="pt-emoji">&#128049;</span>
@@ -635,10 +637,10 @@
     <label class="form-label">Size <span class="required">*</span></label>
     <select class="form-select" id="petSizeSelect">
       <option value="">Select size...</option>
-      <option value="small_dog">Small Dog (up to 10kg)</option>
-      <option value="medium_dog">Medium Dog (10-20kg)</option>
-      <option value="large_dog">Large Dog (20-35kg)</option>
-      <option value="giant_dog">Giant Dog (35kg+)</option>
+      <option value="small_dog">Small Dog (up to 6kg / 13 lbs)</option>
+      <option value="medium_dog">Medium Dog (up to 15kg / 33 lbs)</option>
+      <option value="large_dog">Large Dog (up to 30kg / 66 lbs)</option>
+      <option value="giant_dog">Giant Dog (over 30kg / 66 lbs)</option>
       <option value="cat">Cat</option>
     </select>
   </div>
@@ -836,35 +838,135 @@
 <!-- STEP 7: WAIVERS -->
 <div class="step-panel" id="step7">
   <p class="step-eyebrow" id="s7eyebrow">Step 7</p>
-  <h1 class="step-title">Waivers &amp; consent</h1>
-  <p class="step-subtitle">Please read and agree before reviewing your booking.</p>
+  <h1 class="step-title">Waivers &amp; Consent</h1>
+  <p class="step-subtitle">Please read each statement and check to confirm your agreement.</p>
 
-  <div class="waiver-box">
-    <h4>General Terms &amp; Liability Waiver</h4>
-    <p>By confirming this booking, you acknowledge that Barkhaus Pet Hotel is not liable for any illness, injury, death, escape, or loss of your pet during their stay, unless caused by gross negligence on our part.</p>
-    <p>You authorize Barkhaus staff to seek emergency veterinary care if deemed necessary, and you agree to cover the costs of such care. Barkhaus reserves the right to refuse service if a pet is deemed a safety risk.</p>
-  </div>
-  <div class="checkbox-row" onclick="toggleCheck('waiverGeneral')">
-    <div class="checkbox-box" id="waiverGeneral"></div>
-    <span class="checkbox-label">I have read and agree to the <strong>General Terms and Liability Waiver</strong>.</span>
-  </div>
-
-  <div id="studioWaiver" style="display:none">
+  <!-- ── GROOMING WAIVERS ── -->
+  <div id="groomingWaivers" style="display:none">
     <div class="waiver-box">
-      <h4>Studio Usage Agreement</h4>
-      <p>I agree to handle all studio equipment and props with care. I understand that any damage to equipment may be charged accordingly. Barkhaus staff reserve the right to end a session early if the pet appears distressed.</p>
+      <h4>Grooming Waiver</h4>
+      <ol class="waiver-list">
+        <li>I, the undersigned, hereby acknowledge that I am the legal owner or authorized agent of the pet listed and authorize Barkhaus to perform grooming services as requested. I understand that Barkhaus will use all reasonable precautions to ensure my pet&#39;s safety and comfort during grooming.</li>
+        <li>I confirm that my pet is current on all required vaccinations, including anti-rabies.</li>
+        <li>I understand that while my dog is fully vaccinated, vaccines are not 100% foolproof and there is still a minimal risk that my dog may contract a contagious virus/disease. I agree that this may occur.</li>
+        <li>I have disclosed all known medical conditions, allergies, sensitivities, and/or behavioral issues that may affect the grooming process.</li>
+        <li>I understand that grooming may expose hidden medical conditions, such as skin irritations, parasites, or lumps, and Barkhaus is not liable for any pre-existing or discovered health conditions.</li>
+        <li>I acknowledge that young, senior, or pets with pre-existing conditions may be at higher risk during grooming. I waive any claims against Barkhaus should a health issue arise or worsen during or after the session.</li>
+        <li>I certify that my pet has not shown aggression toward people or other animals unless otherwise disclosed.</li>
+        <li>I understand that if my pet becomes aggressive or unmanageable, Barkhaus may stop or modify services at their discretion.</li>
+        <li>I acknowledge the risk of skin irritation, nicks, or cuts due to matting and agree not to hold Barkhaus responsible for resulting issues.</li>
+        <li>I understand that Barkhaus will attempt to notify me before significant shaving but may proceed if necessary for the pet&#39;s health and comfort.</li>
+        <li>While Barkhaus takes every precaution, grooming involves sharp tools and moving animals and accidents can happen. I agree that Barkhaus shall not be held liable for any injury or condition arising during or after grooming, provided reasonable care was taken.</li>
+        <li>In case of emergency, Barkhaus will attempt to contact me. If unreachable and my pet needs urgent care, I authorize Barkhaus to seek veterinary services at their discretion and I accept full responsibility for all veterinary charges.</li>
+        <li>I hereby release and hold harmless Barkhaus, its owners, staff, and affiliates from any and all claims arising from grooming services, including injury, illness, stress, or death, unless resulting from proven negligence.</li>
+        <li>I certify that I have read, understood, and voluntarily agree to these terms. This waiver shall remain in effect for all future grooming appointments unless revoked in writing.</li>
+      </ol>
     </div>
-    <div class="checkbox-row" onclick="toggleCheck('waiverStudio')">
-      <div class="checkbox-box" id="waiverStudio"></div>
-      <span class="checkbox-label">I agree to the <strong>Studio Usage Agreement</strong>.</span>
+    <div class="checkbox-row" onclick="toggleCheck(&#39;waiverGeneral&#39;)">
+      <div class="checkbox-box" id="waiverGeneral"></div>
+      <span class="checkbox-label">I have read and agree to the <strong>Grooming Waiver</strong>.</span>
     </div>
   </div>
 
-  <div class="waiver-box">
-    <h4>Photo &amp; Media Consent</h4>
-    <p>I consent to Barkhaus photographing or recording my pet during their visit for use on social media, marketing materials, and our website.</p>
+  <!-- ── DAYCARE WAIVERS ── -->
+  <div id="daycareWaivers" style="display:none">
+    <div class="waiver-box">
+      <h4>Daycare Waiver</h4>
+      <ol class="waiver-list">
+        <li>I confirm that I am the owner of the pet or have been authorized by the owner to take responsibility for the pet.</li>
+        <li>In the event that I am unable to pick up my dog as scheduled, I acknowledge Barkhaus&#39; prerogative to extend my dog&#39;s stay for additional hours or days, subject to corresponding charges.</li>
+        <li>I certify that my dog is in good health. In the event of a medical emergency and I am unreachable, I authorize Barkhaus staff to contact my veterinarian or any available veterinarian and seek necessary medical attention. Should I refuse Barkhaus&#39; recommendation to seek immediate care, I release Barkhaus from any liability arising from such decision.</li>
+        <li>I confirm that my pet has complete and updated vaccinations and is free from fleas and any communicable diseases. I understand that vaccines are not 100% effective and that there remains a minimal risk of contracting illness, which I fully accept.</li>
+        <li>I understand that dogs in heat are not allowed to interact with other dogs. By signing this waiver, I acknowledge that my dog may interact with other dogs, and I accept full responsibility if my dog is found to be in heat during its stay, including any consequences such as accidental breeding. I release Barkhaus and its staff from any related liability.</li>
+        <li>I acknowledge that participation in Barkhaus play park activities is at my own risk. I understand that risks such as injury to my dog, other dogs, or individuals may still occur despite proper supervision.</li>
+        <li>I agree that if my dog causes injury to another dog or person, I will assume full responsibility and release Barkhaus from any related liability.</li>
+        <li>I hereby voluntarily release, discharge, and agree to indemnify and hold harmless Barkhaus from any and all claims arising from my participation or my dog&#39;s participation in any Barkhaus activities.</li>
+        <li>I certify that I have read, understood, and agree to abide by all Barkhaus rules and regulations. I confirm all information provided is true and accurate, and that I am at least eighteen (18) years of age.</li>
+        <li>I understand that while Barkhaus screens all dogs, not all dogs may be suitable for daycare. Barkhaus reserves the right to remove any dog at its discretion. In such cases, daycare packages are non-refundable but may be transferred.</li>
+        <li>I grant Barkhaus permission to use any photos or videos of me and my pet taken within the facility for promotional, marketing, and social media purposes.</li>
+        <li>By signing this agreement, I acknowledge and accept all house rules set by Barkhaus.</li>
+        <li>I understand and agree that if my dog remains at Barkhaus for three (3) days or more with an unsettled bill and without any communication from me, my dog will be considered abandoned. In such cases, I relinquish ownership rights, and Barkhaus reserves the right to place the dog for adoption or appropriate care.</li>
+      </ol>
+    </div>
+    <div class="checkbox-row" onclick="toggleCheck(&#39;waiverGeneral&#39;)">
+      <div class="checkbox-box" id="waiverGeneral"></div>
+      <span class="checkbox-label">I have read and agree to the <strong>Daycare Waiver</strong>.</span>
+    </div>
   </div>
-  <div class="checkbox-row" onclick="toggleCheck('waiverMedia')">
+
+  <!-- ── HOTEL WAIVERS ── -->
+  <div id="hotelWaivers" style="display:none">
+    <div class="waiver-box">
+      <h4>Hotel Waiver</h4>
+      <ol class="waiver-list">
+        <li>I confirm that I am the legal owner of the pet or have been authorized by the owner to take responsibility for the pet.</li>
+        <li>In the event that I am unable to pick up my pet as scheduled, I acknowledge Barkhaus&#39; prerogative to extend my pet&#39;s stay for additional hours or days, subject to corresponding charges.</li>
+        <li>I acknowledge that while my pet may be healthy upon check-in, illness may still occur during their stay. In the event of an emergency where I am unreachable, I authorize Barkhaus to bring my pet to a veterinary clinic for immediate care. All major medical decisions will require my consent when possible, and all related expenses shall be my responsibility. I release Barkhaus from any liability, recognizing that illness may occur, particularly in enclosed air-conditioned environments, especially for pets not accustomed to such conditions.</li>
+        <li>I confirm that my pet has complete and updated vaccinations and is free from fleas and any communicable diseases. I understand that vaccines are not 100% foolproof and that there remains a minimal risk of contracting illness, which I fully accept.</li>
+        <li>I understand that dogs in heat are not permitted to interact with other dogs. By signing this waiver, I acknowledge that my dog may interact with other dogs and accept full responsibility if my dog is found to be in heat during her stay, including any consequences such as accidental breeding. I release Barkhaus and its staff from all related liability.</li>
+        <li>By signing below, I acknowledge and agree to all house rules set by Barkhaus. I understand that if my dog remains at Barkhaus for fifteen (15) days or more with an unsettled bill and without communication, my dog will be considered abandoned, and Barkhaus reserves the right to place the dog for adoption or appropriate care.</li>
+      </ol>
+    </div>
+    <div class="checkbox-row" onclick="toggleCheck(&#39;waiverGeneral&#39;)">
+      <div class="checkbox-box" id="waiverGeneral"></div>
+      <span class="checkbox-label">I have read and agree to the <strong>Hotel Waiver</strong>.</span>
+    </div>
+
+    <!-- Play park consent - shown conditionally when playparkConsent = yes -->
+    <div id="playparkWaiverSection" style="display:none">
+      <div class="waiver-box" style="margin-top:12px">
+        <h4>Play Park Consent</h4>
+        <ol class="waiver-list">
+          <li>I acknowledge that by allowing my dog to use the Barkhaus play park, there are inherent risks involved. Despite proper supervision, I understand that injuries to my dog, other dogs, or individuals may still occur, and I accept these risks.</li>
+          <li>I agree that if my dog causes any injury to other dogs or individuals, I will assume full responsibility and release Barkhaus from any related liability.</li>
+          <li>I hereby voluntarily release, forever discharge, and agree to indemnify and hold harmless Barkhaus from any and all claims arising from my dog&#39;s participation in any activities, including the use of Barkhaus facilities and equipment, even in cases alleging negligence.</li>
+          <li>Barkhaus reserves the right to refuse or permanently remove any dog from daycare if deemed unsuitable. In such cases, daycare packages are non-refundable but may be transferred.</li>
+          <li>I certify that I have read, understood, and agree to abide by all terms and policies. I confirm all information provided is true and accurate, and that I am at least eighteen (18) years of age.</li>
+        </ol>
+      </div>
+      <div class="checkbox-row" onclick="toggleCheck(&#39;waiverPlaypark&#39;)">
+        <div class="checkbox-box" id="waiverPlaypark"></div>
+        <span class="checkbox-label">I agree to the <strong>Play Park Consent</strong>.</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── VACCINE DECLARATION (all services) ── -->
+  <div class="waiver-box" style="margin-top:12px">
+    <h4>Vaccine &amp; Health Declaration</h4>
+    <p id="vaccineWaiverText">I acknowledge and agree that my dog may acquire illnesses or diseases due to outdated or incomplete vaccinations, and that even with complete and updated vaccinations, there remains a minimal risk of contracting illness. I will not hold Barkhaus liable for any such occurrences.</p>
+  </div>
+  <div class="checkbox-row" onclick="toggleCheck(&#39;vaccineWaiver&#39;)">
+    <div class="checkbox-box" id="vaccineWaiver"></div>
+    <span class="checkbox-label">I agree to the <strong>Vaccine &amp; Health Declaration</strong>.</span>
+  </div>
+
+  <!-- ── SENIOR / PRE-EXISTING CONDITIONS (conditional) ── -->
+  <div id="seniorWaiverSection" style="display:none">
+    <div class="waiver-box" style="margin-top:12px">
+      <h4>Senior &amp; Pre-existing Conditions Waiver</h4>
+      <ol class="waiver-list">
+        <li>I acknowledge that I am leaving my dog, who is a senior dog and/or has pre-existing medical conditions, in the care of Barkhaus.</li>
+        <li>I am aware that senior dogs and dogs with existing medical conditions may be at increased risk for health complications, including sudden illness or death, especially in a boarding environment.</li>
+        <li>In the event of a medical emergency, Barkhaus will make every reasonable effort to contact me. If I cannot be reached, I authorize Barkhaus to seek immediate veterinary care at their discretion, and I agree to be responsible for all costs incurred.</li>
+        <li>I have disclosed all known medical conditions, medications, and special care instructions for my dog.</li>
+        <li>I agree that Barkhaus may charge Special Handling Fees due to my dog&#39;s age and/or pre-existing condition(s). I understand that Barkhaus reserves the right to limit my dog&#39;s access to the play park and/or exposure to other dogs in the interest of my dog&#39;s well-being.</li>
+        <li>I release Barkhaus from any liability related to the worsening of any existing conditions or the occurrence of age-related complications during or after the stay.</li>
+        <li>I hereby voluntarily release, forever discharge, and agree to indemnify and hold harmless Barkhaus, its staff, owners, and affiliates, from any and all claims arising out of or connected with the services provided, including those involving negligent acts or omissions.</li>
+      </ol>
+    </div>
+    <div class="checkbox-row" onclick="toggleCheck(&#39;seniorWaiver&#39;)">
+      <div class="checkbox-box" id="seniorWaiver"></div>
+      <span class="checkbox-label">I agree to the <strong>Senior &amp; Pre-existing Conditions Waiver</strong>.</span>
+    </div>
+  </div>
+
+  <!-- ── PHOTO CONSENT (all services) ── -->
+  <div class="waiver-box" style="margin-top:12px">
+    <h4>Photo &amp; Media Consent</h4>
+    <p>I consent to Barkhaus taking photographs or videos of my pet during grooming for promotional use, including social media and marketing materials.</p>
+  </div>
+  <div class="checkbox-row" onclick="toggleCheck(&#39;waiverMedia&#39;)">
     <div class="checkbox-box" id="waiverMedia"></div>
     <span class="checkbox-label">I <strong>consent</strong> to photos and videos of my pet being used by Barkhaus.</span>
   </div>
@@ -941,10 +1043,10 @@ var GROOM_PRICES = {
 };
 var FACE_TRIM_PRICES = { small_dog:200, medium_dog:250, large_dog:350, giant_dog:450, cat:400 };
 var GROOM_SERVICES = [
-  { key:'bath_dry',  name:'Bath and Dry',   duration:'30 minutes' },
-  { key:'basic',     name:'Basic Groom',     duration:'1 hour' },
-  { key:'premium',   name:'Premium Groom',   duration:'2 hours' },
-  { key:'ala_carte', name:'Ala Carte',       duration:'varies' }
+  { key:'bath_dry',  name:'Bath and Dry',   duration:'30 minutes', desc:'Bath, Blow Dry and Brush Out' },
+  { key:'basic',     name:'Basic Groom',     duration:'1 hour',     desc:'Shampoo, Blow Dry, Brush Out, Teeth Brushing, Sanitary Clean, Paw Pad Trim, Nail Trim and Filing, Ear Cleaning, Anal Gland Expression' },
+  { key:'premium',   name:'Premium Groom',   duration:'2 hours',    desc:'Customized Haircut, Face Trim, Shampoo, Blow Dry, Brush Out, Teeth Brushing, Sanitary Clean, Paw Pad Trim, Nail Trim and Filing, Ear Cleaning, Anal Gland Expression' },
+  { key:'ala_carte', name:'Ala Carte',       duration:'varies',     desc:'Choose individual services below' }
 ];
 var ADDONS = [
   { key:'nail_trim',  name:'Nail Trim and Filing',   price:150,  assessment:false },
@@ -957,7 +1059,8 @@ var ADDONS = [
   { key:'anal_gland', name:'Anal Gland Expression',   price:150,  assessment:false },
   { key:'face_trim',  name:'Face Trim',                price:0,    assessment:false, sizeDependent:true },
   { key:'deshed',     name:'Deshedding',               price:0,    assessment:true },
-  { key:'demat',      name:'Dematting',                price:0,    assessment:true }
+  { key:'demat',      name:'Dematting',                price:0,    assessment:true },
+  { key:'premium_shampoo', name:'Premium Shampoo', price:100, assessment:false },
 ];
 // Add-ons enabled per service (null = all enabled)
 var ADDON_ENABLED = {
@@ -1321,13 +1424,16 @@ function renderGroomServices() {
   var grid = document.getElementById('groomSvcGrid');
   grid.innerHTML = GROOM_SERVICES.map(function(s) {
     var price = GROOM_PRICES[s.key][size] || 0;
-    var priceLabel = s.key === 'ala_carte' ? 'Ala Carte' : ('\u20b1' + price.toLocaleString());
+    var priceLabel = s.key === 'ala_carte' ? 'Choose services below' : ('₱' + price.toLocaleString());
     return '<div class="svc-card" onclick="selectGroomService(this,\'' + s.key + '\',' + price + ')">' +
       '<div class="svc-card-radio"></div>' +
-      '<div class="svc-card-info"><div class="svc-card-name">' + s.name + '</div>' +
-      '<div class="svc-card-duration">' + s.duration + '</div></div>' +
+      '<div class="svc-card-info">' +
+        '<div class="svc-card-name">' + s.name + '</div>' +
+        '<div class="svc-card-duration">' + s.duration + '</div>' +
+        '<div class="svc-card-desc" style="font-size:11px;color:var(--mid);margin-top:3px;line-height:1.4">' + s.desc + '</div>' +
+      '</div>' +
       '<div class="svc-card-price">' + priceLabel + '</div>' +
-      '</div>';
+    '</div>';
   }).join('');
 }
 
@@ -2218,6 +2324,26 @@ function validateStep(step) {
 }
 
 // ── SUMMARY ──
+function buildWaiverTexts() {
+  var svc = booking.service;
+  var texts = {};
+  var WAIVER_TEXT = {
+    grooming: 'I, the undersigned, hereby acknowledge that I am the legal owner or authorized agent of the pet listed and authorize Barkhaus to perform grooming services as requested. I understand that Barkhaus will use all reasonable precautions to ensure my pet\'s safety and comfort during the grooming process. I confirm that my pet is current on all required vaccinations, including anti-rabies. I understand that while my dog is fully vaccinated, vaccines are not 100% foolproof and there is still a minimal risk that my dog may contract a contagious virus/disease. I agree that this may occur. I have disclosed all known medical conditions, allergies, sensitivities, and/or behavioral issues that may affect the grooming process. I understand that grooming may expose hidden medical conditions, such as skin irritations, parasites, or lumps, and Barkhaus is not liable for any pre-existing or discovered health conditions. I acknowledge that young, senior, or pets with pre-existing conditions may be at higher risk during grooming. I waive any claims against Barkhaus should a health issue arise or worsen during or after the session. I certify that my pet has not shown aggression toward people or other animals unless otherwise disclosed. I understand that if my pet becomes aggressive or unmanageable, Barkhaus may stop or modify services at their discretion. I acknowledge the risk of skin irritation, nicks, or cuts due to matting and agree not to hold Barkhaus responsible for resulting issues. I understand that Barkhaus will attempt to notify me before significant shaving but may proceed if necessary. While Barkhaus takes every precaution, grooming involves sharp tools and moving animals and accidents can happen. I agree that Barkhaus shall not be held liable for any injury or condition arising during or after grooming, provided reasonable care was taken. In case of emergency, Barkhaus will attempt to contact me. If unreachable and my pet needs urgent care, I authorize Barkhaus to seek veterinary services at their discretion and I accept full responsibility for all veterinary charges. I hereby release and hold harmless Barkhaus, its owners, staff, and affiliates from any and all claims arising from grooming services provided. I certify that I have read, understood, and voluntarily agree to these terms. This waiver shall remain in effect for all future grooming appointments unless revoked in writing.',
+    daycare: 'I confirm that I am the owner of the pet or have been authorized by the owner to take responsibility for the pet. In the event that I am unable to pick up my dog as scheduled, I acknowledge Barkhaus\' prerogative to extend my dog\'s stay for additional hours or days, subject to corresponding charges. I certify that my dog is in good health. In the event of a medical emergency and I am unreachable, I authorize Barkhaus staff to contact my veterinarian or any available veterinarian and seek necessary medical attention. Should I refuse Barkhaus\' recommendation to seek immediate care, I release Barkhaus from any liability arising from such decision. I confirm that my pet has complete and updated vaccinations and is free from fleas and any communicable diseases. I understand that vaccines are not 100% effective and that there remains a minimal risk of contracting illness, which I fully accept. I understand that dogs in heat are not allowed to interact with other dogs. By signing this waiver, I acknowledge that my dog may interact with other dogs, and I accept full responsibility if my dog is found to be in heat during its stay, including any consequences such as accidental breeding. I release Barkhaus and its staff from any related liability. I acknowledge that participation in Barkhaus play park activities is at my own risk. I understand that risks such as injury to my dog, other dogs, or individuals may still occur despite proper supervision. I agree that if my dog causes injury to another dog or person, I will assume full responsibility and release Barkhaus from any related liability. I hereby voluntarily release, discharge, and agree to indemnify and hold harmless Barkhaus from any and all claims arising from my participation or my dog\'s participation in any Barkhaus activities. I certify that I have read, understood, and agree to abide by all Barkhaus rules and regulations. I confirm all information provided is true and accurate, and that I am at least eighteen (18) years of age. I understand that while Barkhaus screens all dogs, not all dogs may be suitable for daycare. Barkhaus reserves the right to remove any dog at its discretion. In such cases, daycare packages are non-refundable but may be transferred. I grant Barkhaus permission to use any photos or videos of me and my pet taken within the facility for promotional, marketing, and social media purposes. By signing this agreement, I acknowledge and accept all house rules set by Barkhaus. I understand and agree that if my dog remains at Barkhaus for three (3) days or more with an unsettled bill and without any communication from me, my dog will be considered abandoned. In such cases, I relinquish ownership rights, and Barkhaus reserves the right to place the dog for adoption or appropriate care.',
+    hotel: 'I confirm that I am the legal owner of the pet or have been authorized by the owner to take responsibility for the pet. In the event that I am unable to pick up my pet as scheduled, I acknowledge Barkhaus\' prerogative to extend my pet\'s stay for additional hours or days, subject to corresponding charges. I acknowledge that while my pet may be healthy upon check-in, illness may still occur during their stay. In the event of an emergency where I am unreachable, I authorize Barkhaus to bring my pet to a veterinary clinic for immediate care. All major medical decisions will require my consent when possible, and all related expenses shall be my responsibility. I release Barkhaus from any liability, recognizing that illness may occur, particularly in enclosed air-conditioned environments, especially for pets not accustomed to such conditions. I confirm that my pet has complete and updated vaccinations and is free from fleas and any communicable diseases. I understand that vaccines are not 100% foolproof and that there remains a minimal risk of contracting illness, which I fully accept. I understand that dogs in heat are not permitted to interact with other dogs. By signing this waiver, I acknowledge that my dog may interact with other dogs and accept full responsibility if my dog is found to be in heat during her stay, including any consequences such as accidental breeding. I release Barkhaus and its staff from all related liability. By signing below, I acknowledge and agree to all house rules set by Barkhaus. I understand that if my dog remains at Barkhaus for fifteen (15) days or more with an unsettled bill and without communication, my dog will be considered abandoned, and Barkhaus reserves the right to place the dog for adoption or appropriate care.',
+    playpark: 'I acknowledge that by allowing my dog to use the Barkhaus play park, there are inherent risks involved. Despite proper supervision, I understand that injuries to my dog, other dogs, or individuals may still occur, and I accept these risks. I agree that if my dog causes any injury to other dogs or individuals, I will assume full responsibility and release Barkhaus from any related liability. I hereby voluntarily release, forever discharge, and agree to indemnify and hold harmless Barkhaus from any and all claims arising from my dog\'s participation in any activities, including the use of Barkhaus facilities and equipment, even in cases alleging negligence. Barkhaus reserves the right to refuse or permanently remove any dog from daycare if deemed unsuitable. In such cases, daycare packages are non-refundable but may be transferred. I certify that I have read, understood, and agree to abide by all terms and policies. I confirm all information provided is true and accurate, and that I am at least eighteen (18) years of age.',
+    vaccine: 'I acknowledge and agree that my dog may acquire illnesses or diseases due to outdated or incomplete vaccinations, and that even with complete and updated vaccinations, there remains a minimal risk of contracting illness. I will not hold Barkhaus liable for any such occurrences.',
+    senior: 'I, the undersigned, acknowledge that I am leaving my dog, who is a senior dog and/or has pre-existing medical conditions, in the care of Barkhaus. I am aware that senior dogs and dogs with existing medical conditions may be at increased risk for health complications, including sudden illness or death, especially in a boarding environment. In the event of a medical emergency, Barkhaus will make every reasonable effort to contact me. If I cannot be reached, I authorize Barkhaus to seek immediate veterinary care at their discretion, and I agree to be responsible for all costs incurred. I have disclosed all known medical conditions, medications, and special care instructions for my dog. I agree that Barkhaus may charge Special Handling Fees due to my dog\'s age and/or pre-existing condition(s). I understand that Barkhaus reserves the right to limit my dog\'s access to the play park and/or exposure to other dogs in the interest of my dog\'s well-being. I release Barkhaus from any liability related to the worsening of any existing conditions or the occurrence of age-related complications during or after the stay. I hereby voluntarily release, forever discharge, and agree to indemnify and hold harmless Barkhaus, its staff, owners, and affiliates, from any and all claims arising out of or connected with the services provided, including those involving negligent acts or omissions.',
+    media: 'I consent to Barkhaus taking photographs or videos of my pet during grooming for promotional use, including social media and marketing materials.',
+  };
+  texts.general  = WAIVER_TEXT[svc] || '';
+  texts.vaccine  = WAIVER_TEXT.vaccine;
+  texts.media    = WAIVER_TEXT.media;
+  if (booking.playparkConsent) texts.playpark = WAIVER_TEXT.playpark;
+  var seniorSec = document.getElementById('seniorWaiverSection');
+  if (seniorSec && seniorSec.style.display !== 'none') texts.senior = WAIVER_TEXT.senior;
+  return texts;
+}
 function buildSummary() {
   collectStep(6);
   var svc = booking.service;
@@ -2468,6 +2594,8 @@ function submitBooking() {
     waiverSeniorMedical:document.getElementById('seniorWaiver')?document.getElementById('seniorWaiver').classList.contains('checked'):false,
     waiverStudio:document.getElementById('waiverStudio')?document.getElementById('waiverStudio').classList.contains('checked'):false,
     waiverMedia:document.getElementById('waiverMedia').classList.contains('checked'),
+    waiverPlaypark:document.getElementById('waiverPlaypark')?document.getElementById('waiverPlaypark').classList.contains('checked'):false,
+    waiverTexts: buildWaiverTexts(),
     subtotal:subtotal, discountAmount:discAmt, total:total,
   };
 
