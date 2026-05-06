@@ -116,7 +116,7 @@
   .svc-img-carousel { position:relative; width:100%; border-radius:14px; overflow:hidden; flex-shrink:0; background:var(--surface); margin-bottom:14px; }
   .svc-img-track { display:flex; transition:transform 0.35s cubic-bezier(0.4,0,0.2,1); }
   .svc-img-frame { min-width:100%; flex-shrink:0; }
-  .svc-img-frame img { width:100%; height:180px; object-fit:cover; display:block; }
+  .svc-img-frame img { width:100%; height:180px; object-fit:cover; display:block; image-orientation:from-image; }
   .svc-img-btn { position:absolute; top:50%; transform:translateY(-50%); width:30px; height:30px; border-radius:50%; background:rgba(15,28,38,0.65); border:1px solid rgba(255,255,255,0.15); color:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; z-index:5; backdrop-filter:blur(4px); }
   .svc-img-btn svg { pointer-events:none; }
   .svc-img-prev { left:8px; }
@@ -164,10 +164,12 @@
     .services-title { font-size:32px; }
     .svc-slide { flex-direction:row; gap:40px; padding:28px 200px 28px 40px; align-items:flex-start; overflow-y:hidden; }
     .svc-img-col { width:45%; flex-shrink:0; display:flex; flex-direction:column; gap:0; align-self:stretch; }
-    .svc-img-col .svc-img-carousel { width:100%; flex:1; display:flex; flex-direction:column; position:relative; }
-    .svc-img-col .svc-img-track { flex:1; height:100%; }
+    .svc-img-col .svc-img-carousel { width:100%; flex:1; display:flex; flex-direction:column; position:relative; margin-bottom:0; border-radius:16px; }
+    .svc-img-col .svc-img-track { flex:1; min-height:0; }
     .svc-img-col .svc-img-frame { min-width:100%; flex-shrink:0; height:100%; }
-    .svc-img-col .svc-img-frame img { height:100%; min-height:320px; max-height:calc(100svh - 200px); object-fit:cover; }
+    .svc-img-col .svc-img-frame img { width:100%; height:100%; min-height:320px; max-height:calc(100svh - 160px); object-fit:cover; display:block; }
+    .svc-img-col .svc-img-dots { position:absolute; bottom:12px; left:0; right:0; padding:0; background:none; z-index:5; }
+    .svc-img-col .svc-img-btn { z-index:6; }
     .svc-text-col { flex:1; overflow-y:auto; max-height:calc(100svh - 140px); scrollbar-width:none; display:flex; flex-direction:column; }
     .svc-text-col::-webkit-scrollbar { display:none; }
     .svc-slide-name { font-size:30px; }
