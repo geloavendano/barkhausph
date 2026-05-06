@@ -163,9 +163,11 @@
     .services-header { padding:28px 40px 0; text-align:left; }
     .services-title { font-size:32px; }
     .svc-slide { flex-direction:row; gap:40px; padding:28px 200px 28px 40px; align-items:flex-start; overflow-y:hidden; }
-    .svc-img-col { width:45%; flex-shrink:0; display:flex; flex-direction:column; gap:0; }
-    .svc-img-col .svc-img-carousel { width:100%; }
-    .svc-img-col .svc-img-frame img { height:280px; }
+    .svc-img-col { width:45%; flex-shrink:0; display:flex; flex-direction:column; gap:0; align-self:stretch; }
+    .svc-img-col .svc-img-carousel { width:100%; flex:1; display:flex; flex-direction:column; position:relative; }
+    .svc-img-col .svc-img-track { flex:1; height:100%; }
+    .svc-img-col .svc-img-frame { min-width:100%; flex-shrink:0; height:100%; }
+    .svc-img-col .svc-img-frame img { height:100%; min-height:320px; max-height:calc(100svh - 200px); object-fit:cover; }
     .svc-text-col { flex:1; overflow-y:auto; max-height:calc(100svh - 140px); scrollbar-width:none; display:flex; flex-direction:column; }
     .svc-text-col::-webkit-scrollbar { display:none; }
     .svc-slide-name { font-size:30px; }
