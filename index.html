@@ -321,7 +321,8 @@
   .mem-cta { display:inline-block; background:#0F1C26; color:#FFCE58; font-family:"Nunito",sans-serif; font-size:13px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; padding:13px 36px; border-radius:50px; text-decoration:none; width:100%; text-align:center; box-sizing:border-box; }
   @media(min-width:640px) { .mem-title { font-size:40px; } .mem-card { padding:24px 28px; } .mem-benefit { font-size:14px; } }
 </style>
-<script src="images.js">
+<script src="images.js"></script>
+<script>
 /* ══ LIGHTBOX ══ */
 var lbImgs = [];
 var lbIdx = 0;
@@ -821,7 +822,7 @@ const services = [
   {
     tag: 'Daycare',
     name: 'Day Care',
-    imgKey: 'playpark',
+    imgKey: 'daycare',
     desc: 'Drop off your pet for a full day of supervised play, socialisation, and care. Perfect for busy days when your pet deserves great company.',
     features: [
       { label: 'Drop-off and pick-up', detail: 'Flexible hours per branch' },
@@ -1007,7 +1008,7 @@ var svcCarousels = {}; // per-slide carousel state: { idx, imgs }
 function buildSvcThumbnailsHtml(imgs, slideIdx) {
   if (!imgs || !imgs.length) return '';
   var items = imgs.map(function(src, i) {
-    return '<div class="svc-thumb" onclick="lbOpen(' + JSON.stringify(imgs) + ',' + i + ')">' +
+    return '<div class="svc-thumb" onclick=\'lbOpen(' + JSON.stringify(imgs) + ',' + i + ')">' +
            '<img src="' + src + '" alt="" loading="lazy"></div>';
   }).join('');
   return '<div class="svc-thumbs" data-count="' + imgs.length + '">' + items + '</div>';
