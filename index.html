@@ -116,7 +116,7 @@
   .svc-img-carousel { position:relative; width:100%; border-radius:14px; overflow:hidden; flex-shrink:0; background:var(--surface); margin-bottom:14px; }
   .svc-img-track { display:flex; transition:transform 0.35s cubic-bezier(0.4,0,0.2,1); }
   .svc-img-frame { min-width:100%; flex-shrink:0; }
-  .svc-img-frame img { width:100%; height:180px; object-fit:cover; display:block; image-orientation:from-image; }
+  .svc-img-frame img { width:100%; height:180px; object-fit:cover; display:block; }
   .svc-img-btn { position:absolute; top:50%; transform:translateY(-50%); width:30px; height:30px; border-radius:50%; background:rgba(15,28,38,0.65); border:1px solid rgba(255,255,255,0.15); color:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; z-index:5; backdrop-filter:blur(4px); }
   .svc-img-btn svg { pointer-events:none; }
   .svc-img-prev { left:8px; }
@@ -164,12 +164,12 @@
     .services-title { font-size:32px; }
     .svc-slide { flex-direction:row; gap:40px; padding:28px 200px 28px 40px; align-items:flex-start; overflow-y:hidden; }
     .svc-img-col { width:45%; flex-shrink:0; display:flex; flex-direction:column; gap:0; align-self:stretch; }
-    .svc-img-col .svc-img-carousel { width:100%; flex:1; display:flex; flex-direction:column; position:relative; margin-bottom:0; border-radius:16px; }
-    .svc-img-col .svc-img-track { flex:1; min-height:0; }
+    .svc-img-col .svc-img-carousel { width:100%; flex:1; display:flex; flex-direction:column; position:relative; }
+    .svc-img-col .svc-img-track { flex:1; height:100%; }
     .svc-img-col .svc-img-frame { min-width:100%; flex-shrink:0; height:100%; }
-    .svc-img-col .svc-img-frame img { width:100%; height:100%; min-height:320px; max-height:calc(100svh - 160px); object-fit:cover; display:block; }
-    .svc-img-col .svc-img-dots { position:absolute; bottom:12px; left:0; right:0; padding:0; background:none; z-index:5; }
-    .svc-img-col .svc-img-btn { z-index:6; }
+    .svc-img-col .svc-img-frame img { height:100%; min-height:320px; max-height:calc(100svh - 200px); object-fit:cover; }
+    .svc-img-col { width:44%; flex-shrink:0; }
+    .svc-img-col .svc-thumbs { grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:0; }
     .svc-text-col { flex:1; overflow-y:auto; max-height:calc(100svh - 140px); scrollbar-width:none; display:flex; flex-direction:column; }
     .svc-text-col::-webkit-scrollbar { display:none; }
     .svc-slide-name { font-size:30px; }
@@ -273,6 +273,32 @@
   .svc-carousel[data-count="1"] .svc-carousel-btn,
   .svc-carousel[data-count="1"] .svc-carousel-dots { display:none; }
 
+
+  /* ══ SERVICE IMAGE THUMBNAILS ══ */
+  .svc-thumbs { display:grid; grid-template-columns:repeat(4,1fr); gap:5px; margin-bottom:14px; }
+  .svc-thumb { aspect-ratio:1/1; overflow:hidden; border-radius:8px; cursor:pointer; background:var(--surface); }
+  .svc-thumb img { width:100%; height:100%; object-fit:cover; display:block; image-orientation:from-image; transition:opacity 0.15s; }
+  .svc-thumb:hover img { opacity:0.82; }
+  .svc-thumbs[data-count="1"] .svc-thumb { grid-column:span 4; aspect-ratio:16/9; }
+  .svc-thumbs[data-count="2"] .svc-thumb { grid-column:span 2; }
+  .svc-thumbs[data-count="3"] .svc-thumb:first-child { grid-column:span 4; aspect-ratio:16/9; }
+
+  /* ══ LIGHTBOX ══ */
+  .lb-overlay { display:none; position:fixed; inset:0; z-index:900; background:rgba(0,0,0,0.93); align-items:center; justify-content:center; }
+  .lb-overlay.open { display:flex; }
+  .lb-img-wrap { position:relative; display:flex; align-items:center; justify-content:center; max-width:92vw; max-height:88vh; }
+  .lb-img { max-width:90vw; max-height:85vh; object-fit:contain; border-radius:6px; display:block; image-orientation:from-image; }
+  .lb-close { position:absolute; top:14px; right:18px; width:36px; height:36px; background:rgba(255,255,255,0.12); border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#fff; z-index:10; }
+  .lb-close:hover { background:rgba(255,255,255,0.22); }
+  .lb-btn { position:fixed; top:50%; transform:translateY(-50%); width:44px; height:44px; background:rgba(255,255,255,0.12); border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#fff; z-index:10; }
+  .lb-btn:hover { background:rgba(255,255,255,0.22); }
+  .lb-prev { left:14px; }
+  .lb-next { right:14px; }
+  .lb-counter { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); color:rgba(255,255,255,0.6); font-size:12px; z-index:10; }
+  .lb-dots { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); display:flex; gap:6px; z-index:10; }
+  .lb-dot { width:6px; height:6px; border-radius:50%; background:rgba(255,255,255,0.35); cursor:pointer; transition:background 0.2s; }
+  .lb-dot.active { background:#FFCE58; }
+
   @keyframes fadeUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
   @keyframes pulse { 0%,100% { opacity:0.3; } 50% { opacity:1; } }
 
@@ -295,7 +321,74 @@
   .mem-cta { display:inline-block; background:#0F1C26; color:#FFCE58; font-family:"Nunito",sans-serif; font-size:13px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; padding:13px 36px; border-radius:50px; text-decoration:none; width:100%; text-align:center; box-sizing:border-box; }
   @media(min-width:640px) { .mem-title { font-size:40px; } .mem-card { padding:24px 28px; } .mem-benefit { font-size:14px; } }
 </style>
-<script src="images.js"></script>
+<script src="images.js">
+/* ══ LIGHTBOX ══ */
+var lbImgs = [];
+var lbIdx = 0;
+
+function lbOpen(imgs, idx) {
+  lbImgs = imgs;
+  lbIdx = idx;
+  lbShow();
+  document.getElementById('lb-overlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+  document.addEventListener('keydown', lbKeyDown);
+}
+
+function lbShow() {
+  var img = document.getElementById('lb-img');
+  var dots = document.getElementById('lb-dots');
+  if (img) img.src = lbImgs[lbIdx];
+  if (dots) {
+    dots.innerHTML = lbImgs.map(function(_, i) {
+      return '<div class="lb-dot' + (i === lbIdx ? ' active' : '') + '" onclick="lbGo(' + i + ')"></div>';
+    }).join('');
+  }
+  var prev = document.querySelector('.lb-prev');
+  var next = document.querySelector('.lb-next');
+  if (prev) prev.style.display = lbImgs.length > 1 ? 'flex' : 'none';
+  if (next) next.style.display = lbImgs.length > 1 ? 'flex' : 'none';
+}
+
+function lbNav(dir) {
+  lbIdx = (lbIdx + dir + lbImgs.length) % lbImgs.length;
+  lbShow();
+}
+
+function lbGo(idx) {
+  lbIdx = idx;
+  lbShow();
+}
+
+function lbClose() {
+  document.getElementById('lb-overlay').classList.remove('open');
+  document.body.style.overflow = '';
+  document.removeEventListener('keydown', lbKeyDown);
+}
+
+function lbOverlayClick(e) {
+  if (e.target === document.getElementById('lb-overlay')) lbClose();
+}
+
+function lbKeyDown(e) {
+  if (e.key === 'ArrowLeft') lbNav(-1);
+  else if (e.key === 'ArrowRight') lbNav(1);
+  else if (e.key === 'Escape') lbClose();
+}
+
+// Touch swipe support for lightbox
+(function() {
+  var startX = 0;
+  var el = document.getElementById('lb-overlay');
+  if (!el) return;
+  el.addEventListener('touchstart', function(e) { startX = e.touches[0].clientX; }, {passive:true});
+  el.addEventListener('touchend', function(e) {
+    var d = startX - e.changedTouches[0].clientX;
+    if (Math.abs(d) > 40) lbNav(d > 0 ? 1 : -1);
+  }, {passive:true});
+})();
+
+</script>
 </head>
 <body>
 
@@ -911,18 +1004,13 @@ function closeSvcModalOnOverlay(e) {
 var currentSvc = 0;
 var svcCarousels = {}; // per-slide carousel state: { idx, imgs }
 
-function buildSvcCarouselHtml(imgs, slideIdx) {
+function buildSvcThumbnailsHtml(imgs, slideIdx) {
   if (!imgs || !imgs.length) return '';
-  var frames = imgs.map(function(src) {
-    return '<div class="svc-img-frame"><img src="' + src + '" alt=""></div>';
+  var items = imgs.map(function(src, i) {
+    return '<div class="svc-thumb" onclick="lbOpen(' + JSON.stringify(imgs) + ',' + i + ')">' +
+           '<img src="' + src + '" alt="" loading="lazy"></div>';
   }).join('');
-  var dots = imgs.length > 1 ? '<div class="svc-img-dots">' + imgs.map(function(_, i) {
-    return '<div class="svc-img-dot' + (i === 0 ? ' active' : '') + '" onclick="svcImgGo(' + slideIdx + ',' + i + ')"></div>';
-  }).join('') + '</div>' : '';
-  var btns = imgs.length > 1 ? '<div class="svc-img-btn svc-img-prev" onclick="svcImgNav(' + slideIdx + ',-1)"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></div><div class="svc-img-btn svc-img-next" onclick="svcImgNav(' + slideIdx + ',1)"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></div>' : '';
-  return '<div class="svc-img-carousel" id="svc-car-' + slideIdx + '" data-count="' + imgs.length + '">' +
-    '<div class="svc-img-track" id="svc-track-' + slideIdx + '">' + frames + '</div>' +
-    btns + dots + '</div>';
+  return '<div class="svc-thumbs" data-count="' + imgs.length + '">' + items + '</div>';
 }
 
 function svcImgNav(slideIdx, dir) {
@@ -962,7 +1050,7 @@ function initSvcSlides() {
     if (imgs.length === 1) imgs = [imgs[0], imgs[0], imgs[0]];
 svcCarousels[i] = { idx: 0, imgs: imgs };
 
-    var carouselHtml = buildSvcCarouselHtml(imgs, i);
+    var carouselHtml = buildSvcThumbnailsHtml(imgs, i);
 
     var featureHtml = s.features.map(function(f) {
       return '<div class="svc-slide-feature"><div class="svc-slide-feature-dot"></div>' +
@@ -1196,5 +1284,23 @@ new IntersectionObserver(entries => {
   });
 })();
 </script>
+
+<!-- ══ LIGHTBOX ══ -->
+<div class="lb-overlay" id="lb-overlay" onclick="lbOverlayClick(event)">
+  <div class="lb-img-wrap">
+    <img class="lb-img" id="lb-img" src="" alt="">
+    <div class="lb-close" onclick="lbClose()">
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </div>
+  </div>
+  <div class="lb-btn lb-prev" onclick="lbNav(-1)">
+    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
+  </div>
+  <div class="lb-btn lb-next" onclick="lbNav(1)">
+    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+  </div>
+  <div class="lb-dots" id="lb-dots"></div>
+</div>
+
 </body>
 </html>
