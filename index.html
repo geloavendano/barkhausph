@@ -300,67 +300,75 @@
   .lb-dot.active { background:#FFCE58; }
 
 
+  /* ══ SERVICE IMAGE THUMBNAILS ══ */
+  .svc-thumbs { display:grid; grid-template-columns:repeat(4,1fr); gap:5px; margin-bottom:14px; }
+  .svc-thumb { aspect-ratio:1/1; overflow:hidden; border-radius:8px; cursor:pointer; background:var(--surface); }
+  .svc-thumb img { width:100%; height:100%; object-fit:cover; display:block; image-orientation:from-image; transition:opacity 0.15s; }
+  .svc-thumb:hover img { opacity:0.82; }
+
+  /* ══ LIGHTBOX ══ */
+  .lb-overlay { display:none; position:fixed; inset:0; z-index:900; background:rgba(0,0,0,0.93); align-items:center; justify-content:center; }
+  .lb-overlay.open { display:flex; }
+  .lb-img-wrap { position:relative; display:flex; align-items:center; justify-content:center; }
+  .lb-img { max-width:90vw; max-height:85vh; object-fit:contain; border-radius:6px; display:block; image-orientation:from-image; }
+  .lb-close { position:absolute; top:-14px; right:-14px; width:36px; height:36px; background:rgba(255,255,255,0.15); border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#fff; }
+  .lb-close:hover { background:rgba(255,255,255,0.25); }
+  .lb-btn { position:fixed; top:50%; transform:translateY(-50%); width:44px; height:44px; background:rgba(255,255,255,0.12); border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#fff; }
+  .lb-btn:hover { background:rgba(255,255,255,0.22); }
+  .lb-prev { left:14px; } .lb-next { right:14px; }
+  .lb-dots { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); display:flex; gap:6px; z-index:10; }
+  .lb-dot { width:6px; height:6px; border-radius:50%; background:rgba(255,255,255,0.35); cursor:pointer; transition:background 0.2s; }
+  .lb-dot.active { background:#FFCE58; }
+
   /* ══ BLOG FOLD ══ */
-  #blog { scroll-snap-align:start; min-height:100svh; background:var(--bg); display:flex; flex-direction:column; justify-content:center; padding:60px 0 80px; position:relative; overflow:hidden; }
+  #blog { scroll-snap-align:start; min-height:100svh; background:var(--bg); display:flex; flex-direction:column; justify-content:center; padding:60px 0 80px; position:relative; }
   .blog-inner { width:100%; max-width:1100px; margin:0 auto; padding:0 24px; }
   .blog-eyebrow { font-size:9px; letter-spacing:0.22em; text-transform:uppercase; color:var(--yellow); font-weight:700; margin-bottom:8px; }
   .blog-heading { font-size:clamp(26px,5vw,40px); font-weight:800; color:var(--cream); margin-bottom:32px; line-height:1.15; }
   .blog-heading span { color:var(--yellow); }
-
-  /* Carousel track */
-  .blog-carousel-wrap { position:relative; }
   .blog-track { display:flex; gap:16px; overflow-x:auto; scroll-snap-type:x mandatory; -webkit-overflow-scrolling:touch; scrollbar-width:none; padding-bottom:4px; }
   .blog-track::-webkit-scrollbar { display:none; }
-
-  /* Cards */
-  .blog-card { flex:0 0 min(82vw,340px); scroll-snap-align:start; background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:24px; display:flex; flex-direction:column; gap:12px; text-decoration:none; color:inherit; transition:border-color 0.2s, transform 0.2s; cursor:pointer; }
+  .blog-card { flex:0 0 min(82vw,340px); scroll-snap-align:start; background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:24px; display:flex; flex-direction:column; gap:12px; text-decoration:none; color:inherit; transition:border-color 0.2s, transform 0.2s; }
   .blog-card:hover { border-color:var(--yellow); transform:translateY(-2px); }
   .blog-card-tag { font-size:9px; font-weight:700; letter-spacing:0.18em; text-transform:uppercase; color:var(--yellow); }
   .blog-card-title { font-size:16px; font-weight:700; color:var(--cream); line-height:1.35; }
   .blog-card-excerpt { font-size:13px; color:var(--cream-m); line-height:1.65; display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical; overflow:hidden; flex:1; }
-  .blog-card-cta { font-size:12px; font-weight:700; color:var(--yellow); letter-spacing:0.08em; margin-top:4px; display:flex; align-items:center; gap:4px; }
-  .blog-card-cta svg { transition:transform 0.2s; }
-  .blog-card:hover .blog-card-cta svg { transform:translateX(3px); }
-
-  /* Nav arrows */
+  .blog-card-cta { font-size:12px; font-weight:700; color:var(--yellow); margin-top:4px; display:flex; align-items:center; gap:4px; }
   .blog-nav { display:flex; gap:10px; margin-top:20px; justify-content:flex-end; }
   .blog-nav-btn { width:38px; height:38px; border-radius:50%; background:var(--surface); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--cream); transition:background 0.18s, border-color 0.18s; }
   .blog-nav-btn:hover { background:var(--raised); border-color:var(--yellow); color:var(--yellow); }
 
-  @media(min-width:640px) {
-    .blog-card { flex:0 0 min(44vw,340px); }
-    #blog { padding:80px 0 100px; }
-  }
-  @media(min-width:960px) {
-    .blog-card { flex:0 0 300px; }
-  }
-
-
-  /* ══ FAQ TEASER (inside blog fold) ══ */
-  .faq-teaser { margin-top:48px; padding-top:40px; border-top:1px solid var(--border); }
-  .faq-teaser-header { display:flex; align-items:flex-end; justify-content:space-between; gap:16px; margin-bottom:24px; flex-wrap:wrap; }
-  .faq-teaser-titles { }
-  .faq-teaser-eyebrow { font-size:9px; letter-spacing:0.22em; text-transform:uppercase; color:var(--yellow); font-weight:700; margin-bottom:6px; }
-  .faq-teaser-heading { font-size:clamp(20px,4vw,30px); font-weight:800; color:var(--cream); line-height:1.2; }
-  .faq-teaser-heading span { color:var(--yellow); }
-  .faq-see-all { flex-shrink:0; display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:700; color:var(--bg); background:var(--yellow); border-radius:30px; padding:10px 20px; text-decoration:none; letter-spacing:0.06em; transition:opacity 0.18s; white-space:nowrap; }
-  .faq-see-all:hover { opacity:0.88; }
-
-  /* FAQ accordion items */
-  .faq-list { display:flex; flex-direction:column; gap:2px; }
-  .faq-item { background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; transition:border-color 0.2s; }
+  /* ══ FAQ FOLD ══ */
+  #faq-fold { scroll-snap-align:start; min-height:100svh; background:var(--bg); display:flex; align-items:center; justify-content:center; padding:60px 0 80px; }
+  .faq-fold-inner { width:100%; max-width:720px; margin:0 auto; padding:0 24px; }
+  .faq-fold-header { display:flex; align-items:flex-end; justify-content:space-between; gap:16px; margin-bottom:32px; flex-wrap:wrap; }
+  .faq-fold-eyebrow { font-size:9px; letter-spacing:0.22em; text-transform:uppercase; color:var(--yellow); font-weight:700; margin-bottom:6px; }
+  .faq-fold-heading { font-size:clamp(26px,5vw,40px); font-weight:800; color:var(--cream); line-height:1.15; }
+  .faq-fold-heading span { color:var(--yellow); }
+  .faq-item { background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:6px; transition:border-color 0.2s; }
   .faq-item.open { border-color:rgba(255,206,88,0.4); }
-  .faq-q { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:16px 18px; cursor:pointer; user-select:none; }
-  .faq-q-text { font-size:14px; font-weight:600; color:var(--cream); line-height:1.4; }
-  .faq-icon { flex-shrink:0; width:20px; height:20px; border-radius:50%; background:var(--raised); display:flex; align-items:center; justify-content:center; transition:background 0.18s, transform 0.25s; }
+  .faq-q { display:flex; align-items:center; justify-content:space-between; gap:14px; padding:18px 20px; cursor:pointer; user-select:none; }
+  .faq-q-text { font-size:15px; font-weight:600; color:var(--cream); line-height:1.4; }
+  .faq-icon { flex-shrink:0; width:22px; height:22px; border-radius:50%; background:var(--raised); display:flex; align-items:center; justify-content:center; transition:background 0.18s, transform 0.28s; }
   .faq-item.open .faq-icon { background:var(--yellow); transform:rotate(45deg); }
   .faq-icon svg { color:var(--cream); }
   .faq-item.open .faq-icon svg { color:var(--bg); }
-  .faq-a { max-height:0; overflow:hidden; transition:max-height 0.32s ease, padding 0.22s; padding:0 18px; }
-  .faq-item.open .faq-a { max-height:300px; padding:0 18px 16px; }
-  .faq-a p { font-size:13px; line-height:1.75; color:var(--cream-m); }
+  .faq-a { max-height:0; overflow:hidden; transition:max-height 0.35s ease, padding 0.22s; padding:0 20px; }
+  .faq-item.open .faq-a { max-height:300px; padding:0 20px 18px; }
+  .faq-a p { font-size:14px; line-height:1.8; color:var(--cream-m); }
   .faq-a a { color:var(--yellow); text-decoration:none; }
-  .faq-a a:hover { text-decoration:underline; }
+  .faq-see-all { flex-shrink:0; display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:700; color:var(--bg); background:var(--yellow); border-radius:30px; padding:10px 20px; text-decoration:none; transition:opacity 0.18s; white-space:nowrap; }
+  .faq-see-all:hover { opacity:0.88; }
+
+  /* ══ DESKTOP OVERRIDES ══ */
+  @media(min-width:640px) {
+    #blog, #faq-fold { padding:80px 0 100px; }
+    .blog-card { flex:0 0 min(44vw,340px); }
+    .svc-img-col { width:44%; flex-shrink:0; }
+    .svc-img-col .svc-thumbs { grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:0; }
+    .svc-text-col { flex:1; overflow-y:auto; max-height:calc(100svh - 140px); scrollbar-width:none; display:flex; flex-direction:column; }
+  }
+  @media(min-width:960px) { .blog-card { flex:0 0 300px; } }
 
   @keyframes fadeUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
   @keyframes pulse { 0%,100% { opacity:0.3; } 50% { opacity:1; } }
@@ -450,28 +458,6 @@ function lbKeyDown(e) {
     if (Math.abs(d) > 40) lbNav(d > 0 ? 1 : -1);
   }, {passive:true});
 })();
-
-
-/* ══ BLOG CAROUSEL ══ */
-function blogNav(dir) {
-  var track = document.getElementById('blogTrack');
-  if (!track) return;
-  var card = track.querySelector('.blog-card');
-  var step = card ? (card.offsetWidth + 16) : 320;
-  track.scrollBy({ left: dir * step, behavior: 'smooth' });
-}
-
-
-/* ══ FAQ ACCORDION ══ */
-function toggleFaq(idx) {
-  var item = document.getElementById('fti' + idx);
-  if (!item) return;
-  var isOpen = item.classList.contains('open');
-  // Close all
-  document.querySelectorAll('.faq-item').forEach(function(el) { el.classList.remove('open'); });
-  // Toggle clicked
-  if (!isOpen) item.classList.add('open');
-}
 
 </script>
 </head>
@@ -727,8 +713,7 @@ function toggleFaq(idx) {
   <div class="blog-inner">
     <p class="blog-eyebrow">From the blog</p>
     <h2 class="blog-heading">Tips &amp; guides for <span>happy pets</span></h2>
-    <div class="blog-carousel-wrap">
-      <div class="blog-track" id="blogTrack">
+    <div class="blog-track" id="blogTrack">
       <a class="blog-card" href="blog/how-to-prepare-your-dog-for-daycare.html">
         <span class="blog-card-tag">Daycare</span>
         <p class="blog-card-title">How to Prepare Your Dog for Daycare</p>
@@ -738,7 +723,7 @@ function toggleFaq(idx) {
       <a class="blog-card" href="blog/what-to-pack-for-a-dog-hotel-stay.html">
         <span class="blog-card-tag">Pet Hotel</span>
         <p class="blog-card-title">What to Pack for a Dog Hotel Stay</p>
-        <p class="blog-card-excerpt">Packing for a dog hotel stay is easier when you focus on comfort, consistency, and safety. A thoughtful packing list helps your dog adjust more smoothly and gives our staff everything they need to care for your pet.</p>
+        <p class="blog-card-excerpt">Packing for a dog hotel stay is easier when you focus on comfort, consistency, and safety. A thoughtful packing list helps your dog adjust more smoothly and gives our staff everything they need.</p>
         <span class="blog-card-cta">Read article <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
       </a>
       <a class="blog-card" href="blog/dog-hotel-vs-dog-daycare.html">
@@ -756,69 +741,77 @@ function toggleFaq(idx) {
       <a class="blog-card" href="blog/benefits-of-indoor-play-for-dogs.html">
         <span class="blog-card-tag">Play Park</span>
         <p class="blog-card-title">Benefits of Indoor Play for Dogs</p>
-        <p class="blog-card-excerpt">Indoor play is a smart option for dogs that need movement, stimulation, and social interaction in a safe setting. It is especially helpful when the weather is too hot, rainy, or unpredictable for outdoor activity.</p>
+        <p class="blog-card-excerpt">Indoor play is a smart option for dogs that need movement, stimulation, and social interaction in a safe setting. It is especially helpful when the weather is too hot, rainy, or unpredictable.</p>
         <span class="blog-card-cta">Read article <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
       </a>
-      </div>
     </div>
     <div class="blog-nav">
-      <button class="blog-nav-btn" onclick="blogNav(-1)" aria-label="Previous">
-        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M19 12H5M11 18l-6-6 6-6"/></svg>
-      </button>
-      <button class="blog-nav-btn" onclick="blogNav(1)" aria-label="Next">
-        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
-      </button>
+      <button class="blog-nav-btn" onclick="blogNav(-1)"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M19 12H5M11 18l-6-6 6-6"/></svg></button>
+      <button class="blog-nav-btn" onclick="blogNav(1)"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
     </div>
   </div>
-    <!-- FAQ teaser -->
-    <div class="faq-teaser">
-      <div class="faq-teaser-header">
-        <div class="faq-teaser-titles">
-          <p class="faq-teaser-eyebrow">Got questions?</p>
-          <h3 class="faq-teaser-heading">We've got <span>answers</span></h3>
-        </div>
-        <a class="faq-see-all" href="faq.html">See all FAQs <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+</section>
+
+<!-- ══ FOLD · FAQ ══ -->
+<section id="faq-fold">
+  <div class="faq-fold-inner">
+    <div class="faq-fold-header">
+      <div>
+        <p class="faq-fold-eyebrow">Got questions?</p>
+        <h2 class="faq-fold-heading">We've got <span>answers</span></h2>
       </div>
-      <div class="faq-list">
-      <div class="faq-item" id="fti0">
-        <div class="faq-q" onclick="toggleFaq(0)">
+      <a class="faq-see-all" href="faq.html">See all FAQs <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+    </div>
+    <div class="faq-list">
+      <div class="faq-item" id="hfti0">
+        <div class="faq-q" onclick="homeFaqToggle(0)">
           <span class="faq-q-text">Do I need to book in advance?</span>
           <span class="faq-icon"><svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
         </div>
         <div class="faq-a"><p>Advanced booking is highly recommended, especially during weekends, holidays, and peak travel seasons. You may make your booking through our <a href='booking.html'>booking portal</a>.</p></div>
       </div>
-      <div class="faq-item" id="fti1">
-        <div class="faq-q" onclick="toggleFaq(1)">
+      <div class="faq-item" id="hfti1">
+        <div class="faq-q" onclick="homeFaqToggle(1)">
           <span class="faq-q-text">What should I bring when checking in my dog?</span>
           <span class="faq-icon"><svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
         </div>
         <div class="faq-a"><p>Bring your pet's food, any necessary medication, vaccination records, and comfort items like a familiar blanket or toy. Keeping routines familiar helps your pet settle in more easily.</p></div>
       </div>
-      <div class="faq-item" id="fti2">
-        <div class="faq-q" onclick="toggleFaq(2)">
+      <div class="faq-item" id="hfti2">
+        <div class="faq-q" onclick="homeFaqToggle(2)">
           <span class="faq-q-text">Is daycare good for social pets?</span>
           <span class="faq-icon"><svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
         </div>
         <div class="faq-a"><p>Yes, daycare can be a great option for pets that enjoy human interaction, playtime, and structured activity. Feel free to bring them over to interact with our staff and other pets.</p></div>
       </div>
-      <div class="faq-item" id="fti3">
-        <div class="faq-q" onclick="toggleFaq(3)">
+      <div class="faq-item" id="hfti3">
+        <div class="faq-q" onclick="homeFaqToggle(3)">
           <span class="faq-q-text">Do dogs need vaccinations before visiting?</span>
           <span class="faq-icon"><svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
         </div>
         <div class="faq-a"><p>Yes, updated vaccinations are required to help protect all dogs in the facility. This is especially important in shared environments like daycare, hotel, and boarding.</p></div>
       </div>
-      <div class="faq-item" id="fti4">
-        <div class="faq-q" onclick="toggleFaq(4)">
+      <div class="faq-item" id="hfti4">
+        <div class="faq-q" onclick="homeFaqToggle(4)">
           <span class="faq-q-text">What if my dog is shy or nervous?</span>
           <span class="faq-icon"><svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
         </div>
-        <div class="faq-a"><p>Shy dogs can still benefit from daycare if introduced slowly in an environment that respects their pace. Our team adjusts care to each dog's comfort level and temperament.</p></div>
-      </div>
+        <div class="faq-a"><p>Shy dogs can still benefit from daycare if introduced slowly and placed in an environment that respects their pace. Our team adjusts care to each dog's comfort level.</p></div>
       </div>
     </div>
-
+  </div>
 </section>
+
+<!-- ══ LIGHTBOX ══ -->
+<div class="lb-overlay" id="lb-overlay" onclick="lbOverlayClick(event)">
+  <div class="lb-img-wrap">
+    <img class="lb-img" id="lb-img" src="" alt="">
+    <div class="lb-close" onclick="lbClose()"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></div>
+  </div>
+  <div class="lb-btn lb-prev" onclick="lbNav(-1)"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></div>
+  <div class="lb-btn lb-next" onclick="lbNav(1)"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></div>
+  <div class="lb-dots" id="lb-dots"></div>
+</div>
 
 <!-- ══ FOLD 5 · FOOTER ══ -->
 <div id="footer-section">
@@ -1004,7 +997,7 @@ const services = [
   {
     tag: 'Daycare',
     name: 'Day Care',
-    imgKey: 'playpark',
+    imgKey: 'daycare',
     desc: 'Drop off your pet for a full day of supervised play, socialisation, and care. Perfect for busy days when your pet deserves great company.',
     features: [
       { label: 'Drop-off and pick-up', detail: 'Flexible hours per branch' },
@@ -1065,7 +1058,20 @@ const services = [
       { label: 'Photo opportunities', detail: 'Themed setups available' },
     ],
     pricing: '<div class="svc-price-row"><span class="svc-price-label">Birthday packages</span><span class="svc-price-val">Contact branch</span></div><div class="svc-price-row"><span class="svc-price-label">Private events</span><span class="svc-price-val">Contact branch</span></div>'
-  },
+  },,
+  {
+    tag: 'Cafe',
+    name: 'Cafe',
+    imgKey: 'cafe',
+    desc: 'Enjoy a cup of coffee while your furry best friend hangs out beside you. Our Barkhaus Cafe serves specialty coffee, refreshers, and dog-safe puppuccinos.',
+    features: [
+      { label: 'Specialty coffee & drinks', detail: 'Crafted in-house' },
+      { label: 'Puppuccinos available', detail: 'A treat for your pup too' },
+      { label: 'Pet-friendly seating', detail: 'Bring your fur baby along' },
+      { label: 'Eastwood only', detail: 'Available at our Eastwood branch' },
+    ],
+    pricing: '<div class=\"svc-price-row\"><span class=\"svc-price-label\">Coffee & drinks from</span><span class=\"svc-price-val\">\u20b145</span></div>',
+  }
 ];
 
 /* ── SERVICE MODAL CAROUSEL STATE ── */
@@ -1187,10 +1193,13 @@ function closeSvcModalOnOverlay(e) {
 var currentSvc = 0;
 var svcCarousels = {}; // per-slide carousel state: { idx, imgs }
 
+var _svcImgSets = {};
 function buildSvcThumbnailsHtml(imgs, slideIdx) {
   if (!imgs || !imgs.length) return '';
+  var key = 'svc' + slideIdx;
+  _svcImgSets[key] = imgs;
   var items = imgs.map(function(src, i) {
-    return '<div class="svc-thumb" onclick="lbOpen(' + JSON.stringify(imgs) + ',' + i + ')">' +
+    return '<div class="svc-thumb" onclick="lbOpenSet(\'' + key + '\',' + i + ')">' +
            '<img src="' + src + '" alt="" loading="lazy"></div>';
   }).join('');
   return '<div class="svc-thumbs" data-count="' + imgs.length + '">' + items + '</div>';
@@ -1466,6 +1475,76 @@ new IntersectionObserver(entries => {
     });
   });
 })();
+
+/* ══ LIGHTBOX ══ */
+var lbImgs = [], lbIdx = 0;
+var _svcImgSets = _svcImgSets || {};
+
+function lbOpenSet(key, idx) {
+  lbOpen(_svcImgSets[key] || [], idx);
+}
+function lbOpen(imgs, idx) {
+  lbImgs = imgs; lbIdx = idx; lbShow();
+  document.getElementById('lb-overlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+  document.addEventListener('keydown', lbKeyDown);
+}
+function lbShow() {
+  var img = document.getElementById('lb-img');
+  var dots = document.getElementById('lb-dots');
+  if (img) img.src = lbImgs[lbIdx];
+  if (dots) dots.innerHTML = lbImgs.map(function(_, i) {
+    return '<div class="lb-dot' + (i===lbIdx?' active':'') + '" onclick="lbGo('+i+')"></div>';
+  }).join('');
+  var p=document.querySelector('.lb-prev'), n=document.querySelector('.lb-next');
+  if(p) p.style.display=lbImgs.length>1?'flex':'none';
+  if(n) n.style.display=lbImgs.length>1?'flex':'none';
+}
+function lbNav(dir){ lbIdx=(lbIdx+dir+lbImgs.length)%lbImgs.length; lbShow(); }
+function lbGo(idx){ lbIdx=idx; lbShow(); }
+function lbClose(){
+  document.getElementById('lb-overlay').classList.remove('open');
+  document.body.style.overflow='';
+  document.removeEventListener('keydown',lbKeyDown);
+}
+function lbOverlayClick(e){ if(e.target===document.getElementById('lb-overlay')) lbClose(); }
+function lbKeyDown(e){ if(e.key==='ArrowLeft') lbNav(-1); else if(e.key==='ArrowRight') lbNav(1); else if(e.key==='Escape') lbClose(); }
+(function(){
+  var el=document.getElementById('lb-overlay'); if(!el) return;
+  var sx=0;
+  el.addEventListener('touchstart',function(e){sx=e.touches[0].clientX;},{passive:true});
+  el.addEventListener('touchend',function(e){var d=sx-e.changedTouches[0].clientX;if(Math.abs(d)>40)lbNav(d>0?1:-1);},{passive:true});
+})();
+
+/* ══ SERVICE HASH ROUTING ══ */
+(function() {
+  var map={'svc-playpark':0,'svc-daycare':1,'svc-hotel':2,'svc-grooming':3,'svc-studio':4,'svc-events':5,'svc-cafe':6};
+  function applyHash() {
+    var hash=window.location.hash.replace('#','');
+    if(map[hash]!==undefined){
+      var s=document.getElementById('services');
+      if(s) s.scrollIntoView({behavior:'smooth'});
+      setTimeout(function(){switchSvc(map[hash]);},350);
+    }
+  }
+  window.addEventListener('hashchange',applyHash);
+  document.addEventListener('DOMContentLoaded',applyHash);
+})();
+
+/* ══ BLOG CAROUSEL ══ */
+function blogNav(dir) {
+  var track=document.getElementById('blogTrack'); if(!track) return;
+  var card=track.querySelector('.blog-card');
+  track.scrollBy({left:dir*(card?card.offsetWidth+16:320),behavior:'smooth'});
+}
+
+/* ══ HOME FAQ ACCORDION ══ */
+function homeFaqToggle(idx) {
+  var item=document.getElementById('hfti'+idx); if(!item) return;
+  var isOpen=item.classList.contains('open');
+  document.querySelectorAll('#faq-fold .faq-item').forEach(function(el){el.classList.remove('open');});
+  if(!isOpen) item.classList.add('open');
+}
 </script>
 
 <!-- ══ LIGHTBOX ══ -->
