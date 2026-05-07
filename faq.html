@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FAQs | Barkhaus Pet Hotel Philippines</title>
+  <meta name="description" content="Answers to common questions about Barkhaus — pet hotel, daycare, grooming, safety, bookings, and more.">
+  <link rel="canonical" href="https://barkhaus.ph/faq/">
+  <style>
+    :root {
+      --bg:#0F1C26; --surface:#1A3044; --raised:#1F3D55;
+      --border:rgba(77,150,185,0.30); --mid:#6AAEC8;
+      --cream:#F0EDE6; --cream-m:#B8D4E0; --blue:#4D96B9; --yellow:#FFCE58;
+    }
+    *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+    html { background:var(--bg); color:var(--cream); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; }
+    body { min-height:100vh; }
+
+    /* ── Top nav ── */
+    .topnav { position:sticky; top:0; z-index:100; background:var(--bg); border-bottom:1px solid var(--border); padding:14px 24px; display:flex; align-items:center; justify-content:space-between; }
+    .topnav-logo { font-size:15px; font-weight:900; letter-spacing:0.04em; color:var(--cream); text-decoration:none; }
+    .topnav-logo span { color:var(--yellow); }
+    .topnav-back { font-size:12px; font-weight:600; color:var(--yellow); text-decoration:none; letter-spacing:0.06em; }
+
+    /* ── Hero ── */
+    .faq-hero { padding:56px 24px 40px; max-width:720px; margin:0 auto; }
+    .faq-eyebrow { font-size:9px; font-weight:700; letter-spacing:0.22em; text-transform:uppercase; color:var(--yellow); margin-bottom:10px; }
+    .faq-hero h1 { font-size:clamp(28px,6vw,42px); font-weight:800; line-height:1.15; color:var(--cream); margin-bottom:12px; }
+    .faq-hero h1 span { color:var(--yellow); }
+    .faq-hero p { font-size:15px; color:var(--cream-m); line-height:1.7; max-width:520px; }
+
+    /* ── Category tabs ── */
+    .faq-tabs { display:flex; gap:8px; overflow-x:auto; scrollbar-width:none; padding:0 24px 0; max-width:768px; margin:0 auto 32px; }
+    .faq-tabs::-webkit-scrollbar { display:none; }
+    .faq-tab { flex-shrink:0; font-size:12px; font-weight:700; letter-spacing:0.06em; padding:8px 16px; border-radius:20px; border:1px solid var(--border); background:transparent; color:var(--cream-m); cursor:pointer; transition:all 0.18s; white-space:nowrap; }
+    .faq-tab.active, .faq-tab:hover { background:var(--yellow); border-color:var(--yellow); color:var(--bg); }
+
+    /* ── Main content ── */
+    .faq-content { max-width:720px; margin:0 auto; padding:0 24px 80px; }
+
+    /* ── Category group ── */
+    .faq-group { margin-bottom:48px; }
+    .faq-group-title { font-size:11px; font-weight:700; letter-spacing:0.2em; text-transform:uppercase; color:var(--mid); margin-bottom:14px; padding-bottom:10px; border-bottom:1px solid var(--border); }
+
+    /* ── Accordion items ── */
+    .faq-item { border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:6px; background:var(--surface); transition:border-color 0.2s; }
+    .faq-item.open { border-color:rgba(255,206,88,0.4); }
+    .faq-q { display:flex; align-items:center; justify-content:space-between; gap:14px; padding:18px 20px; cursor:pointer; user-select:none; }
+    .faq-q-text { font-size:15px; font-weight:600; color:var(--cream); line-height:1.4; }
+    .faq-icon { flex-shrink:0; width:22px; height:22px; border-radius:50%; background:var(--raised); display:flex; align-items:center; justify-content:center; transition:background 0.18s, transform 0.28s; }
+    .faq-item.open .faq-icon { background:var(--yellow); transform:rotate(45deg); }
+    .faq-icon svg { color:var(--cream); transition:color 0.18s; }
+    .faq-item.open .faq-icon svg { color:var(--bg); }
+    .faq-a { max-height:0; overflow:hidden; transition:max-height 0.35s ease, padding 0.22s; padding:0 20px; }
+    .faq-item.open .faq-a { max-height:400px; padding:0 20px 18px; }
+    .faq-a p { font-size:14px; line-height:1.8; color:var(--cream-m); }
+    .faq-a a { color:var(--yellow); text-decoration:none; }
+    .faq-a a:hover { text-decoration:underline; }
+
+    /* ── CTA strip ── */
+    .faq-cta { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:28px 24px; text-align:center; margin-top:16px; }
+    .faq-cta h3 { font-size:18px; font-weight:700; color:var(--cream); margin-bottom:8px; }
+    .faq-cta p { font-size:14px; color:var(--cream-m); line-height:1.7; margin-bottom:20px; }
+    .faq-cta-btn { display:inline-block; background:var(--yellow); color:var(--bg); font-weight:700; font-size:13px; letter-spacing:0.07em; padding:12px 28px; border-radius:30px; text-decoration:none; transition:opacity 0.18s; }
+    .faq-cta-btn:hover { opacity:0.88; }
+
+    /* ── Footer ── */
+    .faq-footer { text-align:center; padding:28px 24px; border-top:1px solid var(--border); font-size:12px; color:var(--mid); }
+    .faq-footer a { color:var(--yellow); text-decoration:none; }
+  </style>
+</head>
+<body>
+
+<nav class="topnav">
+  <a class="topnav-logo" href="index.html">BARK<span>HAUS</span></a>
+  <a class="topnav-back" href="index.html">← Back to site</a>
+</nav>
+
+<div class="faq-hero">
+  <p class="faq-eyebrow">Help centre</p>
+  <h1>Frequently asked <span>questions</span></h1>
+  <p>Everything you need to know about our services, booking, and caring for your pet at Barkhaus.</p>
+</div>
+
+<div class="faq-tabs">
+  <button class="faq-tab active" onclick="scrollTo('cat-general')">General</button>
+  <button class="faq-tab" onclick="scrollTo('cat-hotel')">Pet Hotel</button>
+  <button class="faq-tab" onclick="scrollTo('cat-daycare')">Daycare</button>
+  <button class="faq-tab" onclick="scrollTo('cat-grooming')">Grooming</button>
+  <button class="faq-tab" onclick="scrollTo('cat-safety')">Safety & Health</button>
+</div>
+
+<div class="faq-content">
+
+  <!-- General -->
+  <div class="faq-group" id="cat-general">
+    <p class="faq-group-title">General</p>
+
+    <div class="faq-item">
+      <div class="faq-q" onclick="toggle(this)">
+        <span class="faq-q-text">What is Barkhaus?</span>
+        <span class="faq-icon"><svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+      </div>
+      <div class="faq-a"><p>Barkhaus is a pet care destination offering dog hotel, daycare, grooming, and play services in a safe, supervised, and comfortable environment. It is designed to give pet parents peace of mind while their dogs enjoy a happy, enriching experience.</p></div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q" onclick="toggle(this)">
+        <span class="faq-q-text">Who is Barkhaus for?</span>
+        <span class="faq-icon"><svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+      </div>
+      <div class="faq-a"><p>Barkhaus is ideal for dog parents who need reliable pet boarding, a safe place for daytime care, or professional grooming services. It is especially helpful for busy owners, frequent travelers, and pets who enjoy socialization and structured play.</p></div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q" onclick="toggle(this)">
+        <span class="faq-q-text">Do I need to book in advance or can I walk-in?</span>
+        <span class="faq-icon"><svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+      </div>
+      <div class="faq-a"><p>Advanced booking is highly recommended, especially during weekends, holidays, and peak travel seasons. This helps ensure slot availability and allows the team to prepare for your dog's visit. You may make your booking through our <a href="booking.html">booking portal</a>.</p></div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q" onclick="toggle(this)">
+        <span class="faq-q-text">What are the accepted payment options?</span>
+        <span class="faq-icon"><svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+      </div>
+      <div class="faq-a"><p>We accept Visa, Mastercard, and JCB for Debit and Credit Cards, and GCash, Maya, and QR PH for e-wallet and bank transfers.</p></div>
+    </div>
+  </div>
+
+  <!-- Pet Hotel / Cat Boarding -->
+  <div class="faq-group" id="cat-hotel">
+    <p class="faq-group-title">Pet Hotel &amp; Cat Boarding</p>
+
+    <div class="faq-item">
+      <div class="faq-q" onclick="toggle(this)">
+        <span class="faq-q-text">What should I bring when checking in my dog or boarding my cat?</span>
+        <span class="faq-icon"><svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+      </div>
+      <div class="faq-a"><p>Bring your pet's food, any necessary medication, vaccination records if required, and comfort items like a familiar blanket or toy. Keeping your pet's routine as familiar as possible helps them settle in more easily.</p></div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q" onclick="toggle(this)">
+        <span class="faq-q-text">How do you keep boarded pets safe?</span>
+        <span class="faq-icon"><svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+      </div>
+      <div class="faq-a"><p>Safety is maintained through expert 24/7 care, supervised playgroup matching, clean facilities, and proper feeding and handling protocols. Your pets are monitored closely to reduce stress and prevent unnecessary conflicts or accidents. We also provide daily photo updates so you can rest assured they are given the utmost care and attention.</p></div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q" onclick="toggle(this)">
+        <span class="faq-q-text">Will my pet get exercise during their stay?</span>
+        <span class="faq-icon"><svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+      </div>
+      <div class="faq-a"><p>Yes, pets receive daily movement and supervised activity based on their energy level, temperament, and with owners' consent. We value the need for your pets to have their days as balanced as possible while under our care and supervision.</p></div>
+    </div>
+  </div>
+
+  <!-- Daycare -->
+  <div class="faq-group" id="cat-daycare">
+    <p class="faq-group-title">Daycare</p>
+
+    <div class="faq-item">
+      <div class="faq-q" onclick="toggle(this)">
+        <span class="faq-q-text">Is daycare good for social pets?</span>
+        <span class="faq-icon"><svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+      </div>
+      <div class="faq-a"><p>Yes, daycare can be a great option for pets that enjoy human interaction, playtime, and structured activity. Feel free to bring them over and have them interact with our staff and the other pets!</p></div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q" onclick="toggle(this)">
+        <span class="faq-q-text">How do you decide if a dog is fit for daycare?</span>
+        <span class="faq-icon"><svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+      </div>
+      <div class="faq-a"><p>A responsible daycare evaluates temperament, social behavior, health status, and comfort level around other dogs. The goal is to make sure each pet can participate safely and enjoyably.</p></div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q" onclick="toggle(this)">
+        <span class="faq-q-text">What if my dog is shy or nervous?</span>
+        <span class="faq-icon"><svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+      </div>
+      <div class="faq-a"><p>Shy dogs can still benefit from daycare if they are introduced slowly and placed in an environment that respects their pace. Not every dog needs the same play style, and a good facility should adjust care accordingly.</p></div>
+    </div>
+  </div>
+
+  <!-- Grooming -->
+  <div class="faq-group" id="cat-grooming">
+    <p class="faq-group-title">Grooming</p>
+
+    <div class="faq-item">
+      <div class="faq-q" onclick="toggle(this)">
+        <span class="faq-q-text">How often should my dog be groomed?</span>
+        <span class="faq-icon"><svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+      </div>
+      <div class="faq-a"><p>Grooming frequency depends on coat type, activity level, and lifestyle, but most dogs benefit from regular grooming every few weeks to a few months. Consistent grooming helps maintain coat health, skin comfort, and hygiene.</p></div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q" onclick="toggle(this)">
+        <span class="faq-q-text">What is included in a grooming session?</span>
+        <span class="faq-icon"><svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+      </div>
+      <div class="faq-a"><p>A grooming session may include shampoo, blow-dry, brush out, plus essential care like teeth brushing, paw pad cleaning, ear cleaning, and more depending on the package and any add-ons selected. The exact service will always be explained before the appointment.</p></div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q" onclick="toggle(this)">
+        <span class="faq-q-text">My dog is anxious during grooming. Can you still groom them?</span>
+        <span class="faq-icon"><svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+      </div>
+      <div class="faq-a"><p>Many dogs are nervous at first, and our grooming team have the experience and capability to treat and handle your pets lovingly and carefully.</p></div>
+    </div>
+  </div>
+
+  <!-- Safety & Health -->
+  <div class="faq-group" id="cat-safety">
+    <p class="faq-group-title">Safety &amp; Health</p>
+
+    <div class="faq-item">
+      <div class="faq-q" onclick="toggle(this)">
+        <span class="faq-q-text">Do dogs need vaccinations before visiting?</span>
+        <span class="faq-icon"><svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+      </div>
+      <div class="faq-a"><p>Yes, most pet care facilities require updated vaccinations to help protect all dogs in the facility. This is especially important in shared environments like daycare, hotel, and boarding.</p></div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q" onclick="toggle(this)">
+        <span class="faq-q-text">What happens if my dog has special needs?</span>
+        <span class="faq-icon"><svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+      </div>
+      <div class="faq-a"><p>Special needs should always be discussed before booking so the team can assess whether the dog's care requirements can be properly supported. Clear communication helps ensure the safest and most comfortable experience.</p></div>
+    </div>
+  </div>
+
+  <!-- CTA -->
+  <div class="faq-cta">
+    <h3>Still have questions?</h3>
+    <p>Our team is happy to help. Visit any Barkhaus branch or reach out to us directly — we'll make sure you and your pet feel taken care of.</p>
+    <a class="faq-cta-btn" href="index.html#contact">Get in touch</a>
+  </div>
+
+</div>
+
+<footer class="faq-footer">
+  <p>© 2025 Barkhaus Pet Hotel · <a href="index.html">barkhaus.ph</a></p>
+</footer>
+
+<script>
+function toggle(btn) {
+  var item = btn.closest('.faq-item');
+  var isOpen = item.classList.contains('open');
+  document.querySelectorAll('.faq-item').forEach(function(el) { el.classList.remove('open'); });
+  if (!isOpen) item.classList.add('open');
+}
+function scrollTo(id) {
+  var el = document.getElementById(id);
+  if (el) el.scrollIntoView({ behavior:'smooth', block:'start' });
+  document.querySelectorAll('.faq-tab').forEach(function(t) { t.classList.remove('active'); });
+  event.target.classList.add('active');
+}
+</script>
+</body>
+</html>
