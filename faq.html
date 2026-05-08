@@ -83,11 +83,11 @@
 </div>
 
 <div class="faq-tabs">
-  <button class="faq-tab active" onclick="scrollTo('cat-general')">General</button>
-  <button class="faq-tab" onclick="scrollTo('cat-hotel')">Pet Hotel</button>
-  <button class="faq-tab" onclick="scrollTo('cat-daycare')">Daycare</button>
-  <button class="faq-tab" onclick="scrollTo('cat-grooming')">Grooming</button>
-  <button class="faq-tab" onclick="scrollTo('cat-safety')">Safety & Health</button>
+  <button class="faq-tab active" onclick=\"faqScrollTo('cat-general', this)\">General</button>
+  <button class="faq-tab" onclick=\"faqScrollTo('cat-hotel', this)\">Pet Hotel</button>
+  <button class="faq-tab" onclick=\"faqScrollTo('cat-daycare', this)\">Daycare</button>
+  <button class="faq-tab" onclick=\"faqScrollTo('cat-grooming', this)\">Grooming</button>
+  <button class="faq-tab" onclick=\"faqScrollTo('cat-safety', this)\">Safety & Health</button>
 </div>
 
 <div class="faq-content">
@@ -257,11 +257,14 @@ function toggle(btn) {
   document.querySelectorAll('.faq-item').forEach(function(el) { el.classList.remove('open'); });
   if (!isOpen) item.classList.add('open');
 }
-function scrollTo(id) {
+function faqScrollTo(id, btn) {
   var el = document.getElementById(id);
-  if (el) el.scrollIntoView({ behavior:'smooth', block:'start' });
+  if (el) {
+    var offset = el.getBoundingClientRect().top + window.scrollY - 80;
+    window.scrollTo({ top: offset, behavior: 'smooth' });
+  }
   document.querySelectorAll('.faq-tab').forEach(function(t) { t.classList.remove('active'); });
-  event.target.classList.add('active');
+  if (btn) btn.classList.add('active');
 }
 </script>
 </body>
