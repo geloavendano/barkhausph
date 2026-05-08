@@ -30,12 +30,7 @@
     .faq-hero p { font-size:15px; color:var(--cream-m); line-height:1.7; max-width:520px; }
 
     /* ── Category tabs ── */
-    .faq-tabs { display:flex; gap:8px; overflow-x:auto; scrollbar-width:none; padding:0 24px 0; max-width:768px; margin:0 auto 32px; }
-    .faq-tabs::-webkit-scrollbar { display:none; }
-    .faq-tab { flex-shrink:0; font-size:12px; font-weight:700; letter-spacing:0.06em; padding:8px 16px; border-radius:20px; border:1px solid var(--border); background:transparent; color:var(--cream-m); cursor:pointer; transition:all 0.18s; white-space:nowrap; }
-    .faq-tab.active, .faq-tab:hover { background:var(--yellow); border-color:var(--yellow); color:var(--bg); }
-
-    /* ── Main content ── */
+/* ── Main content ── */
     .faq-content { max-width:720px; margin:0 auto; padding:0 24px 80px; }
 
     /* ── Category group ── */
@@ -82,13 +77,6 @@
   <p>Everything you need to know about our services, booking, and caring for your pet at Barkhaus.</p>
 </div>
 
-<div class="faq-tabs">
-  <button class="faq-tab active" onclick=\"faqScrollTo('cat-general', this)\">General</button>
-  <button class="faq-tab" onclick=\"faqScrollTo('cat-hotel', this)\">Pet Hotel</button>
-  <button class="faq-tab" onclick=\"faqScrollTo('cat-daycare', this)\">Daycare</button>
-  <button class="faq-tab" onclick=\"faqScrollTo('cat-grooming', this)\">Grooming</button>
-  <button class="faq-tab" onclick=\"faqScrollTo('cat-safety', this)\">Safety & Health</button>
-</div>
 
 <div class="faq-content">
 
@@ -256,15 +244,6 @@ function toggle(btn) {
   var isOpen = item.classList.contains('open');
   document.querySelectorAll('.faq-item').forEach(function(el) { el.classList.remove('open'); });
   if (!isOpen) item.classList.add('open');
-}
-function faqScrollTo(id, btn) {
-  var el = document.getElementById(id);
-  if (el) {
-    var offset = el.getBoundingClientRect().top + window.scrollY - 80;
-    window.scrollTo({ top: offset, behavior: 'smooth' });
-  }
-  document.querySelectorAll('.faq-tab').forEach(function(t) { t.classList.remove('active'); });
-  if (btn) btn.classList.add('active');
 }
 </script>
 </body>
