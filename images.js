@@ -69,6 +69,11 @@ const BARKHAUS_IMAGES = {
       "images/events-04.jpg",
       "images/events-05.jpg",
     ],
+    store: [
+      "images/store-01.jpg",
+      "images/store-02.jpg",
+      "images/store-03.jpg",
+    ],
     cafe: [
       "images/cafe-01.jpg",
       "images/cafe-02.jpg",
