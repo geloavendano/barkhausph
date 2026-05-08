@@ -183,7 +183,9 @@
   .svc-nav:not(.nav-expanded) .svc-nav-item:not(.active) .svc-nav-label { max-width:0; opacity:0; pointer-events:none; }
   .svc-nav:not(.nav-expanded) .svc-nav-item:not(.active) { gap:0; }
   .svc-nav.nav-expanded .svc-nav-label { max-width:160px; opacity:1; }
-  .svc-nav { cursor:pointer; }
+  .svc-nav { cursor:pointer; transition: opacity 0.5s ease; }
+  .svc-contact-link { color: var(--yellow); text-decoration: none; font-weight: 700; }
+  .svc-nav.nav-hidden { opacity: 0; pointer-events: none; }
   @media(min-width:640px) {
     .svc-nav:not(.nav-expanded) .svc-nav-item:not(.active) .svc-nav-label { max-width:120px; opacity:1; }
     .svc-nav:not(.nav-expanded) .svc-nav-item:not(.active) { gap:8px; }
@@ -255,7 +257,7 @@
   .footer-contacts { display:flex; flex-direction:column; gap:8px; margin-bottom:32px; }
   .footer-row { display:flex; justify-content:space-between; align-items:center; font-size:13px; border-bottom:0.5px solid var(--border); padding-bottom:8px; gap:12px; }
   .footer-branch { color:var(--cream-m); flex-shrink:0; font-weight:600; }
-  .footer-num { color:var(--cream); text-align:right; font-weight:600; }
+  .footer-num { color:var(--cream); text-align:right; font-weight:600; text-decoration:none; }
   .footer-socials { display:flex; gap:14px; margin-bottom:28px; }
   .footer-social { width:36px; height:36px; border-radius:50%; border:0.5px solid var(--border); display:flex; align-items:center; justify-content:center; color:var(--mid); cursor:pointer; text-decoration:none; transition:border-color 0.2s, color 0.2s; }
   .footer-social:active { border-color:var(--yellow); color:var(--yellow); }
@@ -831,8 +833,8 @@ function lbKeyDown(e) {
     <p class="footer-tag">Pet Hotel · Philippines</p>
     <p class="footer-contact-label">Contact us</p>
     <div class="footer-contacts">
-      <div class="footer-row"><span class="footer-branch">Estancia, Pasig</span><span class="footer-num">+63 927 607 3681</span></div>
-      <div class="footer-row"><span class="footer-branch">Eastwood, QC</span><span class="footer-num">+63 956 781 9641</span></div>
+      <div class="footer-row"><span class="footer-branch">Estancia, Pasig</span><a class="footer-num" href="tel:+639276073681">+63 927 607 3681</a></div>
+      <div class="footer-row"><span class="footer-branch">Eastwood, QC</span><a class="footer-num" href="tel:+639567819641">+63 956 781 9641</a></div>
     </div>
     <div class="footer-socials">
       <a class="footer-social" href="https://www.facebook.com/barkhausph" target="_blank" aria-label="Facebook">
@@ -1055,7 +1057,7 @@ const services = [
       { label: 'Hourly booking', detail: 'Take your time, no rush' },
       { label: 'Eastwood only', detail: 'Available at our Eastwood branch' },
     ],
-    pricing: '<div class="svc-price-row"><span class="svc-price-label">Studio session (1 hour)</span><span class="svc-price-val">Contact branch</span></div>',
+    pricing: '<div class="svc-price-row"><span class="svc-price-label">Studio session (1 hour)</span><a class="svc-price-val svc-contact-link" href="#footer-section" onclick="document.getElementById('footer-section').scrollIntoView({behavior:'smooth'});return false;">Contact branch</a></div>',
   },
   {
     tag: 'Events',
@@ -1068,7 +1070,7 @@ const services = [
       { label: 'Pet-friendly catering', detail: 'Treats for your four-legged guests' },
       { label: 'Photo opportunities', detail: 'Themed setups available' },
     ],
-    pricing: '<div class="svc-price-row"><span class="svc-price-label">Birthday packages</span><span class="svc-price-val">Contact branch</span></div><div class="svc-price-row"><span class="svc-price-label">Private events</span><span class="svc-price-val">Contact branch</span></div>',
+    pricing: '<div class="svc-price-row"><span class="svc-price-label">Birthday packages</span><a class="svc-price-val svc-contact-link" href="#footer-section" onclick="document.getElementById('footer-section').scrollIntoView({behavior:'smooth'});return false;">Contact branch</a></div><div class="svc-price-row"><span class="svc-price-label">Private events</span><a class="svc-price-val svc-contact-link" href="#footer-section" onclick="document.getElementById('footer-section').scrollIntoView({behavior:'smooth'});return false;">Contact branch</a></div>',
   },
   {
     tag: 'Shop',
@@ -1583,17 +1585,42 @@ function homeFaqToggle(idx) {
   if(!isOpen) item.classList.add('open');
 }
 
-/* ══ SERVICES NAV COLLAPSE TOGGLE ══ */
+/* ══ SERVICES NAV COLLAPSE TOGGLE + AUTO-HIDE ══ */
 document.addEventListener('DOMContentLoaded', function() {
   var nav = document.querySelector('.svc-nav');
   if (!nav) return;
+  var navHideTimer = null;
+
+  function scheduleNavHide(delay) {
+    clearTimeout(navHideTimer);
+    navHideTimer = setTimeout(function() {
+      nav.classList.add('nav-hidden');
+      nav.classList.remove('nav-expanded');
+    }, delay || 3000);
+  }
+
+  function showNav() {
+    nav.classList.remove('nav-hidden');
+    scheduleNavHide();
+  }
+
   nav.addEventListener('click', function(e) {
-    // If clicking an item, let switchSvc handle it — just collapse after
     var item = e.target.closest('.svc-nav-item');
     if (item) return; // handled by onclick="switchSvc()"
-    // Clicking the nav background toggles expand
+    // Tapping nav background: show/expand, then auto-hide
     nav.classList.toggle('nav-expanded');
+    nav.classList.remove('nav-hidden');
+    scheduleNavHide();
   });
+
+  // Auto-hide when services section enters view; show briefly on scroll-in
+  var svcSection = document.getElementById('services');
+  if (svcSection) {
+    new IntersectionObserver(function(entries) {
+      if (entries[0].isIntersecting) showNav();
+      else { clearTimeout(navHideTimer); nav.classList.add('nav-hidden'); nav.classList.remove('nav-expanded'); }
+    }, { threshold: 0.5 }).observe(svcSection);
+  }
 });
 
 </script>
