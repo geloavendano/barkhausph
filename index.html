@@ -183,9 +183,9 @@
   .svc-nav:not(.nav-expanded) .svc-nav-item:not(.active) .svc-nav-label { max-width:0; opacity:0; pointer-events:none; }
   .svc-nav:not(.nav-expanded) .svc-nav-item:not(.active) { gap:0; }
   .svc-nav.nav-expanded .svc-nav-label { max-width:160px; opacity:1; }
-  .svc-nav { cursor:pointer; transition: opacity 0.5s ease; }
-  .svc-contact-link { color: var(--yellow); text-decoration: none; font-weight: 700; }
+  .svc-nav { cursor:pointer; transition: opacity 0.4s ease; }
   .svc-nav.nav-hidden { opacity: 0; pointer-events: none; }
+  .svc-contact-link { color: var(--yellow); text-decoration: none; font-weight: 700; }
   @media(min-width:640px) {
     .svc-nav:not(.nav-expanded) .svc-nav-item:not(.active) .svc-nav-label { max-width:120px; opacity:1; }
     .svc-nav:not(.nav-expanded) .svc-nav-item:not(.active) { gap:8px; }
@@ -1586,42 +1586,64 @@ function homeFaqToggle(idx) {
 }
 
 /* ══ SERVICES NAV COLLAPSE TOGGLE + AUTO-HIDE ══ */
-document.addEventListener('DOMContentLoaded', function() {
-  var nav = document.querySelector('.svc-nav');
-  if (!nav) return;
-  var navHideTimer = null;
+(function() {
+  var nav, navHideTimer;
 
-  function scheduleNavHide(delay) {
+  function scheduleNavHide() {
     clearTimeout(navHideTimer);
     navHideTimer = setTimeout(function() {
-      nav.classList.add('nav-hidden');
-      nav.classList.remove('nav-expanded');
-    }, delay || 3000);
+      if (nav) { nav.classList.add('nav-hidden'); nav.classList.remove('nav-expanded'); }
+    }, 3000);
   }
 
   function showNav() {
+    if (!nav) return;
     nav.classList.remove('nav-hidden');
     scheduleNavHide();
   }
 
-  nav.addEventListener('click', function(e) {
-    var item = e.target.closest('.svc-nav-item');
-    if (item) return; // handled by onclick="switchSvc()"
-    // Tapping nav background: show/expand, then auto-hide
-    nav.classList.toggle('nav-expanded');
-    nav.classList.remove('nav-hidden');
-    scheduleNavHide();
+  document.addEventListener('DOMContentLoaded', function() {
+    nav = document.querySelector('.svc-nav');
+    if (!nav) return;
+
+    // Start hidden; show when services section comes into view
+    nav.classList.add('nav-hidden');
+
+    nav.addEventListener('click', function(e) {
+      var item = e.target.closest('.svc-nav-item');
+      if (item) return; // handled by onclick="switchSvc()"
+      nav.classList.toggle('nav-expanded');
+      nav.classList.remove('nav-hidden');
+      scheduleNavHide();
+    });
+
+    // Show nav when services section scrolls into view, hide when it leaves
+    var svcSection = document.getElementById('services');
+    if (svcSection) {
+      new IntersectionObserver(function(entries) {
+        if (entries[0].isIntersecting) {
+          showNav();
+        } else {
+          clearTimeout(navHideTimer);
+          nav.classList.add('nav-hidden');
+          nav.classList.remove('nav-expanded');
+        }
+      }, { threshold: 0.3 }).observe(svcSection);
+    }
   });
 
-  // Auto-hide when services section enters view; show briefly on scroll-in
-  var svcSection = document.getElementById('services');
-  if (svcSection) {
-    new IntersectionObserver(function(entries) {
-      if (entries[0].isIntersecting) showNav();
-      else { clearTimeout(navHideTimer); nav.classList.add('nav-hidden'); nav.classList.remove('nav-expanded'); }
-    }, { threshold: 0.5 }).observe(svcSection);
-  }
-});
+  // Also re-show briefly after switching service (user is interacting)
+  var _origSwitchSvc = window.switchSvc;
+  document.addEventListener('DOMContentLoaded', function() {
+    var origSwitchSvc = window.switchSvc;
+    if (origSwitchSvc) {
+      window.switchSvc = function(idx) {
+        origSwitchSvc(idx);
+        showNav();
+      };
+    }
+  });
+})();
 
 </script>
 
