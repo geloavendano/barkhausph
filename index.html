@@ -185,6 +185,8 @@
   .svc-nav.nav-expanded .svc-nav-label { max-width:160px; opacity:1; }
   .svc-nav { cursor:pointer; transition: opacity 0.4s ease; }
   .svc-nav.nav-hidden { opacity: 0; pointer-events: none; }
+  .svc-nav.labels-hidden .svc-nav-label { max-width: 0 !important; opacity: 0 !important; }
+  .svc-nav.labels-hidden .svc-nav-item { gap: 0; }
   .svc-contact-link { color: var(--yellow); text-decoration: none; font-weight: 700; }
   @media(min-width:640px) {
     .svc-nav:not(.nav-expanded) .svc-nav-item:not(.active) .svc-nav-label { max-width:120px; opacity:1; }
@@ -1590,36 +1592,60 @@ function homeFaqToggle(idx) {
   var nav = document.querySelector('.svc-nav');
   if (!nav) return;
   var hideTimer = null;
+  var shownForCurrentVisit = false;
+  var MOBILE_BP = 640;
 
-  // Start hidden immediately (script runs at end of body, nav exists)
-  nav.classList.add('nav-hidden');
+  function isMobile() { return window.innerWidth < MOBILE_BP; }
 
-  function hide() {
+  function hideLabels() {
     clearTimeout(hideTimer);
-    nav.classList.add('nav-hidden');
+    nav.classList.add('labels-hidden');
     nav.classList.remove('nav-expanded');
   }
 
-  function showThen(ms) {
+  function showLabelsThen(ms) {
     clearTimeout(hideTimer);
-    nav.classList.remove('nav-hidden');
-    hideTimer = setTimeout(hide, ms || 3000);
+    nav.classList.remove('labels-hidden');
+    hideTimer = setTimeout(hideLabels, ms || 3000);
   }
 
-  // Tap on nav background: expand/collapse and reset timer
+  // Initial state on mobile: collapse to bars only
+  if (isMobile()) nav.classList.add('labels-hidden');
+
+  // Tap nav bars: show labels and reset timer (mobile only)
   nav.addEventListener('click', function(e) {
+    if (!isMobile()) return;
     if (e.target.closest('.svc-nav-item')) return;
     nav.classList.toggle('nav-expanded');
-    showThen(3000);
+    showLabelsThen(3000);
   });
 
-  // Watch the services section: show on enter, hide immediately on leave
+  // Show labels once when section comes into view; ignore snap-scroll re-fires
   var svcSection = document.getElementById('services');
   if (svcSection) {
     new IntersectionObserver(function(entries) {
-      entries[0].isIntersecting ? showThen(3000) : hide();
+      if (!isMobile()) return;
+      if (entries[0].isIntersecting) {
+        if (!shownForCurrentVisit) {
+          shownForCurrentVisit = true;
+          showLabelsThen(3000);
+        }
+      } else {
+        shownForCurrentVisit = false;
+        hideLabels();
+      }
     }, { threshold: 0.5 }).observe(svcSection);
   }
+
+  // Orientation / resize: restore full nav on desktop
+  window.addEventListener('resize', function() {
+    if (!isMobile()) {
+      clearTimeout(hideTimer);
+      nav.classList.remove('labels-hidden');
+    } else if (!shownForCurrentVisit) {
+      hideLabels();
+    }
+  });
 })();
 
 </script>
