@@ -1659,6 +1659,23 @@ function homeFaqToggle(idx) {
   });
 })();
 
+(function() {
+  var startX, startY, blocking;
+  document.addEventListener('touchstart', function(e) {
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+    blocking = null;
+  }, { passive: true });
+  document.addEventListener('touchmove', function(e) {
+    if (blocking === null) {
+      var dx = Math.abs(e.touches[0].clientX - startX);
+      var dy = Math.abs(e.touches[0].clientY - startY);
+      if (dx > 5 || dy > 5) blocking = dx > dy;
+    }
+    if (blocking && !e.target.closest('.loc-thumbs')) e.preventDefault();
+  }, { passive: false });
+})();
+
 </script>
 
 <!-- ══ LIGHTBOX ══ -->
