@@ -1587,62 +1587,39 @@ function homeFaqToggle(idx) {
 
 /* ══ SERVICES NAV COLLAPSE TOGGLE + AUTO-HIDE ══ */
 (function() {
-  var nav, navHideTimer;
+  var nav = document.querySelector('.svc-nav');
+  if (!nav) return;
+  var hideTimer = null;
 
-  function scheduleNavHide() {
-    clearTimeout(navHideTimer);
-    navHideTimer = setTimeout(function() {
-      if (nav) { nav.classList.add('nav-hidden'); nav.classList.remove('nav-expanded'); }
-    }, 3000);
-  }
+  // Start hidden immediately (script runs at end of body, nav exists)
+  nav.classList.add('nav-hidden');
 
-  function showNav() {
-    if (!nav) return;
-    nav.classList.remove('nav-hidden');
-    scheduleNavHide();
-  }
-
-  document.addEventListener('DOMContentLoaded', function() {
-    nav = document.querySelector('.svc-nav');
-    if (!nav) return;
-
-    // Start hidden; show when services section comes into view
+  function hide() {
+    clearTimeout(hideTimer);
     nav.classList.add('nav-hidden');
+    nav.classList.remove('nav-expanded');
+  }
 
-    nav.addEventListener('click', function(e) {
-      var item = e.target.closest('.svc-nav-item');
-      if (item) return; // handled by onclick="switchSvc()"
-      nav.classList.toggle('nav-expanded');
-      nav.classList.remove('nav-hidden');
-      scheduleNavHide();
-    });
+  function showThen(ms) {
+    clearTimeout(hideTimer);
+    nav.classList.remove('nav-hidden');
+    hideTimer = setTimeout(hide, ms || 3000);
+  }
 
-    // Show nav when services section scrolls into view, hide when it leaves
-    var svcSection = document.getElementById('services');
-    if (svcSection) {
-      new IntersectionObserver(function(entries) {
-        if (entries[0].isIntersecting) {
-          showNav();
-        } else {
-          clearTimeout(navHideTimer);
-          nav.classList.add('nav-hidden');
-          nav.classList.remove('nav-expanded');
-        }
-      }, { threshold: 0.3 }).observe(svcSection);
-    }
+  // Tap on nav background: expand/collapse and reset timer
+  nav.addEventListener('click', function(e) {
+    if (e.target.closest('.svc-nav-item')) return;
+    nav.classList.toggle('nav-expanded');
+    showThen(3000);
   });
 
-  // Also re-show briefly after switching service (user is interacting)
-  var _origSwitchSvc = window.switchSvc;
-  document.addEventListener('DOMContentLoaded', function() {
-    var origSwitchSvc = window.switchSvc;
-    if (origSwitchSvc) {
-      window.switchSvc = function(idx) {
-        origSwitchSvc(idx);
-        showNav();
-      };
-    }
-  });
+  // Watch the services section: show on enter, hide immediately on leave
+  var svcSection = document.getElementById('services');
+  if (svcSection) {
+    new IntersectionObserver(function(entries) {
+      entries[0].isIntersecting ? showThen(3000) : hide();
+    }, { threshold: 0.5 }).observe(svcSection);
+  }
 })();
 
 </script>
