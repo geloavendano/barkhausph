@@ -1,6 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<!-- Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-LBWQT2HSGQ"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-LBWQT2HSGQ');
+</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Book Now - Barkhaus</title>
@@ -1081,6 +1089,7 @@ var PET_SIZE_LABELS = {
 var VALID_MEMBER_IDS = ['BH-M001','BH-M002','BH-M003','BH-M004','BH-M005',
   'BH-M010','BH-M020','BH-M030','BH-M100'];
 var MEMBER_DISCOUNT = { grooming:0.10, hotel:0.20, daycare:0.20 };
+var CONVENIENCE_FEE = 20;
 
 // ── STATE ──
 // Live data from DB (populated on init)
@@ -1499,11 +1508,11 @@ function updateGroomTotal() {
   var addons  = Object.keys(booking.selectedAddons).reduce(function(a,k){return a+(booking.selectedAddons[k]||0);},0);
   var subtotal = base + addons;
   var discount = booking.memberValid ? Math.round(subtotal * MEMBER_DISCOUNT.grooming) : 0;
-  var total    = subtotal - discount;
+  var total    = subtotal - discount + CONVENIENCE_FEE;
   var el = document.getElementById('groomPriceTotal');
   if (subtotal > 0) {
     var html = '\u20b1' + total.toLocaleString();
-    if (discount > 0) html = '<span style="text-decoration:line-through;opacity:0.5;font-size:14px">\u20b1' + subtotal.toLocaleString() + '</span> \u20b1' + total.toLocaleString();
+    if (discount > 0) html = '<span style="text-decoration:line-through;opacity:0.5;font-size:14px">\u20b1' + (subtotal + CONVENIENCE_FEE).toLocaleString() + '</span> \u20b1' + total.toLocaleString();
     document.getElementById('groomTotalVal').innerHTML = html;
     el.style.display = 'flex';
   } else {
@@ -1977,11 +1986,11 @@ function calcHotelTotal() {
 
   var subtotal = baseTotal + booking.hotelLateTotal;
   var discount = booking.memberValid ? Math.round(subtotal * MEMBER_DISCOUNT.hotel) : 0;
-  var total    = subtotal - discount;
+  var total    = subtotal - discount + CONVENIENCE_FEE;
 
   var el   = document.getElementById('hotelDetailsPriceTotal');
   var html = '\u20b1' + total.toLocaleString();
-  if (discount > 0) html = '<span style="text-decoration:line-through;opacity:0.5;font-size:14px">\u20b1' + subtotal.toLocaleString() + '</span> \u20b1' + total.toLocaleString();
+  if (discount > 0) html = '<span style="text-decoration:line-through;opacity:0.5;font-size:14px">\u20b1' + (subtotal + CONVENIENCE_FEE).toLocaleString() + '</span> \u20b1' + total.toLocaleString();
   document.getElementById('hotelDetailsTotalVal').innerHTML = html;
   el.style.display = 'flex';
   updateNavTotal();
@@ -2073,9 +2082,9 @@ function calcDaycareTotal() {
   booking.daycarePickupHour  = pickH;
   booking.daycareTotal = subtotal;
   var discount = booking.memberValid ? Math.round(subtotal * MEMBER_DISCOUNT.daycare) : 0;
-  var total    = subtotal - discount;
+  var total    = subtotal - discount + CONVENIENCE_FEE;
   var html = '\u20b1' + total.toLocaleString();
-  if (discount > 0) html = '<span style="text-decoration:line-through;opacity:0.5;font-size:14px">\u20b1' + subtotal.toLocaleString() + '</span> \u20b1' + total.toLocaleString();
+  if (discount > 0) html = '<span style="text-decoration:line-through;opacity:0.5;font-size:14px">\u20b1' + (subtotal + CONVENIENCE_FEE).toLocaleString() + '</span> \u20b1' + total.toLocaleString();
   html += '<span style="font-size:11px;display:block;color:var(--mid);margin-top:2px">' + hours + ' hour' + (hours!==1?'s':'') + (extra>0?' (base + '+extra+' extra hr'+(extra>1?'s':'')+')'  :'') + '</span>';
   document.getElementById('daycareTotalVal').innerHTML = html;
   el.style.display = 'flex';
@@ -2423,12 +2432,13 @@ function buildSummary() {
   if (subtotal > 0) {
     var discRate = booking.memberValid ? (MEMBER_DISCOUNT[svc]||0) : 0;
     var discAmt  = Math.round(subtotal * discRate);
-    var total    = subtotal - discAmt;
+    var total    = subtotal - discAmt + CONVENIENCE_FEE;
     if (discAmt > 0) {
       var discPct = Math.round(discRate * 100);
       html += '<div class="price-line"><span class="price-line-label">Subtotal</span><span class="price-line-val">\u20b1'+subtotal.toLocaleString()+'</span></div>';
       html += '<div class="price-line"><span class="price-line-label">Member discount ('+discPct+'%)</span><span class="price-line-val discount">-\u20b1'+discAmt.toLocaleString()+'</span></div>';
     }
+    html += '<div class="price-line"><span class="price-line-label">Convenience fee</span><span class="price-line-val">\u20b1'+CONVENIENCE_FEE.toLocaleString()+'</span></div>';
     html += '<div class="price-line total-line"><span class="price-line-label">Total</span><span class="price-line-val">\u20b1'+total.toLocaleString()+'</span></div>';
   }
   document.getElementById('priceBreakdown').innerHTML = html || '<div class="price-line"><span class="price-line-label">No price estimate available</span><span class="price-line-val">-</span></div>';
@@ -2540,7 +2550,7 @@ function submitBooking() {
   }
   var discRate = booking.memberValid ? (MEMBER_DISCOUNT[svc] || 0) : 0;
   var discAmt  = Math.round(subtotal * discRate);
-  var total    = subtotal - discAmt;
+  var total    = subtotal - discAmt + CONVENIENCE_FEE;
 
   var groomServiceName = '';
   if (booking.groomService) {
@@ -2596,7 +2606,7 @@ function submitBooking() {
     waiverMedia:document.getElementById('waiverMedia').classList.contains('checked'),
     waiverPlaypark:document.getElementById('waiverPlaypark')?document.getElementById('waiverPlaypark').classList.contains('checked'):false,
     waiverTexts: buildWaiverTexts(),
-    subtotal:subtotal, discountAmount:discAmt, total:total,
+    subtotal:subtotal, discountAmount:discAmt, convenienceFee:CONVENIENCE_FEE, total:total,
   };
 
   // Show loading state
