@@ -882,8 +882,8 @@
         <li>I certify that I have read, understood, and voluntarily agree to these terms. This waiver shall remain in effect for all future grooming appointments unless revoked in writing.</li>
       </ol>
     </div>
-    <div class="checkbox-row" onclick="toggleCheck(&#39;waiverGeneral&#39;)">
-      <div class="checkbox-box" id="waiverGeneral"></div>
+    <div class="checkbox-row" onclick="toggleCheck('waiverGeneralGrooming')">
+      <div class="checkbox-box" id="waiverGeneralGrooming"></div>
       <span class="checkbox-label">I have read and agree to the <strong>Grooming Waiver</strong>.</span>
     </div>
   </div>
@@ -908,8 +908,8 @@
         <li>I understand and agree that if my dog remains at Barkhaus for three (3) days or more with an unsettled bill and without any communication from me, my dog will be considered abandoned. In such cases, I relinquish ownership rights, and Barkhaus reserves the right to place the dog for adoption or appropriate care.</li>
       </ol>
     </div>
-    <div class="checkbox-row" onclick="toggleCheck(&#39;waiverGeneral&#39;)">
-      <div class="checkbox-box" id="waiverGeneral"></div>
+    <div class="checkbox-row" onclick="toggleCheck('waiverGeneralDaycare')">
+      <div class="checkbox-box" id="waiverGeneralDaycare"></div>
       <span class="checkbox-label">I have read and agree to the <strong>Daycare Waiver</strong>.</span>
     </div>
   </div>
@@ -927,8 +927,8 @@
         <li>By signing below, I acknowledge and agree to all house rules set by Barkhaus. I understand that if my dog remains at Barkhaus for fifteen (15) days or more with an unsettled bill and without communication, my dog will be considered abandoned, and Barkhaus reserves the right to place the dog for adoption or appropriate care.</li>
       </ol>
     </div>
-    <div class="checkbox-row" onclick="toggleCheck(&#39;waiverGeneral&#39;)">
-      <div class="checkbox-box" id="waiverGeneral"></div>
+    <div class="checkbox-row" onclick="toggleCheck('waiverGeneralHotel')">
+      <div class="checkbox-box" id="waiverGeneralHotel"></div>
       <span class="checkbox-label">I have read and agree to the <strong>Hotel Waiver</strong>.</span>
     </div>
 
@@ -1426,7 +1426,11 @@ function showOwnerPanel() {
 
 // ── STEP 7 WAIVER PANEL ──
 function showWaiverPanel() {
-  document.getElementById('studioWaiver').style.display = booking.service === 'studio' ? '' : 'none';
+  var svc = booking.service;
+  document.getElementById('groomingWaivers').style.display = svc === 'grooming' ? '' : 'none';
+  document.getElementById('daycareWaivers').style.display  = svc === 'daycare'  ? '' : 'none';
+  document.getElementById('hotelWaivers').style.display    = svc === 'hotel'    ? '' : 'none';
+  document.getElementById('studioWaiver').style.display    = svc === 'studio'   ? '' : 'none';
 }
 
 // ── GROOMING SIZE ──
@@ -2340,7 +2344,9 @@ function validateStep(step) {
     if (!document.getElementById('ownerPhone').value.trim()) { alert('Please enter your mobile number.'); return false; }
   }
   if (step === 7) {
-    if (!document.getElementById('waiverGeneral').classList.contains('checked')) {
+    var waiverMap = { grooming:'waiverGeneralGrooming', daycare:'waiverGeneralDaycare', hotel:'waiverGeneralHotel' };
+    var waiverEl = waiverMap[booking.service] ? document.getElementById(waiverMap[booking.service]) : null;
+    if (waiverEl && !waiverEl.classList.contains('checked')) {
       alert('Please agree to the General Terms and Liability Waiver.'); return false;
     }
     if (!document.getElementById('waiverVaccineDecl').classList.contains('checked')) {
@@ -2620,7 +2626,7 @@ function submitBooking() {
     ownerFirst:booking.ownerFirst, ownerLast:booking.ownerLast,
     ownerEmail:booking.ownerEmail, ownerPhone:booking.ownerPhone,
     ownerSource:document.getElementById('ownerSource')?document.getElementById('ownerSource').value:'',
-    waiverGeneral:document.getElementById('waiverGeneral').classList.contains('checked'),
+    waiverGeneral:(function(){ var m={grooming:'waiverGeneralGrooming',daycare:'waiverGeneralDaycare',hotel:'waiverGeneralHotel'}; var el=m[booking.service]?document.getElementById(m[booking.service]):null; return el?el.classList.contains('checked'):false; })(),
     waiverVaccine:document.getElementById('waiverVaccineDecl').classList.contains('checked'),
     waiverSeniorMedical:document.getElementById('seniorWaiver')?document.getElementById('seniorWaiver').classList.contains('checked'):false,
     waiverStudio:document.getElementById('waiverStudio')?document.getElementById('waiverStudio').classList.contains('checked'):false,
