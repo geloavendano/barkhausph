@@ -2317,7 +2317,7 @@ function validateStep(step) {
       alert('Please select your pet\'s size.'); return false;
     }
     if (!booking.petTemperament) { alert('Please select your pet\'s temperament.'); return false; }
-    if (!document.getElementById('waiverVaccineDecl').classList.contains('checked')) {
+    if (!document.getElementById('vaccineWaiver').classList.contains('checked')) {
       alert('Please agree to the vaccine liability declaration.'); return false;
     }
     // Senior waiver check for grooming
@@ -2342,6 +2342,9 @@ function validateStep(step) {
   if (step === 7) {
     if (!document.getElementById('waiverGeneral').classList.contains('checked')) {
       alert('Please agree to the General Terms and Liability Waiver.'); return false;
+    }
+    if (!document.getElementById('waiverVaccineDecl').classList.contains('checked')) {
+      alert('Please agree to the Vaccine & Health Declaration.'); return false;
     }
     if (booking.service === 'studio' && !document.getElementById('waiverStudio').classList.contains('checked')) {
       alert('Please agree to the Studio Usage Agreement.'); return false;
