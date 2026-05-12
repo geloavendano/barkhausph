@@ -956,8 +956,8 @@
     <h4>Vaccine &amp; Health Declaration</h4>
     <p id="vaccineWaiverText">I acknowledge and agree that my dog may acquire illnesses or diseases due to outdated or incomplete vaccinations, and that even with complete and updated vaccinations, there remains a minimal risk of contracting illness. I will not hold Barkhaus liable for any such occurrences.</p>
   </div>
-  <div class="checkbox-row" onclick="toggleCheck(&#39;vaccineWaiver&#39;)">
-    <div class="checkbox-box" id="vaccineWaiver"></div>
+  <div class="checkbox-row" onclick="toggleCheck('waiverVaccineDecl')">
+    <div class="checkbox-box" id="waiverVaccineDecl"></div>
     <span class="checkbox-label">I agree to the <strong>Vaccine &amp; Health Declaration</strong>.</span>
   </div>
 
@@ -2317,7 +2317,7 @@ function validateStep(step) {
       alert('Please select your pet\'s size.'); return false;
     }
     if (!booking.petTemperament) { alert('Please select your pet\'s temperament.'); return false; }
-    if (!document.getElementById('vaccineWaiver').classList.contains('checked')) {
+    if (!document.getElementById('waiverVaccineDecl').classList.contains('checked')) {
       alert('Please agree to the vaccine liability declaration.'); return false;
     }
     // Senior waiver check for grooming
@@ -2618,7 +2618,7 @@ function submitBooking() {
     ownerEmail:booking.ownerEmail, ownerPhone:booking.ownerPhone,
     ownerSource:document.getElementById('ownerSource')?document.getElementById('ownerSource').value:'',
     waiverGeneral:document.getElementById('waiverGeneral').classList.contains('checked'),
-    waiverVaccine:document.getElementById('vaccineWaiver').classList.contains('checked'),
+    waiverVaccine:document.getElementById('waiverVaccineDecl').classList.contains('checked'),
     waiverSeniorMedical:document.getElementById('seniorWaiver')?document.getElementById('seniorWaiver').classList.contains('checked'):false,
     waiverStudio:document.getElementById('waiverStudio')?document.getElementById('waiverStudio').classList.contains('checked'):false,
     waiverMedia:document.getElementById('waiverMedia').classList.contains('checked'),
