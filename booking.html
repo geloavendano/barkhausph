@@ -174,6 +174,7 @@
   .nav-total-val { font-family: "Fredoka One", cursive; font-size: 17px; color: var(--yellow); line-height: 1.1; }
   .btn-back { flex: 0 0 auto; padding: 14px 20px; background: var(--surface); border: 1px solid var(--border); border-radius: 50px; font-size: 13px; font-weight: 700; color: var(--cream-m); cursor: pointer; font-family: "Nunito", sans-serif; transition: background 0.2s; }
   .btn-next { flex: 1; padding: 14px; background: var(--yellow); color: var(--bg); border: none; border-radius: 50px; font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; font-family: "Nunito", sans-serif; transition: opacity 0.2s; }
+  .btn-next:disabled { opacity: 0.35; cursor: not-allowed; }
   .btn-submit { flex: 1; padding: 14px; background: var(--blue); color: #fff; border: none; border-radius: 50px; font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; font-family: "Nunito", sans-serif; }
   .section-label { font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--yellow); font-weight: 700; margin: 18px 0 10px; padding-bottom: 8px; border-bottom: 0.5px solid var(--border); }
   .info-box { background: rgba(77,150,185,0.08); border: 1px solid rgba(77,150,185,0.2); border-radius: 10px; padding: 12px 14px; font-size: 12px; color: var(--cream-m); line-height: 1.6; margin-bottom: 14px; }
@@ -498,13 +499,13 @@
         <div class="form-row">
           <div class="form-group">
             <label class="form-label">Drop-off <span class="required">*</span></label>
-            <select class="form-select" id="daycareDropoff" onchange="calcDaycareTotal()">
+            <select class="form-select" id="daycareDropoff" onchange="calcDaycareTotal(); refreshContinueBtn();">
               <option value="">Select time</option>
             </select>
           </div>
           <div class="form-group">
             <label class="form-label">Pick-up <span class="required">*</span></label>
-            <select class="form-select" id="daycarePickup" onchange="calcDaycareTotal()">
+            <select class="form-select" id="daycarePickup" onchange="calcDaycareTotal(); refreshContinueBtn();">
               <option value="">Select time</option>
             </select>
           </div>
@@ -521,7 +522,7 @@
   <div id="studioSlotSection" style="display:none">
     <div class="form-group">
       <label class="form-label">Date <span class="required">*</span></label>
-      <input type="date" class="form-input" id="studioDate">
+      <input type="date" class="form-input" id="studioDate" onchange="refreshContinueBtn()">
     </div>
     <p class="section-label">Time slot <span style="font-size:10px;color:var(--mid);text-transform:none;letter-spacing:0;font-weight:500">(1 hour session)</span></p>
     <div class="timeslot-grid" id="studioSlots" style="grid-template-columns:repeat(3,1fr)">
@@ -592,13 +593,13 @@
   <div id="hotelDetailsSection" style="display:none">
     <div class="form-group">
       <label class="form-label">Drop-off time <span class="required">*</span></label>
-      <select class="form-select" id="hotelDropoffTime">
+      <select class="form-select" id="hotelDropoffTime" onchange="calcHotelTotal(); refreshContinueBtn();">
         <option value="">Select time</option>
       </select>
     </div>
     <p class="section-label">Pick-up time</p>
     <div class="info-box" style="margin-bottom:10px">Standard checkout is <strong>2:00 PM</strong>. Late pick-up up to 8:00 PM is <strong>+&#8369;100/hour</strong>. Holiday rates may apply on public holidays. Extension beyond <strong>6 hours</strong> past standard checkout counts as <strong>1 additional night</strong>. Failure to pick up by 8:00 PM will be charged as an additional night.</div>
-    <select class="form-select" id="hotelPickupTime" onchange="calcHotelTotal()">
+    <select class="form-select" id="hotelPickupTime" onchange="calcHotelTotal(); refreshContinueBtn();">
       <option value="">Select pick-up time</option>
       <option value="14">On or before 2PM (standard)</option>
       <option value="15">3:00 PM (+&#8369;100)</option>
@@ -651,7 +652,7 @@
 
   <div class="form-group">
     <label class="form-label">Pet name <span class="required">*</span></label>
-    <input type="text" class="form-input" id="petName" placeholder="e.g. Mochi" maxlength="40">
+    <input type="text" class="form-input" id="petName" placeholder="e.g. Mochi" maxlength="40" oninput="refreshContinueBtn()">
   </div>
 
   <div class="form-group" id="petTypeGroup">
@@ -689,17 +690,17 @@
 
   <div class="form-group">
     <label class="form-label">Breed <span class="required">*</span></label>
-    <input type="text" class="form-input" id="petBreed" placeholder="e.g. Golden Retriever, Mixed">
+    <input type="text" class="form-input" id="petBreed" placeholder="e.g. Golden Retriever, Mixed" oninput="refreshContinueBtn()">
   </div>
 
   <div class="form-row">
     <div class="form-group">
       <label class="form-label">Age <span class="required">*</span></label>
-      <input type="number" class="form-input" id="petAgeNum" placeholder="e.g. 2" min="0" max="30" oninput="checkSeniorWaiver()">
+      <input type="number" class="form-input" id="petAgeNum" placeholder="e.g. 2" min="0" max="30" oninput="checkSeniorWaiver(); refreshContinueBtn();">
     </div>
     <div class="form-group">
       <label class="form-label">Unit</label>
-      <select class="form-select" id="petAgeUnit" onchange="checkSeniorWaiver()">
+      <select class="form-select" id="petAgeUnit" onchange="checkSeniorWaiver(); refreshContinueBtn();">
         <option value="years">Years</option>
         <option value="months">Months</option>
       </select>
@@ -708,7 +709,7 @@
 
   <div class="form-group">
     <label class="form-label">Known medical issues or allergies</label>
-    <textarea class="form-textarea" id="petMedical" placeholder="Leave blank if none" oninput="checkSeniorWaiver()"></textarea>
+    <textarea class="form-textarea" id="petMedical" placeholder="Leave blank if none" oninput="checkSeniorWaiver(); refreshContinueBtn();"></textarea>
     <div id="seniorWaiverRow" style="display:none" class="checkbox-row" onclick="toggleCheck('seniorWaiverAck')" style="margin-top:10px">
       <div class="checkbox-box" id="seniorWaiverAck"></div>
       <span class="checkbox-label">I understand that senior pets (6+ years) or pets with known medical conditions may be at higher risk during grooming. I waive Barkhaus from liability for any adverse health reactions.</span>
@@ -843,20 +844,20 @@
   <div class="form-row">
     <div class="form-group">
       <label class="form-label">First name <span class="required">*</span></label>
-      <input type="text" class="form-input" id="ownerFirst" placeholder="Juan">
+      <input type="text" class="form-input" id="ownerFirst" placeholder="Juan" oninput="refreshContinueBtn()">
     </div>
     <div class="form-group">
       <label class="form-label">Last name <span class="required">*</span></label>
-      <input type="text" class="form-input" id="ownerLast" placeholder="dela Cruz">
+      <input type="text" class="form-input" id="ownerLast" placeholder="dela Cruz" oninput="refreshContinueBtn()">
     </div>
   </div>
   <div class="form-group">
     <label class="form-label">Email <span class="required">*</span></label>
-    <input type="email" class="form-input" id="ownerEmail" placeholder="juan@email.com">
+    <input type="email" class="form-input" id="ownerEmail" placeholder="juan@email.com" oninput="refreshContinueBtn()">
   </div>
   <div class="form-group">
     <label class="form-label">Mobile <span class="required">*</span></label>
-    <input type="tel" class="form-input" id="ownerPhone" placeholder="+63 9XX XXX XXXX">
+    <input type="tel" class="form-input" id="ownerPhone" placeholder="+63 9XX XXX XXXX" oninput="refreshContinueBtn()">
   </div>
   <div class="form-group">
     <label class="form-label">How did you hear about us?</label>
@@ -1386,9 +1387,90 @@ function updateBottomNav() {
   back.style.display = currentStep > 1 ? '' : 'none';
   next.textContent = 'Continue';
   next.className = 'btn-next';
-  next.disabled = false;
   next.onclick = function() { nextStep(); };
   updateNavTotal();
+  refreshContinueBtn();
+}
+function silentValidateStep(step) {
+  var svc = booking.service;
+  var g = function(id) { var el=document.getElementById(id); return el ? el.value : ''; };
+  if (step === 1) return !!booking.location;
+  if (step === 2) return !!svc;
+  if (step === 3) {
+    if (svc === 'grooming') {
+      if (!booking.petSize || !booking.groomService) return false;
+      if (booking.groomService === 'ala_carte' && Object.keys(booking.selectedAddons).length === 0) return false;
+    }
+    if (svc === 'hotel') {
+      if (!booking.petSize) return false;
+      if (!g('hotelCheckin') || !g('hotelCheckout')) return false;
+      if (!booking.hotelRoomType) return false;
+    }
+    if (svc === 'daycare') {
+      if (!booking.petSize) return false;
+      if (!g('daycareDate') || !g('daycareDropoff') || !g('daycarePickup')) return false;
+    }
+    if (svc === 'studio') {
+      if (!g('studioDate') || !booking.studioSlot) return false;
+    }
+    return true;
+  }
+  if (step === 4) {
+    if (svc === 'grooming') {
+      if (!g('groomDate') || !booking.groomSlot) return false;
+    }
+    if (svc === 'hotel') {
+      if (!g('hotelDropoffTime') || !g('hotelPickupTime')) return false;
+    }
+    return true;
+  }
+  if (step === 5) {
+    if (!g('petName').trim() || !booking.petAnimal || !booking.petGender) return false;
+    if (!g('petBreed').trim() || !g('petAgeNum').trim()) return false;
+    if (!booking.petTemperament) return false;
+    var vw = document.getElementById('vaccineWaiver');
+    if (!vw || !vw.classList.contains('checked')) return false;
+    var sr = document.getElementById('seniorWaiverRow');
+    if (sr && sr.style.display !== 'none') {
+      var sa = document.getElementById('seniorWaiverAck');
+      if (!sa || !sa.classList.contains('checked')) return false;
+    }
+    return true;
+  }
+  if (step === 6) {
+    var email = g('ownerEmail').trim();
+    if (!g('ownerFirst').trim() || !g('ownerLast').trim()) return false;
+    if (!email || !email.includes('@')) return false;
+    if (!g('ownerPhone').trim()) return false;
+    return true;
+  }
+  if (step === 7) {
+    var cfg = SERVICE_CONFIG[svc];
+    if (cfg && cfg.generalWaiverId) {
+      var we = document.getElementById(cfg.generalWaiverId);
+      if (!we || !we.classList.contains('checked')) return false;
+    }
+    var wv = document.getElementById('waiverVaccineDecl');
+    if (!wv || !wv.classList.contains('checked')) return false;
+    if (svc === 'studio') {
+      var ws = document.getElementById('waiverStudio');
+      if (!ws || !ws.classList.contains('checked')) return false;
+    }
+    var ageV = parseInt(g('petAgeNum')) || 0;
+    var unitV = g('petAgeUnit') || 'months';
+    var medV  = g('petMedical').trim();
+    if ((ageV >= 6 && unitV === 'years') || medV.length > 0) {
+      var sw = document.getElementById('seniorWaiver');
+      if (!sw || !sw.classList.contains('checked')) return false;
+    }
+    return true;
+  }
+  return true;
+}
+function refreshContinueBtn() {
+  var btn = document.getElementById('btnNext');
+  if (!btn || onSummaryScreen) return;
+  btn.disabled = !silentValidateStep(currentStep);
 }
 function updateBottomNavForSummary() {
   document.getElementById('btnBack').style.display = '';
@@ -1600,6 +1682,7 @@ function selectGroomSize(el, val) {
   document.getElementById('groomSpecialSection').style.display = 'none';
   updateGroomTotal();
   updateNavTotal();
+  refreshContinueBtn();
 }
 
 function renderGroomServices() {
@@ -1631,6 +1714,7 @@ function selectGroomService(el, key, price) {
   document.getElementById('groomSpecialSection').style.display = 'block';
   updateGroomTotal();
   updateNavTotal();
+  refreshContinueBtn();
 }
 
 function renderAddons() {
@@ -1684,6 +1768,7 @@ function toggleAddon(el, key, price, isAssessment) {
   document.getElementById('alacartNote').style.display = (isAlaCarte && !hasAddon) ? 'block' : 'none';
   updateGroomTotal();
   updateNavTotal();
+  refreshContinueBtn();
 }
 
 function updateGroomTotal() {
@@ -1868,6 +1953,7 @@ function onGroomDateChange() {
   document.getElementById('stylistSection').style.display = 'block';
   document.getElementById('groomSlotsSection').style.display = 'none';
   renderStylistGrid();
+  refreshContinueBtn();
 }
 
 function renderStylistGrid() {
@@ -1903,6 +1989,7 @@ function selectSlot(el) {
   el.classList.add('selected');
   if (booking.service === 'studio') booking.studioSlot = el.textContent.trim();
   else booking.groomSlot = el.textContent.trim();
+  refreshContinueBtn();
 }
 
 // ── HOTEL SIZE + RATES ──
@@ -1939,10 +2026,10 @@ function selectHotelSize(el, val) {
   document.getElementById('hotelDatesBody').style.display = 'block';
   document.getElementById('roomAvailSection').style.display = 'none';
   document.getElementById('roomAvailGrid').innerHTML = '';
-  // Reset dates to re-trigger availability check
   document.getElementById('hotelCheckin').value  = '';
   document.getElementById('hotelCheckout').value = '';
   document.getElementById('nightsDisplay').style.display = 'none';
+  refreshContinueBtn();
 }
 
 function populateHotelDropoffTimes() {
@@ -1972,6 +2059,7 @@ function onHotelCheckinChange() {
   document.getElementById('hotelCheckout').value = '';
   document.getElementById('nightsDisplay').style.display = 'none';
   document.getElementById('roomAvailSection').style.display = 'none';
+  refreshContinueBtn();
 }
 
 function onHotelCheckoutChange() {
@@ -1986,6 +2074,7 @@ function onHotelCheckoutChange() {
   booking.hotelCheckin  = cin;
   booking.hotelCheckout = cout;
   loadRoomAvailability();
+  refreshContinueBtn();
 }
 
 async function loadRoomAvailability() {
@@ -2080,11 +2169,11 @@ function selectRoomFromAvail(el, key, roomId) {
   el.classList.add('selected');
   booking.hotelRoomType = key;
   booking.hotelRoomId   = roomId || null;
-  // Show second cat if villa selected
   var secondCat = document.getElementById('secondCatSection');
   if (secondCat) secondCat.style.display = (key === 'villa') ? '' : 'none';
   calcHotelTotal();
   updateNavTotal();
+  refreshContinueBtn();
 }
 
 async function getSelectedBranchId() {
@@ -2257,6 +2346,7 @@ function selectDaycareSize(el, val) {
   booking.daycareBaseRate = DAYCARE_RATES[val] || 500;
   document.getElementById('daycareDateSection').style.display = 'block';
   calcDaycareTotal();
+  refreshContinueBtn();
 }
 function onDaycareDateChange() {
   var d = document.getElementById('daycareDate').value;
@@ -2283,6 +2373,7 @@ function onDaycareDateChange() {
   document.getElementById('daycarePickup').innerHTML = pOpts;
   document.getElementById('daycareTimesSection').style.display = 'block';
   calcDaycareTotal();
+  refreshContinueBtn();
 }
 function calcDaycareTotal() {
   var dropVal = document.getElementById('daycareDropoff').value;
@@ -2324,16 +2415,19 @@ function selectAnimalType(el, val) {
   el.classList.add('selected');
   booking.petAnimal = val;
   renderVaccines();
+  refreshContinueBtn();
 }
 function selectGender(el, val) {
   document.querySelectorAll('#petGenderGrid .gender-btn').forEach(function(b){b.classList.remove('selected');});
   el.classList.add('selected');
   booking.petGender = val;
+  refreshContinueBtn();
 }
 function selectTemperament(el, val) {
   document.querySelectorAll('.temp-btn').forEach(function(b){b.classList.remove('selected');});
   el.classList.add('selected');
   booking.petTemperament = val;
+  refreshContinueBtn();
 }
 function checkSeniorWaiver() {
   var ageVal  = parseInt(document.getElementById('petAgeNum').value) || 0;
@@ -2442,7 +2536,7 @@ function selectPlaypark(el, val) {
   el.classList.add('selected');
   booking.playparkConsent = val;
 }
-function toggleCheck(id) { document.getElementById(id).classList.toggle('checked'); }
+function toggleCheck(id) { document.getElementById(id).classList.toggle('checked'); refreshContinueBtn(); }
 function toggleSave() { saveDetails = !saveDetails; document.getElementById('saveToggle').classList.toggle('on', saveDetails); }
 
 // ── COLLECT ──
@@ -2658,6 +2752,7 @@ function buildSummary() {
   var svc = booking.service;
   var locLabels = { estancia:'Estancia (Pasig)', eastwood:'Eastwood (QC)' };
   var svcLabels = { grooming:'Grooming', hotel:'Pet Hotel', daycare:'Daycare', studio:'Self-Shoot Studio' };
+  var tempLabels = { friendly_all:'Friendly with all', friendly_shy:'Friendly but shy', selective:'Selective', reactive:'Reactive', first_time:'First time' };
   var schedStr = '';
   if (svc === 'grooming') schedStr = (booking.groomDate||'-') + ' at ' + (booking.groomSlot||'-');
   else if (svc === 'hotel') schedStr = 'Check-in: ' + (booking.hotelCheckin||'-') + ' / Check-out: ' + (booking.hotelCheckout||'-');
@@ -2668,7 +2763,7 @@ function buildSummary() {
     ['Service',  svcLabels[svc]||'-'],
     ['Schedule', schedStr||'-'],
   ];
-  // Service specifications
+  // Service-specific details
   if (svc === 'grooming' && booking.groomService) {
     var svcSpec = GROOM_SERVICES.find(function(s){return s.key===booking.groomService;});
     if (svcSpec) details.push(['Grooming service', svcSpec.name]);
@@ -2677,6 +2772,7 @@ function buildSummary() {
     });
     if (addonNames.length) details.push(['Add-ons', addonNames.join(', ')]);
     if (booking.preferredStylist && booking.preferredStylist !== 'any') details.push(['Groomer', booking.preferredStylist]);
+    if (booking.groomNotes) details.push(['Grooming notes', booking.groomNotes]);
   }
   if (svc === 'hotel') {
     if (booking.hotelRoomType) details.push(['Room', booking.hotelRoomType.replace(/_/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase();})]);
@@ -2690,17 +2786,52 @@ function buildSummary() {
       details.push(['Drop-off', booking.daycareDropoffText || (booking.daycareDropoffHour+':00')]);
       details.push(['Pick-up',  booking.daycarePickupText  || (booking.daycarePickupHour+':00')]);
     }
+    if (booking.daycareNotes) details.push(['Daycare notes', booking.daycareNotes]);
   }
-  details.push(['Pet',      (booking.petName||'-') + ' (' + (booking.petAnimal||'-') + ', ' + (booking.petGender||'-') + ')']);
-  details.push(['Breed',    booking.petBreed||'-']);
-  details.push(['Size',     booking.petSize ? PET_SIZE_LABELS[booking.petSize] : '-']);
+  // Pet details
+  details.push(['Pet name',      booking.petName||'-']);
+  details.push(['Animal',        booking.petAnimal ? (booking.petAnimal.charAt(0).toUpperCase()+booking.petAnimal.slice(1)) : '-']);
+  details.push(['Sex',           booking.petGender ? (booking.petGender.charAt(0).toUpperCase()+booking.petGender.slice(1)) : '-']);
+  details.push(['Breed',         booking.petBreed||'-']);
+  details.push(['Age',           booking.petAge ? (booking.petAge + ' ' + (booking.petAgeUnit||'')) : '-']);
+  details.push(['Size',          booking.petSize ? PET_SIZE_LABELS[booking.petSize] : '-']);
+  details.push(['Temperament',   booking.petTemperament ? (tempLabels[booking.petTemperament]||booking.petTemperament) : '-']);
+  details.push(['Medical notes', booking.petMedical && booking.petMedical.trim() ? booking.petMedical.trim() : 'None']);
+  // Vaccine records
+  var vaccineFileCount = uploadedVaccineFiles ? uploadedVaccineFiles.length : 0;
+  var bringVacc = document.getElementById('bringVaccines');
+  var vaccStatus = vaccineFileCount > 0
+    ? (vaccineFileCount + ' file' + (vaccineFileCount>1?'s':'') + ' uploaded')
+    : (bringVacc && bringVacc.classList.contains('checked') ? 'Will bring to venue' : 'Not provided');
+  details.push(['Vaccine records', vaccStatus]);
+  // Hotel-specific: vet & emergency contact
+  if (svc === 'hotel') {
+    if (booking.vetClinic || booking.vetContact) {
+      details.push(['Vet clinic',   booking.vetClinic||'-']);
+      details.push(['Vet contact',  booking.vetContact||'-']);
+      if (booking.vetAddress) details.push(['Vet address', booking.vetAddress]);
+    }
+    if (booking.emergencyName || booking.emergencyPhone) {
+      details.push(['Emergency contact', booking.emergencyName||'-']);
+      details.push(['Emergency phone',   booking.emergencyPhone||'-']);
+    }
+    if (booking.hotelFeeding) details.push(['Feeding instructions', booking.hotelFeeding]);
+    if (booking.hotelMeds)    details.push(['Medications', booking.hotelMeds]);
+  }
+  // Owner details
   details.push(['Owner',    ((booking.ownerFirst||'')+' '+(booking.ownerLast||'')).trim()||'-']);
+  details.push(['Email',    booking.ownerEmail||'-']);
   details.push(['Mobile',   booking.ownerPhone||'-']);
-  if (booking.memberValid) details.push(['Membership', booking.membershipId||'-']);
+  // Membership \u2014 always show
+  if (booking.memberValid && booking.membershipId) {
+    details.push(['Membership', booking.membershipId + ' \u2713']);
+  } else {
+    details.push(['Membership', 'None']);
+  }
   document.getElementById('bookingDetailsSummary').innerHTML = details.map(function(r) {
     return '<div class="summary-row"><span class="summary-key">'+r[0]+'</span><span class="summary-val">'+r[1]+'</span></div>';
   }).join('');
-  // Price breakdown
+  // \u2500\u2500 Price breakdown \u2500\u2500
   var lines = [];
   var subtotal = 0;
   if (svc === 'grooming') {
@@ -2728,9 +2859,27 @@ function buildSummary() {
     var cin  = booking.hotelCheckin;
     var cout = booking.hotelCheckout;
     if (cin && cout) {
-      var nights = Math.round((new Date(cout+' 00:00:00') - new Date(cin+' 00:00:00')) / 86400000);
-      lines.push({ label:nights+' night'+(nights!==1?'s':'')+' ('+PET_SIZE_LABELS[booking.petSize||'small_dog']+')', val:'\u20b1'+(booking.hotelBaseTotal).toLocaleString(), amount:booking.hotelBaseTotal });
-      subtotal += booking.hotelBaseTotal;
+      var size = booking.petSize || 'small_dog';
+      var rateSize = size === 'cat' ? (booking.hotelRoomType === 'villa' ? 'large_dog' : 'small_dog') : size;
+      var totalNights = Math.round((new Date(cout+' 00:00:00') - new Date(cin+' 00:00:00')) / 86400000);
+      var wdCount = 0, weCount = 0, wdTotal = 0, weTotal = 0;
+      for (var i = 0; i < totalNights; i++) {
+        var d = new Date(cin + ' 00:00:00'); d.setDate(d.getDate() + i);
+        var dow = d.getDay();
+        var isWe = (dow === 0 || dow === 5 || dow === 6);
+        if (isWe) { weCount++; weTotal += HOTEL_RATES.weekend[rateSize]||0; }
+        else       { wdCount++; wdTotal += HOTEL_RATES.weekday[rateSize]||0; }
+      }
+      if (wdCount > 0) {
+        var wdRate = HOTEL_RATES.weekday[rateSize]||0;
+        lines.push({ label: wdCount+' weekday night'+(wdCount!==1?'s':'')+' \u00d7 \u20b1'+wdRate.toLocaleString()+' ('+PET_SIZE_LABELS[size]+')', val:'\u20b1'+wdTotal.toLocaleString(), amount:wdTotal });
+        subtotal += wdTotal;
+      }
+      if (weCount > 0) {
+        var weRate = HOTEL_RATES.weekend[rateSize]||0;
+        lines.push({ label: weCount+' weekend/holiday night'+(weCount!==1?'s':'')+' \u00d7 \u20b1'+weRate.toLocaleString()+' ('+PET_SIZE_LABELS[size]+')', val:'\u20b1'+weTotal.toLocaleString(), amount:weTotal });
+        subtotal += weTotal;
+      }
     }
     if (booking.hotelLateTotal > 0) {
       lines.push({ label:'Late pickup fee', val:'\u20b1'+booking.hotelLateTotal.toLocaleString(), amount:booking.hotelLateTotal });
@@ -2753,9 +2902,11 @@ function buildSummary() {
     var discRate = booking.memberValid ? (MEMBER_DISCOUNT[svc]||0) : 0;
     var discAmt  = Math.round(subtotal * discRate);
     var total    = subtotal - discAmt + CONVENIENCE_FEE;
+    if (lines.length > 1 || discAmt > 0) {
+      html += '<div class="price-line"><span class="price-line-label">Subtotal</span><span class="price-line-val">\u20b1'+subtotal.toLocaleString()+'</span></div>';
+    }
     if (discAmt > 0) {
       var discPct = Math.round(discRate * 100);
-      html += '<div class="price-line"><span class="price-line-label">Subtotal</span><span class="price-line-val">\u20b1'+subtotal.toLocaleString()+'</span></div>';
       html += '<div class="price-line"><span class="price-line-label">Member discount ('+discPct+'%)</span><span class="price-line-val discount">-\u20b1'+discAmt.toLocaleString()+'</span></div>';
     }
     html += '<div class="price-line"><span class="price-line-label">Convenience fee</span><span class="price-line-val">\u20b1'+CONVENIENCE_FEE.toLocaleString()+'</span></div>';
