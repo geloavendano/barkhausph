@@ -162,6 +162,13 @@
   .price-line-val { font-size: 13px; font-weight: 700; color: var(--cream); white-space: nowrap; }
   .price-line-val.assess { color: var(--mid); font-style: italic; }
   .price-line-val.discount { color: var(--success); }
+  /* Component lines: the individual items that add up to the subtotal */
+  .price-line.component { padding: 3px 0; border-bottom: none; }
+  .price-line.component .price-line-label { font-size: 11.5px; color: var(--mid); padding-left: 10px; font-weight: 400; }
+  .price-line.component .price-line-val { font-size: 12px; color: var(--mid); font-weight: 600; }
+  /* Subtotal row: sits below the components with a separator */
+  .price-line.subtotal-line { border-top: 0.5px solid rgba(77,150,185,0.3); margin-top: 4px; padding-top: 8px; }
+  .price-line.subtotal-line .price-line-label { font-weight: 700; color: var(--cream); }
   .price-line.total-line { border-top: 1.5px solid rgba(255,206,88,0.4); margin-top: 4px; padding-top: 10px; }
   .price-line.total-line .price-line-label { color: var(--yellow); font-weight: 700; font-size: 14px; }
   .price-line.total-line .price-line-val { color: var(--yellow); font-family: "Fredoka One", cursive; font-size: 22px; }
@@ -579,6 +586,7 @@
         <div class="timeslot" onclick="selectSlot(this)">9:00 AM</div>
         <div class="timeslot" onclick="selectSlot(this)">10:00 AM</div>
         <div class="timeslot" onclick="selectSlot(this)">11:00 AM</div>
+        <div class="timeslot" onclick="selectSlot(this)">12:00 PM</div>
         <div class="timeslot" onclick="selectSlot(this)">1:00 PM</div>
         <div class="timeslot" onclick="selectSlot(this)">2:00 PM</div>
         <div class="timeslot" onclick="selectSlot(this)">3:00 PM</div>
@@ -1128,6 +1136,14 @@ var HOTEL_RATES = {
   weekday: { small_dog:1200, medium_dog:1300, large_dog:1500 },
   weekend: { small_dog:1300, medium_dog:1400, large_dog:1600 }
 };
+// Rate key is determined by the cage selected, not the pet's own size category
+var CAGE_RATE_SIZE = {
+  small_cage:   'small_dog',
+  medium_cage:  'medium_dog',
+  large_cage:   'large_dog',
+  single_cabin: 'small_dog',
+  villa:        'large_dog'
+};
 var DAYCARE_RATES = { small_dog:500, medium_dog:550, large_dog:650, cat:500 };
 var PET_SIZE_LABELS = {
   small_dog:'Small Dog', medium_dog:'Medium Dog', large_dog:'Large Dog',
@@ -1171,7 +1187,7 @@ var booking = {
   petSize:null, groomService:null, groomServicePrice:0, selectedAddons:{},
   groomDate:null, groomSlot:null, preferredStylist:null, preferredStylistId:null, groomNotes:'',
   // Hotel
-  hotelCheckin:null, hotelCheckout:null, hotelRoomType:null, hotelRoomId:null,
+  hotelCheckin:null, hotelCheckout:null, hotelRoomType:null, hotelRoomId:null, hotelRoomName:null,
   hotelBaseTotal:0, hotelLateTotal:0,
   hotelDropoffTime:'', hotelPickupTime:'', hotelPickupHour:14,
   hotelFeeding:'', hotelMeds:'', playparkConsent:null,
@@ -1231,9 +1247,17 @@ var FLOWS = {
   events:   { steps:[] }
 };
 
+// ── LOCAL DATE HELPER (avoids UTC-offset causing wrong day) ──
+function localDateStr(d) {
+  var dt = d || new Date();
+  return dt.getFullYear() + '-' +
+    String(dt.getMonth() + 1).padStart(2, '0') + '-' +
+    String(dt.getDate()).padStart(2, '0');
+}
+
 // ── INIT ──
 (async function init() {
-  var today = new Date().toISOString().split('T')[0];
+  var today = localDateStr();
   ['groomDate','hotelCheckin','hotelCheckout','daycareDate','studioDate'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.min = today;
@@ -1352,13 +1376,19 @@ function goToStep(n) {
   var next = document.getElementById('step' + currentStep);
   if (next) next.classList.add('active');
   renderProgress();
-  updateBottomNav();
+  updateNavTotal();
+  document.getElementById('btnBack').style.display = currentStep > 1 ? '' : 'none';
+  var btnN = document.getElementById('btnNext');
+  btnN.textContent = 'Continue'; btnN.className = 'btn-next';
+  btnN.onclick = function() { nextStep(); };
   window.scrollTo(0,0);
   if (currentStep === 3) showStep3Panel();
   if (currentStep === 4) showStep4Panel();
   if (currentStep === 5) showPetPanel();
   if (currentStep === 6) showOwnerPanel();
   if (currentStep === 7) showWaiverPanel();
+  // Validate after panel setup so restored values are counted
+  refreshContinueBtn();
 }
 function showSummary() {
   var flow    = booking.service ? FLOWS[booking.service] : null;
@@ -1843,7 +1873,7 @@ async function renderGroomSlots() {
   var serviceKey = booking.groomService || 'basic';
   var myDuration = GROOM_SLOT_MINS[serviceKey] || 60;
   var dow        = dateVal ? new Date(dateVal + 'T00:00:00').getDay() : -1;
-  var ALL_SLOTS  = ['9:00 AM','10:00 AM','11:00 AM','1:00 PM','2:00 PM','3:00 PM','4:00 PM','5:00 PM'];
+  var ALL_SLOTS  = ['9:00 AM','10:00 AM','11:00 AM','12:00 PM','1:00 PM','2:00 PM','3:00 PM','4:00 PM','5:00 PM'];
 
   // Which groomers to consider
   var groomerPool = isAny
@@ -2049,13 +2079,15 @@ function populateHotelDropoffTimes() {
     html += '<option value="' + h + '">' + label + '</option>';
   }
   sel.innerHTML = html;
+  // Restore previously saved drop-off time when returning to this step
+  if (booking.hotelDropoffTime) sel.value = booking.hotelDropoffTime;
 }
 
 function onHotelCheckinChange() {
   var cin = document.getElementById('hotelCheckin').value;
   if (!cin) return;
-  var next = new Date(cin + 'T00:00:00'); next.setDate(next.getDate() + 1);
-  document.getElementById('hotelCheckout').min = next.toISOString().split('T')[0];
+  var next = new Date(cin + 'T12:00:00'); next.setDate(next.getDate() + 1);
+  document.getElementById('hotelCheckout').min = localDateStr(next);
   document.getElementById('hotelCheckout').value = '';
   document.getElementById('nightsDisplay').style.display = 'none';
   document.getElementById('roomAvailSection').style.display = 'none';
@@ -2169,6 +2201,9 @@ function selectRoomFromAvail(el, key, roomId) {
   el.classList.add('selected');
   booking.hotelRoomType = key;
   booking.hotelRoomId   = roomId || null;
+  // Save the display name (e.g. "Large Cage 1") for use in summary
+  var roomObj = roomId ? liveRooms.find(function(r){return r.id === roomId;}) : null;
+  booking.hotelRoomName = roomObj ? roomObj.name : (ROOM_LABELS[key] || key.replace(/_/g,' '));
   var secondCat = document.getElementById('secondCatSection');
   if (secondCat) secondCat.style.display = (key === 'villa') ? '' : 'none';
   calcHotelTotal();
@@ -2280,9 +2315,8 @@ function calcHotelTotal() {
   var nights = Math.round((new Date(cout+' 00:00:00') - new Date(cin+' 00:00:00')) / 86400000);
   if (nights <= 0) return;
 
-  // Determine rate key for cats based on room
-  var rateSize = size;
-  if (size === 'cat') rateSize = (room === 'villa') ? 'large_dog' : 'small_dog';
+  // Rate is determined by the cage type selected, not the pet's size category
+  var rateSize = CAGE_RATE_SIZE[room] || size;
 
   var baseTotal = 0;
   for (var i = 0; i < nights; i++) {
@@ -2293,6 +2327,10 @@ function calcHotelTotal() {
     baseTotal += rates[rateSize] || 0;
   }
   booking.hotelBaseTotal = baseTotal;
+
+  // Save drop-off time so it survives navigating back to this step
+  var dropoffEl = document.getElementById('hotelDropoffTime');
+  if (dropoffEl && dropoffEl.value) booking.hotelDropoffTime = dropoffEl.value;
 
   var pickupEl   = document.getElementById('hotelPickupTime');
   var pickupHour = pickupEl ? (parseInt(pickupEl.value) || 14) : 14;
@@ -2775,7 +2813,13 @@ function buildSummary() {
     if (booking.groomNotes) details.push(['Grooming notes', booking.groomNotes]);
   }
   if (svc === 'hotel') {
-    if (booking.hotelRoomType) details.push(['Room', booking.hotelRoomType.replace(/_/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase();})]);
+    if (booking.hotelRoomName) details.push(['Room', booking.hotelRoomName]);
+    else if (booking.hotelRoomType) details.push(['Room', ROOM_LABELS[booking.hotelRoomType] || booking.hotelRoomType.replace(/_/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase();})]);
+    if (booking.hotelDropoffTime) {
+      var dH = parseInt(booking.hotelDropoffTime);
+      var dLabel = dH < 12 ? dH+':00 AM' : (dH===12?'12:00 PM':(dH-12)+':00 PM');
+      details.push(['Drop-off time', dLabel]);
+    }
     if (booking.petSize !== 'cat') details.push(['Play park', booking.playparkConsent === 'yes' ? 'Yes' : 'No']);
     if (booking.hotelPickupTime) details.push(['Pick-up time', booking.hotelPickupTime]);
   }
@@ -2859,8 +2903,9 @@ function buildSummary() {
     var cin  = booking.hotelCheckin;
     var cout = booking.hotelCheckout;
     if (cin && cout) {
-      var size = booking.petSize || 'small_dog';
-      var rateSize = size === 'cat' ? (booking.hotelRoomType === 'villa' ? 'large_dog' : 'small_dog') : size;
+      var room = booking.hotelRoomType || 'small_cage';
+      var rateSize = CAGE_RATE_SIZE[room] || booking.petSize || 'small_dog';
+      var roomLabel = booking.hotelRoomName || ROOM_LABELS[room] || room.replace(/_/g,' ');
       var totalNights = Math.round((new Date(cout+' 00:00:00') - new Date(cin+' 00:00:00')) / 86400000);
       var wdCount = 0, weCount = 0, wdTotal = 0, weTotal = 0;
       for (var i = 0; i < totalNights; i++) {
@@ -2872,12 +2917,12 @@ function buildSummary() {
       }
       if (wdCount > 0) {
         var wdRate = HOTEL_RATES.weekday[rateSize]||0;
-        lines.push({ label: wdCount+' weekday night'+(wdCount!==1?'s':'')+' \u00d7 \u20b1'+wdRate.toLocaleString()+' ('+PET_SIZE_LABELS[size]+')', val:'\u20b1'+wdTotal.toLocaleString(), amount:wdTotal });
+        lines.push({ label: wdCount+' weekday night'+(wdCount!==1?'s':'')+' \u00d7 \u20b1'+wdRate.toLocaleString()+' ('+roomLabel+')', val:'\u20b1'+wdTotal.toLocaleString(), amount:wdTotal });
         subtotal += wdTotal;
       }
       if (weCount > 0) {
         var weRate = HOTEL_RATES.weekend[rateSize]||0;
-        lines.push({ label: weCount+' weekend/holiday night'+(weCount!==1?'s':'')+' \u00d7 \u20b1'+weRate.toLocaleString()+' ('+PET_SIZE_LABELS[size]+')', val:'\u20b1'+weTotal.toLocaleString(), amount:weTotal });
+        lines.push({ label: weCount+' weekend/holiday night'+(weCount!==1?'s':'')+' \u00d7 \u20b1'+weRate.toLocaleString()+' ('+roomLabel+')', val:'\u20b1'+weTotal.toLocaleString(), amount:weTotal });
         subtotal += weTotal;
       }
     }
@@ -2893,7 +2938,7 @@ function buildSummary() {
     subtotal += booking.daycareTotal;
   }
   var html = lines.map(function(l) {
-    return '<div class="price-line">' +
+    return '<div class="price-line component">' +
       '<span class="price-line-label">'+l.label+'</span>' +
       '<span class="price-line-val'+(l.assess?' assess':'')+'">'+l.val+'</span>' +
       '</div>';
@@ -2902,9 +2947,8 @@ function buildSummary() {
     var discRate = booking.memberValid ? (MEMBER_DISCOUNT[svc]||0) : 0;
     var discAmt  = Math.round(subtotal * discRate);
     var total    = subtotal - discAmt + CONVENIENCE_FEE;
-    if (lines.length > 1 || discAmt > 0) {
-      html += '<div class="price-line"><span class="price-line-label">Subtotal</span><span class="price-line-val">\u20b1'+subtotal.toLocaleString()+'</span></div>';
-    }
+    // Always show subtotal when there are components so the hierarchy is clear
+    html += '<div class="price-line subtotal-line"><span class="price-line-label">Subtotal</span><span class="price-line-val">\u20b1'+subtotal.toLocaleString()+'</span></div>';
     if (discAmt > 0) {
       var discPct = Math.round(discRate * 100);
       html += '<div class="price-line"><span class="price-line-label">Member discount ('+discPct+'%)</span><span class="price-line-val discount">-\u20b1'+discAmt.toLocaleString()+'</span></div>';
@@ -2960,7 +3004,13 @@ function showToast(msg, duration) {
         if (snap.groomServiceName) _dRows.push(['Grooming service', snap.groomServiceName]);
         if (snap.addons && snap.addons.length) _dRows.push(['Add-ons', snap.addons.join(', ')]);
         if (snap.preferredStylist && snap.preferredStylist !== 'any') _dRows.push(['Groomer', snap.preferredStylist]);
-        if (snap.hotelRoomType) _dRows.push(['Room', snap.hotelRoomType.replace(/_/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase();})]);
+        if (snap.hotelRoomName) _dRows.push(['Room', snap.hotelRoomName]);
+        else if (snap.hotelRoomType) _dRows.push(['Room', ROOM_LABELS[snap.hotelRoomType] || snap.hotelRoomType.replace(/_/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase();})]);
+        if (snap.hotelDropoffTime) {
+          var _dH = parseInt(snap.hotelDropoffTime);
+          var _dL = _dH < 12 ? _dH+':00 AM' : (_dH===12?'12:00 PM':(_dH-12)+':00 PM');
+          _dRows.push(['Drop-off time', _dL]);
+        }
         if (snap.hotelPickupTime) _dRows.push(['Pick-up time', snap.hotelPickupTime]);
         if (snap.daycareOpenTime) {
           _dRows.push(['Drop-off', 'Open time']); _dRows.push(['Pick-up', 'Open time']);
@@ -3173,6 +3223,8 @@ function submitBooking() {
         addons: svc === 'grooming' ? Object.keys(booking.selectedAddons).map(function(k){var a=ADDONS.find(function(x){return x.key===k;});return a?a.name:k;}) : [],
         preferredStylist: svc === 'grooming' ? booking.preferredStylist : null,
         hotelRoomType: svc === 'hotel' ? booking.hotelRoomType : null,
+        hotelRoomName: svc === 'hotel' ? booking.hotelRoomName : null,
+        hotelDropoffTime: svc === 'hotel' ? booking.hotelDropoffTime : null,
         playparkConsent: svc === 'hotel' ? booking.playparkConsent : null,
         hotelPickupTime: svc === 'hotel' ? booking.hotelPickupTime : null,
         petSizeRaw: booking.petSize,
