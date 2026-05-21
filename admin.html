@@ -417,7 +417,7 @@
 <div class="fab-group" id="fabGroup">
   <div class="fab-actions" id="fabActions" style="display:none">
     <button class="fab-action" onclick="openBookingPanel(null,'admin')">📋 Add Booking</button>
-    <button class="fab-action" onclick="window.open('booking.html?walkin=1','_blank')">🚶 Walk-in</button>
+    <button class="fab-action" onclick="localStorage.setItem('bh_walkin_grant',Date.now());window.open('booking.html?walkin=1','_blank')">🚶 Walk-in</button>
     <button class="fab-action" onclick="openBlockPanel(null)">🚫 Block Schedule</button>
   </div>
   <button class="fab-main" id="fabMain" onclick="toggleFab()">+</button>
@@ -2875,7 +2875,7 @@ var MONTHS=['January','February','March','April','May','June','July','August','S
 function renderDateLabel(){var d=currentDate,now=new Date();var yr=d.getFullYear()===now.getFullYear()?'':' '+d.getFullYear();document.getElementById('dateLabel').textContent=DAYS[d.getDay()]+', '+MONTHS[d.getMonth()]+' '+d.getDate()+yr;}
 async function shiftDate(delta){var prev=currentDate.getMonth();currentDate.setDate(currentDate.getDate()+delta);renderDateLabel();if(currentDate.getMonth()!==prev)await loadMonthDots(currentDate.getFullYear(),currentDate.getMonth());await loadBookings();}
 async function goToday(){var prev=currentDate.getMonth();currentDate=new Date();renderDateLabel();if(currentDate.getMonth()!==prev)await loadMonthDots(currentDate.getFullYear(),currentDate.getMonth());await loadBookings();}
-async function setBranch(idx,el){currentBranch=idx;activeFilter=null;document.querySelectorAll('.br-tab').forEach(function(t){t.classList.remove('on');});el.classList.add('on');await Promise.all([loadRooms(),loadGroomers()]);await loadGroomerBlocks();await loadBlockedSchedules();renderSidebar();renderTabs();await loadBookings();}
+async function setBranch(idx,el){currentBranch=idx;activeFilter=null;document.querySelectorAll('.br-tab').forEach(function(t){t.classList.remove('on');});el.classList.add('on');await Promise.all([loadRooms(),loadGroomers()]);await loadGroomerBlocks();await loadBlockedSchedules();renderSidebar();renderTabs();await loadBookings();if(currentAdminPage==='bookings')await loadBookingsList();}
 
 /* ── UTILS ── */
 function e(s){return (s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
@@ -3025,18 +3025,25 @@ function renderBookingsList() {
   if (!allBookingsList.length) { el.innerHTML = '<p style="color:var(--mid);padding:16px">No bookings found.</p>'; return; }
   var svcLabels = {grooming:'Grooming',hotel:'Pet Hotel',daycare:'Daycare',studio:'Studio'};
   var svcColors = {grooming:'#4D96B9',hotel:'#EF9F27',daycare:'#1D9E75',studio:'#D4537E'};
-  // Group by date
+  // Group by submission date (created_at), newest first
   var groups = {};
   allBookingsList.forEach(function(b) {
-    var dt = b.booking_date || (b.hotel_details && b.hotel_details.checkin_date) || 'Unknown';
+    var dt = b.created_at ? b.created_at.split('T')[0] : 'Unknown';
     if (!groups[dt]) groups[dt] = [];
     groups[dt].push(b);
+  });
+  // Sort within each group by created_at descending
+  Object.keys(groups).forEach(function(dt) {
+    groups[dt].sort(function(a,b){ return (b.created_at||'').localeCompare(a.created_at||''); });
   });
   var sortedDates = Object.keys(groups).sort(function(a,b){return b.localeCompare(a);});
   var html = '<h2 style="font-family:\'Fredoka One\',cursive;font-size:20px;margin-bottom:16px">Bookings</h2>';
   sortedDates.forEach(function(dt) {
+    var dateLabel = dt === 'Unknown' ? 'No date' : (function(){
+      try { var d = new Date(dt+'T00:00:00'); return d.toLocaleDateString('en-PH',{weekday:'short',year:'numeric',month:'short',day:'numeric'}); } catch(x){ return dt; }
+    })();
     html += '<div style="margin-bottom:24px">';
-    html += '<div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--mid);margin-bottom:8px">'+e(dt==='Unknown'?'No date':dt)+'</div>';
+    html += '<div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--mid);margin-bottom:8px">'+e(dateLabel)+'</div>';
     html += '<div style="background:var(--surface);border:0.5px solid var(--border);border-radius:10px;overflow:hidden">';
     groups[dt].forEach(function(b,i) {
       var owner = b.owners ? (b.owners.first_name||'')+' '+(b.owners.last_name||'') : '-';
@@ -3159,6 +3166,29 @@ if (document.readyState === "loading") {
 } else {
   initSupabaseClient(); checkExistingSession();
 }
+
+// ── AUTO-REFRESH every 60 s ──
+// Silently reloads the active view so bookings stay current without a manual reload.
+var _autoRefreshTimer = null;
+function startAutoRefresh() {
+  if (_autoRefreshTimer) return; // already running
+  _autoRefreshTimer = setInterval(async function() {
+    try {
+      if (currentAdminPage === 'calendar') {
+        await loadBookings();
+      } else if (currentAdminPage === 'bookings') {
+        await loadBookingsList();
+      }
+    } catch(e) { /* silent — network hiccup shouldn't break anything */ }
+  }, 60000);
+}
+function stopAutoRefresh() {
+  if (_autoRefreshTimer) { clearInterval(_autoRefreshTimer); _autoRefreshTimer = null; }
+}
+// Pause when tab is hidden, resume when visible — avoids stacking requests in background tabs
+document.addEventListener('visibilitychange', function() {
+  if (document.hidden) { stopAutoRefresh(); } else { startAutoRefresh(); }
+});
 </script>
 </body>
 </html>

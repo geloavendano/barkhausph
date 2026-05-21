@@ -1136,7 +1136,27 @@ var PET_SIZE_LABELS = {
 var MEMBER_DISCOUNT = { grooming:0.10, hotel:0.20, daycare:0.20 };
 var CONVENIENCE_FEE = 20;
 var IS_WALKIN = (new URLSearchParams(window.location.search)).get('walkin') === '1';
-if (IS_WALKIN) CONVENIENCE_FEE = 0;
+if (IS_WALKIN) {
+  CONVENIENCE_FEE = 0;
+  // Auth gate: walk-in flow is only accessible from the admin panel (grant set within the last 60 min)
+  (function() {
+    var grant = parseInt(localStorage.getItem('bh_walkin_grant') || '0', 10);
+    var age   = Date.now() - grant;
+    if (!grant || age > 60 * 60 * 1000) {
+      document.addEventListener('DOMContentLoaded', function() {
+        document.body.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;font-family:sans-serif;background:#1a1a1a;color:#fff;text-align:center;padding:24px">'
+          + '<div style="font-size:48px;margin-bottom:16px">🔒</div>'
+          + '<h2 style="margin:0 0 8px">Access Restricted</h2>'
+          + '<p style="color:#aaa;margin:0 0 24px">Walk-in bookings must be started from the admin panel.</p>'
+          + '<a href="index.html" style="background:#FFCE58;color:#1a1a1a;padding:10px 24px;border-radius:20px;text-decoration:none;font-weight:700">Go to Home</a>'
+          + '</div>';
+      });
+    } else {
+      // Consume the grant so it can't be reused after tab is closed
+      localStorage.removeItem('bh_walkin_grant');
+    }
+  })();
+}
 
 // ── STATE ──
 // Live data from DB (populated on init)
@@ -1264,6 +1284,8 @@ async function loadPricing() {
         CONVENIENCE_FEE = p;
       }
     });
+    // Walk-in mode never charges a convenience fee regardless of DB value
+    if (IS_WALKIN) CONVENIENCE_FEE = 0;
   } catch(e) {
     console.warn('Pricing fetch failed, using hardcoded defaults:', e);
   }
@@ -2490,10 +2512,8 @@ function validateStep5() {
   if (!document.getElementById('vaccineWaiver').classList.contains('checked')) {
     alert('Please agree to the vaccine liability declaration.'); return false;
   }
-  var _age  = parseInt(document.getElementById('petAgeNum').value) || 0;
-  var _unit = document.getElementById('petAgeUnit').value;
-  var _med  = document.getElementById('petMedical').value.trim();
-  if ((_unit === 'years' && _age >= 6) || _med.length > 0) {
+  var _seniorRow = document.getElementById('seniorWaiverRow');
+  if (_seniorRow && _seniorRow.style.display !== 'none') {
     if (!document.getElementById('seniorWaiverAck').classList.contains('checked')) {
       alert('Please agree to the senior/medical pet acknowledgment to proceed.'); return false;
     }
