@@ -103,7 +103,7 @@
   .bk-sub{font-size:10px;color:var(--cream-m);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .bk-tag{font-size:9px;font-weight:700;margin-top:3px;padding:1px 5px;border-radius:3px;display:inline-block;letter-spacing:0.03em;}
   /* BREAK BLOCKS */
-  .bk-break{position:absolute;border-radius:4px;padding:4px 7px;pointer-events:none;z-index:3;opacity:0.82;}
+  .bk-break{position:absolute;border-radius:5px;padding:5px 8px;pointer-events:none;z-index:3;overflow:hidden;}
   .bk-break-lbl{font-size:10px;font-weight:600;color:var(--cream-m);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .bk-cancelled { opacity:0.4; filter:grayscale(1); }
   .bk-cancelled .bk-pet, .bk-cancelled .bk-sub { text-decoration:line-through; }
@@ -692,12 +692,14 @@ async function sbPost(path, body) {
   var hdrs = await getAuthHeaders();
   hdrs['Prefer'] = 'return=representation';
   var res = await fetch(SUPABASE_URL+'/rest/v1/'+path, {method:'POST',headers:hdrs,body:JSON.stringify(body)});
+  if (!res.ok) { var t=await res.text(); throw new Error(res.status+': '+t); }
   return res.json();
 }
 async function sbPatch(path, params, body) {
   var hdrs = await getAuthHeaders();
   hdrs['Prefer'] = 'return=representation';
   var res = await fetch(SUPABASE_URL+'/rest/v1/'+path+'?'+params, {method:'PATCH',headers:hdrs,body:JSON.stringify(body)});
+  if (!res.ok) { var t=await res.text(); throw new Error(res.status+': '+t); }
   return res.json();
 }
 async function sbDelete(path, params) {
@@ -872,14 +874,14 @@ function renderTimeline() {
     var top = Math.max(0, (stMin - DAY_START) * PX_PER_MIN);
     var ht  = Math.max(22, (enMin - stMin) * PX_PER_MIN);
     var label = bl.reason || 'Blocked';
-    // Find resource name for label
-    var resourceName = '';
-    if (!activeFilter) {
-      var res = (currentSvc==='grooming' ? groomers : rooms).find(function(r){return r.id===bl.resource_id;});
-      if (res) resourceName = ' — '+res.name;
-    }
-    breakHtml += '<div class="bk-break" style="top:'+top+'px;height:'+ht+'px;left:0;right:0;background:rgba(80,50,120,0.55);border-left:3px solid #9B95E8;backdrop-filter:blur(0)">'+
-      '<span class="bk-break-lbl" style="color:#e0d6ff">🚫 '+e(label)+e(resourceName)+'</span></div>';
+    // Always resolve resource name
+    var resObj = (currentSvc==='grooming' ? groomers : rooms).find(function(r){return r.id===bl.resource_id;});
+    var resourceName = resObj ? resObj.name : '';
+    var innerHtml = '<div style="font-size:11px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">🚫 '+(resourceName?e(resourceName)+' — ':'')+e(label)+'</div>';
+    if (ht >= 44) innerHtml += '<div style="font-size:10px;color:rgba(255,255,255,0.7);margin-top:2px">Blocked schedule</div>';
+    breakHtml += '<div class="bk-break" style="top:'+top+'px;height:'+ht+'px;left:2px;right:2px;'+
+      'background:repeating-linear-gradient(135deg,rgba(130,100,210,0.55) 0px,rgba(130,100,210,0.55) 6px,rgba(90,60,160,0.45) 6px,rgba(90,60,160,0.45) 12px);'+
+      'border:1.5px solid #9B95E8;border-left:4px solid #9B95E8;border-radius:5px">'+innerHtml+'</div>';
   });
 
   var positioned = layoutBks(filtered);
@@ -993,7 +995,8 @@ async function loadBlockedSchedules() {
   try {
     var rows = await sb('blocked_schedules', 'branch_id=eq.'+br.id+'&active=eq.true&order=created_at.desc&select=*');
     blockedSchedules = rows || [];
-  } catch(ex) { console.warn('loadBlockedSchedules failed:', ex); blockedSchedules = []; }
+    console.log('[BlockedSchedules] loaded', blockedSchedules.length, 'records:', blockedSchedules);
+  } catch(ex) { console.warn('[BlockedSchedules] load failed:', ex); blockedSchedules = []; }
   renderBlockedSlots();
   renderTimeline();
 }
