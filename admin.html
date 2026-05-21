@@ -1919,8 +1919,10 @@ function bkRGroom() {
   h += '<div class="bk-agrid">';
   AD_ADM.forEach(function(a){
     var en = !ek || ek.indexOf(a.k) !== -1;
+    var isPremiumFt = a.k==='face_trim' && bk.gsvc==='premium';
+    if (isPremiumFt) { delete bk.addons['face_trim']; en=false; }
     var on = !!bk.addons[a.k];
-    var pr = a.a ? 'For assessment' : (a.sz ? bkF(FT_ADM[bk.size]||0) : bkF(a.p));
+    var pr = isPremiumFt ? 'included' : (a.a ? 'For assessment' : (a.sz ? bkF(FT_ADM[bk.size]||0) : bkF(a.p)));
     h += '<div class="bk-acard'+(on?' on':'')+(en?'':' dis')+'"'+(en?' onclick="bkTad(\''+a.k+'\')"':'')+'>'+
       '<div class="bk-an">'+a.n+'</div><div class="bk-ap">'+pr+'</div></div>';
   });
@@ -2343,6 +2345,7 @@ function bkCBase() {
     var base = bk.gsvc!=='ala_carte' ? (GP_ADM[bk.gsvc][bk.size]||0) : 0;
     return base + Object.keys(bk.addons).reduce(function(acc,k) {
       var a = AD_ADM.find(function(x){return x.k===k;}); if(!a||a.a) return acc;
+      if (k==='face_trim' && bk.gsvc==='premium') return acc; // included in premium
       return acc + (a.sz ? (FT_ADM[bk.size]||0) : a.p);
     }, 0);
   }
