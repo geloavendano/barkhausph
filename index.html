@@ -508,7 +508,7 @@ function lbKeyDown(e) {
     <p class="hero-submark">Pet Hotel · Philippines</p>
     <h1 class="hero-title">Where <span>Tails</span><br>Wag Non-Stop</h1>
     <p class="hero-tagline">Daycare, hotel stays, grooming, and celebrations all under one (very happy) roof.</p>
-    <a href="booking.html" class="hero-book">Book Now 🐾</a>
+    <a href="#" class="hero-book" onclick="showComingSoon();return false;">Book Now 🐾</a>
   </div>
   <div class="scroll-hint" onclick="document.getElementById('locations').scrollIntoView({behavior:'smooth'})">Scroll</div>
 </section>
@@ -606,7 +606,7 @@ function lbKeyDown(e) {
         <p class="loc-modal-section-label">The space</p>
         <div class="loc-modal-features" id="modal-features"></div>
       </div>
-      <a href="booking.html" class="loc-modal-book">Book this branch</a>
+      <a href="#" class="loc-modal-book" onclick="showComingSoon();return false;">Book this branch</a>
     </div>
   </div>
 </div>
@@ -660,7 +660,7 @@ function lbKeyDown(e) {
         <p class="svc-modal-section-label">What's included</p>
         <div class="svc-modal-features" id="svc-modal-features"></div>
       </div>
-      <a href="booking.html" class="svc-modal-book">Book Now 🐾</a>
+      <a href="#" class="svc-modal-book" onclick="showComingSoon();return false;">Book Now 🐾</a>
     </div>
   </div>
 </div>
@@ -810,7 +810,7 @@ function lbKeyDown(e) {
           <span class="faq-q-text">Do I need to book in advance?</span>
           <span class="faq-icon"><svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
         </div>
-        <div class="faq-a"><p>Advanced booking is highly recommended, especially during weekends, holidays, and peak travel seasons. You may make your booking through our <a href='booking.html'>booking portal</a>.</p></div>
+        <div class="faq-a"><p>Advanced booking is highly recommended, especially during weekends, holidays, and peak travel seasons. You may make your booking through our <a href='#' onclick='showComingSoon();return false;'>booking portal</a>.</p></div>
       </div>
       <div class="faq-item" id="hfti1">
         <div class="faq-q" onclick="homeFaqToggle(1)">
@@ -886,7 +886,7 @@ function lbKeyDown(e) {
 
 <nav class="float-nav" id="floatNav">
   <span class="float-nav-logo" onclick="document.getElementById('hero').scrollIntoView({behavior:'smooth'})"><img src="images/Barkhaus Pet Hotel Logo.png" alt="Barkhaus Pet Hotel Logo" style="height:18px;width:auto;display:inline-block;vertical-align:middle;"></span>
-  <a href="booking.html" class="float-nav-book">Book Now</a>
+  <a href="#" class="float-nav-book" onclick="showComingSoon();return false;">Book Now</a>
 </nav>
 
 <script>
@@ -1714,6 +1714,30 @@ function homeFaqToggle(idx) {
   </div>
   <div class="lb-dots" id="lb-dots"></div>
 </div>
+
+<!-- COMING SOON MODAL -->
+<div id="comingSoonOverlay" onclick="hideComingSoon()" style="display:none;position:fixed;inset:0;background:rgba(10,20,28,0.72);z-index:9999;align-items:center;justify-content:center;padding:24px;">
+  <div onclick="event.stopPropagation()" style="background:#1A3044;border:0.5px solid rgba(77,150,185,0.25);border-radius:20px;padding:36px 28px;max-width:340px;width:100%;text-align:center;">
+    <div style="font-size:40px;margin-bottom:12px">🐾</div>
+    <h2 style="font-family:'Fredoka One',cursive;font-size:24px;color:#F0EDE6;margin-bottom:8px">Coming Soon!</h2>
+    <p style="font-size:14px;color:#B8D4E0;line-height:1.6;margin-bottom:24px">Online booking is almost ready. In the meantime, please visit or message your preferred branch to reserve a slot.</p>
+    <button onclick="hideComingSoon()" style="background:#FFCE58;color:#3d2e00;border:none;border-radius:50px;padding:12px 32px;font-size:14px;font-weight:700;cursor:pointer;font-family:'Nunito',sans-serif;">Got it!</button>
+  </div>
+</div>
+
+<script>
+function showComingSoon() {
+  var el = document.getElementById('comingSoonOverlay');
+  el.style.display = 'flex';
+}
+function hideComingSoon() {
+  var el = document.getElementById('comingSoonOverlay');
+  el.style.display = 'none';
+}
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') hideComingSoon();
+});
+</script>
 
 </body>
 </html>

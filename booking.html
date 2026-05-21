@@ -1135,6 +1135,8 @@ var PET_SIZE_LABELS = {
 // VALID_MEMBER_IDS removed — membership validated via Supabase
 var MEMBER_DISCOUNT = { grooming:0.10, hotel:0.20, daycare:0.20 };
 var CONVENIENCE_FEE = 20;
+var IS_WALKIN = (new URLSearchParams(window.location.search)).get('walkin') === '1';
+if (IS_WALKIN) CONVENIENCE_FEE = 0;
 
 // ── STATE ──
 // Live data from DB (populated on init)
@@ -1229,6 +1231,12 @@ var FLOWS = {
   } catch(e) {}
   await loadPricing();
   renderProgress();
+  if (IS_WALKIN) {
+    var banner = document.createElement('div');
+    banner.style.cssText = 'background:rgba(107,203,119,0.15);border-bottom:0.5px solid rgba(107,203,119,0.3);padding:8px 16px;font-size:12px;color:#6BCB77;font-weight:600;text-align:center;';
+    banner.textContent = '🚶 Walk-in booking — payment collected at counter';
+    document.body.insertBefore(banner, document.body.firstChild);
+  }
 })();
 
 async function loadPricing() {
@@ -2961,6 +2969,22 @@ function submitBooking() {
         convenienceFee: CONVENIENCE_FEE, total: total
       }));
     } catch(e) {}
+    if (IS_WALKIN) {
+      // Skip payment gateway — show success screen directly
+      var refNum = data.ref_number || data.booking_id || 'BK-' + Date.now();
+      document.querySelectorAll('.step-panel').forEach(function(el){ el.classList.remove('active'); });
+      var pw = document.getElementById('progressWrap');
+      var bn = document.getElementById('bottomNav');
+      if (pw) pw.style.display = 'none';
+      if (bn) bn.style.display = 'none';
+      var ss = document.getElementById('successScreen');
+      if (ss) { ss.style.display = ''; ss.classList.add('active'); }
+      var rn = document.getElementById('refNum');
+      if (rn) rn.textContent = refNum;
+      var msgEl = ss ? ss.querySelector('.success-msg') : null;
+      if (msgEl) msgEl.textContent = 'Your booking has been recorded. Please proceed to the counter to complete your payment.';
+      return;
+    }
     window.location.href = data.checkout_url;
   })
   .catch(function(err) {
