@@ -963,6 +963,24 @@
     </div>
   </div>
 
+  <!-- ── STUDIO WAIVER ── -->
+  <div id="studioWaiver" style="display:none">
+    <div class="waiver-box">
+      <h4>Studio Usage Agreement</h4>
+      <ol class="waiver-list">
+        <li>I confirm I am the owner of the pet(s) participating in the Barkhaus Studio session.</li>
+        <li>I acknowledge that photography/videography sessions involve movement and activity; while Barkhaus will ensure a safe environment, I accept that minor incidents may occur.</li>
+        <li>I grant Barkhaus permission to use any photos or videos taken during the session for promotional, marketing, and social media purposes, unless I have expressly opted out in writing.</li>
+        <li>I understand that all session fees are non-refundable once the session has commenced.</li>
+        <li>I release Barkhaus, its staff, and affiliates from any liability arising from the studio session, provided reasonable care was taken.</li>
+      </ol>
+    </div>
+    <div class="checkbox-row" onclick="toggleCheck('waiverStudio')">
+      <div class="checkbox-box" id="waiverStudio"></div>
+      <span class="checkbox-label">I agree to the <strong>Studio Usage Agreement</strong>.</span>
+    </div>
+  </div>
+
   <!-- ── VACCINE DECLARATION (all services) ── -->
   <div class="waiver-box" style="margin-top:12px">
     <h4>Vaccine &amp; Health Declaration</h4>
@@ -1521,7 +1539,8 @@ function showOwnerPanel() {
 function showWaiverPanel() {
   var svc = booking.service;
   ['groomingWaivers','daycareWaivers','hotelWaivers','studioWaiver'].forEach(function(id) {
-    document.getElementById(id).style.display = 'none';
+    var el = document.getElementById(id);
+    if (el) el.style.display = 'none';
   });
   var cfg = SERVICE_CONFIG[svc];
   if (cfg && cfg.waiverSectionId) document.getElementById(cfg.waiverSectionId).style.display = '';
