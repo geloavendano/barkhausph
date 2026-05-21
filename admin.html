@@ -417,7 +417,7 @@
 <div class="fab-group" id="fabGroup">
   <div class="fab-actions" id="fabActions" style="display:none">
     <button class="fab-action" onclick="openBookingPanel(null,'admin')">📋 Add Booking</button>
-    <button class="fab-action" onclick="openBookingPanel(null,'walkin')">🚶 Walk-in</button>
+    <button class="fab-action" onclick="window.open('booking.html?walkin=1','_blank')">🚶 Walk-in</button>
     <button class="fab-action" onclick="openBlockPanel(null)">🚫 Block Schedule</button>
   </div>
   <button class="fab-main" id="fabMain" onclick="toggleFab()">+</button>
@@ -956,14 +956,6 @@ function hexBg(hex) {
 }
 
 /* ── BOOKING DRAWER ── */
-function openDrawer(bookingId) {
-  var b=allBookings.find(function(x){return x.id===bookingId;});
-  if(!b) return;
-  closeFab();
-  currentBookingId=bookingId;
-  document.getElementById('drContent').innerHTML=buildDrawer(b);
-  document.getElementById('drOverlay').classList.add('open');
-}
 function closeDrawer(e) {
   if(e&&e.target!==document.getElementById('drOverlay')) return;
   document.getElementById('drOverlay').classList.remove('open');
@@ -1155,8 +1147,18 @@ function buildDrawer(b) {
 
   var html='';
   html+='<p class="dr-ref">'+e(b.ref_number||'')+'</p>';
-  html+='<p class="dr-name">'+e(pet.name||'Pet')+' '+(pet.animal_type==='cat'?'&#128049;':'&#128054;')+'</p>';
+  if (b.created_at) {
+    var tsDate = new Date(b.created_at);
+    var tsStr = tsDate.toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric'}) + ' ' + tsDate.toLocaleTimeString('en-PH',{hour:'numeric',minute:'2-digit',hour12:true});
+    html += '<p style="font-size:10px;color:var(--mid);margin-bottom:4px">Booked '+tsStr+'</p>';
+  }
+  var memberStarDr = b.discount_amount > 0 ? ' <span style="color:#FFCE58;font-size:13px" title="Member">&#9733;</span>' : '';
+  html+='<p class="dr-name">'+e(pet.name||'Pet')+' '+(pet.animal_type==='cat'?'&#128049;':'&#128054;')+memberStarDr+'</p>';
   html+='<p class="dr-breed">'+e([pet.breed,pet.size?SIZE_LABELS[pet.size]:null,pet.animal_type].filter(Boolean).join(' · '))+'</p>';
+  var ageStr = pet.age_value ? (pet.age_value + ' ' + (pet.age_unit||'')) : '';
+  var genderStr = pet.gender ? pet.gender.charAt(0).toUpperCase()+pet.gender.slice(1) : '';
+  var petExtra = [genderStr, ageStr].filter(Boolean).join(' · ');
+  if (petExtra) html += '<p style="font-size:11px;color:var(--mid);margin-bottom:4px">'+e(petExtra)+'</p>';
   html+='<div class="dr-status-row">';
   html+='<span class="dr-time">'+e(timeStr)+'</span>';
   html+='<span class="dr-status-pill" style="background:'+hexBg(STATUS_COLORS[b.status]||'#888')+';color:'+(STATUS_COLORS[b.status]||'#888')+'">'+e(b.status.replace('_',' '))+'</span>';
@@ -1185,11 +1187,20 @@ function buildDrawer(b) {
   html+='</div>';
   // Owner
   var memberPill = b.discount_amount > 0 ? ' <span style="font-size:10px;background:rgba(255,206,88,0.2);color:#FFCE58;border:0.5px solid rgba(255,206,88,0.4);padding:1px 6px;border-radius:10px;font-weight:700">&#9733; Member</span>' : '';
-  html+='<div class="dr-sec"><p class="dr-sec-title">Owner</p><div style="display:flex;justify-content:space-between;align-items:center"><div><p style="font-size:14px;font-weight:500;color:var(--cream)">'+e((owner.first_name||'')+' '+(owner.last_name||''))+memberPill+'</p><p style="font-size:12px;color:var(--cream-m)">'+e(owner.mobile||'')+'</p></div><a href="tel:'+e(owner.mobile||'')+'" style="font-size:12px;color:var(--blue);border:0.5px solid var(--border);padding:5px 12px;border-radius:20px;text-decoration:none">Call</a></div></div>';
+  html+='<div class="dr-sec"><p class="dr-sec-title">Owner</p><div style="display:flex;justify-content:space-between;align-items:center"><div><p style="font-size:14px;font-weight:500;color:var(--cream)">'+e((owner.first_name||'')+' '+(owner.last_name||''))+'</p><p style="font-size:12px;color:var(--cream-m)">'+e(owner.mobile||'')+'</p>';
+  if (owner.email) html += '<p style="font-size:11px;color:var(--mid)">'+e(owner.email)+'</p>';
+  if (owner.referral_source) html += '<p style="font-size:10px;color:var(--mid)">via '+e(owner.referral_source)+'</p>';
+  html+='</div><a href="tel:'+e(owner.mobile||'')+'" style="font-size:12px;color:var(--blue);border:0.5px solid var(--border);padding:5px 12px;border-radius:20px;text-decoration:none">Call</a></div></div>';
   // Emergency (hotel)
   if(hd&&(hd.emergency_name||hd.vet_clinic)){html+='<div class="dr-sec"><p class="dr-sec-title">Emergency</p>';if(hd.emergency_name)html+='<div class="dr-row"><span class="dr-key">Contact</span><span class="dr-val">'+e(hd.emergency_name+(hd.emergency_phone?' / '+hd.emergency_phone:''))+'</span></div>';if(hd.vet_clinic)html+='<div class="dr-row"><span class="dr-key">Vet</span><span class="dr-val">'+e(hd.vet_clinic)+'</span></div>';html+='</div>';}
   // Bill
-  if(b.subtotal>0){html+='<div class="dr-sec"><p class="dr-sec-title">Bill</p>';addons.forEach(function(a){html+='<div class="dr-row"><span class="dr-key">'+e(a.addon_name)+'</span><span class="dr-val">\u20b1'+(a.price||0).toLocaleString()+'</span></div>';});if(b.discount_amount>0)html+='<div class="dr-row"><span class="dr-key">Member discount</span><span class="dr-val" style="color:var(--success)">-\u20b1'+b.discount_amount.toLocaleString()+'</span></div>';html+='<div class="dr-row" style="border-top:0.5px solid var(--border);margin-top:4px;padding-top:8px"><span style="font-size:13px;font-weight:500;color:var(--cream)">Total</span><span style="font-size:13px;font-weight:700;color:var(--cream)">\u20b1'+(b.total||b.subtotal||0).toLocaleString()+'</span></div></div>';}
+  if(b.subtotal>0){html+='<div class="dr-sec"><p class="dr-sec-title">Bill</p>';
+  var baseAmt = (b.subtotal||b.total||0) - addons.reduce(function(s,a){return s+(a.price||0);},0) + (b.discount_amount||0);
+  if (baseAmt > 0) {
+    var svcLabel = {grooming:'Grooming service',hotel:'Hotel stay',daycare:'Daycare',studio:'Studio session'}[b.service]||'Service';
+    html += '<div class="dr-row"><span class="dr-key">'+svcLabel+'</span><span class="dr-val">&#8369;'+baseAmt.toLocaleString()+'</span></div>';
+  }
+  addons.forEach(function(a){html+='<div class="dr-row"><span class="dr-key">'+e(a.addon_name)+'</span><span class="dr-val">\u20b1'+(a.price||0).toLocaleString()+'</span></div>';});if(b.discount_amount>0)html+='<div class="dr-row"><span class="dr-key">Member discount</span><span class="dr-val" style="color:var(--success)">-\u20b1'+b.discount_amount.toLocaleString()+'</span></div>';html+='<div class="dr-row" style="border-top:0.5px solid var(--border);margin-top:4px;padding-top:8px"><span style="font-size:13px;font-weight:500;color:var(--cream)">Total</span><span style="font-size:13px;font-weight:700;color:var(--cream)">\u20b1'+(b.total||b.subtotal||0).toLocaleString()+'</span></div></div>';}
   // Payments
   html+='<div class="dr-sec"><div style="display:flex;align-items:center;justify-content:space-between"><p class="dr-sec-title">Payments</p><button class="dr-btn-pay" style="width:auto;padding:4px 12px;margin-top:0" onclick="openPayPanel(\''+b.id+'\')">+ Record</button></div><div id="payList"><p style="font-size:12px;color:var(--mid)">Loading...</p></div></div>';
   // Check-in notes
@@ -1202,6 +1213,11 @@ function buildDrawer(b) {
     cnRows.forEach(function(r){html+='<div class="dr-row"><span class="dr-key">'+e(r[0])+'</span><span class="dr-val" style="color:'+(r[1]==='Fail'?'var(--error)':'var(--cream)')+'">'+e(r[1])+'</span></div>';});
   }
   html+='<div id="ciWrap" style="display:none">'+buildCiForm(b)+'</div></div>';
+  // Booking source
+  if (b.booking_source && b.booking_source !== 'online') {
+    var srcLabel = {admin:'Admin booking',walkin:'Walk-in'}[b.booking_source]||b.booking_source;
+    html += '<div style="font-size:10px;color:var(--mid);text-align:center;padding:6px 0">'+srcLabel+'</div>';
+  }
   // Status
   html+='<div class="dr-sec"><p class="dr-sec-title">Update status</p>';
   html+='<select class="status-select" id="statusSel">';
@@ -1212,7 +1228,7 @@ function buildDrawer(b) {
   html+='</select>';
   html+='<button class="save-btn" onclick="saveStatus(\''+b.id+'\')">Update</button>';
   html+='</div>';
-  html+='<div class="dr-ctas"><button class="dr-btn-sec" onclick="editBookingFromDrawer()">Edit booking</button><button class="dr-btn-pri" onclick="closeDrawer()">Done</button></div>';
+  html+='<div class="dr-ctas"><button class="dr-btn-sec" onclick="openEditPanel(\''+b.id+'\')">Edit booking</button><button class="dr-btn-pri" onclick="closeDrawer()">Done</button></div>';
   return html;
 }
 
@@ -1235,11 +1251,12 @@ async function loadPayments(bookingId) {
 }
 
 function openDrawer(bookingId) {
-  var b=allBookings.find(function(x){return x.id===bookingId;})||allBookingsList.find(function(x){return x.id===bookingId;});
+  var b = allBookings.find(function(x){return x.id===bookingId;}) ||
+          allBookingsList.find(function(x){return x.id===bookingId;});
   if(!b) return;
   closeFab();
-  currentBookingId=bookingId;
-  document.getElementById('drContent').innerHTML=buildDrawer(b);
+  currentBookingId = bookingId;
+  document.getElementById('drContent').innerHTML = buildDrawer(b);
   document.getElementById('drOverlay').classList.add('open');
   loadPayments(bookingId);
 }
@@ -1854,6 +1871,140 @@ function editBookingFromDrawer() {
   var id = currentBookingId;   // save before closeDrawer nulls it
   closeDrawer();
   openBookingPanel(id);
+}
+
+function openEditPanel(bookingId) {
+  closeDrawer();
+  var b = allBookings.find(function(x){return x.id===bookingId;}) ||
+          allBookingsList.find(function(x){return x.id===bookingId;});
+  if (!b) return;
+  bkEditing = bookingId;
+  bkReset();
+  bkPrePopulate(b);
+
+  function first(v){return Array.isArray(v)?(v[0]||null):(v||null);}
+  var pet=first(b.pets)||{}, own=first(b.owners)||{};
+  var gd=first(b.grooming_details), hd=first(b.hotel_details), dd=first(b.daycare_details), sd=first(b.studio_details);
+
+  var svcLabels={grooming:'Grooming',hotel:'Pet Hotel',daycare:'Daycare',studio:'Studio'};
+
+  var html = '';
+
+  // ── PET ──
+  html += '<div class="fg"><label class="fl">Pet name</label><input class="fi" id="epPetName" value="'+e(pet.name||'')+'"></div>';
+  html += '<div class="fg"><label class="fl">Breed</label><input class="fi" id="epBreed" value="'+e(pet.breed||'')+'"></div>';
+  html += '<div style="display:flex;gap:8px">';
+  html += '<div class="fg" style="flex:1"><label class="fl">Age</label><input class="fi" type="number" id="epAge" value="'+e(String(pet.age_value||''))+'" min="0"></div>';
+  html += '<div class="fg" style="flex:1"><label class="fl">Unit</label><select class="fs" id="epAgeUnit"><option value="years"'+(pet.age_unit==='years'?' selected':'')+'>Years</option><option value="months"'+(pet.age_unit==='months'?' selected':'')+'>Months</option></select></div>';
+  html += '</div>';
+  html += '<div class="fg"><label class="fl">Medical notes</label><textarea class="ft" id="epMed">'+e(pet.medical_notes||'')+'</textarea></div>';
+  html += '<div class="fg"><label class="fl">Temperament</label><select class="fs" id="epTemp">';
+  ['friendly_all','friendly_shy','selective','first_time','reactive'].forEach(function(t){html+='<option value="'+t+'"'+(pet.temperament===t?' selected':'')+'>'+t.replace(/_/g,' ')+'</option>';});
+  html += '</select></div>';
+
+  // ── OWNER ──
+  html += '<div style="height:0.5px;background:var(--border);margin:12px 0"></div>';
+  html += '<div style="display:flex;gap:8px"><div class="fg" style="flex:1"><label class="fl">First name</label><input class="fi" id="epFirst" value="'+e(own.first_name||'')+'"></div>';
+  html += '<div class="fg" style="flex:1"><label class="fl">Last name</label><input class="fi" id="epLast" value="'+e(own.last_name||'')+'"></div></div>';
+  html += '<div class="fg"><label class="fl">Email</label><input class="fi" id="epEmail" value="'+e(own.email||'')+'"></div>';
+  html += '<div class="fg"><label class="fl">Mobile</label><input class="fi" id="epPhone" value="'+e(own.mobile||'')+'"></div>';
+
+  // ── SCHEDULE (service-specific) ──
+  html += '<div style="height:0.5px;background:var(--border);margin:12px 0"></div>';
+  html += '<p class="fl" style="margin-bottom:10px">'+svcLabels[b.service]+'</p>';
+  if (gd) {
+    html += '<div class="fg"><label class="fl">Date</label><input class="fi" type="date" id="epGDate" value="'+e(b.booking_date||'')+'"></div>';
+    html += '<div class="fg"><label class="fl">Time slot</label><input class="fi" id="epGSlot" value="'+e(gd.timeslot||'')+'"></div>';
+    html += '<div class="fg"><label class="fl">Grooming service</label><input class="fi" id="epGSvc" value="'+e(gd.groom_service_name||'')+'"></div>';
+    html += '<div class="fg"><label class="fl">Groomer</label><select class="fs" id="epGroomer"><option value="any">Any available</option>'+groomers.map(function(g){return '<option value="'+g.id+'"'+(gd.groomer_id===g.id?' selected':'')+'>'+e(g.name)+'</option>';}).join('')+'</select></div>';
+    html += '<div class="fg"><label class="fl">Special requests</label><textarea class="ft" id="epGNotes">'+e(gd.special_requests||'')+'</textarea></div>';
+  }
+  if (hd) {
+    html += '<div style="display:flex;gap:8px"><div class="fg" style="flex:1"><label class="fl">Check-in</label><input class="fi" type="date" id="epCin" value="'+e(hd.checkin_date||'')+'"></div>';
+    html += '<div class="fg" style="flex:1"><label class="fl">Check-out</label><input class="fi" type="date" id="epCout" value="'+e(hd.checkout_date||'')+'"></div></div>';
+    html += '<div class="fg"><label class="fl">Drop-off time</label><input class="fi" id="epDrop" value="'+e(hd.dropoff_time||'')+'"></div>';
+    html += '<div class="fg"><label class="fl">Pick-up time</label><input class="fi" id="epPick" value="'+e(hd.pickup_time||'')+'"></div>';
+    html += '<div class="fg"><label class="fl">Feeding instructions</label><textarea class="ft" id="epFeed">'+e(hd.feeding_instructions||'')+'</textarea></div>';
+    html += '<div class="fg"><label class="fl">Medications</label><textarea class="ft" id="epMeds">'+e(hd.medications||'')+'</textarea></div>';
+    html += '<div class="fg"><label class="fl">Emergency contact</label><input class="fi" id="epEmerg" value="'+e((hd.emergency_name||'')+(hd.emergency_phone?' / '+hd.emergency_phone:''))+'"></div>';
+  }
+  if (dd) {
+    html += '<div class="fg"><label class="fl">Date</label><input class="fi" type="date" id="epDcDate" value="'+e(b.booking_date||'')+'"></div>';
+    html += '<div style="display:flex;gap:8px"><div class="fg" style="flex:1"><label class="fl">Drop-off</label><input class="fi" id="epDcDrop" value="'+e(dd.dropoff_time||'')+'"></div>';
+    html += '<div class="fg" style="flex:1"><label class="fl">Pick-up</label><input class="fi" id="epDcPick" value="'+e(dd.pickup_time||'')+'"></div></div>';
+    html += '<div class="fg"><label class="fl">Notes</label><textarea class="ft" id="epDcNotes">'+e(dd.notes||'')+'</textarea></div>';
+  }
+  if (sd) {
+    html += '<div class="fg"><label class="fl">Date</label><input class="fi" type="date" id="epStDate" value="'+e(b.booking_date||'')+'"></div>';
+    html += '<div class="fg"><label class="fl">Time slot</label><input class="fi" id="epStSlot" value="'+e(sd.timeslot||'')+'"></div>';
+  }
+
+  // ── STATUS ──
+  html += '<div style="height:0.5px;background:var(--border);margin:12px 0"></div>';
+  html += '<div style="display:flex;gap:8px"><div class="fg" style="flex:1"><label class="fl">Status</label><select class="fs" id="epStatus">';
+  ['pending','confirmed','checked_in','completed','cancelled'].forEach(function(s){html+='<option value="'+s+'"'+(b.status===s?' selected':'')+'>'+s.replace(/_/g,' ')+'</option>';});
+  html += '</select></div>';
+  html += '<div class="fg" style="flex:1"><label class="fl">Payment</label><select class="fs" id="epPayStatus">';
+  ['unpaid','partially_paid','paid','refunded'].forEach(function(s){html+='<option value="'+s+'"'+((b.payment_status||'unpaid')===s?' selected':'')+'>'+s.replace(/_/g,' ')+'</option>';});
+  html += '</select></div></div>';
+  html += '<div class="fg"><label class="fl">Admin notes</label><textarea class="ft" id="epNotes">'+e(bk.anotes||'')+'</textarea></div>';
+
+  // Render panel
+  document.getElementById('bkPanelTitle').textContent = 'Edit booking';
+  document.getElementById('bkPanelBody').innerHTML = html;
+  document.getElementById('bkBtnBack').textContent = 'Cancel';
+  document.getElementById('bkBtnBack').onclick = closeBkPanel;
+  document.getElementById('bkBtnNext').textContent = 'Save changes';
+  document.getElementById('bkBtnNext').onclick = function(){ saveEditPanel(bookingId, b); };
+  document.getElementById('bkStepsBar').innerHTML = '';
+  document.getElementById('bkOverlay').classList.add('open');
+  document.getElementById('bkPanel').classList.add('open');
+}
+
+async function saveEditPanel(bookingId, b) {
+  function first(v){return Array.isArray(v)?(v[0]||null):(v||null);}
+  var g = function(id){var el=document.getElementById(id);return el?el.value:'';};
+  var gd=first(b.grooming_details), hd=first(b.hotel_details), dd=first(b.daycare_details), sd=first(b.studio_details);
+  var pet=first(b.pets)||{}, own=first(b.owners)||{};
+  var btn = document.getElementById('bkBtnNext');
+  if(btn){btn.disabled=true;btn.textContent='Saving…';}
+  try {
+    // Update pet
+    if (pet.id || b.pets) {
+      await sbPatch('pets','booking_id=eq.'+bookingId,{name:g('epPetName')||undefined,breed:g('epBreed')||undefined,age_value:parseInt(g('epAge'))||undefined,age_unit:g('epAgeUnit')||undefined,medical_notes:g('epMed')||undefined,temperament:g('epTemp')||undefined});
+    }
+    // Update owner
+    if (own.id || b.owners) {
+      await sbPatch('owners','booking_id=eq.'+bookingId,{first_name:g('epFirst')||undefined,last_name:g('epLast')||undefined,email:g('epEmail')||undefined,mobile:g('epPhone')||undefined});
+    }
+    // Update status
+    await sbPatch('bookings','id=eq.'+bookingId,{status:g('epStatus'),payment_status:g('epPayStatus')});
+    // Update service-specific details
+    if (gd) {
+      var grEl=document.getElementById('epGroomer');
+      var grId=grEl&&grEl.value&&grEl.value!=='any'?grEl.value:null;
+      var grName=grId?(groomers.find(function(gr){return gr.id===grId;})||{name:'any'}).name:'any';
+      await sbPatch('grooming_details','booking_id=eq.'+bookingId,{timeslot:g('epGSlot')||undefined,groom_service_name:g('epGSvc')||undefined,special_requests:g('epGNotes')||undefined,groomer_id:grId,preferred_stylist:grName});
+      if (g('epGDate')) await sbPatch('bookings','id=eq.'+bookingId,{booking_date:g('epGDate')});
+    }
+    if (hd) {
+      await sbPatch('hotel_details','booking_id=eq.'+bookingId,{checkin_date:g('epCin')||undefined,checkout_date:g('epCout')||undefined,dropoff_time:g('epDrop')||undefined,pickup_time:g('epPick')||undefined,feeding_instructions:g('epFeed')||undefined,medications:g('epMeds')||undefined});
+    }
+    if (dd) {
+      if(g('epDcDate')) await sbPatch('bookings','id=eq.'+bookingId,{booking_date:g('epDcDate')});
+      await sbPatch('daycare_details','booking_id=eq.'+bookingId,{dropoff_time:g('epDcDrop')||undefined,pickup_time:g('epDcPick')||undefined,notes:g('epDcNotes')||undefined});
+    }
+    if (sd) {
+      if(g('epStDate')) await sbPatch('bookings','id=eq.'+bookingId,{booking_date:g('epStDate')});
+      await sbPatch('studio_details','booking_id=eq.'+bookingId,{timeslot:g('epStSlot')||undefined});
+    }
+    closeBkPanel();
+    await loadBookings();
+    if(currentAdminPage==='bookings') await loadBookingsList();
+  } catch(err) {
+    alert('Save failed: '+err.message);
+    if(btn){btn.disabled=false;btn.textContent='Save changes';}
+  }
 }
 
 function bkReset() {
@@ -2851,7 +3002,16 @@ async function loadBookingsList() {
   if (!br) return;
   document.getElementById('pageBookings').innerHTML = '<p style="color:var(--mid);padding:16px">Loading…</p>';
   try {
-    var sel = 'id,ref_number,service,status,payment_status,booking_date,total,discount_amount,created_at,owners(first_name,last_name),pets(name),grooming_details(timeslot),hotel_details(checkin_date,checkout_date),daycare_details(dropoff_time,pickup_time)';
+    var sel = 'id,ref_number,service,status,payment_status,booking_date,total,subtotal,discount_amount,created_at,'+
+      'owners(first_name,last_name,mobile,email,referral_source),'+
+      'pets(name,animal_type,breed,size,gender,age_value,age_unit,temperament,medical_notes),'+
+      'grooming_details(timeslot,preferred_stylist,groom_service_name,groom_service_key,special_requests,groomer_id),'+
+      'hotel_details(checkin_date,checkout_date,dropoff_time,pickup_time,room_type,room_id,playpark_consent,feeding_instructions,medications,emergency_name,emergency_phone,vet_clinic,vet_contact),'+
+      'daycare_details(dropoff_time,pickup_time,hours_total,open_time,notes),'+
+      'studio_details(timeslot),'+
+      'booking_addons(addon_name,price),'+
+      'pet_vaccines(vaccine_name,confirmed),'+
+      'checkin_notes(general_remarks,addon_purchases,physical_inspection_notes,personal_items,vacc_complete,skin_coat_good,skin_coat_remarks,ears_nose_eyes_good,ears_nose_eyes_remarks,nails_good,nails_remarks,joints_good,joints_remarks)';
     var rows = await sb('bookings', 'branch_id=eq.'+br.id+'&order=created_at.desc&select='+sel);
     allBookingsList = rows || [];
     renderBookingsList();
