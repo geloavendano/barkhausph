@@ -103,7 +103,7 @@
   .bk-sub{font-size:10px;color:var(--cream-m);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .bk-tag{font-size:9px;font-weight:700;margin-top:3px;padding:1px 5px;border-radius:3px;display:inline-block;letter-spacing:0.03em;}
   /* BREAK BLOCKS */
-  .bk-break{position:absolute;border-radius:4px;padding:4px 7px;pointer-events:none;z-index:1;opacity:0.7;}
+  .bk-break{position:absolute;border-radius:4px;padding:4px 7px;pointer-events:none;z-index:3;opacity:0.82;}
   .bk-break-lbl{font-size:10px;font-weight:600;color:var(--cream-m);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .bk-cancelled { opacity:0.4; filter:grayscale(1); }
   .bk-cancelled .bk-pet, .bk-cancelled .bk-sub { text-decoration:line-through; }
@@ -857,18 +857,29 @@ function renderTimeline() {
   // Render blocked_schedules for the current view date
   var todayStr = fmtDate(currentDate);
   blockedSchedules.forEach(function(bl) {
-    if (!bl.dates || bl.dates.indexOf(todayStr) === -1) return;
+    // Date match — support both JS array and PostgreSQL literal string
+    var blDates = Array.isArray(bl.dates) ? bl.dates : (bl.dates ? String(bl.dates).replace(/[{}"]/g,'').split(',') : []);
+    if (!blDates.length || blDates.indexOf(todayStr) === -1) return;
+    // Service type match
     if (currentSvc==='grooming' && bl.resource_type!=='groomer') return;
     if (currentSvc==='hotel'    && bl.resource_type!=='room')    return;
     if (currentSvc!=='grooming' && currentSvc!=='hotel') return;
+    // When a specific resource is selected, only show blocks for that resource
+    if (activeFilter && activeFilter.id && bl.resource_id !== activeFilter.id) return;
     var stMin = parseMins(bl.start_time);
     var enMin = parseMins(bl.end_time);
     if (stMin===null || enMin===null || stMin >= enMin) return;
     var top = Math.max(0, (stMin - DAY_START) * PX_PER_MIN);
     var ht  = Math.max(22, (enMin - stMin) * PX_PER_MIN);
     var label = bl.reason || 'Blocked';
-    breakHtml += '<div class="bk-break" style="top:'+top+'px;height:'+ht+'px;left:0;right:0;background:rgba(80,80,110,0.45);border-left:3px solid #9B95E8">'+
-      '<div class="bk-break-lbl" style="color:var(--cream)">🚫 '+e(label)+'</div></div>';
+    // Find resource name for label
+    var resourceName = '';
+    if (!activeFilter) {
+      var res = (currentSvc==='grooming' ? groomers : rooms).find(function(r){return r.id===bl.resource_id;});
+      if (res) resourceName = ' — '+res.name;
+    }
+    breakHtml += '<div class="bk-break" style="top:'+top+'px;height:'+ht+'px;left:0;right:0;background:rgba(80,50,120,0.55);border-left:3px solid #9B95E8;backdrop-filter:blur(0)">'+
+      '<span class="bk-break-lbl" style="color:#e0d6ff">🚫 '+e(label)+e(resourceName)+'</span></div>';
   });
 
   var positioned = layoutBks(filtered);
@@ -978,12 +989,13 @@ function closeFab() {
 /* ── BLOCK SCHEDULE ── */
 async function loadBlockedSchedules() {
   var br = branches[currentBranch];
-  if (!br || !br.id) { blockedSchedules = []; renderBlockedSlots(); return; }
+  if (!br || !br.id) { blockedSchedules = []; renderBlockedSlots(); renderTimeline(); return; }
   try {
     var rows = await sb('blocked_schedules', 'branch_id=eq.'+br.id+'&active=eq.true&order=created_at.desc&select=*');
     blockedSchedules = rows || [];
-  } catch(ex) { blockedSchedules = []; }
+  } catch(ex) { console.warn('loadBlockedSchedules failed:', ex); blockedSchedules = []; }
   renderBlockedSlots();
+  renderTimeline();
 }
 
 function renderBlockedSlots() {
@@ -1140,10 +1152,11 @@ function buildDrawer(b) {
   var vaccines=Array.isArray(b.pet_vaccines)?b.pet_vaccines:(b.pet_vaccines?[b.pet_vaccines]:[]);
   var cn=dFirst(b.checkin_notes);
   var timeStr='';
-  if(gd) timeStr=gd.timeslot||'';
+  var _bDate = b.booking_date || '';
+  if(gd) timeStr=(_bDate?_bDate+' · ':'')+( gd.timeslot||'');
   else if(hd) timeStr=(hd.checkin_date||'')+' to '+(hd.checkout_date||'');
-  else if(dd) timeStr=(dd.dropoff_time||'')+(dd.open_time?' to open':(' to '+(dd.pickup_time||'')));
-  else if(sd) timeStr=sd.timeslot||'';
+  else if(dd) timeStr=(_bDate?_bDate+' · ':'')+((dd.dropoff_time||'')+(dd.open_time?' to open':(' to '+(dd.pickup_time||''))));
+  else if(sd) timeStr=(_bDate?_bDate+' · ':'')+( sd.timeslot||'');
 
   var html='';
   html+='<p class="dr-ref">'+e(b.ref_number||'')+'</p>';
@@ -1179,10 +1192,10 @@ function buildDrawer(b) {
   // Service details
   html+='<div class="dr-sec"><p class="dr-sec-title">'+e({grooming:'Grooming',hotel:'Pet Hotel',daycare:'Daycare',studio:'Studio'}[b.service]||b.service)+'</p>';
   var rows=[];
-  if(gd){rows.push(['Service',gd.groom_service_name]);rows.push(['Stylist',gd.preferred_stylist]);if(addons.length)rows.push(['Add-ons',addons.map(function(a){return a.addon_name;}).join(', ')]);if(gd.special_requests)rows.push(['Notes',gd.special_requests]);}
+  if(gd){if(b.booking_date)rows.push(['Date',b.booking_date]);rows.push(['Time',gd.timeslot]);rows.push(['Service',gd.groom_service_name]);rows.push(['Stylist',gd.preferred_stylist]);if(addons.length)rows.push(['Add-ons',addons.map(function(a){return a.addon_name;}).join(', ')]);if(gd.special_requests)rows.push(['Notes',gd.special_requests]);}
   if(hd){var rm=rooms.find(function(r){return r.id===hd.room_id;});rows.push(['Room',(rm?rm.name:(ROOM_TYPES[hd.room_type]||hd.room_type||'-'))]);rows.push(['Check-in',hd.checkin_date]);rows.push(['Check-out',hd.checkout_date]);rows.push(['Drop-off',hd.dropoff_time]);rows.push(['Pick-up',hd.pickup_time]);rows.push(['Play park',hd.playpark_consent?'Yes':'No']);if(hd.feeding_instructions)rows.push(['Feeding',hd.feeding_instructions]);if(hd.medications)rows.push(['Medications',hd.medications]);}
-  if(dd){rows.push(['Drop-off',dd.dropoff_time]);rows.push(['Pick-up',dd.open_time?'Open time':dd.pickup_time]);rows.push(['Duration',dd.hours_total?dd.hours_total+'h':'-']);if(dd.notes)rows.push(['Notes',dd.notes]);}
-  if(sd)rows.push(['Slot',sd.timeslot]);
+  if(dd){if(b.booking_date)rows.push(['Date',b.booking_date]);rows.push(['Drop-off',dd.dropoff_time]);rows.push(['Pick-up',dd.open_time?'Open time':dd.pickup_time]);rows.push(['Duration',dd.hours_total?dd.hours_total+'h':'-']);if(dd.notes)rows.push(['Notes',dd.notes]);}
+  if(sd){if(b.booking_date)rows.push(['Date',b.booking_date]);rows.push(['Slot',sd.timeslot]);}
   rows.forEach(function(r){if(!r[1])return;html+='<div class="dr-row"><span class="dr-key">'+e(r[0])+'</span><span class="dr-val">'+e(r[1])+'</span></div>';});
   html+='</div>';
   // Owner
@@ -3175,6 +3188,7 @@ function startAutoRefresh() {
   _autoRefreshTimer = setInterval(async function() {
     try {
       if (currentAdminPage === 'calendar') {
+        await loadBlockedSchedules(); // also refreshes timeline via its own renderTimeline() call
         await loadBookings();
       } else if (currentAdminPage === 'bookings') {
         await loadBookingsList();
