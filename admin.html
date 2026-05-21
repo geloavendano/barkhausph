@@ -51,6 +51,12 @@
   .sb-toggle{width:28px;height:28px;background:var(--surface);border:0.5px solid var(--border);border-radius:6px;cursor:pointer;color:var(--mid);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;transition:background 0.15s;}
   .sb-toggle:hover{background:var(--raised);}
   .fab{position:fixed;bottom:24px;right:24px;background:var(--yellow);color:#3d2e00;border:none;border-radius:50px;padding:11px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:"Nunito",sans-serif;z-index:50;display:flex;align-items:center;gap:6px;box-shadow:none;}
+  .fab-group{position:fixed;bottom:24px;right:24px;z-index:50;display:flex;flex-direction:column;align-items:flex-end;gap:8px;}
+  .fab-main{background:var(--yellow);color:#3d2e00;border:none;border-radius:50%;width:48px;height:48px;font-size:22px;font-weight:700;cursor:pointer;font-family:"Nunito",sans-serif;display:flex;align-items:center;justify-content:center;transition:transform 0.2s;flex-shrink:0;}
+  .fab-main.open{transform:rotate(45deg);}
+  .fab-actions{display:flex;flex-direction:column;align-items:flex-end;gap:6px;}
+  .fab-action{background:var(--surface);border:0.5px solid var(--border);color:var(--cream);border-radius:50px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:"Nunito",sans-serif;white-space:nowrap;transition:background 0.15s;}
+  .fab-action:hover{background:var(--raised);}
   .branch-tabs{display:flex;gap:4px;padding:8px;border-bottom:0.5px solid var(--border);}
   .br-tab{flex:1;font-size:11px;font-weight:700;padding:5px 4px;border-radius:20px;border:0.5px solid var(--border);cursor:pointer;background:transparent;color:var(--mid);font-family:"Nunito",sans-serif;text-align:center;transition:all 0.15s;}
   .br-tab.on{background:var(--yellow);border-color:var(--yellow);color:#3d2e00;}
@@ -99,6 +105,9 @@
   /* BREAK BLOCKS */
   .bk-break{position:absolute;border-radius:4px;padding:4px 7px;pointer-events:none;z-index:1;opacity:0.7;}
   .bk-break-lbl{font-size:10px;font-weight:600;color:var(--cream-m);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .bk-cancelled { opacity:0.4; filter:grayscale(1); }
+  .bk-cancelled .bk-pet, .bk-cancelled .bk-sub { text-decoration:line-through; }
+  .bk-member-star { position:absolute; top:3px; right:4px; font-size:9px; color:#FFCE58; line-height:1; pointer-events:none; }
   /* STATUS DOTS */
   .sdot{width:6px;height:6px;border-radius:50%;display:inline-block;flex-shrink:0;}
   /* PANEL (Add/Edit Room/Groomer) */
@@ -273,6 +282,22 @@
   /* ── ROTATED NARROW CARD ── */
   .bk-name-rotated{writing-mode:vertical-rl;text-orientation:mixed;transform:rotate(180deg);font-size:11px;font-weight:700;color:var(--cream);white-space:nowrap;overflow:hidden;max-height:100%;text-overflow:ellipsis;line-height:1.2;}
 
+  /* ── ADMIN PAGE NAV ── */
+  .admin-nav{display:flex;border-bottom:0.5px solid var(--border);background:var(--surface);}
+  .anav-btn{flex:1;padding:8px 4px;border:none;background:transparent;color:var(--mid);cursor:pointer;font-family:"Nunito",sans-serif;font-size:10px;font-weight:700;display:flex;flex-direction:column;align-items:center;gap:2px;transition:color 0.15s,background 0.15s;}
+  .anav-btn span{font-size:9px;letter-spacing:0.05em;text-transform:uppercase;}
+  .anav-btn.on{color:var(--yellow);background:var(--raised);}
+  .anav-btn:hover:not(.on){color:var(--cream);background:var(--raised);}
+
+  /* ── BOOKINGS LIST ── */
+  .bklist-row.bk-cancelled{opacity:0.45;filter:grayscale(1);}
+
+  /* ── TIME SLOT BUTTONS (grooming schedule) ── */
+  .time-slot-btn{padding:6px 10px;border-radius:6px;border:0.5px solid var(--border);background:var(--surface);color:var(--cream);cursor:pointer;font-size:12px;font-family:"Nunito",sans-serif;font-weight:600;transition:all 0.12s;}
+  .time-slot-btn:hover:not(.taken){border-color:var(--blue);color:var(--blue);}
+  .time-slot-btn.on{background:var(--yellow);border-color:var(--yellow);color:#3d2e00;}
+  .time-slot-btn.taken{opacity:0.35;cursor:not-allowed;text-decoration:line-through;}
+
 </style>
 </head>
 <body>
@@ -321,10 +346,16 @@
         <button class="sb-toggle" onclick="toggleSidebar()" id="sbToggle" title="Toggle sidebar"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="1" width="12" height="12" rx="2" stroke="currentColor" stroke-width="1.2"/><line x1="5" y1="1" x2="5" y2="13" stroke="currentColor" stroke-width="1.2"/></svg></button>
       </div>
       <div class="sb-scroll" id="sbScroll">
+      <div class="admin-nav" id="adminNav">
+        <button class="anav-btn on" onclick="switchAdminPage('calendar')" data-page="calendar">📅<span>Calendar</span></button>
+        <button class="anav-btn" onclick="switchAdminPage('bookings')" data-page="bookings">📋<span>Bookings</span></button>
+        <button class="anav-btn" onclick="switchAdminPage('members')" data-page="members">👤<span>Members</span></button>
+      </div>
       <div class="branch-tabs">
         <button class="br-tab on" onclick="setBranch(0,this)">Estancia</button>
         <button class="br-tab" onclick="setBranch(1,this)">Eastwood</button>
       </div>
+      <div id="sbCalContext">
       <div class="sb-sec">
         <div class="sb-sec-hd">
           <span class="sb-sec-title">Hotel rooms</span>
@@ -340,9 +371,18 @@
         <div id="groomerList"></div>
         <button class="sb-add-btn" onclick="openGroomerPanel(null)">+ Add groomer</button>
       </div>
+      <div class="sb-div"></div>
+      <div class="sb-sec" id="sbBlockedSec">
+        <div class="sb-sec-hd">
+          <span class="sb-sec-title">Blocked Slots</span>
+          <span id="sbBlockedCount" style="font-size:9px;color:var(--mid)"></span>
+        </div>
+        <div id="blockedSlotsList"></div>
+      </div>
+      </div><!-- /sbCalContext -->
       </div><!-- /sb-scroll -->
     </aside>
-    <div class="main-content">
+    <div class="main-content" id="pageCalendar">
       <div class="svc-tabs" id="svcTabs"></div>
       <div class="tl-scroll" id="tlScroll">
         <div class="tl-body">
@@ -351,6 +391,8 @@
         </div>
       </div>
     </div>
+    <div id="pageBookings" style="display:none;flex:1;overflow-y:auto;padding:16px;"></div>
+    <div id="pageMembers" style="display:none;flex:1;overflow-y:auto;padding:24px;"></div>
   </div>
 </div>
 
@@ -372,7 +414,14 @@
   </div>
 </div>
 
-<button class="fab" onclick="openBookingPanel(null)">&#43; Add booking</button>
+<div class="fab-group" id="fabGroup">
+  <div class="fab-actions" id="fabActions" style="display:none">
+    <button class="fab-action" onclick="openBookingPanel(null,'admin')">📋 Add Booking</button>
+    <button class="fab-action" onclick="openBookingPanel(null,'walkin')">🚶 Walk-in</button>
+    <button class="fab-action" onclick="openBlockPanel(null)">🚫 Block Schedule</button>
+  </div>
+  <button class="fab-main" id="fabMain" onclick="toggleFab()">+</button>
+</div>
 
 
 <!-- BOOKING PANEL -->
@@ -445,6 +494,20 @@
   </div>
 </div>
 
+<!-- BLOCK SCHEDULE PANEL -->
+<div class="panel-overlay" id="blockOverlay" onclick="closeBlockPanel(event)"></div>
+<div class="panel" id="blockPanel">
+  <div class="panel-head">
+    <span class="panel-title">Block Schedule</span>
+    <button class="panel-close" onclick="closeBlockPanel()">&#215;</button>
+  </div>
+  <div class="panel-body" id="blockPanelBody"></div>
+  <div class="panel-footer">
+    <button class="btn-cancel" onclick="closeBlockPanel()">Cancel</button>
+    <button class="btn-save" onclick="saveBlock()">Save Block</button>
+  </div>
+</div>
+
 <script>
 
 var SUPABASE_URL      = 'https://dxttnbtfhpanyiyduevn.supabase.co';
@@ -470,6 +533,7 @@ var branches       = [];
 var rooms          = [];
 var groomers       = [];
 var groomerBlocks  = [];
+var blockedSchedules = [];
 var allBookings    = [];
 var currentSvc     = 'hotel';
 var activeFilter   = null;
@@ -561,6 +625,7 @@ async function init() {
   renderTimeLbls();
   await Promise.all([loadRooms(), loadGroomers()]);
   await loadGroomerBlocks();
+  await loadBlockedSchedules();
   await loadMonthDots(currentDate.getFullYear(), currentDate.getMonth());
   renderSidebar();
   renderTabs();
@@ -744,7 +809,7 @@ function renderTabs() {
   document.getElementById('svcTabs').innerHTML = html;
 }
 
-function setSvc(key) { currentSvc=key; activeFilter=null; renderSidebar(); renderTabs(); renderTimeline(); }
+function setSvc(key) { currentSvc=key; activeFilter=null; renderSidebar(); renderTabs(); renderTimeline(); renderBlockedSlots(); }
 
 /* ── TIME LABELS ── */
 function renderTimeLbls() {
@@ -788,6 +853,23 @@ function renderTimeline() {
       });
     });
   }
+
+  // Render blocked_schedules for the current view date
+  var todayStr = fmtDate(currentDate);
+  blockedSchedules.forEach(function(bl) {
+    if (!bl.dates || bl.dates.indexOf(todayStr) === -1) return;
+    if (currentSvc==='grooming' && bl.resource_type!=='groomer') return;
+    if (currentSvc==='hotel'    && bl.resource_type!=='room')    return;
+    if (currentSvc!=='grooming' && currentSvc!=='hotel') return;
+    var stMin = parseMins(bl.start_time);
+    var enMin = parseMins(bl.end_time);
+    if (stMin===null || enMin===null || stMin >= enMin) return;
+    var top = Math.max(0, (stMin - DAY_START) * PX_PER_MIN);
+    var ht  = Math.max(22, (enMin - stMin) * PX_PER_MIN);
+    var label = bl.reason || 'Blocked';
+    breakHtml += '<div class="bk-break" style="top:'+top+'px;height:'+ht+'px;left:0;right:0;background:rgba(80,80,110,0.45);border-left:3px solid #9B95E8">'+
+      '<div class="bk-break-lbl" style="color:var(--cream)">🚫 '+e(label)+'</div></div>';
+  });
 
   var positioned = layoutBks(filtered);
   var cardsHtml = positioned.map(function(item){ return renderCard(item); }).join('');
@@ -857,13 +939,15 @@ function renderCard(item) {
   var colW  = tlEl ? (tlEl.offsetWidth || 300) : 300;
   var cardPx = colW / Math.max(item.total, 1);
   var isNarrow = cardPx < 70;
+  var cancelClass = (b.status==='cancelled'||b.status==='rejected') ? ' bk-cancelled' : '';
+  var memberStar = b.discount_amount > 0 ? '<span class="bk-member-star">&#9733;</span>' : '';
   if (isNarrow) {
-    return '<div class="bk" style="top:'+top+'px;height:'+ht+'px;left:'+l+';width:'+w+';background:'+bg+';border-left-color:'+color+';display:flex;align-items:center;justify-content:center;padding:3px 2px" onclick="openDrawer(\''+b.id+'\')">' +
+    return '<div class="bk'+cancelClass+'" style="top:'+top+'px;height:'+ht+'px;left:'+l+';width:'+w+';background:'+bg+';border-left-color:'+color+';display:flex;align-items:center;justify-content:center;padding:3px 2px" onclick="openDrawer(\''+b.id+'\')">' +
       '<div class="bk-name-rotated">'+sdot+' '+e(pet.name||'Pet')+'</div></div>';
   }
-  return '<div class="bk" style="top:'+top+'px;height:'+ht+'px;left:'+l+';width:'+w+';background:'+bg+';border-left-color:'+color+'" onclick="openDrawer(\''+b.id+'\')">'+
+  return '<div class="bk'+cancelClass+'" style="top:'+top+'px;height:'+ht+'px;left:'+l+';width:'+w+';background:'+bg+';border-left-color:'+color+'" onclick="openDrawer(\''+b.id+'\')">'+
     '<div class="bk-pet">'+sdot+'<span style="font-size:12px">'+(pet.animal_type==='cat'?'&#128049;':'&#128054;')+'</span>'+e(pet.name||'Pet')+'</div>'+
-    (ht>52?'<div class="bk-sub">'+e(detailLine)+'</div>':'')+(ht>72?'<div class="bk-sub">'+e(ownerName)+'</div>':'')+'</div>';
+    (ht>52?'<div class="bk-sub">'+e(detailLine)+'</div>':'')+(ht>72?'<div class="bk-sub">'+e(ownerName)+'</div>':'')+memberStar+'</div>';
 }
 
 function hexBg(hex) {
@@ -875,6 +959,7 @@ function hexBg(hex) {
 function openDrawer(bookingId) {
   var b=allBookings.find(function(x){return x.id===bookingId;});
   if(!b) return;
+  closeFab();
   currentBookingId=bookingId;
   document.getElementById('drContent').innerHTML=buildDrawer(b);
   document.getElementById('drOverlay').classList.add('open');
@@ -883,6 +968,177 @@ function closeDrawer(e) {
   if(e&&e.target!==document.getElementById('drOverlay')) return;
   document.getElementById('drOverlay').classList.remove('open');
   currentBookingId=null;
+}
+
+var _fabOpen = false;
+function toggleFab() {
+  _fabOpen = !_fabOpen;
+  document.getElementById('fabActions').style.display = _fabOpen ? 'flex' : 'none';
+  document.getElementById('fabMain').classList.toggle('open', _fabOpen);
+}
+function closeFab() {
+  if (!_fabOpen) return;
+  _fabOpen = false;
+  document.getElementById('fabActions').style.display = 'none';
+  document.getElementById('fabMain').classList.remove('open');
+}
+
+/* ── BLOCK SCHEDULE ── */
+async function loadBlockedSchedules() {
+  var br = branches[currentBranch];
+  if (!br || !br.id) { blockedSchedules = []; renderBlockedSlots(); return; }
+  try {
+    var rows = await sb('blocked_schedules', 'branch_id=eq.'+br.id+'&active=eq.true&order=created_at.desc&select=*');
+    blockedSchedules = rows || [];
+  } catch(ex) { blockedSchedules = []; }
+  renderBlockedSlots();
+}
+
+function renderBlockedSlots() {
+  var el = document.getElementById('blockedSlotsList');
+  var countEl = document.getElementById('sbBlockedCount');
+  if (!el) return;
+  var filtered = blockedSchedules.filter(function(b) {
+    if (currentSvc === 'hotel')    return b.resource_type === 'room';
+    if (currentSvc === 'grooming') return b.resource_type === 'groomer';
+    return false;
+  });
+  if (countEl) countEl.textContent = filtered.length ? filtered.length+' active' : '';
+  if (!filtered.length) { el.innerHTML = '<p style="font-size:11px;color:var(--mid);padding:4px 7px">None for this view.</p>'; return; }
+  el.innerHTML = filtered.map(function(bl) {
+    var resource = bl.resource_type==='room'
+      ? (rooms.find(function(r){return r.id===bl.resource_id;})||{name:'Room'})
+      : (groomers.find(function(g){return g.id===bl.resource_id;})||{name:'Groomer'});
+    var datesStr = (bl.dates||[]).slice(0,2).join(', ')+(bl.dates&&bl.dates.length>2?' +more':'');
+    return '<div style="display:flex;align-items:flex-start;gap:6px;padding:5px 7px;border-radius:7px;margin-bottom:2px;background:var(--raised)">' +
+      '<div style="flex:1;min-width:0">' +
+        '<div style="font-size:11px;font-weight:700;color:var(--cream);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+e(resource.name)+'</div>'+
+        '<div style="font-size:10px;color:var(--mid)">'+e(datesStr)+'</div>'+
+        '<div style="font-size:10px;color:var(--mid)">'+e(bl.start_time||'')+'--'+e(bl.end_time||'')+(bl.reason?' - '+e(bl.reason):'')+'</div>'+
+      '</div>'+
+      '<button style="font-size:11px;color:var(--error);background:transparent;border:none;cursor:pointer;padding:0 3px" onclick="deleteBlock(\''+bl.id+'\')">&#128465;</button>'+
+    '</div>';
+  }).join('');
+}
+
+async function deleteBlock(id) {
+  if (!confirm('Delete this blocked slot?')) return;
+  try {
+    await sbPatch('blocked_schedules', 'id=eq.'+id, {active:false});
+    await loadBlockedSchedules();
+    renderTimeline();
+  } catch(err) { alert('Failed: '+err.message); }
+}
+
+var _blkType = 'room';
+var _blkDates = [];
+var _blkDateMonth = new Date();
+
+function openBlockPanel() {
+  closeFab();
+  _blkDates = [];
+  _blkDateMonth = new Date();
+  var branchName = (branches[currentBranch]||{name:'Unknown'}).name;
+  document.getElementById('blockPanelBody').innerHTML =
+    '<div class="fg"><label class="fl">Branch</label><p style="font-size:13px;color:var(--cream)">'+e(branchName)+'</p></div>'+
+    '<div class="fg"><label class="fl">Resource Type</label>'+
+    '<div style="display:flex;gap:8px">'+
+    '<button class="sz-btn on" id="blkTypeRoom" onclick="setBlockType(\'room\')">Hotel Room</button>'+
+    '<button class="sz-btn" id="blkTypeGroomer" onclick="setBlockType(\'groomer\')">Groomer</button>'+
+    '</div></div>'+
+    '<div class="fg" id="blkResourceFg"><label class="fl">Which one?</label><select class="fs" id="blkResourceId"></select></div>'+
+    '<div class="fg"><label class="fl">Date(s) - click to toggle</label><div id="blkDatePicker" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px"></div>'+
+    '<p style="font-size:10px;color:var(--mid);margin-top:4px">Selected: <span id="blkDateCount">0</span> date(s)</p></div>'+
+    '<div style="display:flex;gap:8px">'+
+    '<div class="fg" style="flex:1"><label class="fl">Start time</label><input class="fi" type="time" id="blkStartTime" value="12:00"></div>'+
+    '<div class="fg" style="flex:1"><label class="fl">End time</label><input class="fi" type="time" id="blkEndTime" value="13:00"></div></div>'+
+    '<div class="fg"><label class="fl">Reason (optional)</label><input class="fi" id="blkReason" placeholder="e.g. Lunch break, Leave"></div>';
+  setBlockType(currentSvc === 'grooming' ? 'groomer' : 'room');
+  renderBlockDatePicker();
+  document.getElementById('blockOverlay').classList.add('open');
+  document.getElementById('blockPanel').classList.add('open');
+}
+
+function closeBlockPanel(ev) {
+  if (ev && ev.target !== document.getElementById('blockOverlay')) return;
+  document.getElementById('blockOverlay').classList.remove('open');
+  document.getElementById('blockPanel').classList.remove('open');
+}
+
+function setBlockType(type) {
+  _blkType = type;
+  var roomBtn    = document.getElementById('blkTypeRoom');
+  var groomerBtn = document.getElementById('blkTypeGroomer');
+  if (roomBtn)    roomBtn.classList.toggle('on',    type==='room');
+  if (groomerBtn) groomerBtn.classList.toggle('on', type==='groomer');
+  var sel = document.getElementById('blkResourceId');
+  if (!sel) return;
+  sel.innerHTML = type==='room'
+    ? '<option value="">Select room...</option>'+rooms.map(function(r){return '<option value="'+r.id+'">'+e(r.name)+'</option>';}).join('')
+    : '<option value="">Select groomer...</option>'+groomers.map(function(g){return '<option value="'+g.id+'">'+e(g.name)+'</option>';}).join('');
+}
+
+function renderBlockDatePicker() {
+  var container = document.getElementById('blkDatePicker');
+  if (!container) return;
+  var year = _blkDateMonth.getFullYear(), month = _blkDateMonth.getMonth();
+  var daysInMonth = new Date(year, month+1, 0).getDate();
+  var firstDay = new Date(year, month, 1).getDay();
+  var monthLabel = _blkDateMonth.toLocaleString('default',{month:'long',year:'numeric'});
+  var html = '<div style="width:100%">';
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">';
+  html += '<button class="dnb" onclick="shiftBlockMonth(-1)">&#8592;</button>';
+  html += '<span style="font-size:12px;font-weight:700;color:var(--cream)">'+monthLabel+'</span>';
+  html += '<button class="dnb" onclick="shiftBlockMonth(1)">&#8594;</button>';
+  html += '</div>';
+  html += '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px">';
+  ['S','M','T','W','T','F','S'].forEach(function(d){html+='<div style="font-size:9px;font-weight:700;color:var(--mid);text-align:center;padding:2px">'+d+'</div>';});
+  for(var i=0;i<firstDay;i++) html+='<div></div>';
+  for(var dd=1;dd<=daysInMonth;dd++) {
+    var dateStr = year+'-'+String(month+1).padStart(2,'0')+'-'+String(dd).padStart(2,'0');
+    var isSel = _blkDates.indexOf(dateStr)>=0;
+    html+='<div onclick="toggleBlockDate(\''+dateStr+'\')" style="text-align:center;padding:4px 2px;border-radius:4px;cursor:pointer;font-size:11px;'+(isSel?'background:var(--yellow);color:#3d2e00;font-weight:700':'color:var(--cream-m)')+'">'+dd+'</div>';
+  }
+  html += '</div></div>';
+  container.innerHTML = html;
+}
+
+function shiftBlockMonth(dir) { _blkDateMonth.setMonth(_blkDateMonth.getMonth()+dir); renderBlockDatePicker(); }
+
+function toggleBlockDate(dateStr) {
+  var idx = _blkDates.indexOf(dateStr);
+  if (idx>=0) _blkDates.splice(idx,1); else _blkDates.push(dateStr);
+  _blkDates.sort();
+  var countEl = document.getElementById('blkDateCount');
+  if (countEl) countEl.textContent = _blkDates.length;
+  renderBlockDatePicker();
+}
+
+async function saveBlock() {
+  var resourceId = (document.getElementById('blkResourceId')||{}).value;
+  var start = (document.getElementById('blkStartTime')||{}).value;
+  var end   = (document.getElementById('blkEndTime')||{}).value;
+  var reason = ((document.getElementById('blkReason')||{}).value || '').trim() || null;
+  if (!resourceId) { alert('Please select a resource.'); return; }
+  if (!_blkDates.length) { alert('Please select at least one date.'); return; }
+  if (!start || !end || start >= end) { alert('Please set a valid start and end time.'); return; }
+  var brId = (branches[currentBranch]||{}).id;
+  try {
+    await sbPost('blocked_schedules', {
+      branch_id: brId,
+      resource_type: _blkType,
+      resource_id: resourceId,
+      dates: _blkDates,
+      start_time: start,
+      end_time: end,
+      reason: reason,
+      active: true
+    });
+    closeBlockPanel();
+    _blkDates = [];
+    await loadBlockedSchedules();
+    renderTimeline();
+  } catch(err) { alert('Failed to save block: '+err.message); }
 }
 
 function buildDrawer(b) {
@@ -928,7 +1184,8 @@ function buildDrawer(b) {
   rows.forEach(function(r){if(!r[1])return;html+='<div class="dr-row"><span class="dr-key">'+e(r[0])+'</span><span class="dr-val">'+e(r[1])+'</span></div>';});
   html+='</div>';
   // Owner
-  html+='<div class="dr-sec"><p class="dr-sec-title">Owner</p><div style="display:flex;justify-content:space-between;align-items:center"><div><p style="font-size:14px;font-weight:500;color:var(--cream)">'+e((owner.first_name||'')+' '+(owner.last_name||''))+'</p><p style="font-size:12px;color:var(--cream-m)">'+e(owner.mobile||'')+'</p></div><a href="tel:'+e(owner.mobile||'')+'" style="font-size:12px;color:var(--blue);border:0.5px solid var(--border);padding:5px 12px;border-radius:20px;text-decoration:none">Call</a></div></div>';
+  var memberPill = b.discount_amount > 0 ? ' <span style="font-size:10px;background:rgba(255,206,88,0.2);color:#FFCE58;border:0.5px solid rgba(255,206,88,0.4);padding:1px 6px;border-radius:10px;font-weight:700">&#9733; Member</span>' : '';
+  html+='<div class="dr-sec"><p class="dr-sec-title">Owner</p><div style="display:flex;justify-content:space-between;align-items:center"><div><p style="font-size:14px;font-weight:500;color:var(--cream)">'+e((owner.first_name||'')+' '+(owner.last_name||''))+memberPill+'</p><p style="font-size:12px;color:var(--cream-m)">'+e(owner.mobile||'')+'</p></div><a href="tel:'+e(owner.mobile||'')+'" style="font-size:12px;color:var(--blue);border:0.5px solid var(--border);padding:5px 12px;border-radius:20px;text-decoration:none">Call</a></div></div>';
   // Emergency (hotel)
   if(hd&&(hd.emergency_name||hd.vet_clinic)){html+='<div class="dr-sec"><p class="dr-sec-title">Emergency</p>';if(hd.emergency_name)html+='<div class="dr-row"><span class="dr-key">Contact</span><span class="dr-val">'+e(hd.emergency_name+(hd.emergency_phone?' / '+hd.emergency_phone:''))+'</span></div>';if(hd.vet_clinic)html+='<div class="dr-row"><span class="dr-key">Vet</span><span class="dr-val">'+e(hd.vet_clinic)+'</span></div>';html+='</div>';}
   // Bill
@@ -978,8 +1235,9 @@ async function loadPayments(bookingId) {
 }
 
 function openDrawer(bookingId) {
-  var b=allBookings.find(function(x){return x.id===bookingId;});
+  var b=allBookings.find(function(x){return x.id===bookingId;})||allBookingsList.find(function(x){return x.id===bookingId;});
   if(!b) return;
+  closeFab();
   currentBookingId=bookingId;
   document.getElementById('drContent').innerHTML=buildDrawer(b);
   document.getElementById('drOverlay').classList.add('open');
@@ -1617,17 +1875,19 @@ function bkReset() {
   };
 }
 
-function openBookingPanel(bookingId) {
+function openBookingPanel(bookingId, mode) {
+  closeFab();
   bkEditing = bookingId;
   bkStep = 0;
   bkReset();
+  bk.mode = mode || 'admin';
   if (bookingId) {
     // Pre-populate for edit
     var b = allBookings.find(function(x){return x.id===bookingId;});
     if (b) bkPrePopulate(b);
     document.getElementById('bkPanelTitle').textContent = 'Edit booking';
   } else {
-    document.getElementById('bkPanelTitle').textContent = 'Add booking';
+    document.getElementById('bkPanelTitle').textContent = mode === 'walkin' ? 'Walk-in Booking' : 'Add booking';
   }
   bkRender();
   document.getElementById('bkOverlay').classList.add('open');
@@ -1813,23 +2073,129 @@ function bkRGroom() {
   h += '</div>';
   if (isAC && !Object.keys(bk.addons).length) h += '<div class="bk-warn">Select at least one add-on.</div>';
   h += '</div>';
-  // Stylist (preserved via bk.stylist)
+  // Stylist (live from groomers[])
+  var groomerOpts = '<option value="">Select groomer…</option><option value="any"'+(bk.stylist==='any'?' selected':'')+'>Any available</option>' +
+    groomers.filter(function(g){return !g.is_unavailable;}).map(function(g){
+      return '<option value="'+g.id+'" data-name="'+bkE(g.name)+'"'+(bk.stylistId===g.id?' selected':'')+'>'+bkE(g.name)+'</option>';
+    }).join('');
   h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+
-    '<div class="fg"><label class="fl">Stylist</label>'+
-    '<select class="fs" onchange="bk.stylist=this.value">'+
-    BK_STYS.map(function(st){return '<option value="'+st+'"'+(bk.stylist===st?' selected':'')+'>'+(st==='any'?'Any available':st)+'</option>';}).join('')+
-    '</select></div>'+
+    '<div class="fg"><label class="fl">Groomer</label>'+
+    '<select class="fs" id="bkStylist" onchange="bkSetStylist(this);loadAdminGroomSlots()">'+groomerOpts+'</select></div>'+
     '<div class="fg"><label class="fl">Date <span style="color:var(--error)">*</span></label>'+
-    '<input type="date" class="fi" value="'+bkE(bk.gdate)+'" onchange="bk.gdate=this.value"></div></div>';
+    '<input type="date" class="fi" id="bkGDate" value="'+bkE(bk.gdate)+'" onchange="bk.gdate=this.value;loadAdminGroomSlots()"></div></div>';
   h += '<div class="fg"><label class="fl">Time slot <span style="color:var(--error)">*</span></label>'+
-    '<div class="bk-slot-grid">'+BK_SLOTS.map(function(sl){
-      return '<div class="bk-slot'+(bk.gslot===sl?' on':'')+'" onclick="bk.gslot=\''+sl+'\';bkRender()">'+sl+'</div>';
-    }).join('')+'</div></div>';
+    '<div id="bkGSlots" style="display:flex;flex-wrap:wrap;gap:6px"><p style="color:var(--mid);font-size:12px">Select a date and groomer to see available slots.</p></div></div>';
   h += '<div class="fg"><label class="fl">Special requests</label>'+
     '<textarea class="ft" onchange="bk.gnotes=this.value">'+bkE(bk.gnotes)+'</textarea></div>';
+  // Trigger slot load after render if date is already set
+  setTimeout(function(){ if(bk.gdate) loadAdminGroomSlots(); }, 0);
   return h;
 }
 function bkTad(k) { if(bk.addons[k]) delete bk.addons[k]; else bk.addons[k]=true; bkRender(); }
+
+function bkSetStylist(sel) {
+  var opt = sel.options[sel.selectedIndex];
+  if (sel.value === 'any' || sel.value === '') {
+    bk.stylist   = sel.value || 'any';
+    bk.stylistId = null;
+  } else {
+    bk.stylistId = sel.value;
+    bk.stylist   = opt.getAttribute('data-name') || sel.value;
+  }
+}
+
+function selGSlot(slot) { bk.gslot = slot; bkRender(); }
+
+function timeToMin(t) {
+  if (!t) return 0;
+  var p = t.split(':');
+  return parseInt(p[0])*60 + parseInt(p[1]||0);
+}
+
+async function loadAdminGroomSlots() {
+  var dateEl    = document.getElementById('bkGDate');
+  var stylistEl = document.getElementById('bkStylist');
+  var slotsEl   = document.getElementById('bkGSlots');
+  if (!slotsEl) return;
+  var dateVal   = dateEl ? dateEl.value : bk.gdate;
+  var groomerId = stylistEl ? stylistEl.value : (bk.stylistId || '');
+  // Sync bk state from DOM
+  if (dateEl && dateEl.value) bk.gdate = dateEl.value;
+  if (stylistEl) bkSetStylist(stylistEl);
+
+  if (!dateVal) {
+    slotsEl.innerHTML = '<p style="color:var(--mid);font-size:12px">Select a date and groomer to see available slots.</p>';
+    return;
+  }
+
+  slotsEl.innerHTML = '<p style="color:var(--mid);font-size:12px">Loading slots…</p>';
+
+  var ALL_SLOTS = ['9:00 AM','10:00 AM','11:00 AM','12:00 PM','1:00 PM','2:00 PM','3:00 PM','4:00 PM','5:00 PM'];
+
+  try {
+    // Get branch id
+    var br = branches[currentBranch];
+    var branchId = br ? br.id : '';
+
+    // Step 1: get booking IDs for this date + branch (not cancelled/rejected)
+    var bkRows = await sb('bookings', 'select=id&branch_id=eq.'+branchId+'&booking_date=eq.'+dateVal+'&status=neq.cancelled&status=neq.rejected');
+    var bkIds = (bkRows||[]).map(function(r){ return r.id; });
+
+    var takenByGroomer = {};
+    if (bkIds.length) {
+      // Step 2: get grooming_details for those bookings
+      var gdRows = await sb('grooming_details', 'select=timeslot,groomer_id&booking_id=in.('+bkIds.join(',')+')');
+      (gdRows||[]).forEach(function(r) {
+        var gid = r.groomer_id || 'any';
+        if (!takenByGroomer[gid]) takenByGroomer[gid] = [];
+        takenByGroomer[gid].push(r.timeslot);
+      });
+    }
+
+    var dayOfWeek = new Date(dateVal+'T00:00:00').getDay();
+    var disabledSlots = new Set();
+    var selectedGroomer = groomerId && groomerId !== 'any' ? groomers.find(function(g){ return g.id===groomerId; }) : null;
+
+    ALL_SLOTS.forEach(function(slot) {
+      if (groomerId && groomerId !== 'any') {
+        // Check if this groomer is booked
+        if ((takenByGroomer[groomerId]||[]).indexOf(slot) >= 0) { disabledSlots.add(slot); return; }
+        // Check groomer blocks
+        var slotH = parseInt(slot);
+        if (slot.indexOf('PM') >= 0 && slotH < 12) slotH += 12;
+        var slotMin = slotH * 60;
+        groomerBlocks.filter(function(bl){
+          return bl.groomer_id===groomerId && (bl.days_of_week.length===0 || bl.days_of_week.indexOf(dayOfWeek)>=0);
+        }).forEach(function(bl) {
+          var s = timeToMin(bl.start_time), en = timeToMin(bl.end_time);
+          if (slotMin >= s && slotMin < en) disabledSlots.add(slot);
+        });
+        // Check days_off in schedule_restrictions
+        if (selectedGroomer && selectedGroomer.schedule_restrictions) {
+          var sr = selectedGroomer.schedule_restrictions;
+          if (sr.days_off && sr.days_off.indexOf(dayOfWeek) >= 0) { disabledSlots.add(slot); }
+        }
+      } else {
+        // 'any' — slot disabled only if ALL available groomers are taken
+        var freeGroomers = groomers.filter(function(g){
+          return !g.is_unavailable && (takenByGroomer[g.id]||[]).indexOf(slot) < 0;
+        });
+        if (!freeGroomers.length) disabledSlots.add(slot);
+      }
+    });
+
+    slotsEl.innerHTML = ALL_SLOTS.map(function(slot) {
+      var taken = disabledSlots.has(slot);
+      var sel   = bk.gslot === slot;
+      return '<button class="time-slot-btn'+(sel?' on':'')+(taken?' taken':'')+'" '+
+        (taken ? 'disabled' : 'onclick="selGSlot(\''+slot+'\')"')+'>'+slot+'</button>';
+    }).join('');
+
+  } catch(err) {
+    slotsEl.innerHTML = '<p style="color:var(--error);font-size:12px">Could not load slots.</p>';
+    console.error('loadAdminGroomSlots error:', err);
+  }
+}
 
 function bkRHotel() {
   var nights = bkNights();
@@ -2065,6 +2431,9 @@ function bkRSum() {
   h += '<div class="bk-total"><span>Total</span><span>'+bkF(fin)+(hasAssess?' + assessment':bk.svc==='studio'?' (TBD)':'')+'</span></div>';
   // Status
   h += '<div style="font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--mid);padding-bottom:7px;border-bottom:0.5px solid var(--border);margin:12px 0 10px">Status & payment</div>';
+  if (bk.mode === 'walkin') {
+    h += '<div style="margin-bottom:12px;padding:10px 12px;background:rgba(107,203,119,0.12);border-radius:8px;border:0.5px solid rgba(107,203,119,0.3);font-size:12px;color:var(--success)">🚶 Walk-in booking — payment will be collected in-store.</div>';
+  }
   h += '<div class="fg"><label class="fl">Booking status <span style="color:var(--error)">*</span></label>'+
     '<div style="display:flex;gap:5px;flex-wrap:wrap">'+
     [{k:'pending',l:'Pending'},{k:'confirmed',l:'Confirmed'},{k:'checked_in',l:'Checked in'}].map(function(st){
@@ -2310,7 +2679,8 @@ async function saveBkBooking() {
         waiverSeniorMedical: false, waiverStudio: false, waiverMedia: bk.wmedia,
         membershipId: bk.memvalid ? bk.memcode : null,
         subtotal: subtotal, discountAmount: discAmt, total: total,
-        adminCreated: true
+        adminCreated: true,
+        booking_source: bk.mode || 'admin'
       };
 
       var EDGE_URL = SUPABASE_URL + '/functions/v1/submit-booking';
@@ -2322,7 +2692,7 @@ async function saveBkBooking() {
 
       // Patch status/payment since admin sets these directly
       if (data.booking_id) {
-        await sbPatch('bookings','id=eq.'+data.booking_id,{status:bk.status,payment_status:bk.paysts});
+        await sbPatch('bookings','id=eq.'+data.booking_id,{status:bk.status,payment_status:bk.paysts,booking_source:bk.mode||'admin'});
         if (bk.paysts!=='unpaid' && payMethodDb) {
           await sbPost('payments',{
             booking_id:       data.booking_id,
@@ -2354,7 +2724,7 @@ var MONTHS=['January','February','March','April','May','June','July','August','S
 function renderDateLabel(){var d=currentDate,now=new Date();var yr=d.getFullYear()===now.getFullYear()?'':' '+d.getFullYear();document.getElementById('dateLabel').textContent=DAYS[d.getDay()]+', '+MONTHS[d.getMonth()]+' '+d.getDate()+yr;}
 async function shiftDate(delta){var prev=currentDate.getMonth();currentDate.setDate(currentDate.getDate()+delta);renderDateLabel();if(currentDate.getMonth()!==prev)await loadMonthDots(currentDate.getFullYear(),currentDate.getMonth());await loadBookings();}
 async function goToday(){var prev=currentDate.getMonth();currentDate=new Date();renderDateLabel();if(currentDate.getMonth()!==prev)await loadMonthDots(currentDate.getFullYear(),currentDate.getMonth());await loadBookings();}
-async function setBranch(idx,el){currentBranch=idx;activeFilter=null;document.querySelectorAll('.br-tab').forEach(function(t){t.classList.remove('on');});el.classList.add('on');await Promise.all([loadRooms(),loadGroomers()]);await loadGroomerBlocks();renderSidebar();renderTabs();await loadBookings();}
+async function setBranch(idx,el){currentBranch=idx;activeFilter=null;document.querySelectorAll('.br-tab').forEach(function(t){t.classList.remove('on');});el.classList.add('on');await Promise.all([loadRooms(),loadGroomers()]);await loadGroomerBlocks();await loadBlockedSchedules();renderSidebar();renderTabs();await loadBookings();}
 
 /* ── UTILS ── */
 function e(s){return (s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
@@ -2458,6 +2828,169 @@ function renderTimeNowLine() {
 
 /* ── ROTATED NARROW CARD LOGIC ── */
 var NARROW_THRESHOLD = 70; // px - cards narrower than this use rotated label
+
+
+/* ── ADMIN PAGE NAVIGATION ── */
+var currentAdminPage = 'calendar';
+function switchAdminPage(page) {
+  currentAdminPage = page;
+  document.querySelectorAll('.anav-btn').forEach(function(b){ b.classList.toggle('on', b.dataset.page===page); });
+  document.getElementById('pageCalendar').style.display = page==='calendar' ? '' : 'none';
+  document.getElementById('pageBookings').style.display = page==='bookings' ? '' : 'none';
+  document.getElementById('pageMembers').style.display  = page==='members'  ? '' : 'none';
+  document.getElementById('sbCalContext').style.display = page==='calendar' ? '' : 'none';
+  if (page==='bookings') loadBookingsList();
+  if (page==='members')  renderMembersPage();
+}
+
+
+/* ── BOOKINGS LIST PAGE ── */
+var allBookingsList = [];
+async function loadBookingsList() {
+  var br = branches[currentBranch];
+  if (!br) return;
+  document.getElementById('pageBookings').innerHTML = '<p style="color:var(--mid);padding:16px">Loading…</p>';
+  try {
+    var sel = 'id,ref_number,service,status,payment_status,booking_date,total,discount_amount,created_at,owners(first_name,last_name),pets(name),grooming_details(timeslot),hotel_details(checkin_date,checkout_date),daycare_details(dropoff_time,pickup_time)';
+    var rows = await sb('bookings', 'branch_id=eq.'+br.id+'&order=created_at.desc&select='+sel);
+    allBookingsList = rows || [];
+    renderBookingsList();
+  } catch(err) {
+    document.getElementById('pageBookings').innerHTML = '<p style="color:var(--error);padding:16px">Failed to load bookings.</p>';
+  }
+}
+
+function renderBookingsList() {
+  var el = document.getElementById('pageBookings');
+  if (!allBookingsList.length) { el.innerHTML = '<p style="color:var(--mid);padding:16px">No bookings found.</p>'; return; }
+  var svcLabels = {grooming:'Grooming',hotel:'Pet Hotel',daycare:'Daycare',studio:'Studio'};
+  var svcColors = {grooming:'#4D96B9',hotel:'#EF9F27',daycare:'#1D9E75',studio:'#D4537E'};
+  // Group by date
+  var groups = {};
+  allBookingsList.forEach(function(b) {
+    var dt = b.booking_date || (b.hotel_details && b.hotel_details.checkin_date) || 'Unknown';
+    if (!groups[dt]) groups[dt] = [];
+    groups[dt].push(b);
+  });
+  var sortedDates = Object.keys(groups).sort(function(a,b){return b.localeCompare(a);});
+  var html = '<h2 style="font-family:\'Fredoka One\',cursive;font-size:20px;margin-bottom:16px">Bookings</h2>';
+  sortedDates.forEach(function(dt) {
+    html += '<div style="margin-bottom:24px">';
+    html += '<div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--mid);margin-bottom:8px">'+e(dt==='Unknown'?'No date':dt)+'</div>';
+    html += '<div style="background:var(--surface);border:0.5px solid var(--border);border-radius:10px;overflow:hidden">';
+    groups[dt].forEach(function(b,i) {
+      var owner = b.owners ? (b.owners.first_name||'')+' '+(b.owners.last_name||'') : '-';
+      var petName = b.pets ? b.pets.name : '-';
+      var sched = '';
+      if (b.grooming_details && b.grooming_details.timeslot) sched = b.grooming_details.timeslot;
+      else if (b.hotel_details) sched = (b.hotel_details.checkin_date||'-')+' → '+(b.hotel_details.checkout_date||'-');
+      else if (b.daycare_details) sched = (b.daycare_details.dropoff_time||'')+' – '+(b.daycare_details.pickup_time||'open');
+      var isCancelled = b.status==='cancelled'||b.status==='rejected';
+      var memberStar = b.discount_amount > 0 ? ' <span style="color:#FFCE58;font-size:10px">★</span>' : '';
+      var statusColor = {pending:'#FFCE58',confirmed:'#4D96B9',checked_in:'#1D9E75',completed:'#6BCB77',cancelled:'#888',rejected:'#888'}[b.status]||'#888';
+      html += '<div class="bklist-row'+(isCancelled?' bk-cancelled':'')+'" onclick="openDrawer(\''+b.id+'\')" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:'+(i<groups[dt].length-1?'0.5px solid var(--border)':'none')+';cursor:pointer;transition:background 0.12s" onmouseover="this.style.background=\'var(--raised)\'" onmouseout="this.style.background=\'\'">';
+      html += '<span style="width:8px;height:8px;border-radius:50%;background:'+statusColor+';flex-shrink:0"></span>';
+      html += '<span style="font-size:11px;background:'+svcColors[b.service]+'22;color:'+svcColors[b.service]+';padding:2px 7px;border-radius:4px;font-weight:700;flex-shrink:0">'+e(svcLabels[b.service]||b.service)+'</span>';
+      html += '<span style="font-size:12px;font-weight:700;color:var(--cream);min-width:90px;flex-shrink:0'+(isCancelled?';text-decoration:line-through':'')+'">'+(b.ref_number?e(b.ref_number):'-')+'</span>';
+      html += '<span style="font-size:12px;color:var(--cream-m);flex:1">'+e(petName)+memberStar+' <span style="color:var(--mid)">\xb7</span> '+e(owner.trim())+'</span>';
+      html += '<span style="font-size:11px;color:var(--mid);flex-shrink:0">'+e(sched)+'</span>';
+      html += '<span style="font-size:12px;font-weight:700;color:var(--cream);flex-shrink:0;min-width:70px;text-align:right">'+(b.total?'₱'+b.total.toLocaleString():'-')+'</span>';
+      html += '</div>';
+    });
+    html += '</div></div>';
+  });
+  el.innerHTML = html;
+}
+
+
+/* ── MEMBERS PAGE ── */
+function renderMembersPage() {
+  var el = document.getElementById('pageMembers');
+  el.innerHTML = '<h2 style="font-family:\'Fredoka One\',cursive;font-size:20px;margin-bottom:20px">Members</h2>'+
+    '<div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start">'+
+    // LEFT: Validate in-store
+    '<div style="flex:1;min-width:280px;background:var(--surface);border:0.5px solid var(--border);border-radius:12px;padding:20px">'+
+    '<p style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--mid);margin-bottom:14px">Validate In-Store Membership</p>'+
+    '<div style="margin-bottom:10px"><label class="fl">Member Code</label><input class="fi" id="memValCode" placeholder="e.g. BH-001" style="text-transform:uppercase"></div>'+
+    '<div style="margin-bottom:14px"><label class="fl">Pet Name</label><input class="fi" id="memValPet" placeholder="e.g. Max"></div>'+
+    '<button class="btn-save" style="width:100%" onclick="validateMemberInStore()">Validate</button>'+
+    '<div id="memValResult" style="margin-top:12px;font-size:13px;min-height:20px"></div>'+
+    '</div>'+
+    // RIGHT: CSV upload
+    '<div style="flex:1;min-width:280px;background:var(--surface);border:0.5px solid var(--border);border-radius:12px;padding:20px">'+
+    '<p style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--mid);margin-bottom:14px">Upload Membership CSV</p>'+
+    '<p style="font-size:12px;color:var(--mid);margin-bottom:12px">Expected columns: <code style="background:var(--raised);padding:1px 5px;border-radius:4px">Membership ID</code>, <code style="background:var(--raised);padding:1px 5px;border-radius:4px">Pet Name</code>, <code style="background:var(--raised);padding:1px 5px;border-radius:4px">Valid Until Date</code>, <code style="background:var(--raised);padding:1px 5px;border-radius:4px">Branch</code></p>'+
+    '<input type="file" id="memberCsvInput" accept=".csv" style="display:none" onchange="handleMemberCsv(this)">'+
+    '<button class="btn-save" style="width:100%;margin-bottom:8px" onclick="document.getElementById(\'memberCsvInput\').click()">Choose CSV File</button>'+
+    '<div id="csvUploadResult" style="font-size:12px;color:var(--mid);min-height:20px"></div>'+
+    '</div>'+
+    '</div>';
+}
+
+async function validateMemberInStore() {
+  var code = (document.getElementById('memValCode').value||'').trim().toUpperCase();
+  var pet  = (document.getElementById('memValPet').value||'').trim().toLowerCase().replace(/\s+/g,' ');
+  var res  = document.getElementById('memValResult');
+  if (!code) { res.innerHTML='<span style="color:var(--error)">Please enter a member code.</span>'; return; }
+  res.innerHTML='<span style="color:var(--mid)">Validating…</span>';
+  try {
+    var rows = await sb('members', 'member_code=eq.'+encodeURIComponent(code)+'&select=member_code,tier,pet_name,valid_until,branch_id,active&limit=1');
+    if (!rows || !rows.length) { res.innerHTML='<span style="color:var(--error)">✗ Member code not found.</span>'; return; }
+    var m = rows[0];
+    if (!m.active) { res.innerHTML='<span style="color:var(--error)">✗ Membership is inactive.</span>'; return; }
+    if (m.valid_until && new Date(m.valid_until) < new Date()) { res.innerHTML='<span style="color:var(--error)">✗ Membership expired on '+m.valid_until+'.</span>'; return; }
+    var regPet = (m.pet_name||'').trim().toLowerCase().replace(/\s+/g,' ');
+    if (pet && regPet && regPet !== pet) { res.innerHTML='<span style="color:var(--error)">✗ Pet name does not match records.</span>'; return; }
+    var info = [m.tier?'Tier: '+m.tier:null, m.valid_until?'Valid until: '+m.valid_until:null].filter(Boolean).join(' \xb7 ');
+    res.innerHTML='<span style="color:var(--success)">✓ Valid member. '+(info||'')+'</span>';
+  } catch(err) {
+    res.innerHTML='<span style="color:var(--error)">Error: '+e(err.message)+'</span>';
+  }
+}
+
+async function handleMemberCsv(input) {
+  var file = input.files[0];
+  if (!file) return;
+  var res = document.getElementById('csvUploadResult');
+  res.innerHTML='<span style="color:var(--mid)">Parsing…</span>';
+  var text = await file.text();
+  var lines = text.split('\n').map(function(l){return l.trim();}).filter(Boolean);
+  if (!lines.length) { res.innerHTML='<span style="color:var(--error)">Empty file.</span>'; return; }
+  // Parse headers
+  var headers = lines[0].split(',').map(function(h){return h.trim().replace(/^"|"$/g,'');});
+  var idIdx   = headers.findIndex(function(h){return h.toLowerCase()==='membership id';});
+  var petIdx  = headers.findIndex(function(h){return h.toLowerCase()==='pet name';});
+  var dateIdx = headers.findIndex(function(h){return h.toLowerCase()==='valid until date';});
+  var brIdx   = headers.findIndex(function(h){return h.toLowerCase()==='branch';});
+  if (idIdx<0||petIdx<0) { res.innerHTML='<span style="color:var(--error)">Missing required columns: "Membership ID" and "Pet Name".</span>'; return; }
+  var rows = [];
+  for (var i=1;i<lines.length;i++) {
+    var cols = lines[i].split(',').map(function(c){return c.trim().replace(/^"|"$/g,'');});
+    var memberCode = (cols[idIdx]||'').trim().toUpperCase();
+    if (!memberCode) continue;
+    var branchName = brIdx>=0 ? (cols[brIdx]||'').trim() : '';
+    var brMatch = branchName ? branches.find(function(b){return b.name.toLowerCase()===branchName.toLowerCase();}) : null;
+    rows.push({ member_code:memberCode, pet_name:(cols[petIdx]||'').trim()||null, valid_until:(dateIdx>=0&&cols[dateIdx])?cols[dateIdx]||null:null, branch_id:brMatch?brMatch.id:null, active:true, updated_at:new Date().toISOString() });
+  }
+  if (!rows.length) { res.innerHTML='<span style="color:var(--error)">No valid rows found.</span>'; return; }
+  res.innerHTML='<span style="color:var(--mid)">Uploading '+rows.length+' rows…</span>';
+  try {
+    var added=0, updated=0;
+    for (var j=0;j<rows.length;j+=50) {
+      var batch = rows.slice(j,j+50);
+      var existing = await sb('members', 'member_code=in.('+batch.map(function(r){return encodeURIComponent(r.member_code);}).join(',')+')'+'&select=member_code');
+      var existingCodes = (existing||[]).map(function(r){return r.member_code;});
+      batch.forEach(function(r){ if(existingCodes.indexOf(r.member_code)>=0)updated++;else added++; });
+      var hdrs = await getAuthHeaders();
+      hdrs['Prefer'] = 'resolution=merge-duplicates,return=minimal';
+      await fetch(SUPABASE_URL+'/rest/v1/members', {method:'POST', headers:hdrs, body:JSON.stringify(batch)});
+    }
+    res.innerHTML='<span style="color:var(--success)">✓ Done: '+added+' added, '+updated+' updated.</span>';
+    input.value='';
+  } catch(err) {
+    res.innerHTML='<span style="color:var(--error)">Upload failed: '+e(err.message)+'</span>';
+  }
+}
 
 
 // Check for existing session on load
