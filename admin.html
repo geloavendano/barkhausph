@@ -371,14 +371,6 @@
         <div id="groomerList"></div>
         <button class="sb-add-btn" onclick="openGroomerPanel(null)">+ Add groomer</button>
       </div>
-      <div class="sb-div"></div>
-      <div class="sb-sec" id="sbBlockedSec">
-        <div class="sb-sec-hd">
-          <span class="sb-sec-title">Blocked Slots</span>
-          <span id="sbBlockedCount" style="font-size:9px;color:var(--mid)"></span>
-        </div>
-        <div id="blockedSlotsList"></div>
-      </div>
       </div><!-- /sbCalContext -->
       </div><!-- /sb-scroll -->
     </aside>
@@ -800,7 +792,11 @@ function toggleFilter(type, id) {
 /* ── TABS ── */
 function renderTabs() {
   var svcsToShow = currentBranch===1 ? SVCS : SVCS.filter(function(s){return s.key!=='studio';});
-  var html = svcsToShow.map(function(s) {
+  var allTab = '<div class="svc-tab'+(currentSvc==='all'?' on':'')+'" style="color:#ccc" onclick="setSvc(\'all\')">'+
+    '<div class="svc-tab-count">'+allBookings.length+'</div>'+
+    '<div class="svc-tab-label">All</div>'+
+    '</div>';
+  var html = allTab + svcsToShow.map(function(s) {
     var cnt = allBookings.filter(function(b){return b.service===s.key;}).length;
     var on  = currentSvc===s.key;
     return '<div class="svc-tab'+(on?' on':'')+'" style="color:'+s.color+'" onclick="setSvc(\''+s.key+'\')">'+
@@ -811,7 +807,7 @@ function renderTabs() {
   document.getElementById('svcTabs').innerHTML = html;
 }
 
-function setSvc(key) { currentSvc=key; activeFilter=null; renderSidebar(); renderTabs(); renderTimeline(); renderBlockedSlots(); }
+function setSvc(key) { currentSvc=key; activeFilter=null; renderSidebar(); renderTabs(); renderTimeline(); }
 
 /* ── TIME LABELS ── */
 function renderTimeLbls() {
@@ -824,7 +820,7 @@ function renderTimeLbls() {
 function renderTimeline() {
   var dow = currentDate.getDay();
   var filtered = allBookings.filter(function(b) {
-    if (b.service!==currentSvc) return false;
+    if (currentSvc !== 'all' && b.service !== currentSvc) return false;
     if (activeFilter) {
       if (activeFilter.type==='room')    return b.hotel_details    && b.hotel_details.room_id===activeFilter.id;
       if (activeFilter.type==='groomer') return b.grooming_details && b.grooming_details.groomer_id===activeFilter.id;
@@ -836,7 +832,7 @@ function renderTimeline() {
   for(var h=0;h<=11;h++) gridHtml+='<div class="tl-line" style="top:'+(h*90)+'px"></div>';
 
   var breakHtml='';
-  if (currentSvc==='grooming') {
+  if (currentSvc==='grooming' || currentSvc==='all') {
     var bGroomers = activeFilter && activeFilter.type==='groomer'
       ? groomers.filter(function(g){return g.id===activeFilter.id;})
       : groomers;
@@ -865,8 +861,9 @@ function renderTimeline() {
     // Service type match
     if (currentSvc==='grooming' && bl.resource_type!=='groomer') return;
     if (currentSvc==='hotel'    && bl.resource_type!=='room')    return;
-    if (currentSvc!=='grooming' && currentSvc!=='hotel') return;
-    // When a specific resource is selected, only show blocks for that resource
+    // 'all' shows both room and groomer blocks; skip daycare/studio
+    if (currentSvc!=='grooming' && currentSvc!=='hotel' && currentSvc!=='all') return;
+    // When a specific resource is selected, only show that resource's blocks
     if (activeFilter && activeFilter.id && bl.resource_id !== activeFilter.id) return;
     var stMin = parseMins(bl.start_time);
     var enMin = parseMins(bl.end_time);
@@ -874,14 +871,17 @@ function renderTimeline() {
     var top = Math.max(0, (stMin - DAY_START) * PX_PER_MIN);
     var ht  = Math.max(22, (enMin - stMin) * PX_PER_MIN);
     var label = bl.reason || 'Blocked';
-    // Always resolve resource name
-    var resObj = (currentSvc==='grooming' ? groomers : rooms).find(function(r){return r.id===bl.resource_id;});
+    // Resolve inventory color and name
+    var resObj = (bl.resource_type==='groomer' ? groomers : rooms).find(function(r){return r.id===bl.resource_id;});
+    var blockColor = (resObj && resObj.color) ? resObj.color : '#9B95E8';
     var resourceName = resObj ? resObj.name : '';
+    // Parse hex to rgba for the stripe fill
+    var rc=parseInt(blockColor.slice(1,3),16), gc=parseInt(blockColor.slice(3,5),16), bc2=parseInt(blockColor.slice(5,7),16);
     var innerHtml = '<div style="font-size:11px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">🚫 '+(resourceName?e(resourceName)+' — ':'')+e(label)+'</div>';
-    if (ht >= 44) innerHtml += '<div style="font-size:10px;color:rgba(255,255,255,0.7);margin-top:2px">Blocked schedule</div>';
+    if (ht >= 44) innerHtml += '<div style="font-size:10px;color:rgba(255,255,255,0.65);margin-top:2px">Blocked</div>';
     breakHtml += '<div class="bk-break" style="top:'+top+'px;height:'+ht+'px;left:2px;right:2px;'+
-      'background:repeating-linear-gradient(135deg,rgba(130,100,210,0.55) 0px,rgba(130,100,210,0.55) 6px,rgba(90,60,160,0.45) 6px,rgba(90,60,160,0.45) 12px);'+
-      'border:1.5px solid #9B95E8;border-left:4px solid #9B95E8;border-radius:5px">'+innerHtml+'</div>';
+      'background:repeating-linear-gradient(135deg,rgba('+rc+','+gc+','+bc2+',0.55) 0px,rgba('+rc+','+gc+','+bc2+',0.55) 6px,rgba('+rc+','+gc+','+bc2+',0.3) 6px,rgba('+rc+','+gc+','+bc2+',0.3) 12px);'+
+      'border:1.5px solid '+blockColor+';border-left:4px solid '+blockColor+';border-radius:5px">'+innerHtml+'</div>';
   });
 
   var positioned = layoutBks(filtered);
@@ -991,42 +991,15 @@ function closeFab() {
 /* ── BLOCK SCHEDULE ── */
 async function loadBlockedSchedules() {
   var br = branches[currentBranch];
-  if (!br || !br.id) { blockedSchedules = []; renderBlockedSlots(); renderTimeline(); return; }
+  if (!br || !br.id) { blockedSchedules = []; renderTimeline(); return; }
   try {
     var rows = await sb('blocked_schedules', 'branch_id=eq.'+br.id+'&active=eq.true&order=created_at.desc&select=*');
     blockedSchedules = rows || [];
     console.log('[BlockedSchedules] loaded', blockedSchedules.length, 'records:', blockedSchedules);
   } catch(ex) { console.warn('[BlockedSchedules] load failed:', ex); blockedSchedules = []; }
-  renderBlockedSlots();
   renderTimeline();
 }
 
-function renderBlockedSlots() {
-  var el = document.getElementById('blockedSlotsList');
-  var countEl = document.getElementById('sbBlockedCount');
-  if (!el) return;
-  var filtered = blockedSchedules.filter(function(b) {
-    if (currentSvc === 'hotel')    return b.resource_type === 'room';
-    if (currentSvc === 'grooming') return b.resource_type === 'groomer';
-    return false;
-  });
-  if (countEl) countEl.textContent = filtered.length ? filtered.length+' active' : '';
-  if (!filtered.length) { el.innerHTML = '<p style="font-size:11px;color:var(--mid);padding:4px 7px">None for this view.</p>'; return; }
-  el.innerHTML = filtered.map(function(bl) {
-    var resource = bl.resource_type==='room'
-      ? (rooms.find(function(r){return r.id===bl.resource_id;})||{name:'Room'})
-      : (groomers.find(function(g){return g.id===bl.resource_id;})||{name:'Groomer'});
-    var datesStr = (bl.dates||[]).slice(0,2).join(', ')+(bl.dates&&bl.dates.length>2?' +more':'');
-    return '<div style="display:flex;align-items:flex-start;gap:6px;padding:5px 7px;border-radius:7px;margin-bottom:2px;background:var(--raised)">' +
-      '<div style="flex:1;min-width:0">' +
-        '<div style="font-size:11px;font-weight:700;color:var(--cream);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+e(resource.name)+'</div>'+
-        '<div style="font-size:10px;color:var(--mid)">'+e(datesStr)+'</div>'+
-        '<div style="font-size:10px;color:var(--mid)">'+e(bl.start_time||'')+'--'+e(bl.end_time||'')+(bl.reason?' - '+e(bl.reason):'')+'</div>'+
-      '</div>'+
-      '<button style="font-size:11px;color:var(--error);background:transparent;border:none;cursor:pointer;padding:0 3px" onclick="deleteBlock(\''+bl.id+'\')">&#128465;</button>'+
-    '</div>';
-  }).join('');
-}
 
 async function deleteBlock(id) {
   if (!confirm('Delete this blocked slot?')) return;
