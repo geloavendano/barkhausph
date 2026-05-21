@@ -213,6 +213,8 @@
   .btn-text-back:hover { color:var(--blue); }
   @keyframes bh-spin { to { transform:rotate(360deg); } }
   .bh-spinner { width:36px;height:36px;border:4px solid var(--border);border-top-color:var(--yellow);border-radius:50%;animation:bh-spin 0.8s linear infinite;margin:0 auto 16px; }
+  .pay-loading { display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;padding:20px;text-align:center; }
+  .pay-loading-text { text-align:center;margin:0;font-size:14px;color:var(--mid); }
 
 </style>
 <title>Book Your Pet's Stay, Daycare, or Grooming at Barkhaus</title>
@@ -449,7 +451,7 @@
       <!-- Room availability -->
       <div id="roomAvailSection" style="display:none">
         <p class="section-label">Available rooms</p>
-        <div id="roomAvailLoading" style="display:none;text-align:center" class="info-box"><div class="bh-spinner" style="width:24px;height:24px;border-width:3px;margin-bottom:8px"></div>Checking availability…</div>
+        <div id="roomAvailLoading" style="display:none;flex-direction:column;align-items:center;text-align:center" class="info-box"><div class="bh-spinner" style="width:24px;height:24px;border-width:3px;margin-bottom:8px"></div><span>Checking availability…</span></div>
         <div id="roomAvailGrid" class="svc-grid"></div>
         <div id="roomAvailNote" style="display:none" class="warn-box">
           <strong>No rooms available</strong> for the selected dates and pet size.
@@ -692,7 +694,7 @@
 
   <div class="form-row">
     <div class="form-group">
-      <label class="form-label">Age</label>
+      <label class="form-label">Age <span class="required">*</span></label>
       <input type="number" class="form-input" id="petAgeNum" placeholder="e.g. 2" min="0" max="30" oninput="checkSeniorWaiver()">
     </div>
     <div class="form-group">
@@ -1049,7 +1051,7 @@
 <div class="success-screen" id="successScreen">
   <div class="success-icon">&#128062;</div>
   <h2 class="success-title">You're all set!</h2>
-  <p class="success-msg">Your booking request has been received. We'll confirm via email or SMS within 24 hours.</p>
+  <p class="success-msg">Your booking request has been received.</p>
   <div class="success-ref">
     <div class="success-ref-label">Booking Reference</div>
     <div class="success-ref-num" id="refNum">BH-000000</div>
@@ -1925,7 +1927,7 @@ async function loadRoomAvailability() {
   var noteEl  = document.getElementById('roomAvailNote');
 
   section.style.display = '';
-  loading.style.display = '';
+  loading.style.display = 'flex';
   grid.innerHTML        = '';
   noteEl.style.display  = 'none';
   booking.hotelRoomType = null;
@@ -2472,6 +2474,7 @@ function validateStep5() {
   if (!booking.petAnimal)                                { alert('Please select Dog or Cat.'); return false; }
   if (!booking.petGender)                                { alert("Please select your pet's sex."); return false; }
   if (!document.getElementById('petBreed').value.trim()) { alert("Please enter your pet's breed."); return false; }
+  if (!document.getElementById('petAgeNum').value.trim()) { alert("Please enter your pet's age."); return false; }
   if ((booking.service === 'hotel' || booking.service === 'daycare') && !booking.petSize) {
     alert("Please select your pet's size."); return false;
   }
@@ -2479,14 +2482,12 @@ function validateStep5() {
   if (!document.getElementById('vaccineWaiver').classList.contains('checked')) {
     alert('Please agree to the vaccine liability declaration.'); return false;
   }
-  if (booking.service === 'grooming') {
-    var _age  = parseInt(document.getElementById('petAgeNum').value) || 0;
-    var _unit = document.getElementById('petAgeUnit').value;
-    var _med  = document.getElementById('petMedical').value.trim();
-    if ((_unit === 'years' && _age >= 6) || _med.length > 0) {
-      if (!document.getElementById('seniorWaiverAck').classList.contains('checked')) {
-        alert('Please agree to the senior/medical pet acknowledgment to proceed.'); return false;
-      }
+  var _age  = parseInt(document.getElementById('petAgeNum').value) || 0;
+  var _unit = document.getElementById('petAgeUnit').value;
+  var _med  = document.getElementById('petMedical').value.trim();
+  if ((_unit === 'years' && _age >= 6) || _med.length > 0) {
+    if (!document.getElementById('seniorWaiverAck').classList.contains('checked')) {
+      alert('Please agree to the senior/medical pet acknowledgment to proceed.'); return false;
     }
   }
   return true;
@@ -2595,15 +2596,35 @@ function buildSummary() {
     ['Branch',   locLabels[booking.location]||'-'],
     ['Service',  svcLabels[svc]||'-'],
     ['Schedule', schedStr||'-'],
-    ['Pet',      (booking.petName||'-') + ' (' + (booking.petAnimal||'-') + ', ' + (booking.petGender||'-') + ')'],
-    ['Breed',    booking.petBreed||'-'],
-    ['Size',     booking.petSize ? PET_SIZE_LABELS[booking.petSize] : '-'],
-    ['Owner',    ((booking.ownerFirst||'')+' '+(booking.ownerLast||'')).trim()||'-'],
-    ['Mobile',   booking.ownerPhone||'-']
   ];
-  if (svc === 'grooming' && booking.preferredStylist && booking.preferredStylist !== 'any') {
-    details.push(['Stylist', booking.preferredStylist]);
+  // Service specifications
+  if (svc === 'grooming' && booking.groomService) {
+    var svcSpec = GROOM_SERVICES.find(function(s){return s.key===booking.groomService;});
+    if (svcSpec) details.push(['Grooming service', svcSpec.name]);
+    var addonNames = Object.keys(booking.selectedAddons).map(function(k) {
+      var a = ADDONS.find(function(x){return x.key===k;}); return a ? a.name : k;
+    });
+    if (addonNames.length) details.push(['Add-ons', addonNames.join(', ')]);
+    if (booking.preferredStylist && booking.preferredStylist !== 'any') details.push(['Groomer', booking.preferredStylist]);
   }
+  if (svc === 'hotel') {
+    if (booking.hotelRoomType) details.push(['Room', booking.hotelRoomType.replace(/_/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase();})]);
+    if (booking.petSize !== 'cat') details.push(['Play park', booking.playparkConsent === 'yes' ? 'Yes' : 'No']);
+    if (booking.hotelPickupTime) details.push(['Pick-up time', booking.hotelPickupTime]);
+  }
+  if (svc === 'daycare') {
+    if (booking.daycareOpenTime) {
+      details.push(['Drop-off', 'Open time']); details.push(['Pick-up', 'Open time']);
+    } else if (booking.daycareDropoffText || booking.daycareDropoffHour) {
+      details.push(['Drop-off', booking.daycareDropoffText || (booking.daycareDropoffHour+':00')]);
+      details.push(['Pick-up',  booking.daycarePickupText  || (booking.daycarePickupHour+':00')]);
+    }
+  }
+  details.push(['Pet',      (booking.petName||'-') + ' (' + (booking.petAnimal||'-') + ', ' + (booking.petGender||'-') + ')']);
+  details.push(['Breed',    booking.petBreed||'-']);
+  details.push(['Size',     booking.petSize ? PET_SIZE_LABELS[booking.petSize] : '-']);
+  details.push(['Owner',    ((booking.ownerFirst||'')+' '+(booking.ownerLast||'')).trim()||'-']);
+  details.push(['Mobile',   booking.ownerPhone||'-']);
   if (booking.memberValid) details.push(['Membership', booking.membershipId||'-']);
   document.getElementById('bookingDetailsSummary').innerHTML = details.map(function(r) {
     return '<div class="summary-row"><span class="summary-key">'+r[0]+'</span><span class="summary-val">'+r[1]+'</span></div>';
@@ -2712,10 +2733,23 @@ function showToast(msg, duration) {
       if (snap) {
         var _dRows = [
           ['Branch', snap.location||'-'], ['Service', snap.service||'-'],
-          ['Schedule', snap.schedule||'-'], ['Pet', snap.petName||'-'],
-          ['Breed', snap.petBreed||'-'], ['Size', snap.petSize||'-'],
-          ['Owner', (snap.ownerName||'-').trim()], ['Mobile', snap.mobile||'-']
+          ['Schedule', snap.schedule||'-']
         ];
+        if (snap.groomServiceName) _dRows.push(['Grooming service', snap.groomServiceName]);
+        if (snap.addons && snap.addons.length) _dRows.push(['Add-ons', snap.addons.join(', ')]);
+        if (snap.preferredStylist && snap.preferredStylist !== 'any') _dRows.push(['Groomer', snap.preferredStylist]);
+        if (snap.hotelRoomType) _dRows.push(['Room', snap.hotelRoomType.replace(/_/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase();})]);
+        if (snap.hotelPickupTime) _dRows.push(['Pick-up time', snap.hotelPickupTime]);
+        if (snap.daycareOpenTime) {
+          _dRows.push(['Drop-off', 'Open time']); _dRows.push(['Pick-up', 'Open time']);
+        } else if (snap.daycareDropoffText) {
+          _dRows.push(['Drop-off', snap.daycareDropoffText]); _dRows.push(['Pick-up', snap.daycarePickupText||'-']);
+        }
+        _dRows.push(['Pet', snap.petName||'-']);
+        _dRows.push(['Breed', snap.petBreed||'-']);
+        _dRows.push(['Size', snap.petSize||'-']);
+        _dRows.push(['Owner', (snap.ownerName||'-').trim()]);
+        _dRows.push(['Mobile', snap.mobile||'-']);
         var _sdEl = document.getElementById('successDetails');
         if (_sdEl) _sdEl.innerHTML = _dRows.map(function(r){return '<div class="summary-row"><span class="summary-key">'+r[0]+'</span><span class="summary-val">'+r[1]+'</span></div>';}).join('');
         var _pl = [];
@@ -2912,6 +2946,17 @@ function submitBooking() {
         ownerName: (booking.ownerFirst||'') + ' ' + (booking.ownerLast||''),
         mobile: booking.ownerPhone,
         schedule: _sched,
+        // Service specs
+        groomServiceName: svc === 'grooming' && booking.groomService ? (GROOM_SERVICES.find(function(s){return s.key===booking.groomService;})||{name:null}).name : null,
+        addons: svc === 'grooming' ? Object.keys(booking.selectedAddons).map(function(k){var a=ADDONS.find(function(x){return x.key===k;});return a?a.name:k;}) : [],
+        preferredStylist: svc === 'grooming' ? booking.preferredStylist : null,
+        hotelRoomType: svc === 'hotel' ? booking.hotelRoomType : null,
+        playparkConsent: svc === 'hotel' ? booking.playparkConsent : null,
+        hotelPickupTime: svc === 'hotel' ? booking.hotelPickupTime : null,
+        petSizeRaw: booking.petSize,
+        daycareOpenTime: svc === 'daycare' ? booking.daycareOpenTime : null,
+        daycareDropoffText: svc === 'daycare' ? booking.daycareDropoffText : null,
+        daycarePickupText: svc === 'daycare' ? booking.daycarePickupText : null,
         subtotal: subtotal, discountAmount: discAmt,
         convenienceFee: CONVENIENCE_FEE, total: total
       }));
