@@ -103,7 +103,10 @@
   .bk-sub{font-size:10px;color:var(--cream-m);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .bk-tag{font-size:9px;font-weight:700;margin-top:3px;padding:1px 5px;border-radius:3px;display:inline-block;letter-spacing:0.03em;}
   /* BREAK BLOCKS */
-  .bk-break{position:absolute;border-radius:5px;padding:5px 8px;pointer-events:none;z-index:3;overflow:hidden;}
+  .bk-break{position:absolute;border-radius:5px;padding:5px 8px;z-index:3;overflow:hidden;}
+  .bk-break-passive{pointer-events:none;}
+  .bk-break-block{cursor:pointer;transition:filter 0.12s;}
+  .bk-break-block:hover{filter:brightness(1.15);}
   .bk-break-lbl{font-size:10px;font-weight:600;color:var(--cream-m);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .bk-cancelled { opacity:0.4; filter:grayscale(1); }
   .bk-cancelled .bk-pet, .bk-cancelled .bk-sub { text-decoration:line-through; }
@@ -639,40 +642,6 @@ function scrollToNow() {
   if (offset > 0) document.getElementById('tlScroll').scrollTop = offset;
 }
 
-// ── AUTO-REFRESH every 30 seconds ──
-var _refreshInterval = null;
-function startAutoRefresh() {
-  if (_refreshInterval) clearInterval(_refreshInterval);
-  _refreshInterval = setInterval(async function() {
-    // Silent refresh - no loading spinner
-    var br = branches[currentBranch];
-    if (!br || !br.id) return;
-    var dateStr = fmtDate(currentDate);
-    var sel = 'id,ref_number,service,status,payment_status,booking_date,total,subtotal,discount_amount,owners(first_name,last_name,mobile),pets(name,animal_type,breed,size,temperament,medical_notes),grooming_details(timeslot,preferred_stylist,groom_service_name,groom_service_key,special_requests,groomer_id),hotel_details(checkin_date,checkout_date,dropoff_time,pickup_time,room_type,room_id,playpark_consent,feeding_instructions,medications,emergency_name,emergency_phone,vet_clinic,vet_contact),daycare_details(dropoff_time,pickup_time,hours_total,open_time,notes),studio_details(timeslot),booking_addons(addon_name,price),pet_vaccines(vaccine_name,confirmed),checkin_notes(general_remarks,addon_purchases,physical_inspection_notes,personal_items,vacc_complete,skin_coat_good,skin_coat_remarks,ears_nose_eyes_good,ears_nose_eyes_remarks,nails_good,nails_remarks,joints_good,joints_remarks)';
-    try {
-      var day = await sb('bookings','select='+sel+'&branch_id=eq.'+br.id+'&booking_date=eq.'+dateStr+'&service=not.eq.hotel&status=not.in.(cancelled,rejected)&order=created_at');
-      var hot = await sb('bookings','select='+sel+'&branch_id=eq.'+br.id+'&service=eq.hotel&status=not.in.(cancelled,rejected)&order=created_at');
-      var d = new Date(dateStr+'T00:00:00');
-      var hf = (hot||[]).filter(function(b){ var h=b.hotel_details; return h && new Date(h.checkin_date+'T00:00:00')<=d && d<=new Date(h.checkout_date+'T00:00:00'); });
-      var fresh = (day||[]).concat(hf);
-      // Only re-render if count changed or any status changed
-      var changed = fresh.length !== allBookings.length ||
-        fresh.some(function(nb) {
-          var ob = allBookings.find(function(x){return x.id===nb.id;});
-          return !ob || ob.status !== nb.status || ob.payment_status !== nb.payment_status;
-        });
-      if (changed) {
-        allBookings = fresh;
-        renderTabs();
-        renderSidebar();
-        renderTimeline();
-        // Update month dots silently
-        calBookingDates[dateStr] = allBookings.length > 0;
-      }
-    } catch(e) { /* silent fail */ }
-  }, 30000);
-}
-
 /* ── SUPABASE ── */
 async function sb(path, params) {
   var url = SUPABASE_URL+'/rest/v1/'+path+(params?'?'+params:'');
@@ -729,11 +698,11 @@ async function loadBookings() {
   var br = branches[currentBranch];
   if (!br || !br.id) { renderTimeline(); return; }
   var dateStr = fmtDate(currentDate);
-  var sel = 'id,ref_number,service,status,payment_status,booking_date,total,subtotal,discount_amount,'+
-    'owners(first_name,last_name,mobile),'+
-    'pets(name,animal_type,breed,size,temperament,medical_notes),'+
+  var sel = 'id,ref_number,service,status,payment_status,booking_date,total,subtotal,discount_amount,booking_source,created_at,'+
+    'owners(id,first_name,last_name,mobile,email,referral_source),'+
+    'pets(id,name,animal_type,breed,size,gender,age_value,age_unit,temperament,medical_notes),'+
     'grooming_details(timeslot,preferred_stylist,groom_service_name,groom_service_key,special_requests,groomer_id),'+
-    'hotel_details(checkin_date,checkout_date,dropoff_time,pickup_time,room_type,room_id,playpark_consent,feeding_instructions,medications,emergency_name,emergency_phone,vet_clinic,vet_contact),'+
+    'hotel_details(checkin_date,checkout_date,dropoff_time,pickup_time,room_type,room_id,playpark_consent,feeding_instructions,medications,emergency_name,emergency_phone,vet_clinic,vet_contact,vet_address),'+
     'daycare_details(dropoff_time,pickup_time,hours_total,open_time,notes),'+
     'studio_details(timeslot),'+
     'booking_addons(addon_name,price),'+
@@ -749,6 +718,12 @@ async function loadBookings() {
   renderTabs();
   renderSidebar();
   renderTimeline();
+}
+
+// Reload both booking stores so calendar and list view stay in sync
+async function reloadAll() {
+  await loadBookings();
+  if (allBookingsList.length) await loadBookingsList();
 }
 
 /* ── SIDEBAR ── */
@@ -846,7 +821,7 @@ function renderTimeline() {
         if (st===null||en===null) return;
         var top = Math.max(0,(st-DAY_START)*PX_PER_MIN);
         var ht  = Math.max(22,(en-st)*PX_PER_MIN);
-        breakHtml += '<div class="bk-break" style="top:'+top+'px;height:'+ht+'px;left:3px;right:3px;background:rgba(106,174,200,0.12);border-left:3px solid rgba(106,174,200,0.4)">'+
+        breakHtml += '<div class="bk-break bk-break-passive" style="top:'+top+'px;height:'+ht+'px;left:3px;right:3px;background:rgba(106,174,200,0.12);border-left:3px solid rgba(106,174,200,0.4)">'+
           '<span class="bk-break-lbl">'+e(bl.label)+(bGroomers.length>1?' - '+e(g.name):'')+'</span></div>';
       });
     });
@@ -879,7 +854,7 @@ function renderTimeline() {
     var rc=parseInt(blockColor.slice(1,3),16), gc=parseInt(blockColor.slice(3,5),16), bc2=parseInt(blockColor.slice(5,7),16);
     var innerHtml = '<div style="font-size:11px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">🚫 '+(resourceName?e(resourceName)+' — ':'')+e(label)+'</div>';
     if (ht >= 44) innerHtml += '<div style="font-size:10px;color:rgba(255,255,255,0.65);margin-top:2px">Blocked</div>';
-    breakHtml += '<div class="bk-break" style="top:'+top+'px;height:'+ht+'px;left:2px;right:2px;'+
+    breakHtml += '<div class="bk-break bk-break-block" onclick="openBlockDrawer(\''+bl.id+'\')" style="top:'+top+'px;height:'+ht+'px;left:2px;right:2px;'+
       'background:repeating-linear-gradient(135deg,rgba('+rc+','+gc+','+bc2+',0.55) 0px,rgba('+rc+','+gc+','+bc2+',0.55) 6px,rgba('+rc+','+gc+','+bc2+',0.3) 6px,rgba('+rc+','+gc+','+bc2+',0.3) 12px);'+
       'border:1.5px solid '+blockColor+';border-left:4px solid '+blockColor+';border-radius:5px">'+innerHtml+'</div>';
   });
@@ -967,12 +942,62 @@ function hexBg(hex) {
   var r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),bl=parseInt(hex.slice(5,7),16);
   return 'rgba('+r+','+g+','+bl+',0.14)';
 }
+function first(v) { return Array.isArray(v) ? (v[0] || null) : (v || null); }
 
 /* ── BOOKING DRAWER ── */
 function closeDrawer(e) {
   if(e&&e.target!==document.getElementById('drOverlay')) return;
   document.getElementById('drOverlay').classList.remove('open');
   currentBookingId=null;
+}
+
+function openBlockDrawer(blockId) {
+  var bl = blockedSchedules.find(function(b){ return b.id===blockId; });
+  if (!bl) return;
+  document.getElementById('drContent').innerHTML = buildBlockDrawer(bl);
+  document.getElementById('drOverlay').classList.add('open');
+}
+
+function buildBlockDrawer(bl) {
+  var resObj = (bl.resource_type==='groomer' ? groomers : rooms).find(function(r){ return r.id===bl.resource_id; });
+  var resName = resObj ? resObj.name : (bl.resource_type==='groomer' ? 'Groomer' : 'Room');
+  var resColor = (resObj && resObj.color) ? resObj.color : '#9B95E8';
+  var resType = bl.resource_type==='groomer' ? 'Groomer' : 'Hotel Room';
+  var dates = Array.isArray(bl.dates) ? bl.dates : (bl.dates ? String(bl.dates).replace(/[{}"]/g,'').split(',') : []);
+  var fmt = function(d){ try{ return new Date(d+'T00:00:00').toLocaleDateString('en-PH',{weekday:'short',month:'short',day:'numeric',year:'numeric'}); }catch(x){return d;} };
+  var html = '';
+  html += '<p class="dr-ref">Blocked Schedule</p>';
+  // Resource
+  html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">';
+  html += '<span style="width:10px;height:10px;border-radius:50%;background:'+resColor+';flex-shrink:0"></span>';
+  html += '<span style="font-size:18px;font-weight:700;color:var(--cream)">'+e(resName)+'</span>';
+  html += '</div>';
+  html += '<p style="font-size:12px;color:var(--mid);margin-bottom:12px">'+resType+'</p>';
+  // Details section
+  html += '<div class="dr-sec"><p class="dr-sec-title">Block Details</p>';
+  html += '<div class="dr-row"><span class="dr-key">Time</span><span class="dr-val">'+e((bl.start_time||'').slice(0,5))+' – '+e((bl.end_time||'').slice(0,5))+'</span></div>';
+  if (bl.reason) html += '<div class="dr-row"><span class="dr-key">Reason</span><span class="dr-val">'+e(bl.reason)+'</span></div>';
+  html += '</div>';
+  // Dates section
+  html += '<div class="dr-sec"><p class="dr-sec-title">Blocked Dates ('+dates.length+')</p>';
+  html += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">';
+  dates.forEach(function(d){ html += '<span style="font-size:11px;padding:3px 9px;border-radius:20px;background:var(--surface);border:0.5px solid var(--border);color:var(--cream-m)">'+e(fmt(d))+'</span>'; });
+  html += '</div></div>';
+  // Actions
+  html += '<div class="dr-ctas">';
+  html += '<button class="dr-btn-sec" style="color:var(--error);border-color:var(--error)" onclick="deleteBlockFromDrawer(\''+bl.id+'\')">🗑 Delete Block</button>';
+  html += '<button class="dr-btn-pri" onclick="document.getElementById(\'drOverlay\').classList.remove(\'open\')">Done</button>';
+  html += '</div>';
+  return html;
+}
+
+async function deleteBlockFromDrawer(id) {
+  if (!confirm('Delete this blocked schedule?')) return;
+  try {
+    await sbPatch('blocked_schedules', 'id=eq.'+id, {active:false});
+    document.getElementById('drOverlay').classList.remove('open');
+    await loadBlockedSchedules();
+  } catch(err) { alert('Failed: '+err.message); }
 }
 
 var _fabOpen = false;
@@ -1141,6 +1166,10 @@ function buildDrawer(b) {
     var tsStr = tsDate.toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric'}) + ' ' + tsDate.toLocaleTimeString('en-PH',{hour:'numeric',minute:'2-digit',hour12:true});
     html += '<p style="font-size:10px;color:var(--mid);margin-bottom:4px">Booked '+tsStr+'</p>';
   }
+  var srcLabels = {online:'Online booking', admin:'Admin booking', walkin:'Walk-in'};
+  if (b.booking_source) {
+    html += '<p style="font-size:10px;color:var(--mid);margin-bottom:8px">'+e(srcLabels[b.booking_source]||b.booking_source)+'</p>';
+  }
   var memberStarDr = b.discount_amount > 0 ? ' <span style="color:#FFCE58;font-size:13px" title="Member">&#9733;</span>' : '';
   html+='<p class="dr-name">'+e(pet.name||'Pet')+' '+(pet.animal_type==='cat'?'&#128049;':'&#128054;')+memberStarDr+'</p>';
   html+='<p class="dr-breed">'+e([pet.breed,pet.size?SIZE_LABELS[pet.size]:null,pet.animal_type].filter(Boolean).join(' · '))+'</p>';
@@ -1181,7 +1210,7 @@ function buildDrawer(b) {
   if (owner.referral_source) html += '<p style="font-size:10px;color:var(--mid)">via '+e(owner.referral_source)+'</p>';
   html+='</div><a href="tel:'+e(owner.mobile||'')+'" style="font-size:12px;color:var(--blue);border:0.5px solid var(--border);padding:5px 12px;border-radius:20px;text-decoration:none">Call</a></div></div>';
   // Emergency (hotel)
-  if(hd&&(hd.emergency_name||hd.vet_clinic)){html+='<div class="dr-sec"><p class="dr-sec-title">Emergency</p>';if(hd.emergency_name)html+='<div class="dr-row"><span class="dr-key">Contact</span><span class="dr-val">'+e(hd.emergency_name+(hd.emergency_phone?' / '+hd.emergency_phone:''))+'</span></div>';if(hd.vet_clinic)html+='<div class="dr-row"><span class="dr-key">Vet</span><span class="dr-val">'+e(hd.vet_clinic)+'</span></div>';html+='</div>';}
+  if(hd&&(hd.emergency_name||hd.vet_clinic)){html+='<div class="dr-sec"><p class="dr-sec-title">Emergency</p>';if(hd.emergency_name)html+='<div class="dr-row"><span class="dr-key">Contact</span><span class="dr-val">'+e(hd.emergency_name+(hd.emergency_phone?' / '+hd.emergency_phone:''))+'</span></div>';if(hd.vet_clinic)html+='<div class="dr-row"><span class="dr-key">Vet</span><span class="dr-val">'+e(hd.vet_clinic)+'</span></div>';if(hd.vet_contact)html+='<div class="dr-row"><span class="dr-key">Vet contact</span><span class="dr-val">'+e(hd.vet_contact)+'</span></div>';if(hd.vet_address)html+='<div class="dr-row"><span class="dr-key">Vet address</span><span class="dr-val">'+e(hd.vet_address)+'</span></div>';html+='</div>';}
   // Bill
   if(b.subtotal>0){html+='<div class="dr-sec"><p class="dr-sec-title">Bill</p>';
   var baseAmt = (b.subtotal||b.total||0) - addons.reduce(function(s,a){return s+(a.price||0);},0) + (b.discount_amount||0);
@@ -1202,11 +1231,6 @@ function buildDrawer(b) {
     cnRows.forEach(function(r){html+='<div class="dr-row"><span class="dr-key">'+e(r[0])+'</span><span class="dr-val" style="color:'+(r[1]==='Fail'?'var(--error)':'var(--cream)')+'">'+e(r[1])+'</span></div>';});
   }
   html+='<div id="ciWrap" style="display:none">'+buildCiForm(b)+'</div></div>';
-  // Booking source
-  if (b.booking_source && b.booking_source !== 'online') {
-    var srcLabel = {admin:'Admin booking',walkin:'Walk-in'}[b.booking_source]||b.booking_source;
-    html += '<div style="font-size:10px;color:var(--mid);text-align:center;padding:6px 0">'+srcLabel+'</div>';
-  }
   // Status
   html+='<div class="dr-sec"><p class="dr-sec-title">Update status</p>';
   html+='<select class="status-select" id="statusSel">';
@@ -1253,7 +1277,7 @@ function openDrawer(bookingId) {
 async function saveStatus(bookingId) {
   var st=document.getElementById('statusSel').value;
   var ps=document.getElementById('payStatusSel').value;
-  try { await sbPatch('bookings','id=eq.'+bookingId,{status:st,payment_status:ps}); closeDrawer(); await loadBookings(); } catch(err){alert('Failed: '+errrr.message);}
+  try { await sbPatch('bookings','id=eq.'+bookingId,{status:st,payment_status:ps}); closeDrawer(); await reloadAll(); } catch(err){alert('Failed: '+err.message);}
 }
 
 /* ── CHECK-IN FORM ── */
@@ -1281,7 +1305,7 @@ async function saveCi(bookingId,svc){
   if(svc==='hotel'){p.physical_inspection_notes=gv('ci_phys');p.personal_items=gv('ci_items');p.addon_purchases=gv('ci_addons');}
   if(svc==='grooming'){p.general_remarks=gv('ci_rem');p.vacc_complete=gy('ci_vacc');p.skin_coat_good=gy('ci_skin');p.skin_coat_remarks=gv('ci_skin_r');p.ears_nose_eyes_good=gy('ci_eyes');p.ears_nose_eyes_remarks=gv('ci_eyes_r');p.nails_good=gy('ci_nails');p.nails_remarks=gv('ci_nails_r');p.joints_good=gy('ci_joints');p.joints_remarks=gv('ci_joints_r');}
   if(svc==='daycare'){p.general_remarks=gv('ci_rem');p.addon_purchases=gv('ci_addons');}
-  try{var b=allBookings.find(function(x){return x.id===bookingId;});if(b&&b.checkin_notes)await sbPatch('checkin_notes','booking_id=eq.'+bookingId,p);else await sbPost('checkin_notes',p);alert('Saved.');closeDrawer();await loadBookings();}catch(err){alert('Failed: '+err.message);}
+  try{var b=allBookings.find(function(x){return x.id===bookingId;});if(b&&b.checkin_notes)await sbPatch('checkin_notes','booking_id=eq.'+bookingId,p);else await sbPost('checkin_notes',p);alert('Saved.');closeDrawer();await reloadAll();}catch(err){alert('Failed: '+err.message);}
 }
 
 /* ── RECORD PAYMENT ── */
@@ -1307,358 +1331,7 @@ async function savePayment(){
   var amt=parseInt(gv('payAmt'));
   if(!amt||isNaN(amt)){alert('Please enter an amount.');return;}
   var payload={booking_id:currentBookingId,amount:amt,type:gv('payType')||'balance',method:gv('payMethod')||'cash',reference_number:gv('payRef'),notes:gv('payNotes'),recorded_by:gv('payRecorder')||'admin'};
-  try{await sbPost('payments',payload);closePayPanel();if(currentBookingId){loadPayments(currentBookingId);}await loadBookings();}catch(err){alert('Failed: '+err.message);}
-}
-
-/* ── ADD/EDIT ROOM PANEL ── */
-function colorPickerHtml(selectedColor, idPrefix) {
-  return '<div class="color-picker">'+COLORS_8.map(function(c){return '<div class="cp-dot'+(c===selectedColor?' on':'')+'" style="background:'+c+'" onclick="selectColor(\''+idPrefix+'\',\''+c+'\',this)" title="'+COLOR_NAMES[c]+'"></div>';}).join('')+'</div>'+
-    '<input type="hidden" id="'+idPrefix+'_color" value="'+(selectedColor||COLORS_8[0])+'">';
-}
-function selectColor(prefix,color,dot){
-  document.querySelectorAll('[id^="'+prefix+'_"] ~ .color-picker .cp-dot, .color-picker .cp-dot').forEach(function(d){d.classList.remove('on');});
-  dot.classList.add('on');
-  var inp=document.getElementById(prefix+'_color'); if(inp)inp.value=color;
-}
-function daysPickerHtml(selectedDays, id) {
-  return '<div class="days-picker">'+DAY_LABELS.map(function(d,i){return '<button class="day-btn'+(selectedDays.indexOf(i)!==-1?' on':'')+'" onclick="toggleDay(this,'+i+',\''+id+'\')" type="button">'+d+'</button>';}).join('')+'</div>'+
-    '<input type="hidden" id="'+id+'_days" value="'+JSON.stringify(selectedDays)+'">';
-}
-function toggleDay(btn,day,id){
-  btn.classList.toggle('on');
-  var inp=document.getElementById(id+'_days');
-  var days=JSON.parse(inp.value||'[]');
-  var idx=days.indexOf(day);
-  if(idx===-1)days.push(day);else days.splice(idx,1);
-  days.sort();inp.value=JSON.stringify(days);
-}
-function sizeChecksHtml(selectedSizes) {
-  return '<div class="size-checks">'+PET_SIZES.map(function(s){return '<button class="sz-btn'+(selectedSizes.indexOf(s)!==-1?' on':'')+'" onclick="toggleSize(this,\''+s+'\')" type="button">'+SIZE_LABELS[s]+'</button>';}).join('')+'</div>';
-}
-function toggleSize(btn,size){btn.classList.toggle('on');}
-
-function openRoomPanel(roomId) {
-  editingRoom = roomId ? rooms.find(function(r){return r.id===roomId;}) : null;
-  var r = editingRoom || {color:COLORS_8[0],room_type:'large_cage',pet_type:'dog',allowed_sizes:[],schedule_restrictions:{},is_locked:false};
-  var sr = r.schedule_restrictions||{};
-  var days = sr.days_off||[];
-  document.getElementById('roomPanelTitle').textContent = editingRoom ? 'Edit room' : 'Add room';
-  document.getElementById('roomDeleteBtn').style.display = editingRoom ? '' : 'none';
-  document.getElementById('roomPanelBody').innerHTML =
-    '<div class="fg"><label class="fl">Name</label><input type="text" class="fi" id="rName" value="'+e(r.name||'')+'"></div>'+
-    '<div class="fg"><label class="fl">Color</label>'+colorPickerHtml(r.color,'r')+'</div>'+
-    '<div class="fg"><label class="fl">Room type</label><select class="fs" id="rType">'+Object.entries(ROOM_TYPES).map(function(kv){return '<option value="'+kv[0]+'"'+(r.room_type===kv[0]?' selected':'')+'>'+kv[1]+'</option>';}).join('')+'</select></div>'+
-    '<div class="fg"><label class="fl">Pet type</label><select class="fs" id="rPetType"><option value="dog"'+(r.pet_type==='dog'?' selected':'')+'>Dog</option><option value="cat"'+(r.pet_type==='cat'?' selected':'')+'>Cat</option><option value="both"'+(r.pet_type==='both'?' selected':'')+'>Both</option></select></div>'+
-    '<div class="fg"><label class="fl">Allowed sizes</label>'+sizeChecksHtml(r.allowed_sizes||[])+'</div>'+
-    '<div class="fg"><label class="fl">Days off</label>'+daysPickerHtml(days,'r_sched')+'</div>'+
-    '<div class="fg"><label class="fl">Available from</label><input type="time" class="fi" id="rFrom" value="'+(sr.available_from||'')+'"></div>'+
-    '<div class="fg"><label class="fl">Available until</label><input type="time" class="fi" id="rUntil" value="'+(sr.available_until||'')+'"></div>'+
-    '<div class="fg"><label class="fl">Notes</label><textarea class="ft" id="rNotes" placeholder="Optional">'+e(sr.notes||'')+'</textarea></div>'+
-    (editingRoom?'<div class="toggle-row"><span class="toggle-lbl">Locked / temporarily unavailable</span><div class="toggle'+(r.is_locked?' on':'')+'" onclick="this.classList.toggle(\'on\')" id="rLock"></div></div>'+
-    '<div class="fg"><label class="fl">Lock reason</label><input type="text" class="fi" id="rLockReason" value="'+e(r.lock_reason||'')+'"></div>':'');
-  document.getElementById('roomOverlay').classList.add('open');
-  document.getElementById('roomPanel').classList.add('open');
-}
-function closeRoomPanel(e){
-  if(e&&e.target!==document.getElementById('roomOverlay'))return;
-  document.getElementById('roomOverlay').classList.remove('open');
-  document.getElementById('roomPanel').classList.remove('open');
-}
-async function saveRoom(){
-  function gv(id){var el=document.getElementById(id);return el?el.value.trim():''}
-  var sizes=Array.from(document.querySelectorAll('#roomPanelBody .sz-btn.on')).map(function(b){return b.textContent.trim();}).map(function(lbl){return PET_SIZES.find(function(s){return SIZE_LABELS[s]===lbl;})||lbl;});
-  var sr={days_off:JSON.parse(document.getElementById('r_sched_days').value||'[]'),available_from:gv('rFrom')||null,available_until:gv('rUntil')||null,notes:gv('rNotes')||null};
-  var payload={name:gv('rName'),color:gv('r_color')||COLORS_8[0],room_type:gv('rType'),pet_type:gv('rPetType'),allowed_sizes:sizes,schedule_restrictions:sr,branch_id:(branches[currentBranch]||{}).id};
-  var lockEl=document.getElementById('rLock');
-  if(lockEl){payload.is_locked=lockEl.classList.contains('on');payload.lock_reason=gv('rLockReason')||null;}
-  try{if(editingRoom)await sbPatch('rooms','id=eq.'+editingRoom.id,payload);else await sbPost('rooms',payload);closeRoomPanel();await loadRooms();renderSidebar();}catch(err){alert('Failed: '+err.message);}
-}
-async function deleteRoom(){if(!editingRoom||!confirm('Remove this room?'))return;try{await sbPatch('rooms','id=eq.'+editingRoom.id,{active:false});closeRoomPanel();await loadRooms();renderSidebar();}catch(err){alert('Failed: '+err.message);}}
-
-/* ── ADD/EDIT GROOMER PANEL ── */
-/* ── ADD / EDIT GROOMER PANEL ── */
-
-function openGroomerPanel(groomerId) {
-  editingGroomer = groomerId ? groomers.find(function(g){return g.id===groomerId;}) : null;
-  var g    = editingGroomer || {color:COLORS_8[0], schedule_restrictions:{}, is_unavailable:false, sort_order:groomers.length};
-  var sr   = g.schedule_restrictions || {};
-  var gBl  = editingGroomer ? groomerBlocks.filter(function(b){return b.groomer_id===editingGroomer.id;}) : [];
-  breakRowCount = gBl.length;
-
-  document.getElementById('groomerPanelTitle').textContent = editingGroomer ? 'Edit groomer' : 'Add groomer';
-  document.getElementById('groomerDeleteBtn').style.display = editingGroomer ? '' : 'none';
-
-  var branchName = branches[currentBranch] ? branches[currentBranch].name : '';
-
-  document.getElementById('groomerPanelBody').innerHTML =
-    // Branch info
-    '<div class="fg" style="background:var(--surface);border-radius:8px;padding:8px 12px;display:flex;justify-content:space-between;align-items:center">'+
-      '<span style="font-size:11px;color:var(--mid);text-transform:uppercase;letter-spacing:0.08em;font-weight:700">Branch</span>'+
-      '<span style="font-size:13px;color:var(--cream);font-weight:600">'+e(branchName)+'</span>'+
-    '</div>'+
-
-    // Name
-    '<div class="fg"><label class="fl">Name <span style="color:var(--error)">*</span></label>'+
-      '<input type="text" class="fi" id="gName" value="'+e(g.name||'')+'" placeholder="e.g. Alex"></div>'+
-
-    // Color
-    '<div class="fg"><label class="fl">Color</label>'+
-      groomerColorPickerHtml(g.color)+'</div>'+
-
-    // Schedule restrictions
-    '<div style="background:var(--surface);border-radius:10px;padding:12px;margin-bottom:14px">'+
-      '<p style="font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--mid);margin-bottom:12px">Schedule</p>'+
-      '<div class="fg"><label class="fl">Days off</label>'+daysPickerHtml(sr.days_off||[],'g_sched')+'</div>'+
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+
-        '<div class="fg"><label class="fl">Available from</label>'+
-          '<input type="time" class="fi" id="gFrom" value="'+(sr.available_from||'')+'"></div>'+
-        '<div class="fg"><label class="fl">Available until</label>'+
-          '<input type="time" class="fi" id="gUntil" value="'+(sr.available_until||'')+'"></div>'+
-      '</div>'+
-      '<div class="fg"><label class="fl">Schedule notes</label>'+
-        '<textarea class="ft" id="gNotes" placeholder="e.g. Weekdays only" style="min-height:48px">'+e(sr.notes||'')+'</textarea></div>'+
-    '</div>'+
-
-    // Break / time blocks
-    '<div class="fg">'+
-      '<label class="fl">Time blocks</label>'+
-      '<p style="font-size:11px;color:var(--mid);margin-bottom:10px">Breaks, lunch, cleaning slots. These will be hidden from the booking form.</p>'+
-      '<div id="breakRowsWrap">'+gBl.map(function(bl,i){return buildBreakRow(i,bl);}).join('')+'</div>'+
-      '<button class="sb-add-btn" onclick="addBreakRow()" style="width:100%;margin-top:4px">+ Add time block</button>'+
-    '</div>'+
-
-    // Unavailable toggle (edit only)
-    (editingGroomer ?
-      '<div style="background:var(--surface);border-radius:10px;padding:12px;margin-bottom:14px">'+
-        '<p style="font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--mid);margin-bottom:10px">Availability</p>'+
-        '<div class="toggle-row"><span class="toggle-lbl">Mark as temporarily unavailable</span>'+
-          '<div class="toggle'+(g.is_unavailable?' on':'')+'" onclick="this.classList.toggle(\'on\')" id="gUnavail"></div></div>'+
-        '<p style="font-size:11px;color:var(--mid);margin:4px 0 10px">Hides groomer from new bookings. Existing bookings are unaffected.</p>'+
-        '<div class="fg"><label class="fl">Reason (shown in sidebar)</label>'+
-          '<input type="text" class="fi" id="gUnavailReason" value="'+e(g.unavailable_reason||'')+'" placeholder="e.g. On leave"></div>'+
-      '</div>'
-    : '') +
-
-    // Sort order
-    '<div class="fg"><label class="fl">Display order</label>'+
-      '<input type="number" class="fi" id="gSortOrder" value="'+(g.sort_order||0)+'" min="0" style="width:80px"></div>';
-
-  document.getElementById('groomerDeleteBtn').style.display = editingGroomer ? '' : 'none';
-  document.getElementById('groomerOverlay').classList.add('open');
-  document.getElementById('groomerPanel').classList.add('open');
-}
-
-// Groomer-specific color picker (scoped to avoid colliding with room panel)
-function groomerColorPickerHtml(selectedColor) {
-  var html = '<div class="color-picker" id="gColorPicker">';
-  COLORS_8.forEach(function(col) {
-    html += '<div class="cp-dot'+(col===selectedColor?' on':'')+'" style="background:'+col+'" '+
-      'onclick="selectGroomerColor(\''+col+'\',this)" title="'+COLOR_NAMES[col]+'"></div>';
-  });
-  html += '</div><input type="hidden" id="g_color" value="'+(selectedColor||COLORS_8[0])+'">';
-  return html;
-}
-
-function selectGroomerColor(color, dot) {
-  var picker = document.getElementById('gColorPicker');
-  if (picker) picker.querySelectorAll('.cp-dot').forEach(function(d){d.classList.remove('on');});
-  if (dot) dot.classList.add('on');
-  var inp = document.getElementById('g_color');
-  if (inp) inp.value = color;
-}
-
-function buildBreakRow(i, bl) {
-  bl = bl || {label:'Lunch break', start_time:'12:00', end_time:'13:00', days_of_week:[]};
-  var id = 'br' + i;
-  return '<div class="break-row" id="'+id+'">'+
-    '<div class="break-row-head">'+
-      '<input type="text" class="fi" id="'+id+'_lbl" value="'+e(bl.label)+'" style="flex:1;padding:6px 10px" placeholder="Label e.g. Lunch break">'+
-      '<button class="break-row-del" onclick="removeBreakRow(\''+id+'\')" type="button" title="Remove">&#128465;</button>'+
-    '</div>'+
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">'+
-      '<div><label style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--mid);display:block;margin-bottom:4px">From</label>'+
-        '<input type="time" class="fi" id="'+id+'_st" value="'+e(bl.start_time)+'" style="padding:6px 10px"></div>'+
-      '<div><label style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--mid);display:block;margin-bottom:4px">Until</label>'+
-        '<input type="time" class="fi" id="'+id+'_en" value="'+e(bl.end_time)+'" style="padding:6px 10px"></div>'+
-    '</div>'+
-    '<div>'+daysPickerHtml(bl.days_of_week||[], id+'_days')+
-      '<span style="font-size:10px;color:var(--mid);margin-top:4px;display:block">Leave empty to apply every day</span>'+
-    '</div>'+
-  '</div>';
-}
-
-function addBreakRow() {
-  var wrap = document.getElementById('breakRowsWrap');
-  if (!wrap) return;
-  var i = breakRowCount++;
-  wrap.insertAdjacentHTML('beforeend', buildBreakRow(i, null));
-}
-
-function removeBreakRow(id) {
-  var el = document.getElementById(id);
-  if (el) el.remove();
-}
-
-function closeGroomerPanel(e) {
-  if (e && e.target !== document.getElementById('groomerOverlay')) return;
-  document.getElementById('groomerOverlay').classList.remove('open');
-  document.getElementById('groomerPanel').classList.remove('open');
-}
-
-async function saveGroomer() {
-  function gv(id) { var el = document.getElementById(id); return el ? el.value.trim() : ''; }
-
-  var name = gv('gName');
-  if (!name) { alert('Please enter a groomer name.'); return; }
-
-  var btn = document.querySelector('#groomerPanel .btn-save');
-  if (btn) { btn.textContent = 'Saving...'; btn.disabled = true; }
-
-  var sr = {
-    days_off:       JSON.parse((document.getElementById('g_sched_days') || {value:'[]'}).value || '[]'),
-    available_from: gv('gFrom') || null,
-    available_until:gv('gUntil') || null,
-    notes:          gv('gNotes') || null
-  };
-
-  var payload = {
-    name:                   name,
-    color:                  gv('g_color') || COLORS_8[0],
-    schedule_restrictions:  sr,
-    sort_order:             parseInt(gv('gSortOrder')) || 0,
-    branch_id:              (branches[currentBranch] || {}).id
-  };
-
-  // Unavailable (edit mode only)
-  var uEl = document.getElementById('gUnavail');
-  if (uEl) {
-    payload.is_unavailable    = uEl.classList.contains('on');
-    payload.unavailable_reason = gv('gUnavailReason') || null;
-  }
-
-  // Collect break rows
-  var blocks = [];
-  document.querySelectorAll('#breakRowsWrap .break-row').forEach(function(row) {
-    var id  = row.id;
-    var lbl = gv(id + '_lbl');
-    var st  = gv(id + '_st');
-    var en  = gv(id + '_en');
-    var daysInp = document.getElementById(id + '_days_days');
-    var days = daysInp ? JSON.parse(daysInp.value || '[]') : [];
-    if (lbl && st && en) blocks.push({label:lbl, start_time:st, end_time:en, days_of_week:days, active:true});
-  });
-
-  try {
-    var savedId = null;
-
-    if (editingGroomer) {
-      // Update groomer
-      await sbPatch('groomers', 'id=eq.' + editingGroomer.id, payload);
-      savedId = editingGroomer.id;
-    } else {
-      // Insert new groomer
-      var res = await sbPost('groomers', payload);
-      var inserted = Array.isArray(res) ? res[0] : res;
-      if (!inserted || !inserted.id) throw new Error('Groomer insert did not return an ID');
-      savedId = inserted.id;
-    }
-
-    // Replace break blocks: delete all existing, re-insert current set
-    if (savedId) {
-      await sbDelete('groomer_blocks', 'groomer_id=eq.' + savedId);
-      if (blocks.length) {
-        var bRows = blocks.map(function(b) {
-          return {groomer_id:savedId, label:b.label, start_time:b.start_time,
-                  end_time:b.end_time, days_of_week:b.days_of_week, active:true};
-        });
-        await sbPost('groomer_blocks', bRows);
-      }
-    }
-
-    closeGroomerPanel();
-    await loadGroomers();
-    await loadGroomerBlocks();
-    renderSidebar();
-    renderTimeline();
-
-  } catch(err) {
-    alert('Failed to save: ' + err.message);
-    if (btn) { btn.textContent = 'Save groomer'; btn.disabled = false; }
-  }
-}
-
-async function deleteGroomer() {
-  if (!editingGroomer) return;
-  if (!confirm('Remove ' + editingGroomer.name + '? This will deactivate them from the sidebar and booking form. Existing bookings are unaffected.')) return;
-  try {
-    await sbPatch('groomers', 'id=eq.' + editingGroomer.id, {active:false});
-    closeGroomerPanel();
-    await loadGroomers();
-    await loadGroomerBlocks();
-    renderSidebar();
-    renderTimeline();
-  } catch(err) { alert('Failed: ' + err.message); }
-}
-
-
-async function saveStatus(bookingId) {
-  var st=document.getElementById('statusSel').value;
-  var ps=document.getElementById('payStatusSel').value;
-  try { await sbPatch('bookings','id=eq.'+bookingId,{status:st,payment_status:ps}); closeDrawer(); await loadBookings(); } catch(err){alert('Failed: '+errrr.message);}
-}
-
-/* ── CHECK-IN FORM ── */
-function buildCiForm(b) {
-  var svc=b.service, cn=b.checkin_notes||{};
-  var html='<div style="background:var(--surface);border-radius:8px;padding:12px;margin-top:8px">';
-  function ta(lbl,id,val){return '<div class="fg"><label class="fl">'+lbl+'</label><textarea class="ft" id="'+id+'">'+e(val||'')+'</textarea></div>';}
-  if(svc==='hotel'){html+=ta('Physical inspection','ci_phys',cn.physical_inspection_notes);html+=ta('Personal items','ci_items',cn.personal_items);html+=ta('Add-on purchases','ci_addons',cn.addon_purchases);}
-  if(svc==='grooming'){html+=ta('Remarks','ci_rem',cn.general_remarks);var chks=[['Vaccination complete','ci_vacc',cn.vacc_complete,null,null],['Skin & coat OK','ci_skin',cn.skin_coat_good,'ci_skin_r',cn.skin_coat_remarks],['Ears/nose/eyes OK','ci_eyes',cn.ears_nose_eyes_good,'ci_eyes_r',cn.ears_nose_eyes_remarks],['Nails OK','ci_nails',cn.nails_good,'ci_nails_r',cn.nails_remarks],['Joints OK','ci_joints',cn.joints_good,'ci_joints_r',cn.joints_remarks]];chks.forEach(function(c){html+=ciCheck.apply(null,c);});}
-  if(svc==='daycare'){html+=ta('Remarks','ci_rem',cn.general_remarks);html+=ta('Add-on purchases','ci_addons',cn.addon_purchases);}
-  html+='<button class="save-btn" onclick="saveCi(\''+b.id+'\',\''+svc+'\')">Save notes</button></div>';
-  return html;
-}
-function ciCheck(lbl,id,val,rid,rval){
-  var yOn=val===true?'yn-on-y':'',nOn=val===false?'yn-on-n':'';
-  var row='<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:0.5px solid var(--border)"><span style="font-size:12px;color:var(--cream-m)">'+lbl+'</span><div style="display:flex;gap:5px"><button class="yn-btn '+yOn+'" onclick="setYN(this,\''+id+'\',true,'+(rid?'\''+rid+'\'':'null')+')">Yes</button><button class="yn-btn '+nOn+'" onclick="setYN(this,\''+id+'\',false,'+(rid?'\''+rid+'\'':'null')+')">No</button></div></div>';
-  if(rid) row+='<div id="'+rid+'_w" style="display:'+(val===false?'':'none')+'"><textarea class="ft" id="'+rid+'" placeholder="Describe...">'+e(rval||'')+'</textarea></div>';
-  return row;
-}
-function setYN(btn,fid,val,rid){var p=btn.parentElement;p.querySelectorAll('.yn-btn').forEach(function(b){b.classList.remove('yn-on-y','yn-on-n');});btn.classList.add(val?'yn-on-y':'yn-on-n');if(rid){var w=document.getElementById(rid+'_w');if(w)w.style.display=val?'none':'';}};
-async function saveCi(bookingId,svc){
-  function gv(id){var el=document.getElementById(id);return el?el.value.trim()||null:null;}
-  function gy(id){var y=document.querySelector('.yn-on-y[onclick*="\''+id+'\'"]'),n=document.querySelector('.yn-on-n[onclick*="\''+id+'\'"]');return y?true:(n?false:null);}
-  var p={booking_id:bookingId,service:svc};
-  if(svc==='hotel'){p.physical_inspection_notes=gv('ci_phys');p.personal_items=gv('ci_items');p.addon_purchases=gv('ci_addons');}
-  if(svc==='grooming'){p.general_remarks=gv('ci_rem');p.vacc_complete=gy('ci_vacc');p.skin_coat_good=gy('ci_skin');p.skin_coat_remarks=gv('ci_skin_r');p.ears_nose_eyes_good=gy('ci_eyes');p.ears_nose_eyes_remarks=gv('ci_eyes_r');p.nails_good=gy('ci_nails');p.nails_remarks=gv('ci_nails_r');p.joints_good=gy('ci_joints');p.joints_remarks=gv('ci_joints_r');}
-  if(svc==='daycare'){p.general_remarks=gv('ci_rem');p.addon_purchases=gv('ci_addons');}
-  try{var b=allBookings.find(function(x){return x.id===bookingId;});if(b&&b.checkin_notes)await sbPatch('checkin_notes','booking_id=eq.'+bookingId,p);else await sbPost('checkin_notes',p);alert('Saved.');closeDrawer();await loadBookings();}catch(err){alert('Failed: '+err.message);}
-}
-
-/* ── RECORD PAYMENT ── */
-function openPayPanel(bookingId) {
-  currentBookingId = bookingId;
-  document.getElementById('payPanelBody').innerHTML =
-    '<div class="fg"><label class="fl">Amount (PHP)</label><input type="number" class="fi" id="payAmt" placeholder="e.g. 500"></div>'+
-    '<div class="fg"><label class="fl">Type</label><select class="fs" id="payType"><option value="downpayment">Downpayment</option><option value="balance">Balance</option><option value="addon">Add-on charge</option><option value="refund">Refund</option></select></div>'+
-    '<div class="fg"><label class="fl">Method</label><select class="fs" id="payMethod"><option value="cash">Cash</option><option value="card">Card</option><option value="bank_transfer">Bank transfer</option><option value="online">Online</option></select></div>'+
-    '<div class="fg"><label class="fl">Reference number</label><input type="text" class="fi" id="payRef" placeholder="Optional"></div>'+
-    '<div class="fg"><label class="fl">Notes</label><textarea class="ft" id="payNotes" placeholder="Optional"></textarea></div>'+
-    '<div class="fg"><label class="fl">Recorded by</label><input type="text" class="fi" id="payRecorder" placeholder="Your name"></div>';
-  document.getElementById('payOverlay').classList.add('open');
-  document.getElementById('payPanel').classList.add('open');
-}
-function closePayPanel(e){
-  if(e&&e.target!==document.getElementById('payOverlay')) return;
-  document.getElementById('payOverlay').classList.remove('open');
-  document.getElementById('payPanel').classList.remove('open');
-}
-async function savePayment(){
-  function gv(id){var el=document.getElementById(id);return el?el.value.trim()||null:null;}
-  var amt=parseInt(gv('payAmt'));
-  if(!amt||isNaN(amt)){alert('Please enter an amount.');return;}
-  var payload={booking_id:currentBookingId,amount:amt,type:gv('payType')||'balance',method:gv('payMethod')||'cash',reference_number:gv('payRef'),notes:gv('payNotes'),recorded_by:gv('payRecorder')||'admin'};
-  try{await sbPost('payments',payload);closePayPanel();if(currentBookingId){loadPayments(currentBookingId);}await loadBookings();}catch(err){alert('Failed: '+err.message);}
+  try{await sbPost('payments',payload);closePayPanel();if(currentBookingId){loadPayments(currentBookingId);}await reloadAll();}catch(err){alert('Failed: '+err.message);}
 }
 
 /* ── ADD/EDIT ROOM PANEL ── */
@@ -1799,7 +1472,7 @@ function toggleSidebar() {
 }
 
 async function signOut() {
-  if (_refreshInterval) { clearInterval(_refreshInterval); _refreshInterval = null; }
+  if (_autoRefreshTimer) { clearInterval(_autoRefreshTimer); _autoRefreshTimer = null; }
   var client = initSupabaseClient();
   if (client) await client.auth.signOut();
   document.getElementById('app').classList.remove('visible');
@@ -1871,7 +1544,6 @@ function openEditPanel(bookingId) {
   bkReset();
   bkPrePopulate(b);
 
-  function first(v){return Array.isArray(v)?(v[0]||null):(v||null);}
   var pet=first(b.pets)||{}, own=first(b.owners)||{};
   var gd=first(b.grooming_details), hd=first(b.hotel_details), dd=first(b.daycare_details), sd=first(b.studio_details);
 
@@ -1881,7 +1553,20 @@ function openEditPanel(bookingId) {
 
   // ── PET ──
   html += '<div class="fg"><label class="fl">Pet name</label><input class="fi" id="epPetName" value="'+e(pet.name||'')+'"></div>';
+  html += '<div class="fg"><label class="fl">Animal type</label><select class="fs" id="epAnimal">'+
+    '<option value="dog"'+(pet.animal_type==='dog'?' selected':'')+'>Dog</option>'+
+    '<option value="cat"'+(pet.animal_type==='cat'?' selected':'')+'>Cat</option>'+
+    '</select></div>';
+  html += '<div class="fg"><label class="fl">Sex</label><select class="fs" id="epGender">'+
+    '<option value="">— select —</option>'+
+    '<option value="male"'+(pet.gender==='male'?' selected':'')+'>Male</option>'+
+    '<option value="female"'+(pet.gender==='female'?' selected':'')+'>Female</option>'+
+    '</select></div>';
   html += '<div class="fg"><label class="fl">Breed</label><input class="fi" id="epBreed" value="'+e(pet.breed||'')+'"></div>';
+  var szOpts = [{v:'small_dog',l:'Small dog'},{v:'medium_dog',l:'Medium dog'},{v:'large_dog',l:'Large dog'},{v:'cat',l:'Cat'}];
+  html += '<div class="fg"><label class="fl">Size</label><select class="fs" id="epSize">'+
+    szOpts.map(function(o){return '<option value="'+o.v+'"'+(pet.size===o.v?' selected':'')+'>'+o.l+'</option>';}).join('')+
+    '</select></div>';
   html += '<div style="display:flex;gap:8px">';
   html += '<div class="fg" style="flex:1"><label class="fl">Age</label><input class="fi" type="number" id="epAge" value="'+e(String(pet.age_value||''))+'" min="0"></div>';
   html += '<div class="fg" style="flex:1"><label class="fl">Unit</label><select class="fs" id="epAgeUnit"><option value="years"'+(pet.age_unit==='years'?' selected':'')+'>Years</option><option value="months"'+(pet.age_unit==='months'?' selected':'')+'>Months</option></select></div>';
@@ -1897,6 +1582,7 @@ function openEditPanel(bookingId) {
   html += '<div class="fg" style="flex:1"><label class="fl">Last name</label><input class="fi" id="epLast" value="'+e(own.last_name||'')+'"></div></div>';
   html += '<div class="fg"><label class="fl">Email</label><input class="fi" id="epEmail" value="'+e(own.email||'')+'"></div>';
   html += '<div class="fg"><label class="fl">Mobile</label><input class="fi" id="epPhone" value="'+e(own.mobile||'')+'"></div>';
+  html += '<div class="fg"><label class="fl">Referral source</label><input class="fi" id="epReferral" value="'+e(own.referral_source||'')+'"></div>';
 
   // ── SCHEDULE (service-specific) ──
   html += '<div style="height:0.5px;background:var(--border);margin:12px 0"></div>';
@@ -1913,14 +1599,34 @@ function openEditPanel(bookingId) {
     html += '<div class="fg" style="flex:1"><label class="fl">Check-out</label><input class="fi" type="date" id="epCout" value="'+e(hd.checkout_date||'')+'"></div></div>';
     html += '<div class="fg"><label class="fl">Drop-off time</label><input class="fi" id="epDrop" value="'+e(hd.dropoff_time||'')+'"></div>';
     html += '<div class="fg"><label class="fl">Pick-up time</label><input class="fi" id="epPick" value="'+e(hd.pickup_time||'')+'"></div>';
+    html += '<div class="fg"><label class="fl">Room</label><select class="fs" id="epRoom">'+
+      '<option value="">— unassigned —</option>'+
+      rooms.filter(function(r){return r.active!==false;}).map(function(r){
+        return '<option value="'+r.id+'"'+(hd.room_id===r.id?' selected':'')+'>'+e(r.name)+'</option>';
+      }).join('')+
+      '</select></div>';
+    var ppVal = hd.playpark_consent ? 'yes' : 'no';
+    html += '<div class="fg"><label class="fl">Play park</label><select class="fs" id="epPlaypark">'+
+      '<option value="yes"'+(ppVal==='yes'?' selected':'')+'>Yes</option>'+
+      '<option value="no"'+(ppVal==='no'?' selected':'')+'>No</option>'+
+      '</select></div>';
     html += '<div class="fg"><label class="fl">Feeding instructions</label><textarea class="ft" id="epFeed">'+e(hd.feeding_instructions||'')+'</textarea></div>';
     html += '<div class="fg"><label class="fl">Medications</label><textarea class="ft" id="epMeds">'+e(hd.medications||'')+'</textarea></div>';
-    html += '<div class="fg"><label class="fl">Emergency contact</label><input class="fi" id="epEmerg" value="'+e((hd.emergency_name||'')+(hd.emergency_phone?' / '+hd.emergency_phone:''))+'"></div>';
+    html += '<div class="fg"><label class="fl">Emergency contact</label><input class="fi" id="epEmergName" placeholder="Name" value="'+e(hd.emergency_name||'')+'"></div>';
+    html += '<div class="fg"><label class="fl">Emergency phone</label><input class="fi" id="epEmergPhone" placeholder="Phone" value="'+e(hd.emergency_phone||'')+'"></div>';
+    html += '<div class="fg"><label class="fl">Vet clinic</label><input class="fi" id="epVetClinic" value="'+e(hd.vet_clinic||'')+'"></div>';
+    html += '<div class="fg"><label class="fl">Vet contact</label><input class="fi" id="epVetContact" value="'+e(hd.vet_contact||'')+'"></div>';
+    html += '<div class="fg"><label class="fl">Vet address</label><input class="fi" id="epVetAddr" value="'+e(hd.vet_address||'')+'"></div>';
   }
   if (dd) {
     html += '<div class="fg"><label class="fl">Date</label><input class="fi" type="date" id="epDcDate" value="'+e(b.booking_date||'')+'"></div>';
     html += '<div style="display:flex;gap:8px"><div class="fg" style="flex:1"><label class="fl">Drop-off</label><input class="fi" id="epDcDrop" value="'+e(dd.dropoff_time||'')+'"></div>';
     html += '<div class="fg" style="flex:1"><label class="fl">Pick-up</label><input class="fi" id="epDcPick" value="'+e(dd.pickup_time||'')+'"></div></div>';
+    var openVal = dd.open_time ? 'yes' : 'no';
+    html += '<div class="fg"><label class="fl">Open pickup</label><select class="fs" id="epDcOpen">'+
+      '<option value="no"'+(openVal==='no'?' selected':'')+'>No — specific time</option>'+
+      '<option value="yes"'+(openVal==='yes'?' selected':'')+'>Yes — open time</option>'+
+      '</select></div>';
     html += '<div class="fg"><label class="fl">Notes</label><textarea class="ft" id="epDcNotes">'+e(dd.notes||'')+'</textarea></div>';
   }
   if (sd) {
@@ -1951,7 +1657,6 @@ function openEditPanel(bookingId) {
 }
 
 async function saveEditPanel(bookingId, b) {
-  function first(v){return Array.isArray(v)?(v[0]||null):(v||null);}
   var g = function(id){var el=document.getElementById(id);return el?el.value:'';};
   var gd=first(b.grooming_details), hd=first(b.hotel_details), dd=first(b.daycare_details), sd=first(b.studio_details);
   var pet=first(b.pets)||{}, own=first(b.owners)||{};
@@ -1959,12 +1664,12 @@ async function saveEditPanel(bookingId, b) {
   if(btn){btn.disabled=true;btn.textContent='Saving…';}
   try {
     // Update pet
-    if (pet.id || b.pets) {
-      await sbPatch('pets','booking_id=eq.'+bookingId,{name:g('epPetName')||undefined,breed:g('epBreed')||undefined,age_value:parseInt(g('epAge'))||undefined,age_unit:g('epAgeUnit')||undefined,medical_notes:g('epMed')||undefined,temperament:g('epTemp')||undefined});
+    if (pet.id) {
+      await sbPatch('pets','id=eq.'+pet.id,{name:g('epPetName')||undefined,breed:g('epBreed')||undefined,animal_type:g('epAnimal')||undefined,gender:g('epGender')||undefined,size:g('epSize')||undefined,age_value:parseInt(g('epAge'))||undefined,age_unit:g('epAgeUnit')||undefined,medical_notes:g('epMed')||undefined,temperament:g('epTemp')||undefined});
     }
     // Update owner
-    if (own.id || b.owners) {
-      await sbPatch('owners','booking_id=eq.'+bookingId,{first_name:g('epFirst')||undefined,last_name:g('epLast')||undefined,email:g('epEmail')||undefined,mobile:g('epPhone')||undefined});
+    if (own.id) {
+      await sbPatch('owners','id=eq.'+own.id,{first_name:g('epFirst')||undefined,last_name:g('epLast')||undefined,email:g('epEmail')||undefined,mobile:g('epPhone')||undefined,referral_source:g('epReferral')||undefined});
     }
     // Update status
     await sbPatch('bookings','id=eq.'+bookingId,{status:g('epStatus'),payment_status:g('epPayStatus')});
@@ -1977,19 +1682,32 @@ async function saveEditPanel(bookingId, b) {
       if (g('epGDate')) await sbPatch('bookings','id=eq.'+bookingId,{booking_date:g('epGDate')});
     }
     if (hd) {
-      await sbPatch('hotel_details','booking_id=eq.'+bookingId,{checkin_date:g('epCin')||undefined,checkout_date:g('epCout')||undefined,dropoff_time:g('epDrop')||undefined,pickup_time:g('epPick')||undefined,feeding_instructions:g('epFeed')||undefined,medications:g('epMeds')||undefined});
+      await sbPatch('hotel_details','booking_id=eq.'+bookingId,{
+        checkin_date: g('epCin')||undefined,
+        checkout_date: g('epCout')||undefined,
+        dropoff_time: g('epDrop')||undefined,
+        pickup_time: g('epPick')||undefined,
+        room_id: g('epRoom')||undefined,
+        playpark_consent: g('epPlaypark')==='yes',
+        feeding_instructions: g('epFeed')||undefined,
+        medications: g('epMeds')||undefined,
+        emergency_name: g('epEmergName')||undefined,
+        emergency_phone: g('epEmergPhone')||undefined,
+        vet_clinic: g('epVetClinic')||undefined,
+        vet_contact: g('epVetContact')||undefined,
+        vet_address: g('epVetAddr')||undefined
+      });
     }
     if (dd) {
       if(g('epDcDate')) await sbPatch('bookings','id=eq.'+bookingId,{booking_date:g('epDcDate')});
-      await sbPatch('daycare_details','booking_id=eq.'+bookingId,{dropoff_time:g('epDcDrop')||undefined,pickup_time:g('epDcPick')||undefined,notes:g('epDcNotes')||undefined});
+      await sbPatch('daycare_details','booking_id=eq.'+bookingId,{dropoff_time:g('epDcDrop')||undefined,pickup_time:g('epDcPick')||undefined,open_time:g('epDcOpen')==='yes'?true:null,notes:g('epDcNotes')||undefined});
     }
     if (sd) {
       if(g('epStDate')) await sbPatch('bookings','id=eq.'+bookingId,{booking_date:g('epStDate')});
       await sbPatch('studio_details','booking_id=eq.'+bookingId,{timeslot:g('epStSlot')||undefined});
     }
     closeBkPanel();
-    await loadBookings();
-    if(currentAdminPage==='bookings') await loadBookingsList();
+    await reloadAll();
   } catch(err) {
     alert('Save failed: '+err.message);
     if(btn){btn.disabled=false;btn.textContent='Save changes';}
@@ -2035,9 +1753,6 @@ function openBookingPanel(bookingId, mode) {
 }
 
 function bkPrePopulate(b) {
-  // PostgREST returns one-to-many embeds as arrays - normalize to object
-  function first(v) { return Array.isArray(v) ? (v[0]||null) : (v||null); }
-
   bk.svc    = b.service        || 'grooming';
   bk.status = b.status         || 'confirmed';
   bk.paysts = b.payment_status || 'unpaid';
@@ -2152,9 +1867,8 @@ function bkRender() {
 }
 function bkGoStep(n) { bkStep = n; bkRender(); }
 
-function bkE(v) { return (v||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function bkF(n) { return '\u20b1' + Number(n).toLocaleString(); }
-function bkSR(k,v) { return '<div class="bk-sum-row"><span>'+bkE(k)+'</span><span class="bk-sum-val">'+bkE(v||'\u2014')+'</span></div>'; }
+function bkSR(k,v) { return '<div class="bk-sum-row"><span>'+e(k)+'</span><span class="bk-sum-val">'+e(v||'\u2014')+'</span></div>'; }
 
 function bkSzPills(filter) {
   var list = filter ? BK_SIZES.filter(function(z){return filter.indexOf(z.k)!==-1;}) : BK_SIZES;
@@ -2169,7 +1883,7 @@ function bkRSvc() {
   var svcs = [{v:'grooming',l:'Grooming'},{v:'hotel',l:'Pet Hotel'},{v:'daycare',l:'Daycare'},{v:'studio',l:'Studio'}];
   if (currentBranch !== 1) svcs = svcs.filter(function(s){return s.v!=='studio';});
   return '<div class="fg"><label class="fl">Branch</label>'+
-    '<div class="fi" style="cursor:default;color:var(--mid)">'+bkE(br)+'</div></div>'+
+    '<div class="fi" style="cursor:default;color:var(--mid)">'+e(br)+'</div></div>'+
     '<div class="fg"><label class="fl">Service <span style="color:var(--error)">*</span></label>'+
     '<div style="display:flex;gap:6px;flex-wrap:wrap">'+
     svcs.map(function(sv){
@@ -2216,17 +1930,17 @@ function bkRGroom() {
   // Stylist (live from groomers[])
   var groomerOpts = '<option value="">Select groomer…</option><option value="any"'+(bk.stylist==='any'?' selected':'')+'>Any available</option>' +
     groomers.filter(function(g){return !g.is_unavailable;}).map(function(g){
-      return '<option value="'+g.id+'" data-name="'+bkE(g.name)+'"'+(bk.stylistId===g.id?' selected':'')+'>'+bkE(g.name)+'</option>';
+      return '<option value="'+g.id+'" data-name="'+e(g.name)+'"'+(bk.stylistId===g.id?' selected':'')+'>'+e(g.name)+'</option>';
     }).join('');
   h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+
     '<div class="fg"><label class="fl">Groomer</label>'+
     '<select class="fs" id="bkStylist" onchange="bkSetStylist(this);loadAdminGroomSlots()">'+groomerOpts+'</select></div>'+
     '<div class="fg"><label class="fl">Date <span style="color:var(--error)">*</span></label>'+
-    '<input type="date" class="fi" id="bkGDate" value="'+bkE(bk.gdate)+'" onchange="bk.gdate=this.value;loadAdminGroomSlots()"></div></div>';
+    '<input type="date" class="fi" id="bkGDate" value="'+e(bk.gdate)+'" onchange="bk.gdate=this.value;loadAdminGroomSlots()"></div></div>';
   h += '<div class="fg"><label class="fl">Time slot <span style="color:var(--error)">*</span></label>'+
     '<div id="bkGSlots" style="display:flex;flex-wrap:wrap;gap:6px"><p style="color:var(--mid);font-size:12px">Select a date and groomer to see available slots.</p></div></div>';
   h += '<div class="fg"><label class="fl">Special requests</label>'+
-    '<textarea class="ft" onchange="bk.gnotes=this.value">'+bkE(bk.gnotes)+'</textarea></div>';
+    '<textarea class="ft" onchange="bk.gnotes=this.value">'+e(bk.gnotes)+'</textarea></div>';
   // Trigger slot load after render if date is already set
   setTimeout(function(){ if(bk.gdate) loadAdminGroomSlots(); }, 0);
   return h;
@@ -2342,15 +2056,15 @@ function bkRHotel() {
   var h = '<div class="fg"><label class="fl">Pet size <span style="color:var(--error)">*</span></label>'+bkSzPills(['small_dog','medium_dog','large_dog','cat'])+'</div>';
   h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+
     '<div class="fg"><label class="fl">Check-in <span style="color:var(--error)">*</span></label>'+
-    '<input type="date" class="fi" value="'+bkE(bk.hcin)+'" onchange="bk.hcin=this.value;bkRender()"></div>'+
+    '<input type="date" class="fi" value="'+e(bk.hcin)+'" onchange="bk.hcin=this.value;bkRender()"></div>'+
     '<div class="fg"><label class="fl">Check-out <span style="color:var(--error)">*</span></label>'+
-    '<input type="date" class="fi" value="'+bkE(bk.hcout)+'" onchange="bk.hcout=this.value;bkRender()"></div></div>';
+    '<input type="date" class="fi" value="'+e(bk.hcout)+'" onchange="bk.hcout=this.value;bkRender()"></div></div>';
   if (nights > 0) h += '<div class="bk-ibox">'+nights+' night'+(nights>1?'s':'')+' \u2014 est. '+bkF(bkCHotel())+'</div>';
   // Room dropdown from live rooms or fallback
   var roomOpts = '<option value="">Select room...</option>';
   if (liveRooms && liveRooms.length) {
     liveRooms.forEach(function(r){
-      roomOpts += '<option value="'+r.id+'"'+(bk.hroom_id===r.id?' selected':'')+'>'+bkE(r.name)+'</option>';
+      roomOpts += '<option value="'+r.id+'"'+(bk.hroom_id===r.id?' selected':'')+'>'+e(r.name)+'</option>';
     });
   } else {
     ['Large Cage 1','Large Cage 2','Medium Cage 1','Small Cage 1','Cat Cabin 1'].forEach(function(r){
@@ -2361,7 +2075,7 @@ function bkRHotel() {
     '<select class="fs" onchange="bkSetRoom(this)">'+roomOpts+'</select></div>';
   h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+
     '<div class="fg"><label class="fl">Drop-off time</label>'+
-    '<input type="time" class="fi" value="'+bkE(bk.hdrop)+'" onchange="bk.hdrop=this.value"></div>'+
+    '<input type="time" class="fi" value="'+e(bk.hdrop)+'" onchange="bk.hdrop=this.value"></div>'+
     '<div class="fg"><label class="fl">Pick-up time</label>'+
     '<select class="fs" onchange="bk.hpick=this.value">'+
     [['14','On or before 2PM'],['15','3PM (+\u20b1100)'],['16','4PM (+\u20b1200)'],['17','5PM (+\u20b1300)'],['18','6PM (+\u20b1400)'],['19','7PM (+\u20b1500)'],['20','8PM (+\u20b1600)']].map(function(o){
@@ -2380,24 +2094,24 @@ function bkSetRoom(sel) {
 function bkRDcare() {
   var h = '<div class="fg"><label class="fl">Pet size <span style="color:var(--error)">*</span></label>'+bkSzPills(['small_dog','medium_dog','large_dog','cat'])+'</div>';
   h += '<div class="fg"><label class="fl">Date <span style="color:var(--error)">*</span></label>'+
-    '<input type="date" class="fi" value="'+bkE(bk.dcdate)+'" onchange="bk.dcdate=this.value"></div>';
+    '<input type="date" class="fi" value="'+e(bk.dcdate)+'" onchange="bk.dcdate=this.value"></div>';
   h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+
     '<div class="fg"><label class="fl">Drop-off</label>'+
-    '<input type="time" class="fi" value="'+bkE(bk.dcdrop)+'" onchange="bk.dcdrop=this.value;bkRender()"></div>'+
+    '<input type="time" class="fi" value="'+e(bk.dcdrop)+'" onchange="bk.dcdrop=this.value;bkRender()"></div>'+
     '<div class="fg"><label class="fl">Pick-up</label>'+
-    '<input type="time" class="fi" value="'+bkE(bk.dcpick)+'" onchange="bk.dcpick=this.value;bkRender()"></div></div>';
+    '<input type="time" class="fi" value="'+e(bk.dcpick)+'" onchange="bk.dcpick=this.value;bkRender()"></div></div>';
   h += '<div class="toggle-row" style="padding:6px 0"><span class="toggle-lbl">Open time pick-up</span>'+
     '<div class="toggle'+(bk.dcopen?' on':'')+'" onclick="bk.dcopen=!bk.dcopen;bkRender()"></div></div>';
   var hrs = bkHrs();
   if (hrs > 0 && !bk.dcopen) h += '<div class="bk-ibox" style="margin-top:6px">'+hrs+' hr'+(hrs>1?'s':'')+' \u2014 '+bkF(DR_ADM[bk.size]||500)+' base rate</div>';
   h += '<div class="fg" style="margin-top:8px"><label class="fl">Notes</label>'+
-    '<textarea class="ft" onchange="bk.dcnotes=this.value">'+bkE(bk.dcnotes)+'</textarea></div>';
+    '<textarea class="ft" onchange="bk.dcnotes=this.value">'+e(bk.dcnotes)+'</textarea></div>';
   return h;
 }
 
 function bkRStudio() {
   return '<div class="fg"><label class="fl">Date <span style="color:var(--error)">*</span></label>'+
-    '<input type="date" class="fi" value="'+bkE(bk.stdate)+'" onchange="bk.stdate=this.value"></div>'+
+    '<input type="date" class="fi" value="'+e(bk.stdate)+'" onchange="bk.stdate=this.value"></div>'+
     '<div class="fg"><label class="fl">Time slot <span style="color:var(--error)">*</span></label>'+
     '<div class="bk-slot-grid">'+BK_SSTOTS.map(function(sl){
       return '<div class="bk-slot'+(bk.stslot===sl?' on':'')+'" onclick="bk.stslot=\''+sl+'\';bkRender()">'+sl+'</div>';
@@ -2409,7 +2123,7 @@ function bkRStudio() {
 function bkRPet() {
   var h = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+
     '<div class="fg"><label class="fl">Pet name <span style="color:var(--error)">*</span></label>'+
-    '<input type="text" class="fi" placeholder="e.g. Mochi" value="'+bkE(bk.pname)+'" onchange="bk.pname=this.value"></div>'+
+    '<input type="text" class="fi" placeholder="e.g. Mochi" value="'+e(bk.pname)+'" onchange="bk.pname=this.value"></div>'+
     '<div class="fg"><label class="fl">Animal <span style="color:var(--error)">*</span></label>'+
     '<div style="display:flex;gap:5px">'+
     [{k:'dog',l:'Dog'},{k:'cat',l:'Cat'}].map(function(a){
@@ -2422,10 +2136,10 @@ function bkRPet() {
       return '<div class="bk-pill'+(bk.pgender===g.k?' on':'')+'" onclick="bk.pgender=\''+g.k+'\'">'+g.l+'</div>';
     }).join('')+'</div></div>'+
     '<div class="fg"><label class="fl">Breed</label>'+
-    '<input type="text" class="fi" placeholder="e.g. Shih Tzu" value="'+bkE(bk.pbreed)+'" onchange="bk.pbreed=this.value"></div></div>';
+    '<input type="text" class="fi" placeholder="e.g. Shih Tzu" value="'+e(bk.pbreed)+'" onchange="bk.pbreed=this.value"></div></div>';
   h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+
     '<div class="fg"><label class="fl">Age</label>'+
-    '<input type="number" class="fi" min="0" value="'+bkE(bk.page)+'" onchange="bk.page=this.value"></div>'+
+    '<input type="number" class="fi" min="0" value="'+e(bk.page)+'" onchange="bk.page=this.value"></div>'+
     '<div class="fg"><label class="fl">Unit</label>'+
     '<select class="fs" onchange="bk.pageunit=this.value"><option value="years"'+(bk.pageunit==='years'?' selected':'')+'>Years</option><option value="months"'+(bk.pageunit==='months'?' selected':'')+'>Months</option></select></div></div>';
   h += '<div class="fg"><label class="fl">Temperament</label>'+
@@ -2434,7 +2148,7 @@ function bkRPet() {
       return '<option value="'+t[0]+'"'+(bk.ptemp===t[0]?' selected':'')+'>'+t[1]+'</option>';
     }).join('')+'</select></div>';
   h += '<div class="fg"><label class="fl">Medical notes / allergies</label>'+
-    '<textarea class="ft" placeholder="Conditions, medications, allergies..." onchange="bk.pmed=this.value">'+bkE(bk.pmed)+'</textarea></div>';
+    '<textarea class="ft" placeholder="Conditions, medications, allergies..." onchange="bk.pmed=this.value">'+e(bk.pmed)+'</textarea></div>';
   var vaccs = bk.panimal==='cat'
     ? ['Anti-rabies','All-in-1 shot','Anti-parasitic']
     : ['Anti-rabies','5/6/8-in-1 shot','Kennel Cough / Bordetella','Tick and flea treatment'];
@@ -2442,13 +2156,13 @@ function bkRPet() {
   vaccs.forEach(function(v, i) {
     var cur = bk.vacc[i];
     h += '<div class="bk-vacc-row">'+
-      '<span style="font-size:12px;color:var(--cream-m)">'+bkE(v)+'</span>'+
+      '<span style="font-size:12px;color:var(--cream-m)">'+e(v)+'</span>'+
       '<div class="bk-yn">'+
       '<button type="button" class="bk-yn-btn'+(cur===true?' bk-y':'')+'" onclick="bkSetV('+i+',true)">Declared</button>'+
       '<button type="button" class="bk-yn-btn'+(cur===false?' bk-n':'')+'" onclick="bkSetV('+i+',false)">Not yet</button>'+
       '</div></div>';
   });
-  h += '<input type="hidden" id="bkVaccNames" value="'+bkE(JSON.stringify(vaccs))+'">';
+  h += '<input type="hidden" id="bkVaccNames" value="'+e(JSON.stringify(vaccs))+'">';
   return h;
 }
 
@@ -2470,10 +2184,10 @@ function bkROwner() {
     '<input type="text" class="fi" placeholder="Enter email or +63 phone..."></div>'+
     '<div style="height:0.5px;background:var(--border);margin:10px 0"></div>'+
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+
-    '<div class="fg"><label class="fl">First name <span style="color:var(--error)">*</span></label><input type="text" class="fi" placeholder="Juan" value="'+bkE(bk.ofirst)+'" onchange="bk.ofirst=this.value"></div>'+
-    '<div class="fg"><label class="fl">Last name <span style="color:var(--error)">*</span></label><input type="text" class="fi" placeholder="dela Cruz" value="'+bkE(bk.olast)+'" onchange="bk.olast=this.value"></div></div>'+
-    '<div class="fg"><label class="fl">Email <span style="color:var(--error)">*</span></label><input type="email" class="fi" placeholder="juan@email.com" value="'+bkE(bk.oemail)+'" onchange="bk.oemail=this.value"></div>'+
-    '<div class="fg"><label class="fl">Mobile <span style="color:var(--error)">*</span></label><input type="tel" class="fi" placeholder="+63 917 123 4567" value="'+bkE(bk.ophone)+'" onchange="bk.ophone=this.value"></div>'+
+    '<div class="fg"><label class="fl">First name <span style="color:var(--error)">*</span></label><input type="text" class="fi" placeholder="Juan" value="'+e(bk.ofirst)+'" onchange="bk.ofirst=this.value"></div>'+
+    '<div class="fg"><label class="fl">Last name <span style="color:var(--error)">*</span></label><input type="text" class="fi" placeholder="dela Cruz" value="'+e(bk.olast)+'" onchange="bk.olast=this.value"></div></div>'+
+    '<div class="fg"><label class="fl">Email <span style="color:var(--error)">*</span></label><input type="email" class="fi" placeholder="juan@email.com" value="'+e(bk.oemail)+'" onchange="bk.oemail=this.value"></div>'+
+    '<div class="fg"><label class="fl">Mobile <span style="color:var(--error)">*</span></label><input type="tel" class="fi" placeholder="+63 917 123 4567" value="'+e(bk.ophone)+'" onchange="bk.ophone=this.value"></div>'+
     '<div class="fg"><label class="fl">Referral source</label>'+
     '<select class="fs" onchange="bk.osource=this.value">'+
     ['','Instagram','Facebook','TikTok','Google search','Friend or family referral','Walk-in / saw the branch'].map(function(o){
@@ -2487,17 +2201,17 @@ function bkRDet() {
   if (bk.svc==='hotel') {
     h += '<div style="font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--mid);padding-bottom:7px;border-bottom:0.5px solid var(--border);margin-bottom:10px">Hotel care</div>'+
       '<div class="fg"><label class="fl">Feeding instructions</label>'+
-      '<textarea class="ft" placeholder="e.g. 1 cup dry kibble twice a day..." onchange="bk.hfeed=this.value">'+bkE(bk.hfeed)+'</textarea></div>'+
+      '<textarea class="ft" placeholder="e.g. 1 cup dry kibble twice a day..." onchange="bk.hfeed=this.value">'+e(bk.hfeed)+'</textarea></div>'+
       '<div class="fg"><label class="fl">Medications / special care</label>'+
-      '<textarea class="ft" placeholder="e.g. 1 tablet after breakfast..." onchange="bk.hmeds=this.value">'+bkE(bk.hmeds)+'</textarea></div>'+
+      '<textarea class="ft" placeholder="e.g. 1 tablet after breakfast..." onchange="bk.hmeds=this.value">'+e(bk.hmeds)+'</textarea></div>'+
       '<div style="font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--mid);padding-bottom:7px;border-bottom:0.5px solid var(--border);margin:12px 0 10px">Emergency contact</div>'+
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+
-      '<div class="fg"><label class="fl">Name</label><input type="text" class="fi" value="'+bkE(bk.hemerg)+'" onchange="bk.hemerg=this.value"></div>'+
-      '<div class="fg"><label class="fl">Phone</label><input type="tel" class="fi" value="'+bkE(bk.hemergp)+'" onchange="bk.hemergp=this.value"></div></div>'+
-      '<div class="fg"><label class="fl">Vet clinic</label><input type="text" class="fi" value="'+bkE(bk.hvet)+'" onchange="bk.hvet=this.value"></div>'+
+      '<div class="fg"><label class="fl">Name</label><input type="text" class="fi" value="'+e(bk.hemerg)+'" onchange="bk.hemerg=this.value"></div>'+
+      '<div class="fg"><label class="fl">Phone</label><input type="tel" class="fi" value="'+e(bk.hemergp)+'" onchange="bk.hemergp=this.value"></div></div>'+
+      '<div class="fg"><label class="fl">Vet clinic</label><input type="text" class="fi" value="'+e(bk.hvet)+'" onchange="bk.hvet=this.value"></div>'+
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+
-      '<div class="fg"><label class="fl">Vet contact</label><input type="text" class="fi" value="'+bkE(bk.hvetc)+'" onchange="bk.hvetc=this.value"></div>'+
-      '<div class="fg"><label class="fl">Vet address</label><input type="text" class="fi" value="'+bkE(bk.hvetaddr)+'" onchange="bk.hvetaddr=this.value"></div></div>';
+      '<div class="fg"><label class="fl">Vet contact</label><input type="text" class="fi" value="'+e(bk.hvetc)+'" onchange="bk.hvetc=this.value"></div>'+
+      '<div class="fg"><label class="fl">Vet address</label><input type="text" class="fi" value="'+e(bk.hvetaddr)+'" onchange="bk.hvetaddr=this.value"></div></div>';
   }
   h += '<div style="font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--mid);padding-bottom:7px;border-bottom:0.5px solid var(--border);margin:12px 0 10px">Waivers</div>';
   h += [['wgen','General terms accepted'],['wvacc','Health declaration'],['wmedia','Media consent (photos/videos)']].map(function(w){
@@ -2505,7 +2219,7 @@ function bkRDet() {
       '<div class="toggle'+(bk[w[0]]?' on':'')+'" onclick="bk[\''+w[0]+'\']=!bk[\''+w[0]+'\']\';bkRender()"></div></div>';
   }).join('');
   h += '<div class="fg" style="margin-top:10px"><label class="fl">Internal notes <span style="font-size:9px;color:var(--mid);text-transform:none;letter-spacing:0;font-weight:400">(admin only)</span></label>'+
-    '<textarea class="ft" placeholder="Context for the team..." onchange="bk.anotes=this.value">'+bkE(bk.anotes)+'</textarea></div>';
+    '<textarea class="ft" placeholder="Context for the team..." onchange="bk.anotes=this.value">'+e(bk.anotes)+'</textarea></div>';
   return h;
 }
 
@@ -2564,7 +2278,7 @@ function bkRSum() {
   // Member code
   h += '<div class="fg" style="margin-top:10px"><label class="fl">Member code</label>'+
     '<div style="display:flex;gap:6px">'+
-    '<input type="text" class="fi" placeholder="BH-M001" value="'+bkE(bk.memcode)+'" onchange="bk.memcode=this.value.toUpperCase()" style="text-transform:uppercase">'+
+    '<input type="text" class="fi" placeholder="BH-M001" value="'+e(bk.memcode)+'" onchange="bk.memcode=this.value.toUpperCase()" style="text-transform:uppercase">'+
     '<button type="button" style="padding:8px 10px;font-size:11px;border:0.5px solid var(--border);border-radius:8px;background:transparent;color:var(--cream-m);cursor:pointer;font-family:\'Nunito\',sans-serif;white-space:nowrap" onclick="bk.memvalid=!bk.memvalid;bkRender()">'+(bk.memvalid?'Remove':'Apply')+'</button></div>'+
     (bk.memvalid?'<div style="font-size:11px;color:var(--success);margin-top:3px">'+Math.round((MD_ADM[bk.svc]||0)*100)+'% member discount applied</div>':'')+'</div>';
   if (disc>0) h += '<div class="bk-sum-row"><span>Member discount</span><span class="bk-disc">-'+bkF(disc)+'</span></div>';
@@ -2592,11 +2306,11 @@ function bkRSum() {
         return '<option value="'+m+'"'+(bk.paymethod===m?' selected':'')+'>'+(m||'Select...')+'</option>';
       }).join('')+'</select></div>'+
       '<div class="fg"><label class="fl">Reference #</label>'+
-      '<input type="text" class="fi" placeholder="Optional" value="'+bkE(bk.payref)+'" onchange="bk.payref=this.value"></div></div>';
+      '<input type="text" class="fi" placeholder="Optional" value="'+e(bk.payref)+'" onchange="bk.payref=this.value"></div></div>';
   }
   var recLabel = bkEditing ? 'Edited by' : 'Recorded by';
   h += '<div class="fg"><label class="fl">'+recLabel+'</label>'+
-    '<input type="text" class="fi" value="'+bkE(bk.recby)+'" onchange="bk.recby=this.value"></div>';
+    '<input type="text" class="fi" value="'+e(bk.recby)+'" onchange="bk.recby=this.value"></div>';
   return h;
 }
 
@@ -2658,7 +2372,6 @@ async function saveBkBooking() {
       var existing = allBookings.find(function(x){return x.id===bkEditing;});
       if (!existing) throw new Error('Booking not found in current view. Please refresh.');
 
-      var first = function(v){ return Array.isArray(v)?(v[0]||null):(v||null); };
       var existingPet   = first(existing.pets)   || {};
       var existingOwner = first(existing.owners) || {};
 
@@ -2692,6 +2405,7 @@ async function saveBkBooking() {
         await sbPatch('owners','id=eq.'+existingOwner.id,{
           first_name:      bk.ofirst.trim(),
           last_name:       bk.olast.trim(),
+          email:           bk.oemail.trim()||null,
           mobile:          bk.ophone.trim(),
           referral_source: bk.osource||null
         });
@@ -2779,7 +2493,7 @@ async function saveBkBooking() {
       });
 
       closeBkPanel();
-      await loadBookings();
+      await reloadAll();
       alert('Booking updated.');
 
     } else {
@@ -2804,7 +2518,7 @@ async function saveBkBooking() {
         emergencyName: bk.hemerg, emergencyPhone: bk.hemergp,
         vetClinic: bk.hvet, vetContact: bk.hvetc, vetAddress: bk.hvetaddr,
         daycareDate: bk.dcdate, daycareDropoff: bk.dcdrop, daycarePickup: bk.dcpick,
-        daycareOpenTime: bk.dcopen,
+        daycareOpenTime: bk.dcopen, daycareNotes: bk.dcnotes||null,
         studioDate: bk.stdate, studioSlot: bk.stslot,
         addons: Object.keys(bk.addons).reduce(function(acc,k){
           var a=AD_ADM.find(function(x){return x.k===k;});
@@ -2846,7 +2560,7 @@ async function saveBkBooking() {
       }
 
       closeBkPanel();
-      await loadBookings();
+      await reloadAll();
       alert('Booking created: ' + (data.ref_number||'done'));
     }
 
@@ -2913,7 +2627,6 @@ async function shiftCalModal(delta) {
 function renderCalModal() {
   var y = calModalDate.getFullYear(), mon = calModalDate.getMonth();
   var today = new Date(), selDate = currentDate;
-  var MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
   document.getElementById('calModalMonth').textContent = MONTHS[mon] + ' ' + y;
   var dows = ['S','M','T','W','T','F','S'];
   document.getElementById('calDowRow').innerHTML = dows.map(function(d){ return '<div class="cal-dow-cell">'+d+'</div>'; }).join('');
@@ -2991,11 +2704,11 @@ async function loadBookingsList() {
   if (!br) return;
   document.getElementById('pageBookings').innerHTML = '<p style="color:var(--mid);padding:16px">Loading…</p>';
   try {
-    var sel = 'id,ref_number,service,status,payment_status,booking_date,total,subtotal,discount_amount,created_at,'+
-      'owners(first_name,last_name,mobile,email,referral_source),'+
-      'pets(name,animal_type,breed,size,gender,age_value,age_unit,temperament,medical_notes),'+
+    var sel = 'id,ref_number,service,status,payment_status,booking_date,total,subtotal,discount_amount,created_at,booking_source,'+
+      'owners(id,first_name,last_name,mobile,email,referral_source),'+
+      'pets(id,name,animal_type,breed,size,gender,age_value,age_unit,temperament,medical_notes),'+
       'grooming_details(timeslot,preferred_stylist,groom_service_name,groom_service_key,special_requests,groomer_id),'+
-      'hotel_details(checkin_date,checkout_date,dropoff_time,pickup_time,room_type,room_id,playpark_consent,feeding_instructions,medications,emergency_name,emergency_phone,vet_clinic,vet_contact),'+
+      'hotel_details(checkin_date,checkout_date,dropoff_time,pickup_time,room_type,room_id,playpark_consent,feeding_instructions,medications,emergency_name,emergency_phone,vet_clinic,vet_contact,vet_address),'+
       'daycare_details(dropoff_time,pickup_time,hours_total,open_time,notes),'+
       'studio_details(timeslot),'+
       'booking_addons(addon_name,price),'+

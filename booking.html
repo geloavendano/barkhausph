@@ -1751,68 +1751,111 @@ function slotOverlapsBooked(candidateSlot, currentDurationMins, blockedRanges) {
 async function renderGroomSlots() {
   var grid = document.getElementById('groomSlots');
   if (!grid) return;
-  var groomerId    = booking.preferredStylistId;
-  var dateVal      = booking.groomDate;
-  var serviceKey   = booking.groomService || 'basic';
-  var myDuration   = GROOM_SLOT_MINS[serviceKey] || 60;
-  var dow          = dateVal ? new Date(dateVal + 'T00:00:00').getDay() : -1;
-  var ALL_SLOTS    = ['9:00 AM','10:00 AM','11:00 AM','1:00 PM','2:00 PM','3:00 PM','4:00 PM','5:00 PM'];
+
+  var groomerId  = booking.preferredStylistId;   // null = "any available"
+  var isAny      = !groomerId;
+  var dateVal    = booking.groomDate;
+  var serviceKey = booking.groomService || 'basic';
+  var myDuration = GROOM_SLOT_MINS[serviceKey] || 60;
+  var dow        = dateVal ? new Date(dateVal + 'T00:00:00').getDay() : -1;
+  var ALL_SLOTS  = ['9:00 AM','10:00 AM','11:00 AM','1:00 PM','2:00 PM','3:00 PM','4:00 PM','5:00 PM'];
+
+  // Which groomers to consider
+  var groomerPool = isAny
+    ? liveGroomers
+    : liveGroomers.filter(function(g){ return g.id === groomerId; });
 
   grid.innerHTML = '<p style="font-size:12px;color:var(--mid);padding:8px 0">Checking availability...</p>';
 
-  // Build blocked time ranges from existing bookings
-  // Each range = { start: mins, end: mins } representing the full occupied window
-  var blockedRanges = [];
+  // Helper: parse "HH:MM" or "HH:MM:SS" → minutes since midnight
+  function parseTMins(t) {
+    var p = (t||'').split(':');
+    return parseInt(p[0]||0)*60 + parseInt(p[1]||0);
+  }
+
+  // Helper: does [candStart, candEnd) overlap any range in the list?
+  function overlaps(ranges, candStart, candEnd) {
+    return ranges.some(function(r){ return candStart < r.end && candEnd > r.start; });
+  }
+
+  // All booking rows and blocked_schedule rows fetched once for the whole pool
+  var bookingRows = [];
+  var blockRows   = [];
+
   try {
     var branchId = await getSelectedBranchId();
-    if (branchId && groomerId && dateVal) {
-      var rows = await sbFetchPublic('grooming_details',
-        'select=timeslot,groom_service_key,bookings!inner(booking_date,status,branch_id)' +
-        '&bookings.booking_date=eq.' + dateVal +
-        '&bookings.branch_id=eq.' + branchId +
-        '&bookings.status=not.in.(cancelled,rejected)' +
-        '&groomer_id=eq.' + groomerId);
-      (rows || []).forEach(function(r) {
-        if (!r.timeslot) return;
-        var dur   = GROOM_SLOT_MINS[r.groom_service_key || 'basic'] || 60;
-        var start = slotToMins(r.timeslot);
-        if (start >= 0) blockedRanges.push({ start: start, end: start + dur });
+    if (!branchId || !dateVal || !groomerPool.length) throw new Error('missing_context');
+
+    // 1. All grooming bookings on this date (include groomer_id so we can split by groomer)
+    var bkQuery = 'select=timeslot,groom_service_key,groomer_id,bookings!inner(booking_date,status,branch_id)' +
+      '&bookings.booking_date=eq.' + dateVal +
+      '&bookings.branch_id=eq.'   + branchId +
+      '&bookings.status=not.in.(cancelled,rejected)';
+    if (!isAny) bkQuery += '&groomer_id=eq.' + groomerId;
+    bookingRows = (await sbFetchPublic('grooming_details', bkQuery)) || [];
+
+    // 2. One-off blocked_schedules for these groomers on this date
+    var bsQuery = 'select=resource_id,start_time,end_time' +
+      '&resource_type=eq.groomer&active=eq.true' +
+      '&dates=cs.{' + dateVal + '}';
+    if (!isAny) bsQuery += '&resource_id=eq.' + groomerId;
+    try { blockRows = (await sbFetchPublic('blocked_schedules', bsQuery)) || []; }
+    catch(e) { blockRows = []; } // table may not exist yet — degrade gracefully
+
+  } catch(e) {
+    console.warn('Slot availability check failed, showing all slots:', e);
+    // Degrade gracefully: show all slots
+    grid.innerHTML = ALL_SLOTS.map(function(s){
+      return '<div class="timeslot" onclick="selectSlot(this)">'+s+'</div>';
+    }).join('');
+    return;
+  }
+
+  // Build the full blocked-ranges list for a given groomer
+  function rangesFor(gId) {
+    var ranges = [];
+    // Active bookings
+    bookingRows.filter(function(r){ return r.groomer_id === gId && r.timeslot; }).forEach(function(r) {
+      var dur = GROOM_SLOT_MINS[r.groom_service_key || 'basic'] || 60;
+      var st  = slotToMins(r.timeslot);
+      if (st >= 0) ranges.push({ start: st, end: st + dur });
+    });
+    // Recurring groomer breaks (groomer_blocks)
+    if (dow >= 0) {
+      getGroomerBlocksForDay(gId, dow).forEach(function(bl) {
+        ranges.push({ start: parseTMins(bl.start_time), end: parseTMins(bl.end_time) });
       });
     }
-  } catch(e) {
-    console.error('Slot availability check failed:', e);
-  }
-
-  // Also block groomer break times
-  var breakRanges = [];
-  if (groomerId && dow >= 0) {
-    getGroomerBlocksForDay(groomerId, dow).forEach(function(bl) {
-      var startParts = bl.start_time.split(':');
-      var endParts   = bl.end_time.split(':');
-      var bs = parseInt(startParts[0])*60 + parseInt(startParts[1]);
-      var be = parseInt(endParts[0])*60   + parseInt(endParts[1]);
-      breakRanges.push({ start: bs, end: be });
+    // One-off blocked schedules
+    blockRows.filter(function(b){ return b.resource_id === gId; }).forEach(function(b) {
+      ranges.push({ start: parseTMins(b.start_time), end: parseTMins(b.end_time) });
     });
+    return ranges;
   }
-
-  var allBlockedRanges = blockedRanges.concat(breakRanges);
 
   var availableSlots = ALL_SLOTS.filter(function(slot) {
-    var slotStart = slotToMins(slot);
-    var slotEnd   = slotStart + myDuration;
-    // Check if this slot's full duration overlaps any blocked range
-    return !allBlockedRanges.some(function(range) {
-      return slotStart < range.end && slotEnd > range.start;
-    });
+    var candStart = slotToMins(slot);
+    var candEnd   = candStart + myDuration;
+    if (isAny) {
+      // Slot is available if AT LEAST ONE groomer in the pool is free for the full duration
+      return groomerPool.some(function(g) {
+        return !overlaps(rangesFor(g.id), candStart, candEnd);
+      });
+    } else {
+      return !overlaps(rangesFor(groomerId), candStart, candEnd);
+    }
   });
 
   if (!availableSlots.length) {
-    grid.innerHTML = '<p style="font-size:12px;color:var(--error);padding:8px 0">No available slots for this date and service. Please select a different date or stylist.</p>';
+    var msg = isAny
+      ? 'No available slots — all groomers are fully booked for this date. Please try a different date.'
+      : 'No available slots for this groomer on this date. Try a different date or choose "Any available".';
+    grid.innerHTML = '<p style="font-size:12px;color:var(--error);padding:8px 0">'+msg+'</p>';
     return;
   }
 
   grid.innerHTML = availableSlots.map(function(slot) {
-    return '<div class="timeslot" onclick="selectSlot(this)">' + slot + '</div>';
+    return '<div class="timeslot" onclick="selectSlot(this)">'+slot+'</div>';
   }).join('');
 }
 function onGroomDateChange() {
