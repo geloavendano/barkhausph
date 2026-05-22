@@ -110,9 +110,9 @@
   .addon-row.selected .addon-price { color: var(--blue); }
   .gender-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 4px; }
   .gender-btn.locked-opt { pointer-events:none; opacity:0.55; }
-  .gender-btn.selected.locked-opt { opacity:1; border-color:var(--blue); background:rgba(77,150,185,0.12); color:var(--blue); }
   .gender-btn { background: var(--surface); border: 1.5px solid var(--border); border-radius: 12px; padding: 12px; text-align: center; cursor: pointer; transition: all 0.2s; font-weight: 700; font-size: 13px; color: var(--cream-m); }
-  .gender-btn.selected { border-color: var(--blue); background: rgba(77,150,185,0.12); color: var(--blue); }
+  .gender-btn.selected { border-color: var(--yellow); background: rgba(255,206,88,0.08); color: var(--yellow); }
+  .gender-btn.selected.locked-opt { border-color: var(--blue); background: rgba(77,150,185,0.12); color: var(--blue); opacity: 1; }
   .temp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 4px; }
   .temp-btn { background: var(--surface); border: 1.5px solid var(--border); border-radius: 10px; padding: 10px 8px; text-align: center; cursor: pointer; transition: all 0.2s; font-size: 12px; font-weight: 600; color: var(--cream-m); line-height: 1.3; }
   .temp-btn.selected { border-color: var(--blue); background: rgba(77,150,185,0.12); color: var(--blue); }
@@ -155,6 +155,9 @@
   .summary-row:last-child { border-bottom: none; }
   .summary-key { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--mid); flex-shrink: 0; }
   .summary-val { font-size: 13px; color: var(--cream); font-weight: 600; text-align: right; }
+  .summary-group { margin-bottom: 10px; }
+  .summary-group-title { font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--yellow); font-weight: 700; padding: 10px 0 6px; border-bottom: 0.5px solid var(--border); margin-bottom: 2px; }
+  .summary-group:first-child .summary-group-title { padding-top: 0; }
   .price-breakdown { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px; margin-bottom: 16px; }
   .price-line { display: flex; justify-content: space-between; align-items: baseline; padding: 6px 0; border-bottom: 0.5px solid rgba(77,150,185,0.12); gap: 12px; }
   .price-line:last-child { border-bottom: none; }
@@ -182,6 +185,7 @@
   .btn-back { flex: 0 0 auto; padding: 14px 20px; background: var(--surface); border: 1px solid var(--border); border-radius: 50px; font-size: 13px; font-weight: 700; color: var(--cream-m); cursor: pointer; font-family: "Nunito", sans-serif; transition: background 0.2s; }
   .btn-next { flex: 1; padding: 14px; background: var(--yellow); color: var(--bg); border: none; border-radius: 50px; font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; font-family: "Nunito", sans-serif; transition: opacity 0.2s; }
   .btn-next:disabled { opacity: 0.35; cursor: not-allowed; }
+  .btn-next.btn-incomplete { opacity: 0.35; cursor: not-allowed; }
   .btn-submit { flex: 1; padding: 14px; background: var(--blue); color: #fff; border: none; border-radius: 50px; font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; font-family: "Nunito", sans-serif; }
   .section-label { font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--yellow); font-weight: 700; margin: 18px 0 10px; padding-bottom: 8px; border-bottom: 0.5px solid var(--border); }
   .info-box { background: rgba(77,150,185,0.08); border: 1px solid rgba(77,150,185,0.2); border-radius: 10px; padding: 12px 14px; font-size: 12px; color: var(--cream-m); line-height: 1.6; margin-bottom: 14px; }
@@ -466,6 +470,8 @@
           Please <strong>contact the branch directly</strong> for alternative options or to join the waitlist.
         </div>
       </div>
+      <!-- Step 3 rate estimate breakdown -->
+      <div id="hotelStep3Breakdown" style="display:none;margin-top:16px"></div>
     </div>
   </div>
 
@@ -622,8 +628,8 @@
       <label class="form-label">Play park consent</label>
       <div class="info-box" style="margin-bottom:10px">May we allow your pet to join the <strong>dog play park</strong> when space is available during their stay?</div>
       <div class="gender-grid">
-        <div class="gender-btn" id="playparkYes" onclick="selectPlaypark(this,'yes')">Yes, please!</div>
-        <div class="gender-btn" id="playparkNo" onclick="selectPlaypark(this,'no')">No thanks</div>
+        <div class="gender-btn playpark" id="playparkYes" onclick="selectPlaypark(this,'yes')">Yes, please!</div>
+        <div class="gender-btn playpark" id="playparkNo" onclick="selectPlaypark(this,'no')">No thanks</div>
       </div>
     </div>
     <div class="form-group">
@@ -637,10 +643,7 @@
         <strong>Note:</strong> Additional charges may apply for special care and will be assessed in-store.
       </div>
     </div>
-    <div class="price-total" id="hotelDetailsPriceTotal" style="display:none;margin-top:8px">
-      <span class="price-total-label">Estimated total</span>
-      <span class="price-total-val" id="hotelDetailsTotalVal">&#8369;0</span>
-    </div>
+    <div id="hotelDetailsPriceTotal" style="display:none;margin-top:8px"></div>
   </div>
 
   <!-- DAYCARE DETAILS (Notes/Temperament - before pet) -->
@@ -1465,6 +1468,7 @@ function silentValidateStep(step) {
       var sa = document.getElementById('seniorWaiverAck');
       if (!sa || !sa.classList.contains('checked')) return false;
     }
+    if (booking.isMember === true && !booking.memberValid) return false;
     return true;
   }
   if (step === 6) {
@@ -1500,7 +1504,12 @@ function silentValidateStep(step) {
 function refreshContinueBtn() {
   var btn = document.getElementById('btnNext');
   if (!btn || onSummaryScreen) return;
-  btn.disabled = !silentValidateStep(currentStep);
+  var valid = silentValidateStep(currentStep);
+  if (valid) {
+    btn.classList.remove('btn-incomplete');
+  } else {
+    btn.classList.add('btn-incomplete');
+  }
 }
 function updateBottomNavForSummary() {
   document.getElementById('btnBack').style.display = '';
@@ -1668,6 +1677,11 @@ function showPetPanel() {
 
   renderVaccines();
   checkSeniorWaiver();
+  // If no vaccine files have been uploaded, auto-check the "bring to venue" declaration
+  var _bv = document.getElementById('bringVaccines');
+  if (_bv && (!uploadedVaccineFiles || uploadedVaccineFiles.length === 0)) {
+    _bv.classList.add('checked');
+  }
 }
 
 // ── STEP 6 OWNER PANEL ──
@@ -2308,8 +2322,11 @@ function calcHotelTotal() {
   var cout = document.getElementById('hotelCheckout').value;
   var size = booking.petSize;
   var room = booking.hotelRoomType;
+  var step3el = document.getElementById('hotelStep3Breakdown');
+  var step4el = document.getElementById('hotelDetailsPriceTotal');
   if (!cin || !cout || !size || !room) {
-    document.getElementById('hotelDetailsPriceTotal').style.display = 'none';
+    if (step3el) step3el.style.display = 'none';
+    if (step4el) step4el.style.display = 'none';
     return;
   }
   var nights = Math.round((new Date(cout+' 00:00:00') - new Date(cin+' 00:00:00')) / 86400000);
@@ -2317,15 +2334,17 @@ function calcHotelTotal() {
 
   // Rate is determined by the cage type selected, not the pet's size category
   var rateSize = CAGE_RATE_SIZE[room] || size;
+  var roomLabel = booking.hotelRoomName || ROOM_LABELS[room] || room.replace(/_/g,' ');
 
-  var baseTotal = 0;
+  var wdCount = 0, weCount = 0, wdTotal = 0, weTotal = 0;
   for (var i = 0; i < nights; i++) {
     var d   = new Date(cin + ' 00:00:00'); d.setDate(d.getDate() + i);
     var dow = d.getDay();
     var isWe = (dow === 0 || dow === 5 || dow === 6);
-    var rates = isWe ? HOTEL_RATES.weekend : HOTEL_RATES.weekday;
-    baseTotal += rates[rateSize] || 0;
+    if (isWe) { weCount++; weTotal += HOTEL_RATES.weekend[rateSize]||0; }
+    else       { wdCount++; wdTotal += HOTEL_RATES.weekday[rateSize]||0; }
   }
+  var baseTotal = wdTotal + weTotal;
   booking.hotelBaseTotal = baseTotal;
 
   // Save drop-off time so it survives navigating back to this step
@@ -2342,11 +2361,48 @@ function calcHotelTotal() {
   var discount = booking.memberValid ? Math.round(subtotal * MEMBER_DISCOUNT.hotel) : 0;
   var total    = subtotal - discount;
 
-  var el   = document.getElementById('hotelDetailsPriceTotal');
-  var html = '\u20b1' + total.toLocaleString();
-  if (discount > 0) html = '<span style="text-decoration:line-through;opacity:0.5;font-size:14px">\u20b1' + subtotal.toLocaleString() + '</span> \u20b1' + total.toLocaleString();
-  document.getElementById('hotelDetailsTotalVal').innerHTML = html;
-  el.style.display = 'flex';
+  // \u2500\u2500 Step 3 estimate breakdown (no late fee yet) \u2500\u2500
+  if (step3el) {
+    var s3html = '<div class="price-breakdown">';
+    if (wdCount > 0) {
+      var wdRate = HOTEL_RATES.weekday[rateSize]||0;
+      s3html += '<div class="price-line component"><span class="price-line-label">'+wdCount+' weekday night'+(wdCount!==1?'s':'')+' &times; &#8369;'+wdRate.toLocaleString()+' ('+roomLabel+')</span><span class="price-line-val">&#8369;'+wdTotal.toLocaleString()+'</span></div>';
+    }
+    if (weCount > 0) {
+      var weRate = HOTEL_RATES.weekend[rateSize]||0;
+      s3html += '<div class="price-line component"><span class="price-line-label">'+weCount+' weekend/holiday night'+(weCount!==1?'s':'')+' &times; &#8369;'+weRate.toLocaleString()+' ('+roomLabel+')</span><span class="price-line-val">&#8369;'+weTotal.toLocaleString()+'</span></div>';
+    }
+    s3html += '<div class="price-line subtotal-line"><span class="price-line-label">Est. total (excl. late pickup)</span><span class="price-line-val">&#8369;'+baseTotal.toLocaleString()+'</span></div>';
+    s3html += '</div>';
+    step3el.innerHTML = s3html;
+    step3el.style.display = '';
+  }
+
+  // \u2500\u2500 Step 4 full breakdown (includes late pickup fee) \u2500\u2500
+  if (step4el) {
+    var s4html = '<div class="price-breakdown">';
+    if (wdCount > 0) {
+      var wdRate2 = HOTEL_RATES.weekday[rateSize]||0;
+      s4html += '<div class="price-line component"><span class="price-line-label">'+wdCount+' weekday night'+(wdCount!==1?'s':'')+' &times; &#8369;'+wdRate2.toLocaleString()+' ('+roomLabel+')</span><span class="price-line-val">&#8369;'+wdTotal.toLocaleString()+'</span></div>';
+    }
+    if (weCount > 0) {
+      var weRate2 = HOTEL_RATES.weekend[rateSize]||0;
+      s4html += '<div class="price-line component"><span class="price-line-label">'+weCount+' weekend/holiday night'+(weCount!==1?'s':'')+' &times; &#8369;'+weRate2.toLocaleString()+' ('+roomLabel+')</span><span class="price-line-val">&#8369;'+weTotal.toLocaleString()+'</span></div>';
+    }
+    if (booking.hotelLateTotal > 0) {
+      s4html += '<div class="price-line component"><span class="price-line-label">Late pick-up fee ('+lateHours+' hr'+(lateHours!==1?'s':'')+')</span><span class="price-line-val">&#8369;'+booking.hotelLateTotal.toLocaleString()+'</span></div>';
+    }
+    s4html += '<div class="price-line subtotal-line"><span class="price-line-label">Subtotal</span><span class="price-line-val">&#8369;'+subtotal.toLocaleString()+'</span></div>';
+    if (discount > 0) {
+      var discPct = Math.round(MEMBER_DISCOUNT.hotel * 100);
+      s4html += '<div class="price-line"><span class="price-line-label">Member discount ('+discPct+'%)</span><span class="price-line-val discount">-&#8369;'+discount.toLocaleString()+'</span></div>';
+    }
+    s4html += '<div class="price-line total-line"><span class="price-line-label">Estimated total</span><span class="price-line-val">&#8369;'+total.toLocaleString()+'</span></div>';
+    s4html += '</div>';
+    step4el.innerHTML = s4html;
+    step4el.style.display = '';
+  }
+
   updateNavTotal();
 }
 
@@ -2543,7 +2599,7 @@ async function validateMemberId() {
         return (p.name||'').trim().replace(/\s+/g,' ').toLowerCase();
       });
       if (petInput.length > 0 && petList.length > 0 && petList.indexOf(petInput) === -1) {
-        msg.textContent = 'Pet name does not match our records.'; msg.style.color = 'var(--error)';
+        msg.textContent = 'Member not found.'; msg.style.color = 'var(--error)';
         booking.memberValid = false;
       } else {
         booking.memberValid = true; booking.membershipId = idInput;
@@ -2557,6 +2613,7 @@ async function validateMemberId() {
     booking.memberValid = false;
   }
   refreshAllTotals();
+  refreshContinueBtn();
 }
 function refreshAllTotals() {
   var svc = booking.service;
@@ -2693,6 +2750,9 @@ function validateStep5() {
       alert('Please agree to the senior/medical pet acknowledgment to proceed.'); return false;
     }
   }
+  if (booking.isMember === true && !booking.memberValid) {
+    alert('Please enter a valid Membership ID, or select “No” if you are not a member.'); return false;
+  }
   return true;
 }
 function validateStep6() {
@@ -2796,84 +2856,101 @@ function buildSummary() {
   else if (svc === 'hotel') schedStr = 'Check-in: ' + (booking.hotelCheckin||'-') + ' / Check-out: ' + (booking.hotelCheckout||'-');
   else if (svc === 'daycare') schedStr = booking.daycareDate || '-';
   else if (svc === 'studio') schedStr = (booking.studioDate||'-') + ' at ' + (booking.studioSlot||'-');
-  var details = [
-    ['Branch',   locLabels[booking.location]||'-'],
-    ['Service',  svcLabels[svc]||'-'],
-    ['Schedule', schedStr||'-'],
-  ];
-  // Service-specific details
-  if (svc === 'grooming' && booking.groomService) {
-    var svcSpec = GROOM_SERVICES.find(function(s){return s.key===booking.groomService;});
-    if (svcSpec) details.push(['Grooming service', svcSpec.name]);
-    var addonNames = Object.keys(booking.selectedAddons).map(function(k) {
-      var a = ADDONS.find(function(x){return x.key===k;}); return a ? a.name : k;
-    });
-    if (addonNames.length) details.push(['Add-ons', addonNames.join(', ')]);
-    if (booking.preferredStylist && booking.preferredStylist !== 'any') details.push(['Groomer', booking.preferredStylist]);
-    if (booking.groomNotes) details.push(['Grooming notes', booking.groomNotes]);
-  }
+  // \u2500\u2500 Build grouped summary \u2500\u2500
+  var groups = [];
+  function grp(title) { var g={title:title,rows:[]}; groups.push(g); return g; }
+  function row(g,k,v) { g.rows.push([k,v]); }
+
+  // Group 1: Booking
+  var gBook = grp('Booking');
+  row(gBook,'Branch', locLabels[booking.location]||'-');
+  row(gBook,'Service', svcLabels[svc]||'-');
+
+  // Group 2: Schedule
+  var gSched = grp('Schedule');
+  row(gSched,'Schedule', schedStr||'-');
   if (svc === 'hotel') {
-    if (booking.hotelRoomName) details.push(['Room', booking.hotelRoomName]);
-    else if (booking.hotelRoomType) details.push(['Room', ROOM_LABELS[booking.hotelRoomType] || booking.hotelRoomType.replace(/_/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase();})]);
+    if (booking.hotelRoomName) row(gSched,'Room', booking.hotelRoomName);
+    else if (booking.hotelRoomType) row(gSched,'Room', ROOM_LABELS[booking.hotelRoomType] || booking.hotelRoomType.replace(/_/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase();}));
     if (booking.hotelDropoffTime) {
       var dH = parseInt(booking.hotelDropoffTime);
       var dLabel = dH < 12 ? dH+':00 AM' : (dH===12?'12:00 PM':(dH-12)+':00 PM');
-      details.push(['Drop-off time', dLabel]);
+      row(gSched,'Drop-off time', dLabel);
     }
-    if (booking.petSize !== 'cat') details.push(['Play park', booking.playparkConsent === 'yes' ? 'Yes' : 'No']);
-    if (booking.hotelPickupTime) details.push(['Pick-up time', booking.hotelPickupTime]);
+    if (booking.hotelPickupTime) row(gSched,'Pick-up time', booking.hotelPickupTime);
+    if (booking.petSize !== 'cat') row(gSched,'Play park', booking.playparkConsent === 'yes' ? 'Yes' : 'No');
+  }
+  if (svc === 'grooming' && booking.groomService) {
+    var svcSpec = GROOM_SERVICES.find(function(s){return s.key===booking.groomService;});
+    if (svcSpec) row(gSched,'Grooming service', svcSpec.name);
+    var addonNames = Object.keys(booking.selectedAddons).map(function(k) {
+      var a = ADDONS.find(function(x){return x.key===k;}); return a ? a.name : k;
+    });
+    if (addonNames.length) row(gSched,'Add-ons', addonNames.join(', '));
+    if (booking.preferredStylist && booking.preferredStylist !== 'any') row(gSched,'Groomer', booking.preferredStylist);
+    if (booking.groomNotes) row(gSched,'Grooming notes', booking.groomNotes);
   }
   if (svc === 'daycare') {
     if (booking.daycareOpenTime) {
-      details.push(['Drop-off', 'Open time']); details.push(['Pick-up', 'Open time']);
+      row(gSched,'Drop-off', 'Open time'); row(gSched,'Pick-up', 'Open time');
     } else if (booking.daycareDropoffText || booking.daycareDropoffHour) {
-      details.push(['Drop-off', booking.daycareDropoffText || (booking.daycareDropoffHour+':00')]);
-      details.push(['Pick-up',  booking.daycarePickupText  || (booking.daycarePickupHour+':00')]);
+      row(gSched,'Drop-off', booking.daycareDropoffText || (booking.daycareDropoffHour+':00'));
+      row(gSched,'Pick-up',  booking.daycarePickupText  || (booking.daycarePickupHour+':00'));
     }
-    if (booking.daycareNotes) details.push(['Daycare notes', booking.daycareNotes]);
+    if (booking.daycareNotes) row(gSched,'Daycare notes', booking.daycareNotes);
   }
-  // Pet details
-  details.push(['Pet name',      booking.petName||'-']);
-  details.push(['Animal',        booking.petAnimal ? (booking.petAnimal.charAt(0).toUpperCase()+booking.petAnimal.slice(1)) : '-']);
-  details.push(['Sex',           booking.petGender ? (booking.petGender.charAt(0).toUpperCase()+booking.petGender.slice(1)) : '-']);
-  details.push(['Breed',         booking.petBreed||'-']);
-  details.push(['Age',           booking.petAge ? (booking.petAge + ' ' + (booking.petAgeUnit||'')) : '-']);
-  details.push(['Size',          booking.petSize ? PET_SIZE_LABELS[booking.petSize] : '-']);
-  details.push(['Temperament',   booking.petTemperament ? (tempLabels[booking.petTemperament]||booking.petTemperament) : '-']);
-  details.push(['Medical notes', booking.petMedical && booking.petMedical.trim() ? booking.petMedical.trim() : 'None']);
-  // Vaccine records
+
+  // Group 3: Pet details
+  var gPet = grp('Pet Details');
+  row(gPet,'Name',        booking.petName||'-');
+  row(gPet,'Animal',      booking.petAnimal ? (booking.petAnimal.charAt(0).toUpperCase()+booking.petAnimal.slice(1)) : '-');
+  row(gPet,'Sex',         booking.petGender ? (booking.petGender.charAt(0).toUpperCase()+booking.petGender.slice(1)) : '-');
+  row(gPet,'Breed',       booking.petBreed||'-');
+  row(gPet,'Age',         booking.petAge ? (booking.petAge + ' ' + (booking.petAgeUnit||'')) : '-');
+  row(gPet,'Size',        booking.petSize ? PET_SIZE_LABELS[booking.petSize] : '-');
+  row(gPet,'Temperament', booking.petTemperament ? (tempLabels[booking.petTemperament]||booking.petTemperament) : '-');
+  row(gPet,'Medical notes', booking.petMedical && booking.petMedical.trim() ? booking.petMedical.trim() : 'None');
+  if (booking.memberValid && booking.membershipId) {
+    row(gPet,'Membership', booking.membershipId + ' \u2713');
+  } else {
+    row(gPet,'Membership', 'None');
+  }
+
+  // Group 4: Health & Care
+  var gHealth = grp('Health & Care');
   var vaccineFileCount = uploadedVaccineFiles ? uploadedVaccineFiles.length : 0;
   var bringVacc = document.getElementById('bringVaccines');
   var vaccStatus = vaccineFileCount > 0
     ? (vaccineFileCount + ' file' + (vaccineFileCount>1?'s':'') + ' uploaded')
     : (bringVacc && bringVacc.classList.contains('checked') ? 'Will bring to venue' : 'Not provided');
-  details.push(['Vaccine records', vaccStatus]);
-  // Hotel-specific: vet & emergency contact
+  row(gHealth,'Vaccine records', vaccStatus);
   if (svc === 'hotel') {
     if (booking.vetClinic || booking.vetContact) {
-      details.push(['Vet clinic',   booking.vetClinic||'-']);
-      details.push(['Vet contact',  booking.vetContact||'-']);
-      if (booking.vetAddress) details.push(['Vet address', booking.vetAddress]);
+      row(gHealth,'Vet clinic',  booking.vetClinic||'-');
+      row(gHealth,'Vet contact', booking.vetContact||'-');
+      if (booking.vetAddress) row(gHealth,'Vet address', booking.vetAddress);
     }
     if (booking.emergencyName || booking.emergencyPhone) {
-      details.push(['Emergency contact', booking.emergencyName||'-']);
-      details.push(['Emergency phone',   booking.emergencyPhone||'-']);
+      row(gHealth,'Emergency contact', booking.emergencyName||'-');
+      row(gHealth,'Emergency phone',   booking.emergencyPhone||'-');
     }
-    if (booking.hotelFeeding) details.push(['Feeding instructions', booking.hotelFeeding]);
-    if (booking.hotelMeds)    details.push(['Medications', booking.hotelMeds]);
+    if (booking.hotelFeeding) row(gHealth,'Feeding instructions', booking.hotelFeeding);
+    if (booking.hotelMeds)    row(gHealth,'Medications', booking.hotelMeds);
   }
-  // Owner details
-  details.push(['Owner',    ((booking.ownerFirst||'')+' '+(booking.ownerLast||'')).trim()||'-']);
-  details.push(['Email',    booking.ownerEmail||'-']);
-  details.push(['Mobile',   booking.ownerPhone||'-']);
-  // Membership \u2014 always show
-  if (booking.memberValid && booking.membershipId) {
-    details.push(['Membership', booking.membershipId + ' \u2713']);
-  } else {
-    details.push(['Membership', 'None']);
-  }
-  document.getElementById('bookingDetailsSummary').innerHTML = details.map(function(r) {
+
+  // Group 5: Owner details
+  var gOwner = grp('Owner Details');
+  row(gOwner,'Name',   ((booking.ownerFirst||'')+' '+(booking.ownerLast||'')).trim()||'-');
+  row(gOwner,'Email',  booking.ownerEmail||'-');
+  row(gOwner,'Mobile', booking.ownerPhone||'-');
+
+  function renderRow(r) {
     return '<div class="summary-row"><span class="summary-key">'+r[0]+'</span><span class="summary-val">'+r[1]+'</span></div>';
+  }
+  document.getElementById('bookingDetailsSummary').innerHTML = groups.map(function(g) {
+    if (!g.rows.length) return '';
+    return '<div class="summary-group"><div class="summary-group-title">'+g.title+'</div>' +
+      g.rows.map(renderRow).join('') + '</div>';
   }).join('');
   // \u2500\u2500 Price breakdown \u2500\u2500
   var lines = [];
@@ -3178,27 +3255,28 @@ function submitBooking() {
     body: JSON.stringify(payload),
   })
   .then(function(res) {
-    var dbg = document.getElementById('payDebug');
-    if (dbg) dbg.textContent = 'Status: ' + res.status;
+    if (!res.ok) {
+      // Non-2xx: throw so the .catch() path handles recovery uniformly
+      return res.text().then(function(body) {
+        throw new Error('Server error ' + res.status + (body ? ': ' + body.slice(0, 120) : ''));
+      });
+    }
     return res.json();
   })
   .then(function(data) {
     clearTimeout(payTimeout);
     if (data.error) {
+      _submitting = false;
       buildSummary();
       updateBottomNavForSummary();
       showToast('Payment error: ' + data.error, 6000);
-      btn.textContent = 'Confirm Booking';
-      btn.disabled = false;
       return;
     }
     if (!data.checkout_url) {
+      _submitting = false;
       buildSummary();
       updateBottomNavForSummary();
-      _submitting = false;
-      showToast('No checkout URL returned. Check edge function logs.', 6000);
-      btn.textContent = 'Confirm Booking';
-      btn.disabled = false;
+      showToast('No checkout URL returned. Please try again or contact the branch.', 6000);
       return;
     }
     storePaymentRef(data.ref_number);
