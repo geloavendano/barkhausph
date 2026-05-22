@@ -1060,6 +1060,27 @@
   </div>
 </div>
 
+<!-- PAYMENT RETURN (CANCELLED / FAILED) -->
+<div class="success-screen" id="payReturnScreen" style="display:none">
+  <div class="success-icon">😕</div>
+  <h2 class="success-title">Payment not completed</h2>
+  <p class="success-msg">No worries — your booking details are saved below.</p>
+  <div class="success-ref">
+    <div class="success-ref-label">Booking Reference</div>
+    <div class="success-ref-num" id="payReturnRef">BH-000000</div>
+  </div>
+  <div class="info-box" style="margin:16px 0">
+    ⏳ Your booking slot is held for up to <strong>15 minutes</strong>. If payment is not completed in time, your spot will be automatically released.
+  </div>
+  <div class="summary-card" id="payReturnDetails"></div>
+  <div class="price-breakdown" id="payReturnPriceBreakdown"></div>
+  <div style="margin-top:24px;display:flex;flex-direction:column;gap:12px">
+    <button class="btn-next" id="btnRetryPayment" onclick="retryPayment()" style="width:100%">Retry Payment</button>
+    <button id="btnEditBooking" onclick="editAfterCancelledPayment()" style="display:block;width:100%;background:none;border:1.5px solid var(--border);border-radius:12px;padding:13px 20px;color:var(--mid);font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;transition:all 0.2s">← Edit booking details</button>
+  </div>
+  <p id="payReturnStatus" style="font-size:12px;color:var(--mid);text-align:center;margin-top:12px;line-height:1.6"></p>
+</div>
+
 <!-- SUCCESS -->
 <div class="success-screen" id="successScreen">
   <div class="success-icon">&#128062;</div>
@@ -1618,6 +1639,13 @@ function showStep3Panel() {
   document.getElementById('s3title').textContent    = cfg.step3.title;
   document.getElementById('s3subtitle').textContent = cfg.step3.subtitle;
   document.getElementById(cfg.step3.sectionId).style.display = '';
+  // If returning to hotel step 3 with dates already set (e.g. after cancelled payment edit),
+  // reload room availability so the grid reflects current bookings.
+  if (booking.service === 'hotel') {
+    var _cin  = document.getElementById('hotelCheckin');
+    var _cout = document.getElementById('hotelCheckout');
+    if (_cin && _cout && _cin.value && _cout.value) loadRoomAvailability();
+  }
 }
 
 // ── STEP 4 PANEL ──
@@ -1634,7 +1662,15 @@ function showStep4Panel() {
     populateHotelDropoffTimes();
     var _ppGroup = document.getElementById('playparkYes') ? document.getElementById('playparkYes').closest('.form-group') : null;
     if (_ppGroup) _ppGroup.style.display = booking.petSize === 'cat' ? 'none' : '';
-    if (booking.petSize === 'cat') booking.playparkConsent = null;
+    if (booking.petSize === 'cat') {
+      booking.playparkConsent = null;
+    } else {
+      // Re-highlight playpark buttons from restored booking state
+      var _ppY = document.getElementById('playparkYes');
+      var _ppN = document.getElementById('playparkNo');
+      if (_ppY) _ppY.classList.toggle('selected', booking.playparkConsent === 'yes');
+      if (_ppN) _ppN.classList.toggle('selected', booking.playparkConsent === 'no');
+    }
   }
 }
 
@@ -1987,6 +2023,13 @@ async function renderGroomSlots() {
   grid.innerHTML = availableSlots.map(function(slot) {
     return '<div class="timeslot" onclick="selectSlot(this)">'+slot+'</div>';
   }).join('');
+  // Re-highlight the previously selected slot (e.g. after returning from cancelled payment)
+  if (booking.groomSlot || booking.studioSlot) {
+    var _prevSlot = booking.groomSlot || booking.studioSlot;
+    grid.querySelectorAll('.timeslot').forEach(function(t) {
+      if (t.textContent.trim() === _prevSlot) t.classList.add('selected');
+    });
+  }
 }
 function onGroomDateChange() {
   var val = document.getElementById('groomDate').value;
@@ -3122,10 +3165,16 @@ function showToast(msg, duration) {
       }
     } catch(e) {}
     try { sessionStorage.removeItem('bk_pending_ref'); } catch(e) {}
-  } else if (status === 'failed') {
-    setTimeout(function() {
-      showToast('Payment was not completed. Please try again.', 5000);
-    }, 800);
+  } else if (status === 'cancelled' || status === 'failed') {
+    var _retSnap = null;
+    try { _retSnap = JSON.parse(sessionStorage.getItem('bk_snapshot') || 'null'); } catch(e) {}
+    if (_retSnap) {
+      showPayReturnScreen(_retSnap, ref || _retSnap.refNumber);
+    } else {
+      setTimeout(function() {
+        showToast('Payment was not completed. Please try again.', 5000);
+      }, 800);
+    }
   }
 })();
 
@@ -3168,6 +3217,298 @@ function confirmPaymentReturn(ref) {
   if (ss) { ss.style.display = ''; ss.classList.add('active'); }
   var rn = document.getElementById('refNum');
   if (rn) rn.textContent = ref;
+}
+
+// ── PAYMENT RETURN SCREEN (CANCELLED / FAILED) ──
+
+function showPayReturnScreen(snap, ref) {
+  // Hide all step panels, progress, and bottom nav
+  document.querySelectorAll('.step-panel, #successScreen').forEach(function(el) { el.classList.remove('active'); });
+  var pw = document.getElementById('progressWrap');
+  var bn = document.getElementById('bottomNav');
+  var hd = document.querySelector('.booking-header');
+  var pr = document.getElementById('payReturnScreen');
+  if (pw) pw.style.display = 'none';
+  if (bn) bn.style.display = 'none';
+  if (hd) hd.style.display = '';        // keep header visible
+  if (pr) pr.style.display = '';
+
+  // Store snap in memory for retry/edit actions
+  window._payReturnSnap = snap;
+
+  // Set booking reference
+  var refEl = document.getElementById('payReturnRef');
+  if (refEl) refEl.textContent = ref || snap.refNumber || 'BH-000000';
+
+  // Build details rows
+  var _dRows = [
+    ['Branch', snap.location||'-'],
+    ['Service', snap.service||'-'],
+    ['Schedule', snap.schedule||'-']
+  ];
+  if (snap.groomServiceName) _dRows.push(['Grooming service', snap.groomServiceName]);
+  if (snap.addons && snap.addons.length) _dRows.push(['Add-ons', snap.addons.join(', ')]);
+  if (snap.preferredStylist && snap.preferredStylist !== 'any') _dRows.push(['Groomer', snap.preferredStylist]);
+  if (snap.hotelRoomName) _dRows.push(['Room', snap.hotelRoomName]);
+  else if (snap.hotelRoomType) _dRows.push(['Room', (ROOM_LABELS && ROOM_LABELS[snap.hotelRoomType]) || snap.hotelRoomType.replace(/_/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase();})]);
+  if (snap.hotelDropoffTime) {
+    var _dH = parseInt(snap.hotelDropoffTime);
+    var _dL = _dH < 12 ? _dH+':00 AM' : (_dH===12 ? '12:00 PM' : (_dH-12)+':00 PM');
+    _dRows.push(['Drop-off time', _dL]);
+  }
+  if (snap.hotelPickupTime) _dRows.push(['Pick-up time', snap.hotelPickupTime]);
+  if (snap.daycareOpenTime) {
+    _dRows.push(['Drop-off', 'Open time']); _dRows.push(['Pick-up', 'Open time']);
+  } else if (snap.daycareDropoffText) {
+    _dRows.push(['Drop-off', snap.daycareDropoffText]); _dRows.push(['Pick-up', snap.daycarePickupText||'-']);
+  }
+  _dRows.push(['Pet', snap.petName||'-']);
+  _dRows.push(['Breed', snap.petBreed||'-']);
+  _dRows.push(['Size', snap.petSize||'-']);
+  _dRows.push(['Owner', (snap.ownerName||'-').trim()]);
+  _dRows.push(['Mobile', snap.mobile||'-']);
+
+  var detailsEl = document.getElementById('payReturnDetails');
+  if (detailsEl) detailsEl.innerHTML = _dRows.map(function(r) {
+    return '<div class="summary-row"><span class="summary-key">'+r[0]+'</span><span class="summary-val">'+r[1]+'</span></div>';
+  }).join('');
+
+  // Build price breakdown
+  var _pl = [];
+  if (snap.subtotal > 0) _pl.push('<div class="summary-row"><span class="summary-key">Subtotal</span><span class="summary-val">&#8369;'+snap.subtotal.toLocaleString()+'</span></div>');
+  if (snap.discountAmount > 0) _pl.push('<div class="summary-row"><span class="summary-key">Member discount</span><span class="summary-val" style="color:var(--success)">&#8722;&#8369;'+snap.discountAmount.toLocaleString()+'</span></div>');
+  if (snap.convenienceFee > 0) _pl.push('<div class="summary-row"><span class="summary-key">Convenience fee</span><span class="summary-val">&#8369;'+snap.convenienceFee.toLocaleString()+'</span></div>');
+  _pl.push('<div class="summary-row" style="font-weight:700;font-size:15px;border-top:1px solid var(--border);padding-top:8px;margin-top:4px"><span class="summary-key">Total</span><span class="summary-val">&#8369;'+snap.total.toLocaleString()+'</span></div>');
+  var priceEl = document.getElementById('payReturnPriceBreakdown');
+  if (priceEl) priceEl.innerHTML = _pl.join('');
+}
+
+// Re-submit payment for the same booking details
+async function retryPayment() {
+  var snap = window._payReturnSnap;
+  if (!snap || !snap.rawPayload) {
+    showToast('Booking data not found. Please start a new booking.', 5000);
+    return;
+  }
+  var btn      = document.getElementById('btnRetryPayment');
+  var editBtn  = document.getElementById('btnEditBooking');
+  var statusEl = document.getElementById('payReturnStatus');
+  if (btn)     { btn.disabled = true; btn.textContent = 'Processing...'; }
+  if (editBtn) { editBtn.disabled = true; }
+  if (statusEl) statusEl.textContent = 'Connecting to payment gateway…';
+  try {
+    var retryPayload = Object.assign({}, snap.rawPayload, {
+      existing_booking_id: snap.bookingId || null,
+      retry: true
+    });
+    var res  = await fetch(CREATE_PAYMENT_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+        'apikey':        SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify(retryPayload),
+    });
+    var data = await res.json();
+    if (data.conflict) {
+      if (btn)     { btn.disabled = false; btn.textContent = 'Retry Payment'; }
+      if (editBtn) { editBtn.disabled = false; }
+      if (statusEl) statusEl.textContent = '';
+      showToast('⚠️ This slot is no longer available. Please edit your booking to choose another.', 7000);
+      return;
+    }
+    if (data.error || !data.checkout_url) {
+      if (btn)     { btn.disabled = false; btn.textContent = 'Retry Payment'; }
+      if (editBtn) { editBtn.disabled = false; }
+      if (statusEl) statusEl.textContent = data.error || 'No checkout URL returned. Please try again.';
+      return;
+    }
+    // Update snapshot ref if a new booking was created
+    if (data.ref_number) {
+      snap.refNumber  = data.ref_number;
+      snap.bookingId  = data.booking_id || snap.bookingId;
+      var refEl = document.getElementById('payReturnRef');
+      if (refEl) refEl.textContent = data.ref_number;
+      try { sessionStorage.setItem('bk_snapshot', JSON.stringify(snap)); } catch(e) {}
+    }
+    storePaymentRef(data.ref_number || snap.refNumber);
+    window.location.href = data.checkout_url;
+  } catch(err) {
+    if (btn)     { btn.disabled = false; btn.textContent = 'Retry Payment'; }
+    if (editBtn) { editBtn.disabled = false; }
+    if (statusEl) statusEl.textContent = 'Connection error — please check your internet and try again.';
+  }
+}
+
+// Cancel an existing pending booking in Supabase (to free inventory)
+async function cancelPendingBooking(bookingId) {
+  if (!bookingId) return false;
+  try {
+    var res = await fetch(SUPABASE_URL + '/rest/v1/bookings?id=eq.' + encodeURIComponent(bookingId), {
+      method: 'PATCH',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+        'apikey':        SUPABASE_ANON_KEY,
+        'Prefer':        'return=minimal',
+      },
+      body: JSON.stringify({ status: 'cancelled' }),
+    });
+    return res.ok || res.status === 204;
+  } catch(e) {
+    return false;
+  }
+}
+
+// Repopulate DOM form inputs from a restored booking state object
+// so that collectAllState() reads correctly after restoration.
+function populateDOMFromBooking(bk) {
+  function setVal(id, val) {
+    var el = document.getElementById(id);
+    if (el && val != null && val !== '') el.value = val;
+  }
+  // Date inputs
+  setVal('hotelCheckin',  bk.hotelCheckin);
+  setVal('hotelCheckout', bk.hotelCheckout);
+  setVal('groomDate',     bk.groomDate);
+  setVal('daycareDate',   bk.daycareDate);
+  setVal('studioDate',    bk.studioDate);
+  // Hotel times (dropoff = numeric hour value; pickup = numeric hour option value)
+  setVal('hotelDropoffTime', bk.hotelDropoffTime);
+  setVal('hotelPickupTime',  bk.hotelPickupHour != null ? bk.hotelPickupHour : 14);
+  // Hotel care notes
+  setVal('hotelFeeding',    bk.hotelFeeding);
+  setVal('hotelMeds',       bk.hotelMeds);
+  setVal('vetClinic',       bk.vetClinic);
+  setVal('vetContact',      bk.vetContact);
+  setVal('vetAddress',      bk.vetAddress);
+  setVal('emergencyName',   bk.emergencyName);
+  setVal('emergencyPhone',  bk.emergencyPhone);
+  // Daycare times (option values are numeric hours)
+  setVal('daycareDropoff', bk.daycareDropoffHour != null ? bk.daycareDropoffHour : '');
+  setVal('daycarePickup',  bk.daycarePickupHour  != null ? bk.daycarePickupHour  : '');
+  setVal('daycareNotes',   bk.daycareNotes);
+  // Grooming
+  setVal('groomNotes', bk.groomNotes);
+  // Pet details
+  setVal('petName',    bk.petName);
+  setVal('petBreed',   bk.petBreed);
+  setVal('petAgeNum',  bk.petAge);
+  setVal('petAgeUnit', bk.petAgeUnit);
+  setVal('petMedical', bk.petMedical);
+  // Owner details
+  setVal('ownerFirst', bk.ownerFirst);
+  setVal('ownerLast',  bk.ownerLast);
+  setVal('ownerEmail', bk.ownerEmail);
+  setVal('ownerPhone', bk.ownerPhone);
+  // ownerSource — handle "Other: ..." format stored by collectAllState
+  var rawSrc = bk.ownerSource || '';
+  if (rawSrc.startsWith('Other: ')) {
+    setVal('ownerSource', 'Other');
+    setVal('ownerSourceOther', rawSrc.slice(7));
+    var otherFld = document.getElementById('ownerSourceOther');
+    if (otherFld) otherFld.style.display = '';
+  } else {
+    setVal('ownerSource', rawSrc);
+  }
+}
+
+// User chose to edit their booking after a cancelled payment
+async function editAfterCancelledPayment() {
+  var snap = window._payReturnSnap;
+  if (!snap) {
+    showToast('Booking data not found. Please start a new booking.', 5000);
+    return;
+  }
+  var btn      = document.getElementById('btnEditBooking');
+  var retryBtn = document.getElementById('btnRetryPayment');
+  var statusEl = document.getElementById('payReturnStatus');
+  if (btn)      { btn.disabled = true; btn.textContent = 'Loading…'; }
+  if (retryBtn) { retryBtn.disabled = true; }
+  if (statusEl) statusEl.textContent = 'Cancelling previous booking to free your slot…';
+
+  // Cancel the old pending booking in Supabase so inventory is released
+  var cancelled = await cancelPendingBooking(snap.bookingId);
+  if (statusEl) statusEl.textContent = cancelled
+    ? ''
+    : 'Note: previous booking will auto-release within 15 minutes.';
+
+  // Clear the pending payment reference from session storage
+  try { sessionStorage.removeItem('bk_pending_ref'); } catch(e) {}
+  // Keep bk_snapshot in case something goes wrong — it will be overwritten on next submit
+
+  // Restore the booking object from the saved state
+  if (snap.bookingState) {
+    Object.assign(booking, snap.bookingState);
+  }
+
+  // Determine and restore currentStep to the last step of the flow (before summary)
+  var flow = booking.service ? FLOWS[booking.service] : null;
+  currentStep = flow ? flow.steps.length : 7;
+
+  // Repopulate DOM form fields so collectAllState() reads the right values
+  populateDOMFromBooking(booking);
+
+  // Restore playpark button selection in hotel step 4
+  var ppY = document.getElementById('playparkYes');
+  var ppN = document.getElementById('playparkNo');
+  if (ppY && ppN) {
+    ppY.classList.toggle('selected', booking.playparkConsent === 'yes');
+    ppN.classList.toggle('selected', booking.playparkConsent === 'no');
+  }
+
+  // Restore pet gender button selection (buttons use onclick="selectGender(this,'male')" style)
+  if (booking.petGender) {
+    document.querySelectorAll('#petGenderGrid .gender-btn').forEach(function(b) {
+      var oc = b.getAttribute('onclick') || '';
+      b.classList.toggle('selected', oc.indexOf("'"+booking.petGender+"'") >= 0);
+    });
+  }
+  // Restore temperament button selection
+  if (booking.petTemperament) {
+    document.querySelectorAll('.temp-btn').forEach(function(b) {
+      var oc = b.getAttribute('onclick') || '';
+      b.classList.toggle('selected', oc.indexOf("'"+booking.petTemperament+"'") >= 0);
+    });
+  }
+  // Restore membership button selection
+  var memYes = document.getElementById('memberYes');
+  var memNo  = document.getElementById('memberNo');
+  if (memYes && memNo) {
+    memYes.classList.toggle('selected', booking.isMember === true);
+    memNo.classList.toggle('selected',  booking.isMember === false);
+  }
+  // Restore waiver checkbox states from saved payload
+  var _rp = snap.rawPayload || {};
+  function _restoreCheck(id, val) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    if (val)  el.classList.add('checked');
+    else      el.classList.remove('checked');
+  }
+  var _svc = booking.service;
+  if (_svc === 'grooming') _restoreCheck('waiverGeneralGrooming', _rp.waiverGeneral);
+  if (_svc === 'hotel')    _restoreCheck('waiverGeneralHotel',    _rp.waiverGeneral);
+  if (_svc === 'daycare')  _restoreCheck('waiverGeneralDaycare',  _rp.waiverGeneral);
+  if (_svc === 'studio')   _restoreCheck('waiverStudio',          _rp.waiverStudio);
+  _restoreCheck('waiverVaccineDecl',  _rp.waiverVaccine);
+  _restoreCheck('waiverMedia',        _rp.waiverMedia);
+  _restoreCheck('waiverPlaypark',     _rp.waiverPlaypark);
+  _restoreCheck('seniorWaiver',       _rp.waiverSeniorMedical);
+
+  // Hide payReturnScreen; restore normal UI chrome
+  var pr = document.getElementById('payReturnScreen');
+  var pw = document.getElementById('progressWrap');
+  var bn = document.getElementById('bottomNav');
+  if (pr) pr.style.display = 'none';
+  if (pw) pw.style.display = '';
+  if (bn) bn.style.display = '';
+
+  // Navigate directly to summary so the user sees their full booking
+  // and can use the Back button to edit any individual step
+  onSummaryScreen = false;  // reset so showSummary() re-enters correctly
+  showSummary();
 }
 
 // ── PRE-PAYMENT AVAILABILITY CHECK ──
@@ -3431,7 +3772,10 @@ async function submitBooking() {
         daycarePickupText: svc === 'daycare' ? booking.daycarePickupText : null,
         subtotal: subtotal, discountAmount: discAmt,
         convenienceFee: CONVENIENCE_FEE, total: total,
-        bookingId: data.booking_id || null
+        bookingId: data.booking_id || null,
+        refNumber: data.ref_number || null,
+        bookingState: JSON.parse(JSON.stringify(booking)),
+        rawPayload: payload
       }));
     } catch(e) {}
     if (IS_WALKIN) {
