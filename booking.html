@@ -115,7 +115,7 @@
   .gender-btn.selected.locked-opt { border-color: var(--blue); background: rgba(77,150,185,0.12); color: var(--blue); opacity: 1; }
   .temp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 4px; }
   .temp-btn { background: var(--surface); border: 1.5px solid var(--border); border-radius: 10px; padding: 10px 8px; text-align: center; cursor: pointer; transition: all 0.2s; font-size: 12px; font-weight: 600; color: var(--cream-m); line-height: 1.3; }
-  .temp-btn.selected { border-color: var(--blue); background: rgba(77,150,185,0.12); color: var(--blue); }
+  .temp-btn.selected { border-color: var(--yellow); background: rgba(255,206,88,0.08); color: var(--yellow); }
   .vaccine-grid { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
   .vacc-row { display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 10px 14px; background: var(--surface); border: 1.5px solid var(--border); border-radius: 10px; transition: all 0.2s; }
   .vacc-row.checked { border-color: var(--success); background: rgba(107,203,119,0.07); }
@@ -872,12 +872,13 @@
   </div>
   <div class="form-group">
     <label class="form-label">How did you hear about us?</label>
-    <select class="form-select" id="ownerSource">
+    <select class="form-select" id="ownerSource" onchange="onSourceChange()">
       <option value="">Select...</option>
       <option>Instagram</option><option>Facebook</option><option>TikTok</option>
       <option>Friend or family referral</option><option>Walk-in / saw the branch</option>
       <option>Google search</option><option>Other</option>
     </select>
+    <input type="text" class="form-input" id="ownerSourceOther" placeholder="Please tell us more…" maxlength="100" style="display:none;margin-top:8px" oninput="refreshContinueBtn()">
   </div>
 </div>
 
@@ -2567,6 +2568,14 @@ function removeVaccineFile(el, name) {
 }
 
 // ── MEMBERSHIP ──
+function onSourceChange() {
+  var val = document.getElementById('ownerSource').value;
+  var el = document.getElementById('ownerSourceOther');
+  if (!el) return;
+  el.style.display = val === 'Other' ? '' : 'none';
+  if (val !== 'Other') el.value = '';
+}
+
 function setMembership(val) {
   booking.isMember = val;
   document.getElementById('memberYes').classList.toggle('selected', val);
@@ -2821,7 +2830,8 @@ function collectAllState() {
   booking.ownerLast   = g('ownerLast');
   booking.ownerEmail  = g('ownerEmail');
   booking.ownerPhone  = g('ownerPhone');
-  booking.ownerSource = g('ownerSource');
+  var rawSource = g('ownerSource');
+  booking.ownerSource = rawSource === 'Other' ? ('Other: ' + (g('ownerSourceOther').trim() || 'Other')) : rawSource;
 }
 
 // ── SUMMARY ──
@@ -3160,16 +3170,118 @@ function confirmPaymentReturn(ref) {
   if (rn) rn.textContent = ref;
 }
 
+// ── PRE-PAYMENT AVAILABILITY CHECK ──
+// ----------------------------------------------------------------
+// pg_cron job to auto-cancel pending/unpaid bookings after 15 min:
+//   SELECT cron.schedule(
+//     'cancel-pending-bookings', '*/5 * * * *',
+//     $$ UPDATE bookings
+//        SET status = 'cancelled', updated_at = NOW(),
+//            cancellation_reason = 'Payment timeout (15 min)'
+//        WHERE status = 'pending'
+//          AND (payment_status IS NULL OR payment_status = 'unpaid')
+//          AND created_at < NOW() - INTERVAL '15 minutes'; $$
+//   );
+// ----------------------------------------------------------------
+async function checkAvailabilityBeforePayment() {
+  var svc = booking.service;
+  if (svc !== 'hotel' && svc !== 'grooming') return { available: true };
+  try {
+    var branchId = await getSelectedBranchId();
+    if (!branchId) return { available: true };
+
+    if (svc === 'hotel') {
+      if (!booking.hotelRoomId) return { available: true }; // fallback type — edge fn will verify
+      var cin = booking.hotelCheckin, cout = booking.hotelCheckout;
+      var bkRows = await sbFetchPublic('bookings',
+        'select=id&branch_id=eq.' + branchId +
+        '&service=eq.hotel&status=not.in.(cancelled,rejected)');
+      if (bkRows && bkRows.length) {
+        var ids = bkRows.map(function(b){return b.id;}).join(',');
+        var dtRows = await sbFetchPublic('hotel_details',
+          'select=room_id&booking_id=in.(' + ids + ')' +
+          '&checkin_date=lte.' + cout + '&checkout_date=gte.' + cin +
+          '&room_id=eq.' + booking.hotelRoomId);
+        if (dtRows && dtRows.length) return { available: false, conflict: 'room' };
+      }
+      return { available: true };
+    }
+
+    if (svc === 'grooming') {
+      var dateVal = booking.groomDate, slot = booking.groomSlot;
+      if (!dateVal || !slot) return { available: true };
+      var groomerId  = booking.preferredStylistId;
+      var isAny      = !groomerId;
+      var serviceKey = booking.groomService || 'basic';
+      var myDuration = GROOM_SLOT_MINS[serviceKey] || 60;
+      var candStart  = slotToMins(slot);
+      var candEnd    = candStart + myDuration;
+      var bkQuery = 'select=timeslot,groom_service_key,groomer_id,bookings!inner(booking_date,status,branch_id)' +
+        '&bookings.booking_date=eq.' + dateVal + '&bookings.branch_id=eq.' + branchId +
+        '&bookings.status=not.in.(cancelled,rejected)';
+      if (!isAny) bkQuery += '&groomer_id=eq.' + groomerId;
+      var bkRows = (await sbFetchPublic('grooming_details', bkQuery)) || [];
+      function isGroomerFree(gId) {
+        return !bkRows.filter(function(r){ return r.groomer_id === gId && r.timeslot; })
+          .some(function(r) {
+            var dur = GROOM_SLOT_MINS[r.groom_service_key || 'basic'] || 60;
+            var st  = slotToMins(r.timeslot);
+            return st >= 0 && candStart < (st + dur) && candEnd > st;
+          });
+      }
+      var groomerPool = isAny ? liveGroomers : liveGroomers.filter(function(g){ return g.id === groomerId; });
+      var still = isAny ? groomerPool.some(function(g){ return isGroomerFree(g.id); })
+                        : (groomerPool.length > 0 && isGroomerFree(groomerId));
+      if (!still) return { available: false, conflict: 'slot' };
+      return { available: true };
+    }
+  } catch(e) {
+    console.warn('Pre-payment availability check error (fail-open):', e);
+  }
+  return { available: true };
+}
+
+async function handleBookingConflict(conflictType) {
+  _submitting = false;
+  onSummaryScreen = false;
+  document.getElementById('stepSummary').classList.remove('active');
+  document.getElementById('progressWrap').style.display = '';
+
+  if (conflictType === 'room') {
+    booking.hotelRoomType = null;
+    booking.hotelRoomId   = null;
+    booking.hotelRoomName = null;
+    goToStep(3);
+    loadRoomAvailability(); // force-refresh available rooms
+    showToast('⚠️ That room was just booked by someone else — please choose another.', 8000);
+  } else if (conflictType === 'slot') {
+    booking.groomSlot = null;
+    goToStep(4);
+    await renderGroomSlots(); // force-refresh available slots
+    showToast('⚠️ That time slot was just taken — please choose another slot.', 8000);
+  }
+}
+
 // ── SUBMIT (redirects to PayMongo) ──
 var _submitting = false; // global lock - prevents double-submit on fast double-tap
 
-function submitBooking() {
+async function submitBooking() {
   if (_submitting) return; // already in flight
   _submitting = true;
   var btn = document.getElementById('btnNext');
   if (btn) { btn.textContent = 'Processing...'; btn.disabled = true; }
 
   collectAllState();
+
+  // ── Pre-payment availability check ──
+  var avail = await checkAvailabilityBeforePayment();
+  if (!avail.available) {
+    _submitting = false;
+    if (btn) { btn.textContent = 'Confirm Booking'; btn.disabled = false; }
+    await handleBookingConflict(avail.conflict);
+    return;
+  }
+
   var svc = booking.service;
   var subtotal = 0;
   if (svc === 'grooming') {
@@ -3233,6 +3345,9 @@ function submitBooking() {
     '<div class="pay-loading">' +
     '<div class="bh-spinner"></div>' +
     '<p class="pay-loading-text">Preparing your payment...</p>' +
+    '<p style="font-size:12px;color:var(--mid);margin-top:14px;line-height:1.7;max-width:280px;margin-left:auto;margin-right:auto">' +
+    'Your booking will be created with <strong style="color:var(--cream)">Pending</strong> status and your spot held for <strong style="color:var(--yellow)">15 minutes</strong>. ' +
+    'It will be automatically released if payment is not completed in time.</p>' +
     '<p id="payDebug" style="font-size:11px;color:var(--mid);margin-top:8px"></p>' +
     '</div>';
 
@@ -3263,8 +3378,13 @@ function submitBooking() {
     }
     return res.json();
   })
-  .then(function(data) {
+  .then(async function(data) {
     clearTimeout(payTimeout);
+    // Server-side conflict detection (edge function verified availability)
+    if (data.conflict) {
+      await handleBookingConflict(data.conflict);
+      return;
+    }
     if (data.error) {
       _submitting = false;
       buildSummary();
@@ -3310,7 +3430,8 @@ function submitBooking() {
         daycareDropoffText: svc === 'daycare' ? booking.daycareDropoffText : null,
         daycarePickupText: svc === 'daycare' ? booking.daycarePickupText : null,
         subtotal: subtotal, discountAmount: discAmt,
-        convenienceFee: CONVENIENCE_FEE, total: total
+        convenienceFee: CONVENIENCE_FEE, total: total,
+        bookingId: data.booking_id || null
       }));
     } catch(e) {}
     if (IS_WALKIN) {
