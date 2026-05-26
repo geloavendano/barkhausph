@@ -745,13 +745,27 @@ new IntersectionObserver(function(entries) {
 (function() {
   var track = document.getElementById('blogTrack'); if (!track) return;
   var startX = 0, startY = 0, startScroll = 0, swiping = false;
-  track.addEventListener('touchstart', function(e) { startX = e.touches[0].clientX; startY = e.touches[0].clientY; startScroll = track.scrollLeft; swiping = false; }, { passive: true });
+  track.addEventListener('touchstart', function(e) {
+    startX = e.touches[0].clientX; startY = e.touches[0].clientY;
+    startScroll = track.scrollLeft; swiping = false;
+  }, { passive: true });
   track.addEventListener('touchmove', function(e) {
     var dx = e.touches[0].clientX - startX, dy = e.touches[0].clientY - startY;
     if (!swiping && Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 6) swiping = true;
     if (swiping) { e.preventDefault(); e.stopPropagation(); track.scrollLeft = startScroll - dx; }
   }, { passive: false });
-  track.addEventListener('touchend', function() { swiping = false; }, { passive: true });
+  track.addEventListener('touchend', function(e) {
+    if (!swiping) { swiping = false; return; }
+    swiping = false;
+    var dx   = e.changedTouches[0].clientX - startX;
+    var card = track.querySelector('.blog-card');
+    var step = card ? card.offsetWidth + 16 : 320;
+    /* Snap to next/prev card, or spring back if swipe was too short */
+    var target = Math.abs(dx) > 40
+      ? startScroll + (dx < 0 ? step : -step)
+      : startScroll;
+    track.scrollBy({ left: target - track.scrollLeft, behavior: 'smooth' });
+  }, { passive: true });
 })();
 
 /* Global touch blocking (prevents vertical snap-scroll during horizontal swipes) */
