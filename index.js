@@ -47,9 +47,12 @@ function buildLocThumbsHtml(key, imgs) {
   var visible = imgs.length > fit ? imgs.slice(0, fit) : imgs;
   var extra   = imgs.length > fit ? imgs.length - fit : 0;
   return visible.map(function(src, i) {
-    var isMore = extra > 0 && i === visible.length - 1;
+    var isMore  = extra > 0 && i === visible.length - 1;
+    var onclick = isMore
+      ? 'lbOpen(locImages[\'' + key + '\'],' + i + ')'
+      : 'switchThumb(\'' + key + '\',' + i + ',this)';
     return '<div class="loc-thumb' + (i === 0 ? ' active' : '') + (isMore ? ' loc-thumb-more' : '') +
-      '" onclick="switchThumb(\'' + key + '\',' + i + ',this)">' +
+      '" onclick="' + onclick + '">' +
       '<img src="' + src + '" style="width:100%;height:100%;object-fit:cover;border-radius:6px;" loading="lazy">' +
       (isMore ? '<div class="loc-thumb-more-label">+' + extra + '</div>' : '') +
       '</div>';
