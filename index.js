@@ -71,9 +71,18 @@ function upgradeImagesFromStorage(storageImgs) {
     svcCarousels[i] = { idx: 0, imgs: imgs };
     var slide = document.getElementById('svc-slide-' + i);
     if (!slide) return;
-    slide.querySelectorAll('.svc-thumb img').forEach(function(img, j) {
-      if (imgs[j]) img.src = imgs[j];
-    });
+    /* Rebuild the entire thumbnail block so count matches Storage */
+    var imgCol = slide.querySelector('.svc-img-col');
+    if (imgCol) {
+      imgCol.innerHTML = buildSvcThumbnailsHtml(imgs, i, s.name);
+    } else {
+      /* Service had no images initially — insert the img col before text col */
+      var textCol = slide.querySelector('.svc-text-col');
+      var newCol = document.createElement('div');
+      newCol.className = 'svc-img-col';
+      newCol.innerHTML = buildSvcThumbnailsHtml(imgs, i, s.name);
+      if (textCol) slide.insertBefore(newCol, textCol);
+    }
   });
 }
 
