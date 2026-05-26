@@ -134,7 +134,7 @@ function renderBlogCards(posts) {
       ? STORAGE_PUB + '/blog/' + encodeURIComponent(p.cover_image_path)
       : '';
     return '<a class="blog-card" href="blog/' + p.slug + '.html">' +
-      (imgSrc ? '<img class="blog-card-img" src="' + imgSrc + '" alt="' + p.title + '" loading="lazy" style="display:none" onload="this.style.display=\'\'" onerror="this.remove()">' : '') +
+      (imgSrc ? '<img class="blog-card-img" src="' + imgSrc + '" alt="' + p.title + '" style="display:none" onload="this.style.display=\'\'" onerror="this.remove()">' : '') +
       (p.tag ? '<span class="blog-card-tag">' + p.tag + '</span>' : '') +
       '<p class="blog-card-title">' + p.title + '</p>' +
       '<p class="blog-card-excerpt">' + (p.excerpt || '') + '</p>' +
