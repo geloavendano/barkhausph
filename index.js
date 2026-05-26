@@ -379,11 +379,17 @@ function buildSvcThumbnailsHtml(imgs, slideIdx, svcName) {
   if (!imgs || !imgs.length) return '';
   var key = 'svc' + slideIdx;
   _svcImgSets[key] = imgs;
-  var items = imgs.map(function(src, i) {
-    return '<div class="svc-thumb" onclick="lbOpenSet(\'' + key + '\',' + i + ')">' +
-      '<img src="' + src + '" alt="' + (svcName || 'Barkhaus') + ' – pet care service at Barkhaus Pet Services Philippines" loading="lazy"></div>';
+  var MAX = 9;
+  var visible = imgs.length > MAX ? imgs.slice(0, MAX) : imgs;
+  var extra   = imgs.length > MAX ? imgs.length - MAX : 0;
+  var items = visible.map(function(src, i) {
+    var isMore = extra > 0 && i === visible.length - 1;
+    return '<div class="svc-thumb' + (isMore ? ' svc-thumb-more' : '') + '" onclick="lbOpenSet(\'' + key + '\',' + i + ')">' +
+      '<img src="' + src + '" alt="' + (svcName || 'Barkhaus') + ' – pet care service at Barkhaus Pet Services Philippines" loading="lazy">' +
+      (isMore ? '<div class="svc-thumb-more-label">+' + extra + '</div>' : '') +
+      '</div>';
   }).join('');
-  return '<div class="svc-thumbs" data-count="' + imgs.length + '">' + items + '</div>';
+  return '<div class="svc-thumbs" data-count="' + visible.length + '">' + items + '</div>';
 }
 
 function svcImgNav(slideIdx, dir) {
