@@ -1750,6 +1750,15 @@ async function validateMemberId() {
   var petInput = (document.getElementById('petName') ? document.getElementById('petName').value : '').trim().replace(/\s+/g,' ').toLowerCase();
   var msg = document.getElementById('memberValidMsg');
   if (idInput.length < 4) { msg.style.display = 'none'; booking.memberValid = false; refreshAllTotals(); return; }
+  // Require pet name to be filled before validating \u2014 the check is pet-name-bound
+  if (!petInput) {
+    msg.style.display = 'block';
+    msg.textContent = 'Please enter your pet\u2019s name above first, then verify.';
+    msg.style.color = 'var(--error)';
+    booking.memberValid = false;
+    refreshAllTotals();
+    return;
+  }
   msg.style.display = 'block'; msg.textContent = 'Validating\u2026'; msg.style.color = 'var(--mid)';
   try {
     // Validate via RPC \u2014 members/owners/pets tables are not directly readable by anon
@@ -1758,12 +1767,17 @@ async function validateMemberId() {
       msg.textContent = 'Member ID not found.'; msg.style.color = 'var(--error)';
       booking.memberValid = false;
     } else {
-      // Collect all pet names registered to this member's owner account
-      var petList = (member.pet_names || []).map(function(n) {
-        return (n||'').trim().replace(/\s+/g,' ').toLowerCase();
-      });
-      if (petInput.length > 0 && petList.length > 0 && petList.indexOf(petInput) === -1) {
-        msg.textContent = 'Member not found.'; msg.style.color = 'var(--error)';
+      // Build petList from pet_name (singular \u2014 current members table schema).
+      // Falls back to pet_names array in case the RPC is ever updated to return multiple pets.
+      var petList = [];
+      if (Array.isArray(member.pet_names) && member.pet_names.length > 0) {
+        petList = member.pet_names.map(function(n) { return (n||'').trim().replace(/\s+/g,' ').toLowerCase(); });
+      } else if (member.pet_name) {
+        petList = [(member.pet_name||'').trim().replace(/\s+/g,' ').toLowerCase()];
+      }
+      if (petList.length === 0 || petList.indexOf(petInput) === -1) {
+        msg.textContent = 'Pet name doesn\u2019t match this membership. Please check the name or ID.';
+        msg.style.color = 'var(--error)';
         booking.memberValid = false;
       } else {
         booking.memberValid = true; booking.membershipId = idInput;
