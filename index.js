@@ -39,6 +39,23 @@ async function loadStorageImages() {
   return out;
 }
 
+/* Build location thumbnail strip — exactly as many as fit in one viewport line */
+function buildLocThumbsHtml(key, imgs) {
+  /* Each thumb: 56px wide, 8px gap, container has 24px padding each side */
+  var fit = Math.floor((window.innerWidth - 48 + 8) / (56 + 8));
+  fit = Math.max(2, fit);
+  var visible = imgs.length > fit ? imgs.slice(0, fit) : imgs;
+  var extra   = imgs.length > fit ? imgs.length - fit : 0;
+  return visible.map(function(src, i) {
+    var isMore = extra > 0 && i === visible.length - 1;
+    return '<div class="loc-thumb' + (i === 0 ? ' active' : '') + (isMore ? ' loc-thumb-more' : '') +
+      '" onclick="switchThumb(\'' + key + '\',' + i + ',this)">' +
+      '<img src="' + src + '" style="width:100%;height:100%;object-fit:cover;border-radius:6px;" loading="lazy">' +
+      (isMore ? '<div class="loc-thumb-more-label">+' + extra + '</div>' : '') +
+      '</div>';
+  }).join('');
+}
+
 /* After initial render, replace img srcs with Storage versions */
 function upgradeImagesFromStorage(storageImgs) {
   /* Hero */
@@ -53,12 +70,12 @@ function upgradeImagesFromStorage(storageImgs) {
     var imgs = storageImgs[branchMap[key]];
     if (!imgs || !imgs.length) return;
     locImages[key] = imgs;
+    /* Update main image */
     var mainCont = document.getElementById(key + '-main');
     if (mainCont) { var mainImg = mainCont.querySelector('img'); if (mainImg) mainImg.src = imgs[0]; }
-    imgs.forEach(function(src, i) {
-      var el = document.querySelector('[data-img="' + key + '-' + i + '"]');
-      if (el) el.src = src;
-    });
+    /* Rebuild thumb strip to fit viewport width */
+    var thumbsCont = document.getElementById(key + '-thumbs');
+    if (thumbsCont) thumbsCont.innerHTML = buildLocThumbsHtml(key, imgs);
   });
 
   /* Service gallery images */
@@ -379,7 +396,8 @@ function buildSvcThumbnailsHtml(imgs, slideIdx, svcName) {
   if (!imgs || !imgs.length) return '';
   var key = 'svc' + slideIdx;
   _svcImgSets[key] = imgs;
-  var MAX = 9;
+  /* 4-col grid on mobile → 2 rows = 8; 3-col grid on desktop → 3 rows = 9 */
+  var MAX = window.innerWidth < 768 ? 8 : 9;
   var visible = imgs.length > MAX ? imgs.slice(0, MAX) : imgs;
   var extra   = imgs.length > MAX ? imgs.length - MAX : 0;
   var items = visible.map(function(src, i) {
