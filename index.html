@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-LBWQT2HSGQ"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-LBWQT2HSGQ');
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:      #0F1C26;   /* deep blue-tinted dark */
+    --surface: #1A3044;   /* blue-tinted surface */
+    --raised:  #1F3D55;   /* blue-tinted raised */
+    --border:  rgba(77,150,185,0.30);
+    --mid:     #6AAEC8;
+    --cream:   #F0EDE6;
+    --cream-m: #B8D4E0;
+    --blue:    #4D96B9;
+    --yellow:  #FFCE58;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; scroll-snap-type: y mandatory; }
+  body { background: var(--bg); color: var(--cream); font-family: "Nunito", sans-serif; font-weight: 400; overflow-x: hidden; }
+
+  .snap-section { height: 100svh; scroll-snap-align: start; scroll-snap-stop: always; position: relative; overflow: hidden; display: flex; flex-direction: column; }
+
+  /* ══ HERO ══ */
+  #hero { align-items: center; justify-content: center; text-align: center; padding: 60px 32px 64px; }
+  .hero-bg { position: absolute; inset: 0; z-index: 0; }
+  .hero-bg img { width:100%; height:100%; object-fit:cover; object-position:center top; }
+  .hero-bg::after { content:""; position:absolute; inset:0; background: linear-gradient(to bottom, rgba(15,28,38,0.55) 0%, rgba(15,28,38,0.15) 35%, rgba(15,28,38,0.82) 100%), linear-gradient(135deg, rgba(77,150,185,0.12) 0%, transparent 60%); }
+  .hero-content { position:relative; z-index:1; display:flex; flex-direction:column; align-items:center; }
+  .hero-logo { height:56px; width:auto; margin-bottom:14px; opacity:0; animation:fadeUp 0.7s ease 0.1s forwards; filter: drop-shadow(0 0 20px rgba(77,150,185,0.5)); }
+  .hero-submark { font-size:10px; letter-spacing:0.28em; text-transform:uppercase; color:var(--yellow); margin-bottom:36px; font-weight:600; opacity:0; animation:fadeUp 0.7s ease 0.3s forwards; }
+  .hero-title { font-family:"Fredoka One",cursive; font-size:clamp(42px,11vw,66px); line-height:1.1; color:var(--cream); margin-bottom:20px; opacity:0; animation:fadeUp 0.8s ease 0.45s forwards; text-shadow:0 2px 20px rgba(0,0,0,0.4); }
+  .hero-title span { color:var(--yellow); }
+  .hero-tagline { font-size:15px; color:var(--cream-m); line-height:1.65; max-width:280px; margin:0 auto 32px; opacity:0; animation:fadeUp 0.8s ease 0.6s forwards; font-weight:500; }
+  .hero-tagline strong { color:var(--cream); font-weight:700; }
+  .hero-book { display:inline-block; padding:13px 42px; background:var(--yellow); color:var(--bg); font-size:12px; font-weight:700; letter-spacing:0.10em; text-transform:uppercase; text-decoration:none; border-radius:50px; opacity:0; animation:fadeUp 0.8s ease 0.75s forwards; }
+  .scroll-hint { position:absolute; bottom:24px; left:0; right:0; margin:0 auto; width:fit-content; font-size:9px; letter-spacing:0.2em; text-transform:uppercase; color:rgba(240,237,230,0.5); display:flex; flex-direction:column; align-items:center; gap:8px; opacity:0; animation:fadeUp 0.6s ease 1.2s forwards; cursor:pointer; z-index:1; white-space:nowrap; font-weight:600; }
+  .scroll-hint::after { content:""; width:1px; height:24px; background:rgba(240,237,230,0.35); animation:pulse 2s ease-in-out infinite; }
+
+  /* ══ LOCATIONS ══ */
+  #locations { flex-direction:column; }
+  .loc-tabs { position:absolute; top:20px; left:50%; transform:translateX(-50%); z-index:10; display:flex; background:rgba(15,28,38,0.70); border:0.5px solid var(--border); border-radius:30px; padding:4px; backdrop-filter:blur(10px); gap:2px; }
+  .loc-tab { font-size:12px; font-weight:700; color:var(--mid); padding:7px 20px; border-radius:26px; cursor:pointer; transition:background 0.25s,color 0.25s; white-space:nowrap; letter-spacing:0.04em; }
+  .loc-tab-soon { opacity:0.55; cursor:pointer; }
+  .soon-pill { font-size:8px; background:rgba(255,206,88,0.2); color:var(--yellow); border-radius:10px; padding:1px 6px; margin-left:3px; font-weight:700; letter-spacing:0.06em; vertical-align:middle; }
+  .loc-tab.active { background:var(--yellow); color:var(--bg); }
+  .loc-slides-wrap { position:absolute; inset:0; display:flex; transition:transform 0.65s cubic-bezier(0.4,0,0.2,1); }
+  .loc-slide { min-width:100%; height:100%; position:relative; flex-shrink:0; }
+  .loc-slide-img { position:absolute; inset:0; overflow:hidden; }
+  .loc-slide-img img { width:100%; height:100%; object-fit:cover; }
+  .loc-gradient { position:absolute; inset:0; background:linear-gradient(to top, rgba(15,28,38,0.98) 0%, rgba(15,28,38,0.85) 25%, rgba(15,28,38,0.42) 50%, rgba(15,28,38,0.06) 100%); pointer-events:none; }
+  .loc-thumbs { position:absolute; bottom:216px; left:0; right:0; display:flex; gap:8px; padding:0 24px; z-index:5; overflow-x:auto; scrollbar-width:none; }
+  .loc-thumbs::-webkit-scrollbar { display:none; }
+  .loc-thumb { width:56px; height:56px; border-radius:8px; border:2px solid transparent; background:rgba(46,51,82,0.5); flex-shrink:0; cursor:pointer; transition:border-color 0.2s; overflow:hidden; }
+  .loc-thumb.active { border-color:var(--yellow); }
+  .loc-dots { position:absolute; bottom:200px; left:0; right:0; display:flex; justify-content:center; gap:6px; z-index:5; }
+  .loc-dot { width:6px; height:6px; border-radius:50%; background:rgba(240,237,230,0.3); transition:background 0.3s,transform 0.3s; }
+  .loc-dot.active { background:var(--yellow); transform:scale(1.3); }
+  .loc-info { position:absolute; bottom:0; left:0; right:0; z-index:5; padding:0 24px 90px; }
+  .loc-info-name { font-family:"Fredoka One",cursive; font-size:30px; color:var(--cream); margin-bottom:3px; }
+  .loc-info-addr { font-size:11px; color:var(--cream-m); line-height:1.5; margin-bottom:8px; font-weight:500; }
+  .loc-info-row { display:flex; align-items:center; justify-content:space-between; margin-bottom:0; }
+  .loc-maps { font-size:11px; color:var(--yellow); text-decoration:none; display:inline-flex; align-items:center; gap:4px; font-weight:700; }
+  .loc-hours { font-size:11px; color:var(--mid); text-align:right; line-height:1.5; font-weight:500; }
+
+  /* ══ LOCATION MODAL ══ */
+  .loc-modal-overlay { display:none; position:fixed; inset:0; z-index:500; background:rgba(10,10,20,0.75); backdrop-filter:blur(4px); align-items:flex-end; justify-content:center; }
+  .loc-modal-overlay.open { display:flex; }
+  .loc-modal { background:var(--bg); width:100%; max-width:640px; max-height:92svh; border-radius:20px 20px 0 0; overflow-y:auto; scrollbar-width:none; animation:slideUp 0.35s cubic-bezier(0.4,0,0.2,1); }
+  .loc-modal::-webkit-scrollbar { display:none; }
+  @keyframes slideUp { from { transform:translateY(100%); } to { transform:translateY(0); } }
+  .loc-modal-header { position:sticky; top:0; z-index:10; background:var(--bg); padding:20px 20px 16px; display:flex; align-items:flex-start; justify-content:space-between; border-bottom:0.5px solid var(--border); }
+  .loc-modal-header-left { display:flex; flex-direction:column; gap:2px; }
+  .loc-modal-tag { font-size:9px; letter-spacing:0.2em; text-transform:uppercase; color:var(--yellow); margin-bottom:4px; font-weight:700; }
+  .loc-modal-name { font-family:"Fredoka One",cursive; font-size:28px; color:var(--cream); line-height:1.1; }
+  .loc-modal-subtitle { font-size:13px; color:var(--cream-m); font-weight:500; }
+  .loc-modal-close { width:34px; height:34px; border-radius:50%; border:0.5px solid var(--border); display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--mid); flex-shrink:0; transition:border-color 0.2s; }
+  .loc-modal-close:active { border-color:var(--yellow); }
+  .loc-modal-body { padding:20px; }
+  .loc-modal-section { margin-bottom:24px; }
+  .loc-modal-section-label { font-size:9px; letter-spacing:0.2em; text-transform:uppercase; color:var(--yellow); margin-bottom:10px; padding-bottom:8px; border-bottom:0.5px solid var(--border); font-weight:700; }
+  .loc-modal-desc { font-size:13px; color:var(--cream-m); line-height:1.75; font-weight:500; }
+  .loc-modal-desc + .loc-modal-desc { margin-top:10px; }
+  .loc-modal-identity { background:var(--surface); border-radius:12px; padding:14px 16px; border:0.5px solid var(--border); }
+  .loc-modal-identity-element { font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--yellow); margin-bottom:6px; font-weight:700; }
+  .loc-modal-identity-desc { font-size:12px; color:var(--cream-m); line-height:1.6; font-weight:500; }
+  .loc-modal-features { display:flex; flex-direction:column; gap:0; }
+  .loc-modal-feature { display:flex; align-items:flex-start; gap:10px; padding:10px 0; border-bottom:0.5px solid var(--border); }
+  .loc-modal-feature:last-child { border-bottom:none; }
+  .loc-modal-feature-dot { width:6px; height:6px; border-radius:50%; background:var(--yellow); flex-shrink:0; margin-top:6px; }
+  .loc-modal-feature-text { font-size:13px; color:var(--cream-m); line-height:1.5; font-weight:500; }
+  .loc-modal-feature-text strong { color:var(--cream); font-weight:700; }
+  .loc-modal-book { display:block; width:100%; padding:14px; background:var(--yellow); color:var(--bg); font-size:12px; font-weight:700; letter-spacing:0.10em; text-transform:uppercase; text-decoration:none; border-radius:50px; text-align:center; margin-top:8px; border:none; cursor:pointer; }
+
+  /* ══ SERVICES ══ */
+  #services { scroll-snap-align:start; height:100svh; overflow:hidden; position:relative; }
+  #paws-bg { position:absolute; inset:0; width:100%; height:100%; z-index:0; }
+  .paws-vignette { position:absolute; inset:0; z-index:1; background:radial-gradient(ellipse 100% 100% at 50% 50%, rgba(15,28,38,0.10) 0%, rgba(15,28,38,0.65) 100%); pointer-events:none; }
+
+  .services-inner { position:relative; z-index:2; width:100%; height:100%; display:flex; flex-direction:column; }
+  .services-header { padding:18px 20px 0; flex-shrink:0; }
+  .services-eyebrow { font-size:9px; letter-spacing:0.22em; text-transform:uppercase; color:var(--yellow); margin-bottom:2px; font-weight:700; }
+  .services-title { font-family:"Fredoka One",cursive; font-size:26px; color:var(--cream); }
+
+  /* Slides wrap fills remaining height */
+  .svc-slides-wrap { flex:1; position:relative; min-height:0; overflow:hidden; }
+
+  /* ── Mobile: single column, scrollable ── */
+  .svc-slide { position:absolute; inset:0; display:flex; flex-direction:column; opacity:0; transform:translateY(12px); transition:opacity 0.3s ease, transform 0.3s ease; pointer-events:none; padding:12px 160px 80px 18px; overflow-y:auto; scrollbar-width:none; }
+  .svc-slide::-webkit-scrollbar { display:none; }
+  .svc-slide.active { opacity:1; transform:translateY(0); pointer-events:auto; }
+
+  /* Image carousel */
+  .svc-img-carousel { position:relative; width:100%; border-radius:14px; overflow:hidden; flex-shrink:0; background:var(--surface); margin-bottom:14px; }
+  .svc-img-track { display:flex; transition:transform 0.35s cubic-bezier(0.4,0,0.2,1); }
+  .svc-img-frame { min-width:100%; flex-shrink:0; }
+  .svc-img-frame img { width:100%; height:180px; object-fit:cover; display:block; }
+  .svc-img-btn { position:absolute; top:50%; transform:translateY(-50%); width:30px; height:30px; border-radius:50%; background:rgba(15,28,38,0.65); border:1px solid rgba(255,255,255,0.15); color:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; z-index:5; backdrop-filter:blur(4px); }
+  .svc-img-btn svg { pointer-events:none; }
+  .svc-img-prev { left:8px; }
+  .svc-img-next { right:8px; }
+  .svc-img-dots { display:flex; justify-content:center; gap:5px; padding:6px 0 0; }
+  .svc-img-dot { width:5px; height:5px; border-radius:50%; background:rgba(184,212,224,0.3); transition:background 0.2s,transform 0.2s; cursor:pointer; }
+  .svc-img-dot.active { background:var(--yellow); transform:scale(1.3); }
+  .svc-img-carousel[data-count="1"] .svc-img-btn,
+  .svc-img-carousel[data-count="1"] .svc-img-dots { display:none; }
+
+  /* Text content */
+  .svc-slide-eyebrow { font-size:9px; letter-spacing:0.2em; text-transform:uppercase; color:var(--yellow); font-weight:700; margin-bottom:3px; }
+  .svc-slide-name { font-family:"Fredoka One",cursive; font-size:24px; color:var(--cream); margin-bottom:6px; line-height:1.1; }
+  .svc-slide-desc { font-size:12px; color:var(--cream-m); line-height:1.6; font-weight:500; margin-bottom:12px; }
+  .svc-slide-features { display:flex; flex-direction:column; gap:5px; margin-bottom:14px; }
+  .svc-slide-feature { display:flex; align-items:flex-start; gap:8px; }
+  .svc-slide-feature-dot { width:5px; height:5px; border-radius:50%; background:var(--blue); flex-shrink:0; margin-top:5px; }
+  .svc-slide-feature-text { font-size:11px; color:var(--cream-m); font-weight:500; line-height:1.5; }
+  .svc-slide-feature-text strong { color:var(--cream); }
+
+  /* Pricing section */
+  .svc-pricing-label { font-size:9px; letter-spacing:0.18em; text-transform:uppercase; color:var(--yellow); font-weight:700; margin-bottom:8px; padding-top:4px; border-top:0.5px solid var(--border); padding-top:12px; }
+  .svc-price-row { display:flex; justify-content:space-between; align-items:baseline; padding:5px 0; border-bottom:0.5px solid rgba(77,150,185,0.12); gap:12px; }
+  .svc-price-row:last-child { border-bottom:none; }
+  .svc-price-label { font-size:11px; color:var(--cream-m); font-weight:500; }
+  .svc-price-val { font-size:12px; font-weight:700; color:var(--cream); white-space:nowrap; flex-shrink:0; }
+  .price-info-btn { display:inline-flex; align-items:center; justify-content:center; width:15px; height:15px; border-radius:50%; border:1px solid rgba(77,150,185,0.45); background:transparent; color:var(--mid); font-size:9px; font-family:inherit; font-weight:700; cursor:pointer; vertical-align:middle; padding:0; line-height:1; margin-left:4px; flex-shrink:0; transition:border-color 0.15s,color 0.15s; }
+  .price-info-btn:hover,.price-info-btn:active { border-color:var(--yellow); color:var(--yellow); }
+  .price-info-overlay { display:none; position:fixed; inset:0; z-index:1100; background:rgba(0,0,0,0.45); }
+  .price-info-overlay.visible { display:block; }
+  .price-info-popover { position:fixed; bottom:0; left:0; right:0; background:var(--surface); border-top:1px solid var(--border); border-radius:16px 16px 0 0; padding:20px 24px 40px; z-index:1101; transform:translateY(100%); transition:transform 0.25s cubic-bezier(0.32,0.72,0,1); max-height:55vh; overflow-y:auto; }
+  .price-info-popover.visible { transform:translateY(0); }
+  .price-info-popover-handle { width:36px; height:4px; border-radius:2px; background:var(--border); margin:0 auto 16px; }
+  .price-info-popover-title { font-size:14px; font-weight:800; color:var(--cream); margin-bottom:10px; }
+  .price-info-popover-text { font-size:13px; color:var(--cream-m); line-height:1.7; }
+
+  /* Book button */
+
+  /* Service navigator */
+  .svc-nav { position:absolute; bottom:80px; right:0; z-index:10; display:flex; flex-direction:column; align-items:flex-end; gap:4px; padding:10px 14px 10px 20px; background:linear-gradient(to left, rgba(15,28,38,0.82) 60%, transparent 100%); border-radius:12px 0 0 12px; }
+  .svc-nav-item { display:flex; align-items:center; gap:8px; cursor:pointer; padding:3px 0; }
+  .svc-nav-label { font-size:11px; font-weight:700; color:var(--mid); transition:color 0.2s; text-align:right; white-space:nowrap; ; max-width:120px; overflow:hidden; transition:color 0.2s, max-width 0.25s, opacity 0.2s; }
+  .svc-nav-item.active .svc-nav-label { color:var(--cream); }
+  .svc-nav-bar { width:3px; height:18px; border-radius:2px; background:var(--raised); transition:background 0.2s, height 0.2s; flex-shrink:0; }
+  .svc-nav-item.active .svc-nav-bar { background:var(--yellow); height:26px; }
+
+  /* Mobile: stack columns */
+  .svc-img-col { width:100%; flex-shrink:0; }
+  .svc-text-col { flex:1; }
+
+  /* ── Desktop: two-column, centered ── */
+  @media(min-width:640px) {
+    .services-header { padding:28px 40px 0; text-align:left; }
+    .services-title { font-size:32px; }
+    .svc-slide { flex-direction:row; gap:40px; padding:28px 200px 28px 40px; align-items:flex-start; overflow-y:hidden; }
+    .svc-img-col { width:45%; flex-shrink:0; display:flex; flex-direction:column; gap:0; align-self:stretch; }
+    .svc-img-col .svc-img-carousel { width:100%; flex:1; display:flex; flex-direction:column; position:relative; }
+    .svc-img-col .svc-img-track { flex:1; height:100%; }
+    .svc-img-col .svc-img-frame { min-width:100%; flex-shrink:0; height:100%; }
+    .svc-img-col .svc-img-frame img { height:100%; min-height:320px; max-height:calc(100svh - 200px); object-fit:cover; }
+    .svc-img-col { width:44%; flex-shrink:0; }
+    .svc-img-col .svc-thumbs { grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:0; }
+    .svc-text-col { flex:1; overflow-y:auto; max-height:calc(100svh - 140px); scrollbar-width:none; display:flex; flex-direction:column; }
+    .svc-text-col::-webkit-scrollbar { display:none; }
+    .svc-slide-name { font-size:30px; }
+    .svc-slide-desc { font-size:13px; }
+    .svc-slide-features { gap:7px; }
+    .svc-slide-feature-text { font-size:12px; }
+    .svc-price-label { font-size:12px; }
+    .svc-price-val { font-size:13px; }
+  
+  /* Nav collapse — inactive labels hidden until tapped */
+  .svc-nav:not(.nav-expanded) .svc-nav-item:not(.active) .svc-nav-label { max-width:0; opacity:0; pointer-events:none; }
+  .svc-nav:not(.nav-expanded) .svc-nav-item:not(.active) { gap:0; }
+  .svc-nav.nav-expanded .svc-nav-label { max-width:160px; opacity:1; }
+  .svc-nav { cursor:pointer; transition: opacity 0.4s ease; }
+  .svc-nav.nav-hidden { opacity: 0; pointer-events: none; }
+  .svc-nav.labels-hidden .svc-nav-label { max-width: 0 !important; opacity: 0 !important; }
+  .svc-nav.labels-hidden .svc-nav-item { gap: 0; }
+  .svc-contact-link { color: var(--yellow); text-decoration: none; font-weight: 700; }
+  @media(min-width:640px) {
+    .svc-nav:not(.nav-expanded) .svc-nav-item:not(.active) .svc-nav-label { max-width:120px; opacity:1; }
+    .svc-nav:not(.nav-expanded) .svc-nav-item:not(.active) { gap:8px; }
+  }
+  .svc-nav { bottom:50%; transform:translateY(50%); right:32px; gap:6px; }
+    .svc-nav-label { font-size:12px; }
+    .svc-nav-bar { height:20px; }
+    .svc-nav-item.active .svc-nav-bar { height:30px; }
+  }
+
+/* ══ SERVICE MODAL ══ */
+  .svc-modal-overlay { display:none; position:fixed; inset:0; z-index:500; background:rgba(10,10,20,0.75); backdrop-filter:blur(4px); align-items:flex-end; justify-content:center; }
+  .svc-modal-overlay.open { display:flex; }
+  .svc-modal { background:var(--bg); width:100%; max-width:640px; max-height:92svh; border-radius:20px 20px 0 0; overflow-y:auto; scrollbar-width:none; animation:slideUp 0.35s cubic-bezier(0.4,0,0.2,1); }
+  .svc-modal::-webkit-scrollbar { display:none; }
+  .svc-modal-header { position:sticky; top:0; z-index:10; background:var(--bg); padding:20px 20px 16px; display:flex; align-items:flex-start; justify-content:space-between; border-bottom:0.5px solid var(--border); }
+  .svc-modal-header-left { display:flex; flex-direction:column; gap:2px; }
+  .svc-modal-tag { font-size:9px; letter-spacing:0.2em; text-transform:uppercase; color:var(--yellow); margin-bottom:4px; font-weight:700; }
+  .svc-modal-name { font-family:"Fredoka One",cursive; font-size:28px; color:var(--cream); line-height:1.1; }
+  .svc-modal-close { width:34px; height:34px; border-radius:50%; border:0.5px solid var(--border); display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--mid); flex-shrink:0; transition:border-color 0.2s; }
+  .svc-modal-close:active { border-color:var(--yellow); }
+  .svc-modal-body { padding:20px; }
+  .svc-modal-section { margin-bottom:20px; }
+  .svc-modal-section-label { font-size:9px; letter-spacing:0.2em; text-transform:uppercase; color:var(--yellow); margin-bottom:10px; padding-bottom:8px; border-bottom:0.5px solid var(--border); font-weight:700; }
+  .svc-modal-desc { font-size:13px; color:var(--cream-m); line-height:1.75; font-weight:500; }
+  .svc-modal-features { display:flex; flex-direction:column; gap:0; }
+  .svc-modal-feature { display:flex; align-items:flex-start; gap:10px; padding:10px 0; border-bottom:0.5px solid var(--border); }
+  .svc-modal-feature:last-child { border-bottom:none; }
+  .svc-modal-feature-dot { width:6px; height:6px; border-radius:50%; background:var(--yellow); flex-shrink:0; margin-top:6px; }
+  .svc-modal-feature-text { font-size:13px; color:var(--cream-m); line-height:1.5; font-weight:500; }
+  .svc-modal-feature-text strong { color:var(--cream); font-weight:700; }
+  .svc-modal-book { display:block; width:100%; padding:14px; background:var(--yellow); color:var(--bg); font-size:12px; font-weight:700; letter-spacing:0.10em; text-transform:uppercase; text-decoration:none; border-radius:50px; text-align:center; margin-top:8px; border:none; cursor:pointer; }
+
+  /* ══ PRODUCTS ══ */
+  #products { scroll-snap-align:start; height:100svh; overflow:hidden; position:relative; background:var(--bg); }
+  .products-inner { width:100%; height:100%; display:flex; flex-direction:column; padding:28px 0 16px; }
+  .products-header { text-align:center; padding:0 24px 16px; flex-shrink:0; }
+  .products-eyebrow { font-size:9px; letter-spacing:0.22em; text-transform:uppercase; color:var(--yellow); margin-bottom:4px; font-weight:700; }
+  .products-title { font-family:"Fredoka One",cursive; font-size:28px; color:var(--cream); }
+  .products-grid { flex:1; display:grid; grid-template-columns:repeat(2,1fr); gap:10px; padding:0 16px 8px; overflow-y:auto; scrollbar-width:none; align-content:start; }
+  .products-grid::-webkit-scrollbar { display:none; }
+  .product-card { background:var(--surface); border:0.5px solid var(--border); border-radius:16px; overflow:hidden; display:flex; flex-direction:column; transition: border-color 0.2s, transform 0.2s; }
+  .product-card:nth-child(odd) { border-color: rgba(77,150,185,0.35); }
+  .product-card:nth-child(even) { border-color: rgba(255,206,88,0.28); }
+  .product-img { width:100%; aspect-ratio:1; background:var(--raised); display:flex; align-items:center; justify-content:center; overflow:hidden; }
+  .product-img img { width:100%; height:100%; object-fit:cover; }
+  .product-img-placeholder { font-size:36px; }
+  .product-info { padding:10px 12px 12px; }
+  .product-category { font-size:8px; letter-spacing:0.2em; text-transform:uppercase; color:var(--yellow); margin-bottom:3px; font-weight:700; }
+  .product-name { font-family:"Fredoka One",cursive; font-size:15px; color:var(--cream); margin-bottom:3px; line-height:1.2; }
+  .product-desc { font-size:10px; color:var(--cream-m); line-height:1.5; margin-bottom:6px; font-weight:500; }
+  .product-price { font-size:13px; color:var(--yellow); font-weight:700; }
+
+  @media (min-width:480px) {
+    .products-grid { grid-template-columns:repeat(2,1fr); gap:12px; padding:0 20px 10px; }
+    .product-name { font-size:16px; }
+  }
+  @media (min-width:768px) {
+    .products-grid { grid-template-columns:repeat(3,1fr); gap:14px; padding:0 24px 12px; }
+  }
+
+  /* ══ FOOTER ══ */
+  #footer-section { background:var(--bg); scroll-snap-align: end; scroll-snap-stop: always; }
+  footer { padding:44px 28px 48px; width:100%; }
+  .footer-logo { font-family:"Fredoka One",cursive; font-size:26px; color:var(--cream); margin-bottom:3px; letter-spacing:0.04em; }
+  .footer-tag { font-size:11px; color:var(--mid); margin-bottom:32px; font-weight:600; }
+  .footer-contact-label { font-size:9px; letter-spacing:0.2em; text-transform:uppercase; color:var(--mid); margin-bottom:12px; font-weight:700; }
+  .footer-contacts { display:flex; flex-direction:column; gap:8px; margin-bottom:32px; }
+  .footer-row { display:flex; justify-content:space-between; align-items:center; font-size:13px; border-bottom:0.5px solid var(--border); padding-bottom:8px; gap:12px; }
+  .footer-branch { color:var(--cream-m); flex-shrink:0; font-weight:600; }
+  .footer-num { color:var(--cream); text-align:right; font-weight:600; text-decoration:none; }
+  .footer-socials { display:flex; gap:14px; margin-bottom:28px; }
+  .footer-social { width:36px; height:36px; border-radius:50%; border:0.5px solid var(--border); display:flex; align-items:center; justify-content:center; color:var(--mid); cursor:pointer; text-decoration:none; transition:border-color 0.2s, color 0.2s; }
+  .footer-social:active { border-color:var(--yellow); color:var(--yellow); }
+  .footer-legal { font-size:10px; color:var(--mid); font-weight:500; }
+
+  /* ══ FLOAT NAV ══ */
+  .float-nav { position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(80px); background:rgba(10,20,30,0.92); border:0.5px solid var(--border); border-radius:40px; padding:8px 8px 8px 20px; display:flex; align-items:center; gap:16px; z-index:200; transition:transform 0.4s cubic-bezier(0.4,0,0.2,1); white-space:nowrap; backdrop-filter:blur(12px); }
+  .float-nav.visible { transform:translateX(-50%) translateY(0); }
+  .float-nav-logo { font-family:"Fredoka One",cursive; font-size:15px; color:var(--cream); cursor:pointer; letter-spacing:0.04em; }
+  .float-nav-book { background:var(--yellow); color:var(--bg); font-size:11px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; padding:9px 20px; border-radius:30px; text-decoration:none; }
+
+
+  /* ══ SERVICE MODAL CAROUSEL ══ */
+  .svc-carousel { position:relative; width:100%; height:220px; overflow:hidden; border-radius:14px; margin-bottom:16px; background:var(--raised); flex-shrink:0; }
+  .svc-carousel-track { display:flex; height:100%; transition:transform 0.4s cubic-bezier(0.4,0,0.2,1); }
+  .svc-carousel-slide { min-width:100%; height:100%; flex-shrink:0; overflow:hidden; }
+  .svc-carousel-slide img { width:100%; height:100%; object-fit:cover; display:block; }
+  .svc-carousel-btn { position:absolute; top:50%; transform:translateY(-50%); width:32px; height:32px; border-radius:50%; background:rgba(15,28,38,0.65); border:1px solid rgba(255,255,255,0.2); color:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; z-index:5; backdrop-filter:blur(4px); transition:background 0.2s; }
+  .svc-carousel-btn:active { background:rgba(15,28,38,0.9); }
+  .svc-carousel-prev { left:10px; }
+  .svc-carousel-next { right:10px; }
+  .svc-carousel-dots { position:absolute; bottom:8px; left:0; right:0; display:flex; justify-content:center; gap:5px; z-index:5; }
+  .svc-carousel-dot { width:6px; height:6px; border-radius:50%; background:rgba(255,255,255,0.4); transition:background 0.2s, transform 0.2s; cursor:pointer; }
+  .svc-carousel-dot.active { background:#FFCE58; transform:scale(1.3); }
+  .svc-carousel[data-count="1"] .svc-carousel-btn,
+  .svc-carousel[data-count="1"] .svc-carousel-dots { display:none; }
+
+
+  /* ══ SERVICE IMAGE THUMBNAILS ══ */
+  .svc-thumbs { display:grid; grid-template-columns:repeat(4,1fr); gap:5px; margin-bottom:14px; }
+  .svc-thumb { aspect-ratio:1/1; overflow:hidden; border-radius:8px; cursor:pointer; background:var(--surface); }
+  .svc-thumb img { width:100%; height:100%; object-fit:cover; display:block; image-orientation:from-image; transition:opacity 0.15s; }
+  .svc-thumb:hover img { opacity:0.82; }
+  .svc-thumbs[data-count="1"] .svc-thumb { grid-column:span 4; aspect-ratio:16/9; }
+  .svc-thumbs[data-count="2"] .svc-thumb { grid-column:span 2; }
+  .svc-thumbs[data-count="3"] .svc-thumb:first-child { grid-column:span 4; aspect-ratio:16/9; }
+
+  /* ══ LIGHTBOX ══ */
+  .lb-overlay { display:none; position:fixed; inset:0; z-index:900; background:rgba(0,0,0,0.93); align-items:center; justify-content:center; }
+  .lb-overlay.open { display:flex; }
+  .lb-img-wrap { position:relative; display:flex; align-items:center; justify-content:center; max-width:92vw; max-height:88vh; }
+  .lb-img { max-width:90vw; max-height:85vh; object-fit:contain; border-radius:6px; display:block; image-orientation:from-image; }
+  .lb-close { position:absolute; top:14px; right:18px; width:36px; height:36px; background:rgba(255,255,255,0.12); border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#fff; z-index:10; }
+  .lb-close:hover { background:rgba(255,255,255,0.22); }
+  .lb-btn { position:fixed; top:50%; transform:translateY(-50%); width:44px; height:44px; background:rgba(255,255,255,0.12); border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#fff; z-index:10; }
+  .lb-btn:hover { background:rgba(255,255,255,0.22); }
+  .lb-prev { left:14px; }
+  .lb-next { right:14px; }
+  .lb-counter { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); color:rgba(255,255,255,0.6); font-size:12px; z-index:10; }
+  .lb-dots { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); display:flex; gap:6px; z-index:10; }
+  .lb-dot { width:6px; height:6px; border-radius:50%; background:rgba(255,255,255,0.35); cursor:pointer; transition:background 0.2s; }
+  .lb-dot.active { background:#FFCE58; }
+
+
+  /* ══ SERVICE IMAGE THUMBNAILS ══ */
+  .svc-thumbs { display:grid; grid-template-columns:repeat(4,1fr); gap:5px; margin-bottom:14px; }
+  .svc-thumb { aspect-ratio:1/1; overflow:hidden; border-radius:8px; cursor:pointer; background:var(--surface); }
+  .svc-thumb img { width:100%; height:100%; object-fit:cover; display:block; image-orientation:from-image; transition:opacity 0.15s; }
+  .svc-thumb:hover img { opacity:0.82; }
+
+  /* ══ LIGHTBOX ══ */
+  .lb-overlay { display:none; position:fixed; inset:0; z-index:900; background:rgba(0,0,0,0.93); align-items:center; justify-content:center; }
+  .lb-overlay.open { display:flex; }
+  .lb-img-wrap { position:relative; display:flex; align-items:center; justify-content:center; }
+  .lb-img { max-width:90vw; max-height:85vh; object-fit:contain; border-radius:6px; display:block; image-orientation:from-image; }
+  .lb-close { position:absolute; top:-14px; right:-14px; width:36px; height:36px; background:rgba(255,255,255,0.15); border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#fff; }
+  .lb-close:hover { background:rgba(255,255,255,0.25); }
+  .lb-btn { position:fixed; top:50%; transform:translateY(-50%); width:44px; height:44px; background:rgba(255,255,255,0.12); border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#fff; }
+  .lb-btn:hover { background:rgba(255,255,255,0.22); }
+  .lb-prev { left:14px; } .lb-next { right:14px; }
+  .lb-dots { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); display:flex; gap:6px; z-index:10; }
+  .lb-dot { width:6px; height:6px; border-radius:50%; background:rgba(255,255,255,0.35); cursor:pointer; transition:background 0.2s; }
+  .lb-dot.active { background:#FFCE58; }
+
+  /* ══ BLOG FOLD ══ */
+  #blog { scroll-snap-align:start; min-height:100svh; background:var(--bg); display:flex; flex-direction:column; justify-content:center; padding:60px 0 80px; position:relative; }
+  .blog-inner { width:100%; max-width:1100px; margin:0 auto; padding:0 24px; }
+  .blog-eyebrow { font-size:9px; letter-spacing:0.22em; text-transform:uppercase; color:var(--yellow); font-weight:700; margin-bottom:8px; }
+  .blog-heading { font-size:clamp(26px,5vw,40px); font-weight:800; color:var(--cream); margin-bottom:32px; line-height:1.15; }
+  .blog-heading span { color:var(--yellow); }
+  .blog-track { display:flex; gap:16px; overflow-x:auto; scroll-snap-type:x mandatory; -webkit-overflow-scrolling:touch; scrollbar-width:none; padding:6px 2px 4px; touch-action:pan-x; }
+  .blog-track::-webkit-scrollbar { display:none; }
+  .blog-card { flex:0 0 min(82vw,340px); scroll-snap-align:start; background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:24px; display:flex; flex-direction:column; gap:12px; text-decoration:none; color:inherit; transition:border-color 0.2s, transform 0.2s; }
+  .blog-card:hover { border-color:var(--yellow); transform:translateY(-2px); }
+  .blog-card-tag { font-size:9px; font-weight:700; letter-spacing:0.18em; text-transform:uppercase; color:var(--yellow); }
+  .blog-card-title { font-size:16px; font-weight:700; color:var(--cream); line-height:1.35; }
+  .blog-card-excerpt { font-size:13px; color:var(--cream-m); line-height:1.65; display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical; overflow:hidden; flex:1; }
+  .blog-card-cta { font-size:12px; font-weight:700; color:var(--yellow); margin-top:4px; display:flex; align-items:center; gap:4px; }
+  .blog-card-img { width:100%; height:160px; object-fit:cover; object-position:center; border-radius:10px 10px 0 0; display:block; margin-bottom:14px; }
+  .blog-nav { display:flex; gap:10px; margin-top:20px; justify-content:flex-end; }
+  .blog-nav-btn { width:38px; height:38px; border-radius:50%; background:var(--surface); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--cream); transition:background 0.18s, border-color 0.18s; }
+  .blog-nav-btn:hover { background:var(--raised); border-color:var(--yellow); color:var(--yellow); }
+
+  /* ══ FAQ FOLD ══ */
+  #faq-fold { scroll-snap-align:start; min-height:100svh; background:var(--bg); display:flex; align-items:center; justify-content:center; padding:60px 0 80px; }
+  .faq-fold-inner { width:100%; max-width:720px; margin:0 auto; padding:0 24px; position:relative; }
+  .faq-fold-header { display:flex; align-items:flex-end; justify-content:space-between; gap:16px; margin-bottom:32px; flex-wrap:wrap; }
+  .faq-fold-eyebrow { font-size:9px; letter-spacing:0.22em; text-transform:uppercase; color:var(--yellow); font-weight:700; margin-bottom:6px; }
+  .faq-fold-heading { font-size:clamp(26px,5vw,40px); font-weight:800; color:var(--cream); line-height:1.15; }
+  .faq-fold-heading span { color:var(--yellow); }
+  .faq-item { background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:6px; transition:border-color 0.2s; }
+  .faq-item.open { border-color:rgba(255,206,88,0.4); }
+  .faq-q { display:flex; align-items:center; justify-content:space-between; gap:14px; padding:18px 20px; cursor:pointer; user-select:none; }
+  .faq-q-text { font-size:15px; font-weight:600; color:var(--cream); line-height:1.4; }
+  .faq-icon { flex-shrink:0; width:22px; height:22px; border-radius:50%; background:var(--raised); display:flex; align-items:center; justify-content:center; transition:background 0.18s, transform 0.28s; }
+  .faq-item.open .faq-icon { background:var(--yellow); transform:rotate(45deg); }
+  .faq-icon svg { color:var(--cream); }
+  .faq-item.open .faq-icon svg { color:var(--bg); }
+  .faq-a { max-height:0; overflow:hidden; transition:max-height 0.35s ease, padding 0.22s; padding:0 20px; }
+  .faq-item.open .faq-a { max-height:300px; padding:0 20px 18px; }
+  .faq-a p { font-size:14px; line-height:1.8; color:var(--cream-m); }
+  .faq-a a { color:var(--yellow); text-decoration:none; }
+  .faq-see-all { flex-shrink:0; display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:700; color:var(--bg); background:var(--yellow); border-radius:30px; padding:10px 20px; text-decoration:none; transition:opacity 0.18s; white-space:nowrap; }
+  .faq-see-all:hover { opacity:0.88; }
+  .faq-mascot { position:absolute; right:-10px; top:-10px; width:130px; pointer-events:none; z-index:0; filter:drop-shadow(0 4px 14px rgba(0,0,0,0.3)); }
+  @media(min-width:640px) { .faq-mascot { width:170px; right:-16px; } }
+  .faq-list { position:relative; z-index:1; }
+
+  /* ══ DESKTOP OVERRIDES ══ */
+  @media(min-width:640px) {
+    #blog, #faq-fold { padding:80px 0 100px; }
+    .blog-card { flex:0 0 min(44vw,340px); }
+    .svc-img-col { width:44%; flex-shrink:0; }
+    .svc-img-col .svc-thumbs { grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:0; }
+    .svc-text-col { flex:1; overflow-y:auto; max-height:calc(100svh - 140px); scrollbar-width:none; display:flex; flex-direction:column; }
+  }
+  @media(min-width:960px) { .blog-card { flex:0 0 300px; } }
+
+  @keyframes fadeUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+  @keyframes pulse { 0%,100% { opacity:0.3; } 50% { opacity:1; } }
+
+  /* ══ MEMBERSHIP ══ */
+  #membership { scroll-snap-align:start; height:100svh; overflow:hidden; position:relative; background:#FFCE58; display:flex; align-items:center; justify-content:center; }
+  #mem-bg { position:absolute; inset:0; width:100%; height:100%; z-index:0; overflow:hidden; pointer-events:none; }
+  .mem-inner { position:relative; z-index:2; width:100%; max-width:420px; padding:24px 24px 40px; display:flex; flex-direction:column; align-items:center; text-align:center; }
+  .mem-eyebrow { font-size:9px; letter-spacing:0.22em; text-transform:uppercase; color:rgba(77,50,0,0.6); font-weight:700; margin-bottom:6px; }
+  .mem-title { font-family:"Fredoka One",cursive; font-size:32px; color:#1a1200; line-height:1.1; margin-bottom:20px; }
+  .mem-card { background:rgba(255,255,255,0.45); border:1px solid rgba(255,255,255,0.7); border-radius:20px; padding:20px 22px; width:100%; margin-bottom:18px; }
+  .mem-benefits { list-style:none; margin-bottom:18px; display:flex; flex-direction:column; gap:7px; }
+  .mem-benefit { font-size:13px; color:#1a1200; font-weight:600; display:flex; align-items:center; gap:8px; text-align:left; }
+  .mem-benefit::before { content:""; width:6px; height:6px; border-radius:50%; background:#4D96B9; flex-shrink:0; }
+  .mem-benefit.highlight::before { background:#0F1C26; }
+  .mem-tiers { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px; }
+  .mem-tier { background:rgba(255,255,255,0.55); border:1px solid rgba(255,255,255,0.8); border-radius:12px; padding:14px 10px; }
+  .mem-tier-price { font-family:"Fredoka One",cursive; font-size:22px; color:#0F1C26; }
+  .mem-tier-label { font-size:11px; color:rgba(26,18,0,0.65); font-weight:600; margin-top:3px; }
+  .mem-cta-note { font-size:13px; color:rgba(26,18,0,0.7); font-weight:600; text-align:center; margin-top:16px; padding:0 8px; line-height:1.5; }
+  .mem-cta { display:inline-block; background:#0F1C26; color:#FFCE58; font-family:"Nunito",sans-serif; font-size:13px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; padding:13px 36px; border-radius:50px; text-decoration:none; width:100%; text-align:center; box-sizing:border-box; }
+  @media(min-width:640px) { .mem-title { font-size:40px; } .mem-card { padding:24px 28px; } .mem-benefit { font-size:14px; } }
+</style>
+<script src="images.js"></script>
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="48x48" href="/images/favicon-48.png">
+<link rel="icon" type="image/png" sizes="96x96" href="/images/favicon-96.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon.png">
+<title>Barkhaus | Pet Services – Premium Pet Boarding, Grooming, Daycare, and Events in Metro Manila</title>
+<meta name="description" content="Safe hotel for cats and dogs, playful daycare, and gentle grooming in Pasig and Quezon City. Barkhaus gives your dog supervised indoor play and a caring, worry-free stay.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Barkhaus">
+<meta property="og:title" content="Barkhaus | Pet Services – Premium Pet Boarding, Grooming, Daycare, and Events in Metro Manila">
+<meta property="og:description" content="Safe hotel for cats and dogs, playful daycare, and gentle grooming in Pasig and Quezon City. Barkhaus gives your dog supervised indoor play and a caring, worry-free stay.">
+<meta property="og:url" content="https://barkhaus.ph/">
+<meta property="og:image" content="https://barkhaus.ph/images/hero-01.jpg">
+<meta name="twitter:image" content="https://barkhaus.ph/images/hero-01.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Barkhaus | Pet Services – Premium Pet Boarding, Grooming, Daycare, and Events in Metro Manila">
+<meta name="twitter:description" content="Safe hotel for cats and dogs, playful daycare, and gentle grooming in Pasig and Quezon City. Barkhaus gives your dog supervised indoor play and a caring, worry-free stay.">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "name": "Barkhaus",
+      "url": "https://barkhaus.ph"
+    },
+    {
+      "@type": "LocalBusiness",
+      "name": "Barkhaus Pet Services – Estancia",
+      "url": "https://barkhaus.ph",
+      "telephone": "+639276073681",
+      "address": {
+        "@type": "PostalAddress",
+        "streetAddress": "2nd Floor Main Wing, Estancia Mall, Capitol Commons",
+        "addressLocality": "Pasig City",
+        "addressRegion": "Metro Manila",
+        "addressCountry": "PH"
+      },
+      "openingHours": ["Mo-Th 11:00-21:00", "Fr-Su 10:00-22:00"],
+      "priceRange": "₱₱"
+    },
+    {
+      "@type": "LocalBusiness",
+      "name": "Barkhaus Pet Services – Eastwood",
+      "url": "https://barkhaus.ph",
+      "telephone": "+639567819641",
+      "address": {
+        "@type": "PostalAddress",
+        "streetAddress": "4th Floor, Eastwood Mall, Libis",
+        "addressLocality": "Quezon City",
+        "addressRegion": "Metro Manila",
+        "addressCountry": "PH"
+      },
+      "openingHours": "Mo-Su 10:00-22:00",
+      "priceRange": "₱₱"
+    }
+  ]
+}
+</script>
+</head>
+<body>
+
+<!-- ══ FOLD 1 · HERO ══ -->
+<section class="snap-section" id="hero">
+  <div class="hero-bg"><img src="" id="img-hero" alt="Barkhaus Pet Services – Premium Dog Boarding, Grooming, Daycare and Events in the Philippines"></div>
+  <div class="hero-content">
+    <img src="images/Barkhaus Pet Hotel Logo.png" alt="Barkhaus Pet Services Logo" class="hero-logo">
+    <p class="hero-submark">Pet Services · Philippines</p>
+    <h1 class="hero-title">Where <span>Tails</span><br>Wag Non-Stop</h1>
+    <p class="hero-tagline">Daycare, hotel stays, grooming, and celebrations all under one (very happy) roof.</p>
+    <a href="#" class="hero-book" onclick="showComingSoon();return false;">Book Now 🐾</a>
+  </div>
+  <div class="scroll-hint" onclick="document.getElementById('locations').scrollIntoView({behavior:'smooth'})">Scroll</div>
+</section>
+
+<!-- ══ FOLD 2 · LOCATIONS ══ -->
+<section class="snap-section" id="locations">
+  <div class="loc-tabs">
+    <div class="loc-tab active" onclick="switchLoc(0,true)">Estancia</div>
+    <div class="loc-tab" onclick="switchLoc(1,true)">Eastwood</div>
+    <div class="loc-tab loc-tab-soon" onclick="switchLoc(2,true)" style="cursor:pointer">Greenhills <span class="soon-pill">Soon</span></div>
+  </div>
+  <div class="loc-slides-wrap" id="locSlides">
+
+    <!-- ESTANCIA -->
+    <div class="loc-slide">
+      <div class="loc-slide-img" id="b1-main"><img src="" data-img="b1-main" alt="Barkhaus Estancia – Pet Services and Grooming at Capitol Commons, Pasig City" style="width:100%;height:100%;object-fit:cover;"></div>
+      <div class="loc-gradient"></div>
+      <div class="loc-thumbs" id="b1-thumbs">
+        <div class="loc-thumb active" onclick="switchThumb('b1',0,this)"><img src="" data-img="b1-0" alt="Barkhaus Estancia branch interior – dog boarding and pet care facility" style="width:100%;height:100%;object-fit:cover;border-radius:6px;"></div>
+        <div class="loc-thumb" onclick="switchThumb('b1',1,this)"><img src="" data-img="b1-1" alt="Barkhaus Estancia – pet hotel room and overnight boarding area" style="width:100%;height:100%;object-fit:cover;border-radius:6px;"></div>
+        <div class="loc-thumb" onclick="switchThumb('b1',2,this)"><img src="" data-img="b1-2" alt="Barkhaus Estancia – dog grooming station and grooming services" style="width:100%;height:100%;object-fit:cover;border-radius:6px;"></div>
+        <div class="loc-thumb" onclick="switchThumb('b1',3,this)"><img src="" data-img="b1-3" alt="Barkhaus Estancia – supervised dog play park and daycare area" style="width:100%;height:100%;object-fit:cover;border-radius:6px;"></div>
+      </div>
+    </div>
+
+    <!-- EASTWOOD -->
+    <div class="loc-slide">
+      <div class="loc-slide-img" id="b2-main"><img src="" data-img="b2-main" alt="Barkhaus Eastwood – Pet Services and Grooming in Eastwood City, Quezon City" style="width:100%;height:100%;object-fit:cover;"></div>
+      <div class="loc-gradient"></div>
+      <div class="loc-thumbs" id="b2-thumbs">
+        <div class="loc-thumb active" onclick="switchThumb('b2',0,this)"><img src="" data-img="b2-0" alt="Barkhaus Eastwood branch interior – dog boarding and pet care facility" style="width:100%;height:100%;object-fit:cover;border-radius:6px;"></div>
+        <div class="loc-thumb" onclick="switchThumb('b2',1,this)"><img src="" data-img="b2-1" alt="Barkhaus Eastwood – pet hotel room and overnight boarding area" style="width:100%;height:100%;object-fit:cover;border-radius:6px;"></div>
+        <div class="loc-thumb" onclick="switchThumb('b2',2,this)"><img src="" data-img="b2-2" alt="Barkhaus Eastwood – dog grooming station and grooming services" style="width:100%;height:100%;object-fit:cover;border-radius:6px;"></div>
+        <div class="loc-thumb" onclick="switchThumb('b2',3,this)"><img src="" data-img="b2-3" alt="Barkhaus Eastwood – supervised dog play park and daycare area" style="width:100%;height:100%;object-fit:cover;border-radius:6px;"></div>
+      </div>
+    </div>
+
+    <!-- GREENHILLS coming soon -->
+    <div class="loc-slide">
+      <div class="loc-slide-img" style="background:linear-gradient(135deg,#0F1C26 0%,#1A3044 100%);display:flex;align-items:center;justify-content:center;">
+        <div style="text-align:center;padding:40px 32px">
+          <div style="font-size:64px;margin-bottom:20px;opacity:0.35">&#128663;</div>
+          <p style="font-family:'Fredoka One',cursive;font-size:32px;color:var(--mid);margin-bottom:10px">Coming Soon</p>
+          <p style="font-size:13px;color:var(--mid);font-weight:500;line-height:1.7;max-width:220px;margin:0 auto">Greenhills, San Juan<br>Our third home is on the way.</p>
+        </div>
+      </div>
+      <div class="loc-gradient"></div>
+    </div>
+
+  </div>
+  <div class="loc-dots" id="locDots">
+    <div class="loc-dot active" onclick="switchLoc(0,true)"></div>
+    <div class="loc-dot" onclick="switchLoc(1,true)"></div>
+    <div class="loc-dot" onclick="switchLoc(2,true)"></div>
+  </div>
+  <div class="loc-info">
+    <p class="loc-info-name" id="locName">Estancia</p>
+    <p class="loc-info-addr" id="locAddr">2nd Floor Main Wing at Estancia Mall, Capitol Commons, Pasig City</p>
+    <div class="loc-info-row">
+      <a class="loc-maps" id="locMaps" href="https://maps.app.goo.gl/YrzAVYHE8G6982gz8" target="_blank">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0Z"/><circle cx="12" cy="10" r="3"/></svg> Open in Maps
+      </a>
+      <span class="loc-hours" id="locHours">Mon-Thu 11AM-9PM<br>Fri-Sun 10AM-10PM</span>
+    </div>
+  </div>
+</section>
+
+<!-- ══ LOCATION MODALS ══ -->
+<div class="loc-modal-overlay" id="modal-overlay" onclick="closeModalOnOverlay(event)">
+  <div class="loc-modal" id="loc-modal">
+    <div class="loc-modal-header">
+      <div class="loc-modal-header-left">
+        <p class="loc-modal-tag" id="modal-tag">Our first home</p>
+        <p class="loc-modal-name" id="modal-name">Estancia</p>
+        <p class="loc-modal-subtitle" id="modal-subtitle">Capitol Commons, Pasig City</p>
+      </div>
+      <div class="loc-modal-close" onclick="closeModal()">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </div>
+    </div>
+    <div class="loc-modal-body">
+      <div class="loc-modal-section">
+        <p class="loc-modal-section-label">About this branch</p>
+        <p class="loc-modal-desc" id="modal-desc-1"></p>
+        <p class="loc-modal-desc" id="modal-desc-2"></p>
+      </div>
+      <div class="loc-modal-section">
+        <p class="loc-modal-section-label">Branch character</p>
+        <div class="loc-modal-identity">
+          <p class="loc-modal-identity-element" id="modal-element"></p>
+          <p class="loc-modal-identity-desc" id="modal-element-desc"></p>
+        </div>
+      </div>
+      <div class="loc-modal-section">
+        <p class="loc-modal-section-label">The space</p>
+        <div class="loc-modal-features" id="modal-features"></div>
+      </div>
+      <a href="#" class="loc-modal-book" onclick="showComingSoon();return false;">Book this branch</a>
+    </div>
+  </div>
+</div>
+
+<!-- ══ FOLD 3 · SERVICES ══ -->
+<section class="snap-section" id="services">
+  <canvas id="paws-bg"></canvas>
+  <div class="paws-vignette"></div>
+  <div class="services-inner">
+    <div class="services-header">
+      <p class="services-eyebrow">What we offer</p>
+      <h2 class="services-title">Our Services</h2>
+    </div>
+    <div class="svc-slides-wrap" id="svcSlidesWrap">
+      <!-- slides injected by JS -->
+    </div>
+    <nav class="svc-nav" id="svcNav" aria-label="Service navigation">
+      <!-- items injected by JS -->
+    </nav>
+  </div>
+</section>
+
+<!-- ══ SERVICE MODALS ══ -->
+<div class="svc-modal-overlay" id="svc-modal-overlay" onclick="closeSvcModalOnOverlay(event)">
+  <div class="svc-modal" id="svc-modal">
+    <div class="svc-modal-header">
+      <div class="svc-modal-header-left">
+        <p class="svc-modal-tag" id="svc-modal-tag">Service</p>
+        <p class="svc-modal-name" id="svc-modal-name">Play Park</p>
+      </div>
+      <div class="svc-modal-close" onclick="closeSvcModal()">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </div>
+    </div>
+    <div class="svc-modal-body">
+      <div class="svc-carousel" id="svc-carousel" style="display:none;">
+        <div class="svc-carousel-track" id="svc-carousel-track"></div>
+        <div class="svc-carousel-btn svc-carousel-prev" onclick="svcCarouselNav(-1)">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
+        </div>
+        <div class="svc-carousel-btn svc-carousel-next" onclick="svcCarouselNav(1)">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+        </div>
+        <div class="svc-carousel-dots" id="svc-carousel-dots"></div>
+      </div>
+      <div class="svc-modal-section">
+        <p class="svc-modal-section-label">About this service</p>
+        <p class="svc-modal-desc" id="svc-modal-desc"></p>
+      </div>
+      <div class="svc-modal-section">
+        <p class="svc-modal-section-label">What's included</p>
+        <div class="svc-modal-features" id="svc-modal-features"></div>
+      </div>
+      <a href="#" class="svc-modal-book" onclick="showComingSoon();return false;">Book Now 🐾</a>
+    </div>
+  </div>
+</div>
+
+<!-- ══ FOLD 4 · PRODUCTS ══ -->
+<section class="snap-section" id="membership">
+  <svg id="mem-bg" viewBox="0 0 390 844" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+    <g transform="translate(30,60) rotate(-15) scale(0.9)" opacity="0.13">
+      <circle cx="20" cy="8" r="7" fill="#1a1200"/><circle cx="34" cy="4" r="6" fill="#1a1200"/>
+      <circle cx="46" cy="10" r="6" fill="#1a1200"/><circle cx="58" cy="6" r="5" fill="#1a1200"/>
+      <ellipse cx="39" cy="30" rx="18" ry="16" fill="#1a1200"/>
+    </g>
+    <g transform="translate(300,40) rotate(25) scale(0.8)" opacity="0.12">
+      <rect x="20" y="8" width="60" height="12" rx="6" fill="#1a1200"/>
+      <circle cx="16" cy="8" r="8" fill="#1a1200"/><circle cx="16" cy="20" r="8" fill="#1a1200"/>
+      <circle cx="84" cy="8" r="8" fill="#1a1200"/><circle cx="84" cy="20" r="8" fill="#1a1200"/>
+    </g>
+    <g transform="translate(10,300) rotate(10) scale(1.1)" opacity="0.10">
+      <ellipse cx="30" cy="14" rx="24" ry="12" fill="#1a1200"/>
+      <polygon points="56,2 70,14 56,26" fill="#1a1200"/>
+    </g>
+    <g transform="translate(310,240) rotate(20) scale(1.3)" opacity="0.09">
+      <circle cx="20" cy="8" r="7" fill="#1a1200"/><circle cx="34" cy="4" r="6" fill="#1a1200"/>
+      <circle cx="46" cy="10" r="6" fill="#1a1200"/><circle cx="58" cy="6" r="5" fill="#1a1200"/>
+      <ellipse cx="39" cy="30" rx="18" ry="16" fill="#1a1200"/>
+    </g>
+    <g transform="translate(20,640) rotate(-20) scale(1.0)" opacity="0.11">
+      <rect x="20" y="8" width="60" height="12" rx="6" fill="#1a1200"/>
+      <circle cx="16" cy="8" r="8" fill="#1a1200"/><circle cx="16" cy="20" r="8" fill="#1a1200"/>
+      <circle cx="84" cy="8" r="8" fill="#1a1200"/><circle cx="84" cy="20" r="8" fill="#1a1200"/>
+    </g>
+    <g transform="translate(290,700) rotate(-15) scale(0.9)" opacity="0.10">
+      <ellipse cx="30" cy="14" rx="24" ry="12" fill="#1a1200"/>
+      <polygon points="56,2 70,14 56,26" fill="#1a1200"/>
+    </g>
+    <g transform="translate(170,20) rotate(5) scale(0.6)" opacity="0.10">
+      <circle cx="20" cy="8" r="7" fill="#1a1200"/><circle cx="34" cy="4" r="6" fill="#1a1200"/>
+      <circle cx="46" cy="10" r="6" fill="#1a1200"/><circle cx="58" cy="6" r="5" fill="#1a1200"/>
+      <ellipse cx="39" cy="30" rx="18" ry="16" fill="#1a1200"/>
+    </g>
+    <g transform="translate(240,160) rotate(-30) scale(0.65)" opacity="0.09">
+      <ellipse cx="30" cy="14" rx="24" ry="12" fill="#1a1200"/>
+      <polygon points="56,2 70,14 56,26" fill="#1a1200"/>
+    </g>
+    <g transform="translate(320,440) rotate(10) scale(0.7)" opacity="0.08">
+      <rect x="20" y="8" width="60" height="12" rx="6" fill="#1a1200"/>
+      <circle cx="16" cy="8" r="8" fill="#1a1200"/><circle cx="16" cy="20" r="8" fill="#1a1200"/>
+      <circle cx="84" cy="8" r="8" fill="#1a1200"/><circle cx="84" cy="20" r="8" fill="#1a1200"/>
+    </g>
+    <g transform="translate(155,760) rotate(-10) scale(0.7)" opacity="0.09">
+      <circle cx="20" cy="8" r="7" fill="#1a1200"/><circle cx="34" cy="4" r="6" fill="#1a1200"/>
+      <circle cx="46" cy="10" r="6" fill="#1a1200"/><circle cx="58" cy="6" r="5" fill="#1a1200"/>
+      <ellipse cx="39" cy="30" rx="18" ry="16" fill="#1a1200"/>
+    </g>
+  </svg>
+  <div class="mem-inner">
+    <p class="mem-eyebrow">Exclusive perks</p>
+    <h2 class="mem-title">Be a Barkhaus Member</h2>
+    <div class="mem-card">
+      <ul class="mem-benefits">
+        <li class="mem-benefit highlight">20% discount on indoor playpark and daycare</li>
+        <li class="mem-benefit highlight">10% discount on Hotel</li>
+        <li class="mem-benefit highlight">10% discount on Grooming Services</li>
+        <li class="mem-benefit highlight">10% discount on Pet Studio (Eastwood only)</li>
+        <li class="mem-benefit highlight">10% discount on personal event</li>
+        <li class="mem-benefit">FREE Bath and Dry for Hotel with minimum 3 nights stay</li>
+        <li class="mem-benefit">FREE drop-off and pick-up on designated areas only</li>
+        <li class="mem-benefit">Exclusive early drop-off and late pick-up perks at mall entrances for a fee</li>
+      </ul>
+      <div class="mem-tiers">
+        <div class="mem-tier">
+          <div class="mem-tier-price">&#8369;3,499</div>
+          <div class="mem-tier-label">1 branch only</div>
+        </div>
+        <div class="mem-tier">
+          <div class="mem-tier-price">&#8369;4,999</div>
+          <div class="mem-tier-label">2 branches</div>
+        </div>
+      </div>
+      <p class="mem-cta-note">Visit any Barkhaus branch to register as a member.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══ FOLD · BLOG ══ -->
+<section id="blog">
+  <div class="blog-inner">
+    <p class="blog-eyebrow">From the blog</p>
+    <h2 class="blog-heading">Tips &amp; guides for <span>happy pets</span></h2>
+    <div class="blog-track" id="blogTrack">
+      <!-- populated by index.js from blog_posts table -->
+    </div>
+    <div class="blog-nav">
+      <button class="blog-nav-btn" onclick="blogNav(-1)"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M19 12H5M11 18l-6-6 6-6"/></svg></button>
+      <button class="blog-nav-btn" onclick="blogNav(1)"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+    </div>
+  </div>
+</section>
+
+<!-- ══ FOLD · FAQ ══ -->
+<section id="faq-fold">
+  <div class="faq-fold-inner">
+    <div class="faq-fold-header">
+      <div>
+        <p class="faq-fold-eyebrow">Got questions?</p>
+        <h2 class="faq-fold-heading">We've got <span>answers</span></h2>
+      </div>
+    </div>
+    <img class="faq-mascot" src="images/faq-dog.webp" alt="">
+    <div class="faq-list">
+      <div class="faq-item" id="hfti0">
+        <div class="faq-q" onclick="homeFaqToggle(0)">
+          <span class="faq-q-text">Do I need to book in advance?</span>
+          <span class="faq-icon"><svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+        </div>
+        <div class="faq-a"><p>Advanced booking is highly recommended, especially during weekends, holidays, and peak travel seasons. You may make your booking through our <a href='#' onclick='showComingSoon();return false;'>booking portal</a>.</p></div>
+      </div>
+      <div class="faq-item" id="hfti1">
+        <div class="faq-q" onclick="homeFaqToggle(1)">
+          <span class="faq-q-text">What should I bring when checking in my dog?</span>
+          <span class="faq-icon"><svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+        </div>
+        <div class="faq-a"><p>Bring your pet's food, any necessary medication, vaccination records, and comfort items like a familiar blanket or toy. Keeping routines familiar helps your pet settle in more easily.</p></div>
+      </div>
+      <div class="faq-item" id="hfti2">
+        <div class="faq-q" onclick="homeFaqToggle(2)">
+          <span class="faq-q-text">Is daycare good for social pets?</span>
+          <span class="faq-icon"><svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+        </div>
+        <div class="faq-a"><p>Yes, daycare can be a great option for pets that enjoy human interaction, playtime, and structured activity. Feel free to bring them over to interact with our staff and other pets.</p></div>
+      </div>
+      <div class="faq-item" id="hfti3">
+        <div class="faq-q" onclick="homeFaqToggle(3)">
+          <span class="faq-q-text">Do dogs need vaccinations before visiting?</span>
+          <span class="faq-icon"><svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+        </div>
+        <div class="faq-a"><p>Yes, updated vaccinations are required to help protect all dogs in the facility. This is especially important in shared environments like daycare, hotel, and boarding.</p></div>
+      </div>
+      <div class="faq-item" id="hfti4">
+        <div class="faq-q" onclick="homeFaqToggle(4)">
+          <span class="faq-q-text">What if my dog is shy or nervous?</span>
+          <span class="faq-icon"><svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+        </div>
+        <div class="faq-a"><p>Shy dogs can still benefit from daycare if introduced slowly and placed in an environment that respects their pace. Our team adjusts care to each dog's comfort level.</p></div>
+      </div>
+    </div>
+    <div style="margin-top:24px;">
+      <a class="faq-see-all" href="faq.html">See all FAQs <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+    </div>
+  </div>
+</section>
+
+<!-- ══ LIGHTBOX ══ -->
+<div class="lb-overlay" id="lb-overlay" onclick="lbOverlayClick(event)">
+  <div class="lb-img-wrap">
+    <img class="lb-img" id="lb-img" src="" alt="">
+    <div class="lb-close" onclick="lbClose()"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></div>
+  </div>
+  <div class="lb-btn lb-prev" onclick="lbNav(-1)"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></div>
+  <div class="lb-btn lb-next" onclick="lbNav(1)"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></div>
+  <div class="lb-dots" id="lb-dots"></div>
+</div>
+
+<!-- ══ FOLD 5 · FOOTER ══ -->
+<div id="contact"></div>
+<div id="footer-section" class="contact">
+  <footer>
+    <p class="footer-logo"><img src="images/Barkhaus Pet Hotel Logo.png" alt="Barkhaus Pet Services Logo" style="height:28px;width:auto;display:inline-block;vertical-align:middle;"></p>
+    <p class="footer-tag">Pet Services · Philippines</p>
+    <p class="footer-contact-label">Contact us</p>
+    <div class="footer-contacts">
+      <div class="footer-row"><span class="footer-branch">Estancia, Pasig</span><a class="footer-num" href="tel:+639276073681">+63 927 607 3681</a></div>
+      <div class="footer-row"><span class="footer-branch">Eastwood, QC</span><a class="footer-num" href="tel:+639567819641">+63 956 781 9641</a></div>
+    </div>
+    <div class="footer-socials">
+      <a class="footer-social" href="https://www.facebook.com/barkhausph" target="_blank" aria-label="Facebook">
+        <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>
+      </a>
+      <a class="footer-social" href="https://www.instagram.com/barkhausph" target="_blank" aria-label="Instagram">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
+      </a>
+      <a class="footer-social" href="https://www.tiktok.com/@barkhausph" target="_blank" aria-label="TikTok">
+        <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.33-6.34V8.69a8.18 8.18 0 0 0 4.78 1.52V6.76a4.85 4.85 0 0 1-1.01-.07z"/></svg>
+      </a>
+    </div>
+    <p class="footer-legal">© 2026 Barkhaus Pet Services. All rights reserved.</p>
+  </footer>
+</div>
+
+<nav class="float-nav" id="floatNav">
+  <span class="float-nav-logo" onclick="document.getElementById('hero').scrollIntoView({behavior:'smooth'})"><img src="images/Barkhaus Pet Hotel Logo.png" alt="Barkhaus Pet Services Logo" style="height:18px;width:auto;display:inline-block;vertical-align:middle;"></span>
+  <a href="#" class="float-nav-book" onclick="showComingSoon();return false;">Book Now</a>
+</nav>
+
+<!-- JS moved to index.js -->
+
+
+<!-- ══ PRICE INFO POPOVER ══ -->
+<div class="price-info-overlay" id="priceInfoOverlay" onclick="hidePriceInfo()"></div>
+<div class="price-info-popover" id="priceInfoPopover">
+  <div class="price-info-popover-handle"></div>
+  <p class="price-info-popover-title" id="priceInfoTitle"></p>
+  <p class="price-info-popover-text" id="priceInfoText"></p>
+</div>
+
+<!-- ══ LIGHTBOX ══ -->
+<div class="lb-overlay" id="lb-overlay" onclick="lbOverlayClick(event)">
+  <div class="lb-img-wrap">
+    <img class="lb-img" id="lb-img" src="" alt="">
+    <div class="lb-close" onclick="lbClose()">
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </div>
+  </div>
+  <div class="lb-btn lb-prev" onclick="lbNav(-1)">
+    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
+  </div>
+  <div class="lb-btn lb-next" onclick="lbNav(1)">
+    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+  </div>
+  <div class="lb-dots" id="lb-dots"></div>
+</div>
+
+<!-- COMING SOON MODAL -->
+<div id="comingSoonOverlay" onclick="hideComingSoon()" style="display:none;position:fixed;inset:0;background:rgba(10,20,28,0.72);z-index:9999;align-items:center;justify-content:center;padding:24px;">
+  <div onclick="event.stopPropagation()" style="background:#1A3044;border:0.5px solid rgba(77,150,185,0.25);border-radius:20px;padding:36px 28px;max-width:340px;width:100%;text-align:center;">
+    <div style="font-size:40px;margin-bottom:12px">🐾</div>
+    <h2 style="font-family:'Fredoka One',cursive;font-size:24px;color:#F0EDE6;margin-bottom:8px">Coming Soon!</h2>
+    <p style="font-size:14px;color:#B8D4E0;line-height:1.6;margin-bottom:24px">Online booking is almost ready. In the meantime, please visit or message your preferred branch to reserve a slot.</p>
+    <button onclick="hideComingSoon()" style="background:#FFCE58;color:#3d2e00;border:none;border-radius:50px;padding:12px 32px;font-size:14px;font-weight:700;cursor:pointer;font-family:'Nunito',sans-serif;">Got it!</button>
+  </div>
+</div>
+
+<script src="index.js"></script>
+</body>
+</html>

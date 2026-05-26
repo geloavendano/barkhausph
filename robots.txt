@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /admin.html
+Disallow: /barkhaus-tests.html
+
+Sitemap: https://barkhaus.ph/sitemap.xml

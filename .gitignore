@@ -1,0 +1,17 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Editor dirs
+.vscode/
+.idea/
+
+# Dev/test files (kept in barkhaus-dev)
+barkhaus-tests.html
+barkhaus_email_branded.html
+exports/
+*.zip
+
+# Node (if ever added)
+node_modules/
