@@ -307,7 +307,7 @@ var services = [
       { label: 'Pet-friendly seating',      detail: 'Bring your fur baby along' },
       { label: 'Eastwood only',             detail: 'Available at our Eastwood branch' },
     ],
-    pricing: '<div class="svc-price-row"><span class="svc-price-label">Cafe Menu</span><a class="svc-price-val svc-contact-link" href="#" onclick="lbOpen([\'images/Cafe%20Menu.png\'],0);return false;">View Menu</a></div>',
+    pricing: '<div class="svc-price-row"><span class="svc-price-label">Cafe Menu</span><a class="svc-price-val svc-contact-link" href="#" onclick="lbOpen([\'https://dxttnbtfhpanyiyduevn.supabase.co/storage/v1/object/public/site-images/cafe-menu.png\'],0);return false;">View Menu</a></div>',
   },
 ];
 
