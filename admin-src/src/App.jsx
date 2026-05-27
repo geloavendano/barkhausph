@@ -67,16 +67,19 @@ export default function App() {
   }
 
   async function loadResources(branchId) {
+    // Load rooms + groomers together; studios separately so a missing table can't block the others
     try {
-      const [r, g, s] = await Promise.all([
+      const [r, g] = await Promise.all([
         sbGet('rooms',    `branch_id=eq.${branchId}&select=id,name,color,active&order=name`),
         sbGet('groomers', `branch_id=eq.${branchId}&select=id,name,color,active&order=name`),
-        sbGet('studios',  `branch_id=eq.${branchId}&active=eq.true&select=id,name,color&order=sort_order`),
       ])
       setRooms(r ?? [])
       setGroomers(g ?? [])
-      setStudios(s ?? [])
     } catch { /* non-fatal */ }
+    try {
+      const s = await sbGet('studios', `branch_id=eq.${branchId}&active=eq.true&select=id,name,color&order=sort_order`)
+      setStudios(s ?? [])
+    } catch { setStudios([]) }
   }
 
   // Load resources when branch changes
@@ -85,7 +88,19 @@ export default function App() {
   }, [branches, branchIdx])
 
   /* ── Render ── */
-  if (session === undefined) return null
+  if (session === undefined) return (
+    <div style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      height: '100vh', background: 'var(--bg)',
+    }}>
+      <div style={{
+        width: 28, height: 28, border: '3px solid var(--border)',
+        borderTopColor: 'var(--yellow)', borderRadius: '50%',
+        animation: 'spin 0.8s linear infinite',
+      }} />
+      <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+    </div>
+  )
 
   if (!session || !allowed) return <Gate />
 
