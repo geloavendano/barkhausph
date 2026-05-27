@@ -1,0 +1,170 @@
+.page { padding: 0; }
+
+.topRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.title {
+  font-family: 'Fredoka One', cursive;
+  font-size: 20px;
+  color: var(--cream);
+  margin: 0 0 2px;
+}
+
+.dateLabel {
+  font-size: 12px;
+  color: var(--mid);
+  margin: 0;
+}
+
+.refreshBtn {
+  font-size: 11px;
+  color: var(--mid);
+  background: transparent;
+  border: 0.5px solid var(--border);
+  border-radius: 20px;
+  padding: 4px 12px;
+  cursor: pointer;
+  font-family: 'Nunito', sans-serif;
+  flex-shrink: 0;
+}
+.refreshBtn:hover { background: var(--surface); }
+.refreshBtn:disabled { opacity: 0.5; cursor: default; }
+
+.msg  { font-size: 13px; color: var(--mid); padding: 8px 0; }
+.err  { font-size: 13px; color: var(--error); padding: 8px 0; }
+
+.empty { text-align: center; padding: 40px 16px; }
+.emptyIcon { font-size: 32px; margin-bottom: 12px; }
+.emptyText { color: var(--mid); font-size: 13px; }
+
+/* ── Section ── */
+.section { }
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: transparent;
+  border: none;
+  padding: 4px 0;
+  margin-bottom: 8px;
+  cursor: pointer;
+  font-family: 'Nunito', sans-serif;
+  text-align: left;
+}
+
+.sectionLabel {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.chevron {
+  font-size: 14px;
+  line-height: 1;
+}
+
+/* ── Card ── */
+.card {
+  background: var(--surface);
+  border: 0.5px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.card:hover { background: var(--raised); }
+
+.cardTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.cardLeft {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.svcBadge {
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-weight: 700;
+}
+
+.ref {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--cream);
+}
+
+.actionPill {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.cardBottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.petName {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--cream);
+  margin: 0 0 2px;
+}
+
+.ownerName {
+  font-size: 12px;
+  color: var(--cream-m);
+  margin: 0;
+}
+
+.ownerMobile {
+  font-size: 11px;
+  color: var(--mid);
+  margin: 0;
+}
+
+.cardRight {
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.time {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--cream);
+  margin: 0 0 2px;
+}
+
+.checkoutDate {
+  font-size: 10px;
+  color: var(--mid);
+  margin: 0 0 2px;
+}
+
+.statusPill {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: capitalize;
+}
