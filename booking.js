@@ -660,7 +660,8 @@ function renderGroomServices() {
   var size = booking.petSize;
   var grid = document.getElementById('groomSvcGrid');
   grid.innerHTML = GROOM_SERVICES.map(function(s) {
-    var price = GROOM_PRICES[s.key][size] || 0;
+    // Ala carte has no base price — cost comes entirely from selected add-ons
+    var price = (s.key === 'ala_carte') ? 0 : (GROOM_PRICES[s.key][size] || 0);
     var priceLabel = s.key === 'ala_carte' ? 'Choose services below' : ('₱' + price.toLocaleString());
     return '<div class="svc-card" onclick="selectGroomService(this,\'' + s.key + '\',' + price + ')">' +
       '<div class="svc-card-radio"></div>' +
