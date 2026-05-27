@@ -1728,21 +1728,26 @@ function setMembership(val) {
     refreshAllTotals();
   }
 }
+var _petNameDebounce = null;
 function onPetNameInput() {
   refreshContinueBtn();
-  // If membership was already validated against the old pet name, invalidate it
-  // so the customer can't proceed with a mismatched discount.
+  var idInput = (document.getElementById('membershipId') || {}).value || '';
+  if (idInput.trim().length < 4) return; // no membership ID entered — nothing to do
+  // Invalidate immediately so the user can't slip through while retyping
   if (booking.memberValid) {
     booking.memberValid = false;
     var msg = document.getElementById('memberValidMsg');
     if (msg) {
       msg.style.display = 'block';
-      msg.textContent = 'Pet name changed — please re-verify your membership ID.';
+      msg.textContent = 'Re-checking membership…';
       msg.style.color = 'var(--mid)';
     }
     refreshAllTotals();
     refreshContinueBtn();
   }
+  // Debounce: re-run validation 600 ms after the user stops typing
+  clearTimeout(_petNameDebounce);
+  _petNameDebounce = setTimeout(function() { validateMemberId(); }, 600);
 }
 
 async function validateMemberId() {
