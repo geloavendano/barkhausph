@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { supabase, sbGet } from './lib/supabase'
+import { supabase, sbGet, SUPABASE_URL, SUPABASE_ANON_KEY } from './lib/supabase'
 import Gate        from './components/Gate/Gate'
 import Shell       from './components/Shell/Shell'
 import MembersPage  from './pages/Members/MembersPage'
@@ -46,10 +46,10 @@ export default function App() {
 
   async function verifyAdmin(sess) {
     try {
-      const url = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/admin_users?select=email&email=eq.${encodeURIComponent(sess.user.email)}&limit=1`
+      const url = `${SUPABASE_URL}/rest/v1/admin_users?select=email&email=eq.${encodeURIComponent(sess.user.email)}&limit=1`
       const res = await fetch(url, {
         headers: {
-          apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+          apikey: SUPABASE_ANON_KEY,
           Authorization: `Bearer ${sess.access_token}`,
         },
       })
