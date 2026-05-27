@@ -485,12 +485,16 @@ function selectLocation(el, val) {
   // Cat availability for hotel / daycare
   var hotelCat = document.getElementById('hotelCatBtn');
   var daycareCat = document.getElementById('daycareCatBtn');
+  var studioCard  = document.getElementById('studioCard');
+  var studioBadge = document.getElementById('studioBadge');
   if (val === 'estancia') {
-    if (hotelCat) { hotelCat.classList.add('disabled-opt'); document.getElementById('hotelCatNote').textContent = 'Eastwood only'; }
-    if (daycareCat) { daycareCat.classList.add('disabled-opt'); document.getElementById('daycareCatNote').textContent = 'Eastwood only'; }
+    if (hotelCat)   { hotelCat.classList.add('disabled-opt');    document.getElementById('hotelCatNote').textContent   = 'Eastwood only'; }
+    if (daycareCat) { daycareCat.classList.add('disabled-opt');  document.getElementById('daycareCatNote').textContent = 'Eastwood only'; }
+    if (studioCard) { studioCard.classList.add('disabled');    if (studioBadge) studioBadge.textContent = 'Eastwood only'; }
   } else {
-    if (hotelCat) { hotelCat.classList.remove('disabled-opt'); document.getElementById('hotelCatNote').textContent = 'any size'; }
+    if (hotelCat)   { hotelCat.classList.remove('disabled-opt'); document.getElementById('hotelCatNote').textContent   = 'any size'; }
     if (daycareCat) { daycareCat.classList.remove('disabled-opt'); document.getElementById('daycareCatNote').textContent = '\u20b1500 base'; }
+    if (studioCard) { studioCard.classList.remove('disabled'); if (studioBadge) studioBadge.textContent = 'Contact to book'; }
   }
   nextStep();
 }
@@ -502,10 +506,10 @@ function selectService(el, val) {
   el.classList.add('selected');
   booking.service = val;
   if (val === 'events') {
-    document.getElementById('step2').classList.remove('active');
-    document.getElementById('stepEvents').classList.add('active');
-    document.getElementById('bottomNav').style.display = 'none';
-    document.getElementById('progressWrap').style.display = 'none';
+    // Events uses the contact modal (showContactModal), not a booking flow.
+    // The eventsCard onclick calls showContactModal directly; this branch
+    // is kept as a safety fallback only.
+    showContactModal('events');
     return;
   }
   nextStep();
@@ -2890,9 +2894,43 @@ async function submitBooking() {
   });
 }
 
-function showStudioContactModal() {
-  document.getElementById('studioContactOverlay').style.display = 'flex';
+var _BRANCH_CONTACT = {
+  estancia: { tel: 'tel:+639276073681', label: 'Call Estancia — +63 927 607 3681' },
+  eastwood: { tel: 'tel:+639567819641', label: 'Call Eastwood — +63 956 781 9641' }
+};
+function showContactModal(type) {
+  var loc  = booking.location || 'eastwood';
+  var c    = _BRANCH_CONTACT[loc] || _BRANCH_CONTACT.eastwood;
+  var bs   = 'display:block;border-radius:12px;padding:13px;font-family:\'Nunito\',sans-serif;font-weight:700;font-size:14px;text-decoration:none;margin-bottom:10px;';
+  function primaryA(href, label) { return '<a href="' + href + '" style="' + bs + 'background:var(--blue);color:var(--cream)">' + label + '</a>'; }
+  function secondaryA(href, label) { return '<a href="' + href + '" target="_blank" rel="noopener" style="' + bs + 'background:var(--raised);color:var(--cream)">' + label + '</a>'; }
+  function contactActions(branchKey) {
+    var bc = _BRANCH_CONTACT[branchKey] || c;
+    return primaryA(bc.tel, bc.label) +
+           secondaryA('https://instagram.com/barkhausph', 'Instagram @barkhausph') +
+           secondaryA('https://facebook.com/barkhausph', 'Facebook @barkhausph');
+  }
+  var icon, title, body, actions;
+  if (type === 'studio') {
+    icon = '📷'; title = 'BarkStudio';
+    if (loc === 'estancia') {
+      body    = 'BarkStudio is only available at our Eastwood branch — 4th Floor, Eastwood Mall, Libis, Quezon City.';
+      actions = '';
+    } else {
+      body    = 'Studio bookings are currently available via direct visit or message. Get in touch and we’ll set it up for you.';
+      actions = contactActions('eastwood');
+    }
+  } else { // events
+    icon    = '🎉'; title = 'Events';
+    body    = 'Event bookings are currently available via direct visit or message. Get in touch with us to plan your pet’s special day!';
+    actions = contactActions(loc);
+  }
+  document.getElementById('cModalIcon').textContent   = icon;
+  document.getElementById('cModalTitle').textContent  = title;
+  document.getElementById('cModalBody').textContent   = body;
+  document.getElementById('cModalActions').innerHTML  = actions;
+  document.getElementById('contactModalOverlay').style.display = 'flex';
 }
-function closeStudioContactModal() {
-  document.getElementById('studioContactOverlay').style.display = 'none';
+function closeContactModal() {
+  document.getElementById('contactModalOverlay').style.display = 'none';
 }

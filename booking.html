@@ -393,16 +393,16 @@
       </div>
       <span class="option-icon">&#9728;&#65039;</span>
     </div>
-    <div class="option-card disabled" id="studioCard" onclick="showStudioContactModal()">
+    <div class="option-card disabled" id="studioCard" onclick="showContactModal('studio')">
       <div class="option-radio"></div>
       <div class="option-info">
         <p class="option-name">BarkStudio</p>
         <p class="option-detail">Pet portrait studio with professional lighting and props.</p>
-        <span class="option-badge" id="studioBadge">Contact to book</span>
+        <span class="option-badge" id="studioBadge">Eastwood only</span>
       </div>
       <span class="option-icon">&#128247;</span>
     </div>
-    <div class="option-card" onclick="selectService(this,'events')">
+    <div class="option-card" id="eventsCard" onclick="showContactModal('events')">
       <div class="option-radio"></div>
       <div class="option-info">
         <p class="option-name">Events</p>
@@ -1194,14 +1194,13 @@
 <script src="validation.js"></script>
 <script src="booking.js"></script>
 
-<div id="studioContactOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:1000;align-items:center;justify-content:center;padding:24px" onclick="if(event.target===this)closeStudioContactModal()">
+<div id="contactModalOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:1000;align-items:center;justify-content:center;padding:24px" onclick="if(event.target===this)closeContactModal()">
   <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:20px;padding:28px 24px;max-width:340px;width:100%;text-align:center">
-    <div style="font-size:36px;margin-bottom:12px">📷</div>
-    <p style="font-family:'Fredoka One',cursive;font-size:22px;color:var(--cream);margin:0 0 8px">BarkStudio</p>
-    <p style="font-size:14px;color:var(--mid);line-height:1.6;margin:0 0 20px">Studio bookings are handled directly by our Eastwood branch. Get in touch and we'll set it up for you.</p>
-    <a href="tel:+639567819641" style="display:block;background:var(--blue);color:var(--cream);border-radius:12px;padding:13px;font-family:'Nunito',sans-serif;font-weight:700;font-size:14px;text-decoration:none;margin-bottom:10px">Call Eastwood — +63 956 781 9641</a>
-    <a href="https://facebook.com/barkhausph" target="_blank" rel="noopener" style="display:block;background:var(--raised);color:var(--cream);border-radius:12px;padding:13px;font-family:'Nunito',sans-serif;font-weight:700;font-size:14px;text-decoration:none;margin-bottom:16px">Message us on Facebook</a>
-    <button onclick="closeStudioContactModal()" style="background:none;border:none;color:var(--mid);font-family:'Nunito',sans-serif;font-size:13px;font-weight:600;cursor:pointer">Close</button>
+    <div id="cModalIcon" style="font-size:36px;margin-bottom:12px"></div>
+    <p id="cModalTitle" style="font-family:'Fredoka One',cursive;font-size:22px;color:var(--cream);margin:0 0 8px"></p>
+    <p id="cModalBody" style="font-size:14px;color:var(--mid);line-height:1.6;margin:0 0 20px"></p>
+    <div id="cModalActions"></div>
+    <button onclick="closeContactModal()" style="background:none;border:none;color:var(--mid);font-family:'Nunito',sans-serif;font-size:13px;font-weight:600;cursor:pointer;margin-top:4px">Close</button>
   </div>
 </div>
 </body>
