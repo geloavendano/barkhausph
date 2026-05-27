@@ -8,11 +8,14 @@ import CheckInPage  from './pages/CheckIn/CheckInPage'
 import CalendarPage from './pages/Calendar/CalendarPage'
 
 export default function App() {
-  const [session,  setSession]  = useState(undefined) // undefined = loading
-  const [allowed,  setAllowed]  = useState(false)
-  const [greeting, setGreeting] = useState('')
-  const [page,     setPage]     = useState('calendar')
-  const [branches, setBranches] = useState([])
+  const [session,      setSession]      = useState(undefined)
+  const [allowed,      setAllowed]      = useState(false)
+  const [greeting,     setGreeting]     = useState('')
+  const [page,         setPage]         = useState('calendar')
+  const [branches,     setBranches]     = useState([])
+  const [branchIdx,    setBranchIdx]    = useState(0)
+  const [rooms,        setRooms]        = useState([])
+  const [groomers,     setGroomers]     = useState([])
 
   /* ── Auth ── */
   useEffect(() => {
@@ -37,7 +40,7 @@ export default function App() {
       const meta = sess.user.user_metadata ?? {}
       const name = meta.full_name ?? meta.name ?? sess.user.email ?? ''
       setGreeting('Hi, ' + (name.split(' ')[0] || 'Admin'))
-      loadBranches()
+      await loadBranches()
     }
   }
 
@@ -62,15 +65,38 @@ export default function App() {
     } catch { /* non-fatal */ }
   }
 
+  async function loadResources(branchId) {
+    try {
+      const [r, g] = await Promise.all([
+        sbGet('rooms',    `branch_id=eq.${branchId}&select=id,name,color,active&order=name`),
+        sbGet('groomers', `branch_id=eq.${branchId}&select=id,name,color,active&order=name`),
+      ])
+      setRooms(r ?? [])
+      setGroomers(g ?? [])
+    } catch { /* non-fatal */ }
+  }
+
+  // Load resources when branch changes
+  useEffect(() => {
+    if (branches[branchIdx]?.id) loadResources(branches[branchIdx].id)
+  }, [branches, branchIdx])
+
   /* ── Render ── */
-  if (session === undefined) return null // initial load
+  if (session === undefined) return null
 
   if (!session || !allowed) return <Gate />
 
-  const pageProps = { branches }
+  const pageProps = { branches, currentBranchIdx: branchIdx, rooms, groomers }
 
   return (
-    <Shell page={page} onPageChange={setPage} greeting={greeting}>
+    <Shell
+      page={page}
+      onPageChange={setPage}
+      greeting={greeting}
+      branches={branches}
+      branchIdx={branchIdx}
+      onBranchChange={setBranchIdx}
+    >
       {page === 'calendar' && <CalendarPage {...pageProps} />}
       {page === 'bookings' && <BookingsPage {...pageProps} />}
       {page === 'checkin'  && <CheckInPage  {...pageProps} />}

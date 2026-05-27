@@ -25,6 +25,26 @@ export async function sbUpsert(table, body) {
   if (!res.ok) throw new Error(`UPSERT ${table}: ${res.status} ${await res.text()}`)
 }
 
+/** Insert a single row */
+export async function sbPost(table, body) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+    method: 'POST',
+    headers: { ...(await authHeaders()), Prefer: 'return=minimal' },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) throw new Error(`POST ${table}: ${res.status} ${await res.text()}`)
+}
+
+/** Patch rows matching a PostgREST filter string */
+export async function sbPatch(table, filter, body) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${filter}`, {
+    method: 'PATCH',
+    headers: { ...(await authHeaders()), Prefer: 'return=minimal' },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) throw new Error(`PATCH ${table}: ${res.status} ${await res.text()}`)
+}
+
 /** Build auth headers using the current session token */
 async function authHeaders() {
   const { data } = await supabase.auth.getSession()

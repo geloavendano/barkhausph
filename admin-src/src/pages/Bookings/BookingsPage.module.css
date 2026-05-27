@@ -1,0 +1,107 @@
+.page { padding: 0; }
+
+.topRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.title {
+  font-family: 'Fredoka One', cursive;
+  font-size: 20px;
+  color: var(--cream);
+  margin: 0;
+}
+
+.filters { display: flex; gap: 6px; flex-wrap: wrap; }
+.filterBtn {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: 20px;
+  border: 0.5px solid var(--border);
+  background: transparent;
+  color: var(--mid);
+  cursor: pointer;
+  font-family: 'Nunito', sans-serif;
+  transition: background 0.12s, color 0.12s;
+}
+.filterBtn:hover { background: var(--surface); color: var(--cream); }
+.filterOn { background: var(--surface); color: var(--cream); border-color: var(--blue); }
+
+.msg  { color: var(--mid); padding: 8px 0; font-size: 13px; }
+.err  { color: var(--error); font-size: 13px; }
+
+/* ── Date group ── */
+.group { margin-bottom: 20px; }
+
+.groupHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  padding: 4px 0;
+  margin-bottom: 6px;
+  user-select: none;
+}
+
+.groupLabel {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--mid);
+}
+.groupCount { font-weight: 400; }
+.chevron { font-size: 14px; color: var(--mid); }
+
+/* ── Table ── */
+.tableWrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 10px;
+  border: 0.5px solid var(--border);
+}
+.table {
+  min-width: 560px;
+  background: var(--surface);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+/* ── Row ── */
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: background 0.12s;
+  white-space: nowrap;
+}
+.row:hover { background: var(--raised); }
+.cancelled { opacity: 0.55; }
+.lineThrough { text-decoration: line-through; }
+
+.dot       { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.svcBadge  { font-size: 11px; padding: 2px 7px; border-radius: 4px; font-weight: 700; flex-shrink: 0; }
+.ref       { font-size: 12px; font-weight: 700; color: var(--cream); min-width: 90px; flex-shrink: 0; }
+.petOwner  { font-size: 12px; color: var(--cream-m); min-width: 140px; }
+.ownerName { color: var(--mid); }
+.star      { color: var(--yellow); font-size: 10px; }
+.sched     { font-size: 11px; color: var(--mid); min-width: 100px; }
+.total     { font-size: 12px; font-weight: 700; color: var(--cream); min-width: 70px; text-align: right; margin-left: auto; }
+
+/* ── Load more ── */
+.loadMore { text-align: center; padding: 16px 0 32px; }
+.loadMoreBtn {
+  font-size: 12px; color: var(--mid);
+  background: transparent;
+  border: 0.5px solid var(--border);
+  border-radius: 20px; padding: 7px 20px;
+  cursor: pointer; font-family: 'Nunito', sans-serif;
+}
+.loadMoreBtn:hover { background: var(--surface); }

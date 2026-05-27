@@ -7,12 +7,25 @@ const NAV_ITEMS = [
   { key: 'members',  icon: '👤', label: 'Members'  },
 ]
 
-export default function Shell({ page, onPageChange, greeting, children }) {
+export default function Shell({ page, onPageChange, greeting, branches = [], branchIdx = 0, onBranchChange, children }) {
   return (
     <div className={styles.app}>
       {/* ── Top bar ── */}
       <header className={styles.topbar}>
         <span className={styles.logo}>BARK<span>🐾</span>US</span>
+        {branches.length > 1 && (
+          <div className={styles.branchTabs}>
+            {branches.map((br, i) => (
+              <button
+                key={br.id}
+                className={`${styles.branchTab} ${i === branchIdx ? styles.branchOn : ''}`}
+                onClick={() => onBranchChange?.(i)}
+              >
+                {br.name}
+              </button>
+            ))}
+          </div>
+        )}
         {greeting && <span className={styles.greeting}>{greeting}</span>}
       </header>
 

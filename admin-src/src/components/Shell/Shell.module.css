@@ -26,6 +26,17 @@
 }
 .logo span { color: var(--yellow); }
 
+.branchTabs { display: flex; gap: 4px; margin-left: 12px; }
+.branchTab {
+  font-size: 12px; font-weight: 600;
+  padding: 4px 12px; border-radius: 20px;
+  border: 0.5px solid var(--border);
+  background: transparent; color: var(--mid);
+  cursor: pointer; font-family: 'Nunito', sans-serif;
+}
+.branchTab:hover { background: var(--raised); color: var(--cream); }
+.branchOn { background: var(--raised); color: var(--cream); border-color: var(--blue); }
+
 .greeting {
   margin-left: auto;
   font-size: 12px;
