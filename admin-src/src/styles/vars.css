@@ -1,0 +1,18 @@
+/* ── Barkhaus admin design tokens — extracted from admin.html ── */
+:root {
+  --bg:       #0F1C26;
+  --surface:  #1A3044;
+  --raised:   #1F3D55;
+  --border:   rgba(77, 150, 185, 0.22);
+  --mid:      #6AAEC8;
+  --cream:    #F0EDE6;
+  --cream-m:  #B8D4E0;
+  --blue:     #4D96B9;
+  --yellow:   #FFCE58;
+  --error:    #FF6B6B;
+  --success:  #6BCB77;
+  --amber:    #EF9F27;
+  --pink:     #D4537E;
+  --teal:     #1D9E75;
+  --purple:   #9B95E8;
+}

@@ -1,0 +1,118 @@
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100svh;
+  overflow: hidden;
+}
+
+/* ── Top bar ── */
+.topbar {
+  background: var(--surface);
+  border-bottom: 0.5px solid var(--border);
+  padding: 0 16px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+  z-index: 20;
+}
+
+.logo {
+  font-family: 'Fredoka One', cursive;
+  font-size: 17px;
+  color: var(--cream);
+  user-select: none;
+}
+.logo span { color: var(--yellow); }
+
+.greeting {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--mid);
+}
+
+/* ── Body layout ── */
+.body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ── Desktop sidebar ── */
+.sidebar {
+  width: 160px;
+  flex-shrink: 0;
+  border-right: 0.5px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding: 12px 8px;
+  gap: 2px;
+  background: var(--bg);
+}
+
+@media (max-width: 640px) {
+  .sidebar { display: none; }
+}
+
+.navBtn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--mid);
+  font-family: 'Nunito', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  transition: background 0.15s, color 0.15s;
+}
+.navBtn:hover { background: var(--surface); color: var(--cream); }
+.navBtn.active { background: var(--surface); color: var(--cream); }
+
+.navIcon { font-size: 15px; width: 20px; text-align: center; }
+
+/* ── Page content ── */
+.content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+/* ── Mobile bottom nav ── */
+.mobileNav {
+  display: none;
+  background: var(--surface);
+  border-top: 0.5px solid var(--border);
+  flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  .mobileNav {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.mobileBtn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 8px 4px;
+  border: none;
+  background: transparent;
+  color: var(--mid);
+  font-family: 'Nunito', sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mobileBtn span:first-child { font-size: 18px; }
+.mobileBtn.active { color: var(--yellow); }

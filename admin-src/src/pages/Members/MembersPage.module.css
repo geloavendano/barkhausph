@@ -1,0 +1,88 @@
+.page { padding: 0; }
+
+.title {
+  font-family: 'Fredoka One', cursive;
+  font-size: 20px;
+  color: var(--cream);
+  margin-bottom: 20px;
+}
+
+.grid {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.card {
+  flex: 1;
+  min-width: 280px;
+  background: var(--surface);
+  border: 0.5px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.cardLabel {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--mid);
+  margin-bottom: 14px;
+}
+
+/* Validate result */
+.resultOk {
+  background: rgba(107, 203, 119, 0.08);
+  border: 0.5px solid rgba(107, 203, 119, 0.3);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-top: 12px;
+}
+
+.resultOkHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  color: var(--success);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.tier {
+  background: rgba(107, 203, 119, 0.18);
+  color: var(--success);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 20px;
+}
+
+.resultRows { font-size: 12px; color: var(--cream-m); line-height: 1.7; }
+
+.row { display: flex; gap: 6px; }
+.rowLabel { color: var(--mid); width: 70px; flex-shrink: 0; }
+
+.resultErr {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--error);
+  font-weight: 600;
+}
+
+/* CSV */
+.csvHint {
+  font-size: 12px;
+  color: var(--mid);
+  margin-bottom: 14px;
+  line-height: 1.6;
+}
+
+.csvResult {
+  font-size: 12px;
+  margin-top: 4px;
+}

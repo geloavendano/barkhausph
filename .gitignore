@@ -13,5 +13,9 @@ barkhaus_email_branded.html
 exports/
 *.zip
 
-# Node (if ever added)
+# Node
 node_modules/
+
+# Vite admin app
+admin-src/.env.local
+admin-src/dist/
