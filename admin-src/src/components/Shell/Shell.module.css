@@ -94,6 +94,11 @@
   overflow-y: auto;
   padding: 20px;
 }
+/* Used by calendar (and any full-bleed page) to remove padding + lock overflow */
+.contentFill {
+  padding: 0;
+  overflow: hidden;
+}
 
 /* ── Mobile bottom nav ── */
 .mobileNav {

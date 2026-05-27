@@ -7,7 +7,7 @@ const NAV_ITEMS = [
   { key: 'members',  icon: '👤', label: 'Members'  },
 ]
 
-export default function Shell({ page, onPageChange, greeting, branches = [], branchIdx = 0, onBranchChange, children }) {
+export default function Shell({ page, onPageChange, greeting, branches = [], branchIdx = 0, onBranchChange, contentFill, children }) {
   return (
     <div className={styles.app}>
       {/* ── Top bar ── */}
@@ -46,7 +46,7 @@ export default function Shell({ page, onPageChange, greeting, branches = [], bra
         </nav>
 
         {/* Page content */}
-        <main className={styles.content}>
+        <main className={`${styles.content} ${contentFill ? styles.contentFill : ''}`}>
           {children}
         </main>
       </div>

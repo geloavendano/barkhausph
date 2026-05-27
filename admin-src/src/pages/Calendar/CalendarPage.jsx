@@ -1,9 +1,547 @@
-export default function CalendarPage() {
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { sbGet, sbPatch } from '../../lib/supabase'
+import { STATUS_COLORS, first, hexBg } from '../../lib/constants'
+import BookingDrawer from '../Bookings/BookingDrawer'
+import styles from './CalendarPage.module.css'
+
+// ── Constants ──────────────────────────────────────────────────────────────
+const DAY_START  = 9 * 60    // 540 min (9 AM)
+const DAY_END    = 20 * 60   // 1200 min (8 PM)
+const PX_PER_MIN = 1.5       // px per minute → 990px total height
+
+const GROOM_DURATIONS  = { bath_dry: 30, basic: 60, premium: 120, ala_carte: 60 }
+const ROOM_TYPE_LABELS = { small_cage: 'Small Cage', medium_cage: 'Medium Cage', large_cage: 'Large Cage', single_cabin: 'Cat Cabin', villa: 'Cat Villa' }
+const SVCS = [
+  { key: 'hotel',    label: 'Hotel',    color: '#EF9F27' },
+  { key: 'grooming', label: 'Grooming', color: '#4D96B9' },
+  { key: 'daycare',  label: 'Daycare',  color: '#1D9E75' },
+  { key: 'studio',   label: 'Studio',   color: '#D4537E' },
+]
+const DAYS   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
+
+const CAL_SELECT = [
+  'id,ref_number,service,status,payment_status,booking_date,total,subtotal,discount_amount,created_at,booking_source,notes',
+  'waivers(general_terms,health_declaration,media_consent,studio_agreement,senior_medical_waiver,signed_at)',
+  'owners(id,first_name,last_name,mobile,email,referral_source)',
+  'pets(id,name,animal_type,breed,size,gender,age_value,age_unit,temperament,medical_notes)',
+  'grooming_details(timeslot,preferred_stylist,groom_service_name,groom_service_key,special_requests,groomer_id)',
+  'hotel_details(checkin_date,checkout_date,dropoff_time,pickup_time,room_type,room_id,playpark_consent,feeding_instructions,medications,emergency_name,emergency_phone,vet_clinic,vet_contact,vet_address)',
+  'daycare_details(dropoff_time,pickup_time,hours_total,open_time,notes)',
+  'studio_details(timeslot,studio_id)',
+  'booking_addons(addon_name,price)',
+  'pet_vaccines(vaccine_name,confirmed)',
+  'checkin_notes(*)',
+].join(',')
+
+// ── Utilities ──────────────────────────────────────────────────────────────
+function dateToISO(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+}
+function parseMins(s) {
+  if (!s) return null
+  const m = s.match(/(\d+):(\d+)\s*(AM|PM)?/i)
+  if (!m) return null
+  let h = parseInt(m[1]), min = parseInt(m[2])
+  const ap = m[3]?.toUpperCase() ?? null
+  if (ap === 'PM' && h !== 12) h += 12
+  if (ap === 'AM' && h === 12) h = 0
+  return h * 60 + min
+}
+function getBookingTimes(b, dateStr) {
+  const gd = first(b.grooming_details) ?? {}, hd = first(b.hotel_details) ?? {}
+  const dd = first(b.daycare_details)  ?? {}, sd = first(b.studio_details)  ?? {}
+  let st = null, en = null
+  if      (b.service === 'grooming') { st = parseMins(gd.timeslot); en = st != null ? st + (GROOM_DURATIONS[gd.groom_service_key ?? 'basic'] ?? 60) : null }
+  else if (b.service === 'hotel')    { const cin = hd.checkin_date, cout = hd.checkout_date; if (cin === dateStr) { st = parseMins(hd.dropoff_time) ?? DAY_START; en = DAY_END } else if (cout === dateStr) { st = DAY_START; en = parseMins(hd.pickup_time) ?? DAY_END } else { st = DAY_START; en = DAY_END } }
+  else if (b.service === 'daycare')  { st = parseMins(dd.dropoff_time) ?? DAY_START; en = dd.open_time ? DAY_END : (parseMins(dd.pickup_time) ?? DAY_END) }
+  else if (b.service === 'studio')   { st = parseMins(sd.timeslot); en = st != null ? st + 60 : null }
+  const stF = st ?? DAY_START
+  return { st: stF, en: en ?? Math.min(stF + 60, DAY_END) }
+}
+function layoutBks(bookings, dateStr) {
+  const items = bookings.map(b => { const t = getBookingTimes(b, dateStr); return { b, st: t.st, en: t.en, col: 0, total: 1 } }).sort((a,c) => a.st - c.st)
+  const cols = []
+  items.forEach(item => {
+    let placed = false
+    for (let c = 0; c < cols.length; c++) { if (cols[c][cols[c].length-1].en <= item.st) { cols[c].push(item); item.col = c; placed = true; break } }
+    if (!placed) { item.col = cols.length; cols.push([item]) }
+  })
+  items.forEach(item => { let conc = 1; cols.forEach(col => col.forEach(o => { if (o.st < item.en && o.en > item.st) conc = Math.max(conc, o.col+1) })); item.total = conc })
+  return items
+}
+function getCardColor(b, rooms, groomers) {
+  const hd = first(b.hotel_details), gd = first(b.grooming_details)
+  if (b.service === 'hotel' && hd?.room_id)    { const r = rooms.find(x => x.id === hd.room_id);       if (r) return r.color }
+  if (b.service === 'hotel' && hd?.room_type)  { const rc = { large_cage:'#EF9F27', medium_cage:'#4D96B9', small_cage:'#1D9E75', single_cabin:'#D4537E', villa:'#9B95E8' }; return rc[hd.room_type] ?? '#6AAEC8' }
+  if (b.service === 'grooming' && gd?.groomer_id) { const g = groomers.find(x => x.id === gd.groomer_id); if (g) return g.color }
+  if (b.service === 'daycare') return '#1D9E75'
+  if (b.service === 'studio')  return '#D4537E'
+  return '#6AAEC8'
+}
+
+// ── Main component ─────────────────────────────────────────────────────────
+export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, groomers }) {
+  const [currentDate,      setCurrentDate]      = useState(() => new Date())
+  const [bookings,         setBookings]         = useState([])
+  const [blockedSchedules, setBlockedSchedules] = useState([])
+  const [studios,          setStudios]          = useState([])
+  const [loading,          setLoading]          = useState(true)
+  const [currentSvc,       setCurrentSvc]       = useState('hotel')
+  const [activeFilter,     setActiveFilter]     = useState(null)
+  const [monthDots,        setMonthDots]        = useState({})
+  const [calOpen,          setCalOpen]          = useState(false)
+  const [calModalDate,     setCalModalDate]     = useState(() => new Date())
+  const [openId,           setOpenId]           = useState(null)
+  const [openBlockId,      setOpenBlockId]      = useState(null)
+
+  const branch  = branches?.[currentBranchIdx]
+  const dateStr = useMemo(() => dateToISO(currentDate), [currentDate])
+
+  // ── Loaders ───────────────────────────────────────────────────────────────
+  const loadBookings = useCallback(async (date) => {
+    if (!branch?.id) { setBookings([]); setLoading(false); return }
+    setLoading(true)
+    const ds = dateToISO(date)
+    try {
+      const base = `branch_id=eq.${branch.id}&select=${CAL_SELECT}`
+      const [dayRows, hotelAll] = await Promise.all([
+        sbGet('bookings', `${base}&booking_date=eq.${ds}&service=not.eq.hotel&order=created_at`),
+        sbGet('bookings', `${base}&service=eq.hotel&order=created_at`),
+      ])
+      const d = new Date(ds + 'T00:00:00')
+      const hf = (hotelAll ?? []).filter(b => {
+        const hd = first(b.hotel_details); if (!hd) return false
+        return new Date(hd.checkin_date + 'T00:00:00') <= d && d <= new Date(hd.checkout_date + 'T00:00:00')
+      })
+      setBookings([...(dayRows ?? []), ...hf])
+    } catch (err) { console.error(err); setBookings([]) }
+    finally { setLoading(false) }
+  }, [branch?.id])
+
+  const loadBlocked = useCallback(async () => {
+    if (!branch?.id) return
+    try { setBlockedSchedules((await sbGet('blocked_schedules', `branch_id=eq.${branch.id}&active=eq.true&order=created_at.desc&select=*`)) ?? []) }
+    catch { setBlockedSchedules([]) }
+  }, [branch?.id])
+
+  const loadStudios = useCallback(async () => {
+    if (!branch?.id) return
+    try { setStudios((await sbGet('studios', `branch_id=eq.${branch.id}&active=eq.true&order=sort_order&select=id,name,color,is_unavailable,unavailable_reason`)) ?? []) }
+    catch { setStudios([]) }
+  }, [branch?.id])
+
+  const loadMonthDots = useCallback(async (year, month) => {
+    if (!branch?.id) return
+    const f = `${year}-${String(month+1).padStart(2,'0')}-01`
+    const l = `${year}-${String(month+1).padStart(2,'0')}-${new Date(year,month+1,0).getDate()}`
+    try {
+      const rows = await sbGet('bookings', `branch_id=eq.${branch.id}&booking_date=gte.${f}&booking_date=lte.${l}&status=not.in.(cancelled,rejected)&select=booking_date`)
+      const dots = {}; (rows ?? []).forEach(r => { if (r.booking_date) dots[r.booking_date] = true })
+      setMonthDots(dots)
+    } catch { setMonthDots({}) }
+  }, [branch?.id])
+
+  useEffect(() => {
+    if (!branch?.id) return
+    const d = new Date()
+    setCurrentDate(d)
+    setCalModalDate(d)
+    Promise.all([loadBookings(d), loadBlocked(), loadStudios(), loadMonthDots(d.getFullYear(), d.getMonth())])
+  }, [branch?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Date navigation ───────────────────────────────────────────────────────
+  const shiftDate = (delta) => {
+    const d = new Date(currentDate); d.setDate(d.getDate() + delta)
+    const prevM = currentDate.getMonth()
+    setCurrentDate(d); setActiveFilter(null)
+    loadBookings(d)
+    if (d.getMonth() !== prevM) loadMonthDots(d.getFullYear(), d.getMonth())
+  }
+  const goToday = () => {
+    const d = new Date(); const prevM = currentDate.getMonth()
+    setCurrentDate(d); setActiveFilter(null)
+    loadBookings(d)
+    if (d.getMonth() !== prevM) loadMonthDots(d.getFullYear(), d.getMonth())
+  }
+  const jumpToDate = (y, m, day) => {
+    const d = new Date(y, m, day); const prevM = calModalDate.getMonth()
+    setCurrentDate(d); setCalOpen(false); setActiveFilter(null)
+    loadBookings(d)
+    if (d.getMonth() !== prevM) loadMonthDots(y, m)
+  }
+  const openCalOverlay = () => {
+    setCalModalDate(new Date(currentDate))
+    loadMonthDots(currentDate.getFullYear(), currentDate.getMonth())
+    setCalOpen(true)
+  }
+
+  // ── Filter toggle ─────────────────────────────────────────────────────────
+  const toggleFilter = (type, id) => {
+    if (activeFilter?.type === type && activeFilter?.id === id) { setActiveFilter(null) }
+    else {
+      setActiveFilter({ type, id })
+      if (type === 'room')    setCurrentSvc('hotel')
+      if (type === 'groomer') setCurrentSvc('grooming')
+      if (type === 'studio')  setCurrentSvc('studio')
+    }
+  }
+
+  // ── Derived ───────────────────────────────────────────────────────────────
+  const filtered = useMemo(() => bookings.filter(b => {
+    if (currentSvc !== 'all' && b.service !== currentSvc) return false
+    if (activeFilter) {
+      if (activeFilter.type === 'room')    { const hd = first(b.hotel_details)    ?? {}; return hd.room_id    === activeFilter.id }
+      if (activeFilter.type === 'groomer') { const gd = first(b.grooming_details) ?? {}; return gd.groomer_id  === activeFilter.id }
+      if (activeFilter.type === 'studio')  { const sd = first(b.studio_details)   ?? {}; return b.service === 'studio' && sd.studio_id === activeFilter.id }
+    }
+    return true
+  }), [bookings, currentSvc, activeFilter])
+
+  const positioned = useMemo(() => layoutBks(filtered, dateStr), [filtered, dateStr])
+
+  const now     = new Date()
+  const isToday = now.getFullYear() === currentDate.getFullYear() && now.getMonth() === currentDate.getMonth() && now.getDate() === currentDate.getDate()
+  const yrSfx   = currentDate.getFullYear() !== now.getFullYear() ? ` ${currentDate.getFullYear()}` : ''
+  const dateLbl = `${DAYS[currentDate.getDay()]}, ${MONTHS[currentDate.getMonth()]} ${currentDate.getDate()}${yrSfx}`
+  const openBooking = bookings.find(b => b.id === openId)
+  const openBlock   = blockedSchedules.find(b => b.id === openBlockId)
+
   return (
-    <div style={{ color: 'var(--mid)', padding: '40px 0', textAlign: 'center' }}>
-      <p style={{ fontSize: 32, marginBottom: 12 }}>🚧</p>
-      <p style={{ fontWeight: 700 }}>Calendar — coming soon</p>
-      <p style={{ fontSize: 12, marginTop: 6 }}>This panel is being migrated from admin.html.</p>
+    <div className={styles.page}>
+      {/* ── Date nav bar ── */}
+      <div className={styles.dateNav}>
+        <button className={styles.navArrow} onClick={() => shiftDate(-1)}>‹</button>
+        <button className={styles.dateLabelBtn} onClick={openCalOverlay}>{dateLbl}</button>
+        <button className={styles.navArrow} onClick={() => shiftDate(1)}>›</button>
+        {!isToday && <button className={styles.todayBtn} onClick={goToday}>Today</button>}
+        {loading && <span className={styles.loadDot} />}
+      </div>
+
+      {/* ── Body: sidebar + main ── */}
+      <div className={styles.body}>
+        {/* Calendar sidebar (rooms / groomers / studios) */}
+        <aside className={styles.sidebar}>
+          {rooms.length > 0 && (
+            <SbSection label="Rooms">
+              {rooms.map(r => (
+                <SbItem key={r.id} color={r.color} label={r.name}
+                  count={bookings.filter(b => b.service === 'hotel' && (first(b.hotel_details) ?? {}).room_id === r.id).length}
+                  isOn={activeFilter?.type === 'room' && activeFilter?.id === r.id}
+                  onToggle={() => toggleFilter('room', r.id)} />
+              ))}
+            </SbSection>
+          )}
+          {groomers.length > 0 && (
+            <SbSection label="Groomers" topMargin={rooms.length > 0}>
+              {groomers.map(g => (
+                <SbItem key={g.id} color={g.color} label={g.name} isRound
+                  count={bookings.filter(b => b.service === 'grooming' && (first(b.grooming_details) ?? {}).groomer_id === g.id).length}
+                  isOn={activeFilter?.type === 'groomer' && activeFilter?.id === g.id}
+                  onToggle={() => toggleFilter('groomer', g.id)} />
+              ))}
+            </SbSection>
+          )}
+          {studios.length > 0 && (
+            <SbSection label="Studios" topMargin>
+              {studios.map(s => (
+                <SbItem key={s.id} color={s.color} label={s.name} isRound
+                  count={bookings.filter(b => b.service === 'studio' && (first(b.studio_details) ?? {}).studio_id === s.id).length}
+                  isOn={activeFilter?.type === 'studio' && activeFilter?.id === s.id}
+                  onToggle={() => toggleFilter('studio', s.id)} />
+              ))}
+            </SbSection>
+          )}
+        </aside>
+
+        {/* ── Timeline column ── */}
+        <div className={styles.main}>
+          {/* Service filter tabs */}
+          <div className={styles.svcTabs}>
+            <div className={`${styles.svcTab} ${currentSvc === 'all' ? styles.svcTabOn : ''}`}
+              style={{ color: currentSvc === 'all' ? 'var(--cream-m)' : 'var(--mid)' }}
+              onClick={() => { setCurrentSvc('all'); setActiveFilter(null) }}>
+              <div className={styles.svcCount}>{bookings.length}</div>
+              <div className={styles.svcLabel}>All</div>
+            </div>
+            {(studios.length > 0 ? SVCS : SVCS.filter(s => s.key !== 'studio')).map(s => (
+              <div key={s.key}
+                className={`${styles.svcTab} ${currentSvc === s.key ? styles.svcTabOn : ''}`}
+                style={{ color: s.color }}
+                onClick={() => { setCurrentSvc(s.key); setActiveFilter(null) }}>
+                <div className={styles.svcCount}>{bookings.filter(b => b.service === s.key).length}</div>
+                <div className={styles.svcLabel}>{s.label}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Scrollable area */}
+          <div className={styles.tlScroll}>
+            {/* Sticky pet-name header bar */}
+            {positioned.length > 0 && (
+              <div className={styles.stickyBar}>
+                <div className={styles.stickyTime} />
+                <div className={styles.stickyCards}>
+                  {positioned.map(item => {
+                    const b   = item.b, pet = first(b.pets) ?? {}, gd = first(b.grooming_details), hd = first(b.hotel_details)
+                    const color = getCardColor(b, rooms, groomers)
+                    const w = `${100/item.total - 0.8}%`, l = `${item.col/item.total*100 + 0.4}%`
+                    const detail = gd ? (gd.groom_service_name ?? 'Groom') : hd ? (ROOM_TYPE_LABELS[hd.room_type] ?? hd.room_type ?? 'Hotel') : first(b.daycare_details) ? 'Daycare' : first(b.studio_details) ? 'Studio' : ''
+                    const faded = b.status === 'cancelled' || b.status === 'rejected'
+                    return (
+                      <div key={b.id} className={styles.stickyItem}
+                        style={{ left: l, width: w, borderLeft: `3px solid ${color}`, opacity: faded ? 0.4 : b.status === 'pending' ? 0.65 : 1 }}
+                        onClick={() => setOpenId(b.id)}>
+                        <div className={styles.stickyPet}>
+                          <span className={styles.sdot} style={{ background: STATUS_COLORS[b.status] ?? '#888' }} />
+                          <span style={{ fontSize: 11 }}>{pet.animal_type === 'cat' ? '🐱' : '🐶'}</span>
+                          {pet.name ?? 'Pet'}
+                        </div>
+                        {detail && <div className={styles.stickyDetail}>{detail}</div>}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Timeline body */}
+            <div className={styles.tlBody}>
+              {/* Hour labels */}
+              <div className={styles.tlTimes}>
+                {Array.from({ length: 12 }, (_, i) => {
+                  const h = 9 + i
+                  return <div className={styles.tlLbl} key={h}>{h < 12 ? `${h}AM` : h === 12 ? '12PM' : `${h-12}PM`}</div>
+                })}
+              </div>
+
+              {/* Cards area */}
+              <div className={styles.tlCol}>
+                <div className={styles.tlInner}>
+                  {/* Hour grid lines */}
+                  {Array.from({ length: 12 }, (_, i) => <div key={i} className={styles.tlLine} style={{ top: i * 90 }} />)}
+
+                  {/* Blocked schedule blocks */}
+                  {blockedSchedules.map(bl => {
+                    const blDates = Array.isArray(bl.dates) ? bl.dates : (bl.dates ? String(bl.dates).replace(/[{}"]/g,'').split(',') : [])
+                    if (!blDates.includes(dateStr)) return null
+                    if (currentSvc === 'grooming' && bl.resource_type !== 'groomer') return null
+                    if (currentSvc === 'hotel'    && bl.resource_type !== 'room')    return null
+                    if (currentSvc === 'studio'   && bl.resource_type !== 'studio')  return null
+                    if (currentSvc === 'daycare') return null
+                    if (activeFilter?.id && bl.resource_id !== activeFilter.id) return null
+                    const stMin = parseMins(bl.start_time), enMin = parseMins(bl.end_time)
+                    if (stMin == null || enMin == null || stMin >= enMin) return null
+                    const top = Math.max(0, (stMin - DAY_START) * PX_PER_MIN)
+                    const ht  = Math.max(22, (enMin - stMin) * PX_PER_MIN)
+                    const pool = bl.resource_type === 'groomer' ? groomers : bl.resource_type === 'studio' ? studios : rooms
+                    const res  = pool.find(r => r.id === bl.resource_id)
+                    const bc   = res?.color ?? '#9B95E8'
+                    const [rr, gg, bb] = [parseInt(bc.slice(1,3),16), parseInt(bc.slice(3,5),16), parseInt(bc.slice(5,7),16)]
+                    return (
+                      <div key={bl.id} className={styles.blockCard}
+                        style={{ top, height: ht, left: 2, right: 2,
+                          background: `repeating-linear-gradient(135deg,rgba(${rr},${gg},${bb},0.55) 0px,rgba(${rr},${gg},${bb},0.55) 6px,rgba(${rr},${gg},${bb},0.3) 6px,rgba(${rr},${gg},${bb},0.3) 12px)`,
+                          border: `1.5px solid ${bc}`, borderLeft: `4px solid ${bc}` }}
+                        onClick={() => setOpenBlockId(bl.id)}>
+                        <div className={styles.blockLbl}>🚫 {res?.name ? `${res.name} — ` : ''}{bl.reason ?? 'Blocked'}</div>
+                        {ht >= 44 && <div className={styles.blockSub}>Blocked</div>}
+                      </div>
+                    )
+                  })}
+
+                  {/* Booking cards */}
+                  {positioned.map(item => {
+                    const b   = item.b, pet = first(b.pets) ?? {}, gd = first(b.grooming_details), hd = first(b.hotel_details)
+                    const top = (item.st - DAY_START) * PX_PER_MIN
+                    const ht  = Math.max(38, (item.en - item.st) * PX_PER_MIN)
+                    const w   = `${100/item.total - 0.8}%`, l = `${item.col/item.total*100 + 0.4}%`
+                    const color = getCardColor(b, rooms, groomers)
+                    const isCancelled = b.status === 'cancelled' || b.status === 'rejected'
+                    const detail = gd
+                      ? (gd.groom_service_name ?? 'Groom') + (gd.preferred_stylist && gd.preferred_stylist !== 'any' ? ` | ${gd.preferred_stylist}` : '')
+                      : hd ? (ROOM_TYPE_LABELS[hd.room_type] ?? hd.room_type ?? 'Hotel')
+                      : first(b.daycare_details) ? 'Daycare' : first(b.studio_details) ? 'Studio' : ''
+                    return (
+                      <div key={b.id}
+                        className={`${styles.bk} ${isCancelled ? styles.bkCancelled : ''} ${b.status === 'pending' ? styles.bkPending : ''}`}
+                        style={{ top, height: ht, left: l, width: w, background: hexBg(color), borderLeftColor: color }}
+                        onClick={() => setOpenId(b.id)}>
+                        {item.total >= 4 ? (
+                          <div className={styles.bkNameRotated}>{pet.name ?? 'Pet'}</div>
+                        ) : (
+                          <>
+                            <div className={styles.bkPet}>
+                              <span className={styles.sdot} style={{ background: STATUS_COLORS[b.status] ?? '#888' }} />
+                              <span style={{ fontSize: 12 }}>{pet.animal_type === 'cat' ? '🐱' : '🐶'}</span>
+                              {pet.name ?? 'Pet'}
+                            </div>
+                            {ht > 52 && detail     && <div className={styles.bkSub}>{detail}</div>}
+                            {ht > 72 && (first(b.owners)?.first_name ?? '') && <div className={styles.bkSub}>{first(b.owners).first_name}</div>}
+                            {(b.discount_amount ?? 0) > 0 && <span className={styles.bkStar}>★</span>}
+                          </>
+                        )}
+                      </div>
+                    )
+                  })}
+
+                  {/* Current time line */}
+                  {isToday && (() => {
+                    const mins = now.getHours()*60 + now.getMinutes()
+                    if (mins < DAY_START || mins > DAY_END) return null
+                    return (
+                      <div className={styles.timeNow} style={{ top: (mins - DAY_START) * PX_PER_MIN }}>
+                        <div className={styles.timeNowDot} />
+                      </div>
+                    )
+                  })()}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Overlays ── */}
+      {calOpen && (
+        <MonthOverlay
+          modalDate={calModalDate}
+          selectedDate={currentDate}
+          monthDots={monthDots}
+          onClose={() => setCalOpen(false)}
+          onShift={delta => {
+            const d = new Date(calModalDate); d.setMonth(d.getMonth() + delta)
+            setCalModalDate(d); loadMonthDots(d.getFullYear(), d.getMonth())
+          }}
+          onJump={jumpToDate}
+        />
+      )}
+
+      {openBlock && (
+        <BlockDrawer
+          block={openBlock} rooms={rooms} groomers={groomers} studios={studios}
+          onClose={() => setOpenBlockId(null)}
+          onDelete={async id => {
+            await sbPatch('blocked_schedules', `id=eq.${id}`, { active: false })
+            setOpenBlockId(null); loadBlocked()
+          }}
+        />
+      )}
+
+      {openBooking && (
+        <BookingDrawer
+          booking={openBooking} rooms={rooms} groomers={groomers}
+          onClose={() => setOpenId(null)}
+          onUpdated={() => { setOpenId(null); loadBookings(currentDate); loadBlocked() }}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── Sub-components ─────────────────────────────────────────────────────────
+function SbSection({ label, children, topMargin }) {
+  return (
+    <div className={`${styles.sbSec} ${topMargin ? styles.sbSecMargin : ''}`}>
+      <p className={styles.sbSecLbl}>{label}</p>
+      {children}
+    </div>
+  )
+}
+function SbItem({ color, label, count, isOn, isRound, onToggle }) {
+  return (
+    <div className={`${styles.sbItem} ${isOn ? styles.sbItemOn : ''}`} onClick={onToggle}>
+      <span className={`${styles.sbDot} ${isRound ? styles.sbDotRound : ''}`} style={{ background: color }} />
+      <span className={styles.sbLbl}>{label}</span>
+      <span className={styles.sbCt}>{count}</span>
+    </div>
+  )
+}
+
+function MonthOverlay({ modalDate, selectedDate, monthDots, onClose, onShift, onJump }) {
+  const y = modalDate.getFullYear(), mon = modalDate.getMonth()
+  const today = new Date()
+  const firstDay = new Date(y, mon, 1).getDay()
+  const daysCount = new Date(y, mon+1, 0).getDate()
+  const prevLast  = new Date(y, mon, 0).getDate()
+  const DOWS = ['S','M','T','W','T','F','S']
+  const cells = []
+  for (let i = 0; i < firstDay; i++) cells.push({ other: true, day: prevLast - firstDay + i + 1, key: `p${i}` })
+  for (let d = 1; d <= daysCount; d++) {
+    const ds = `${y}-${String(mon+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`
+    cells.push({ day: d, ds, key: `d${d}`,
+      isToday: d === today.getDate()        && mon === today.getMonth()        && y === today.getFullYear(),
+      isSel:   d === selectedDate.getDate() && mon === selectedDate.getMonth() && y === selectedDate.getFullYear(),
+      hasDot: !!monthDots[ds] })
+  }
+  return (
+    <div className={styles.calOverlay} onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className={styles.calModal}>
+        <div className={styles.calHeader}>
+          <button className={styles.calArrow} onClick={() => onShift(-1)}>‹</button>
+          <span className={styles.calMonthLbl}>{MONTHS[mon]} {y}</span>
+          <button className={styles.calArrow} onClick={() => onShift(1)}>›</button>
+          <button className={styles.calClose} onClick={onClose}>✕</button>
+        </div>
+        <div className={styles.calDows}>
+          {DOWS.map((d, i) => <div key={i} className={styles.calDow}>{d}</div>)}
+        </div>
+        <div className={styles.calGrid}>
+          {cells.map(cell => (
+            cell.other
+              ? <div key={cell.key} className={`${styles.calCell} ${styles.calCellOther}`}><span className={styles.calNum}>{cell.day}</span></div>
+              : <div key={cell.key}
+                  className={`${styles.calCell} ${cell.isToday ? styles.calCellToday : ''} ${cell.isSel && !cell.isToday ? styles.calCellSel : ''}`}
+                  onClick={() => onJump(y, mon, cell.day)}>
+                  <span className={styles.calNum}>{cell.day}</span>
+                  {cell.hasDot && <div className={styles.calDot} />}
+                </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function BlockDrawer({ block: bl, rooms, groomers, studios, onClose, onDelete }) {
+  const [deleting, setDeleting] = useState(false)
+  const pool = bl.resource_type === 'groomer' ? groomers : bl.resource_type === 'studio' ? studios : rooms
+  const res  = pool.find(r => r.id === bl.resource_id)
+  const resName  = res?.name ?? (bl.resource_type === 'groomer' ? 'Groomer' : bl.resource_type === 'studio' ? 'Studio' : 'Room')
+  const resColor = res?.color ?? '#9B95E8'
+  const resType  = bl.resource_type === 'groomer' ? 'Groomer' : bl.resource_type === 'studio' ? 'Studio Unit' : 'Hotel Room'
+  const dates    = Array.isArray(bl.dates) ? bl.dates : (bl.dates ? String(bl.dates).replace(/[{}"]/g,'').split(',') : [])
+  const fmtD     = d => { try { return new Date(d+'T00:00:00').toLocaleDateString('en-PH',{weekday:'short',month:'short',day:'numeric',year:'numeric'}) } catch { return d } }
+  const handleDelete = async () => {
+    if (!confirm('Delete this blocked schedule?')) return
+    setDeleting(true); try { await onDelete(bl.id) } catch { setDeleting(false) }
+  }
+  return (
+    <div className={styles.bdOverlay} onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className={styles.bdPanel}>
+        <div className={styles.bdHandle} />
+        <div className={styles.bdBody}>
+          <p className={styles.bdRef}>Blocked Schedule</p>
+          <div className={styles.bdTitleRow}>
+            <span className={styles.bdDot} style={{ background: resColor }} />
+            <span className={styles.bdTitle}>{resName}</span>
+          </div>
+          <p className={styles.bdSubtype}>{resType}</p>
+          <div className={styles.bdSec}>
+            <p className={styles.bdSecTitle}>Block Details</p>
+            <div className={styles.bdRow}><span className={styles.bdKey}>Time</span><span className={styles.bdVal}>{(bl.start_time ?? '').slice(0,5)} – {(bl.end_time ?? '').slice(0,5)}</span></div>
+            {bl.reason && <div className={styles.bdRow}><span className={styles.bdKey}>Reason</span><span className={styles.bdVal}>{bl.reason}</span></div>}
+          </div>
+          <div className={styles.bdSec}>
+            <p className={styles.bdSecTitle}>Blocked Dates ({dates.length})</p>
+            <div className={styles.bdDates}>{dates.map((d,i) => <span key={i} className={styles.bdDatePill}>{fmtD(d)}</span>)}</div>
+          </div>
+          <div className={styles.bdFooter}>
+            <button className={styles.bdDeleteBtn} onClick={handleDelete} disabled={deleting}>🗑 Delete Block</button>
+            <button className={styles.bdDoneBtn} onClick={onClose}>Done</button>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

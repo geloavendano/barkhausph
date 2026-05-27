@@ -1,0 +1,283 @@
+/* CalendarPage.module.css
+   The .page div fills the Shell content area (which is set to overflow:hidden,
+   padding:0 when the calendar is active via the Shell contentFill prop). */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+/* ── Date navigation bar ── */
+.dateNav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-bottom: 0.5px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+  min-height: 44px;
+}
+.navArrow {
+  font-size: 20px; line-height: 1; color: var(--mid);
+  background: transparent; border: none; cursor: pointer;
+  padding: 2px 6px; border-radius: 6px;
+  font-family: 'Nunito', sans-serif;
+}
+.navArrow:hover { background: var(--raised); color: var(--cream); }
+.dateLabelBtn {
+  font-size: 14px; font-weight: 700; color: var(--cream);
+  background: transparent; border: none; cursor: pointer;
+  font-family: 'Fredoka One', cursive;
+  text-decoration: underline dotted rgba(184,212,224,0.4);
+  padding: 2px 4px;
+}
+.todayBtn {
+  font-size: 11px; color: var(--mid);
+  background: transparent; border: 0.5px solid var(--border);
+  border-radius: 20px; padding: 3px 10px; cursor: pointer;
+  font-family: 'Nunito', sans-serif;
+}
+.todayBtn:hover { background: var(--raised); color: var(--cream); }
+.loadDot {
+  display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--blue); animation: pulse 1s ease-in-out infinite;
+  margin-left: 4px;
+}
+@keyframes pulse { 0%,100% { opacity: 0.3 } 50% { opacity: 1 } }
+
+/* ── Body layout ── */
+.body { display: flex; flex: 1; overflow: hidden; }
+
+/* ── Calendar sidebar ── */
+.sidebar {
+  width: 148px;
+  flex-shrink: 0;
+  border-right: 0.5px solid var(--border);
+  overflow-y: auto;
+  padding: 10px 6px;
+  background: var(--bg);
+  scrollbar-width: thin;
+  scrollbar-color: var(--raised) transparent;
+}
+@media (max-width: 640px) { .sidebar { display: none; } }
+
+.sbSec { }
+.sbSecMargin { margin-top: 14px; }
+.sbSecLbl {
+  font-size: 9px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--mid); margin: 0 0 5px 4px;
+}
+.sbItem {
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 6px; border-radius: 7px; cursor: pointer;
+  transition: background 0.12s; margin-bottom: 1px;
+  user-select: none;
+}
+.sbItem:hover { background: var(--raised); }
+.sbItemOn { background: var(--raised); outline: 0.5px solid var(--border); }
+.sbDot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+.sbDotRound { border-radius: 50%; }
+.sbLbl { font-size: 11px; color: var(--mid); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sbItem:hover .sbLbl, .sbItemOn .sbLbl { color: var(--cream); }
+.sbCt { font-size: 11px; color: var(--mid); font-weight: 700; margin-left: auto; }
+
+/* ── Main area ── */
+.main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+/* ── Service tabs ── */
+.svcTabs {
+  display: flex;
+  border-bottom: 0.5px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.svcTabs::-webkit-scrollbar { display: none; }
+.svcTab {
+  padding: 10px 18px; cursor: pointer; flex-shrink: 0;
+  border-bottom: 2.5px solid transparent;
+  transition: border-color 0.15s, background 0.15s;
+  user-select: none;
+}
+.svcTab:hover { background: var(--raised); }
+.svcTabOn { border-bottom-color: currentColor; }
+.svcCount { font-size: 20px; font-weight: 500; line-height: 1.1; }
+.svcLabel { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; margin-top: 2px; opacity: 0.7; }
+@media (max-width: 640px) {
+  .svcTab { padding: 8px 12px; }
+  .svcCount { font-size: 17px; }
+}
+
+/* ── Scrollable timeline area ── */
+.tlScroll {
+  flex: 1; overflow-y: auto; overflow-x: hidden;
+  scrollbar-width: thin; scrollbar-color: var(--raised) transparent;
+}
+
+/* ── Sticky pet-name bar ── */
+.stickyBar {
+  position: sticky; top: 0; z-index: 20;
+  background: var(--surface);
+  border-bottom: 0.5px solid var(--border);
+  display: flex; height: 44px; flex-shrink: 0;
+}
+.stickyTime { width: 50px; flex-shrink: 0; border-right: 0.5px solid var(--border); }
+.stickyCards { position: relative; flex: 1; overflow: hidden; }
+.stickyItem {
+  position: absolute; top: 0; bottom: 0;
+  display: flex; flex-direction: column; justify-content: center;
+  padding: 0 6px; cursor: pointer; overflow: hidden;
+  transition: background 0.12s;
+}
+.stickyItem:hover { background: rgba(255,255,255,0.04); }
+.stickyPet {
+  font-size: 11px; font-weight: 700; color: var(--cream);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  display: flex; align-items: center; gap: 3px;
+}
+.stickyDetail {
+  font-size: 10px; color: var(--mid);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  margin-top: 1px;
+}
+
+/* ── Timeline body ── */
+.tlBody { display: flex; }
+.tlTimes { width: 50px; flex-shrink: 0; }
+.tlLbl {
+  height: 90px; display: flex; align-items: flex-start;
+  padding: 5px 8px 0 0; justify-content: flex-end;
+  font-size: 10px; color: var(--mid); font-weight: 600;
+  border-top: 0.5px solid var(--border);
+}
+.tlLbl:first-child { border-top: none; }
+.tlCol { flex: 1; position: relative; }
+.tlInner { position: relative; height: 990px; }
+.tlLine { position: absolute; left: 0; right: 0; height: 0.5px; background: var(--border); pointer-events: none; }
+
+/* ── Booking cards ── */
+.bk {
+  position: absolute; border-radius: 6px; padding: 5px 7px;
+  cursor: pointer; border-left: 3px solid transparent; overflow: hidden;
+  transition: filter 0.12s; z-index: 2;
+}
+.bk:hover { filter: brightness(1.1); z-index: 10; }
+.bkCancelled { opacity: 0.4; filter: grayscale(1); }
+.bkCancelled .bkPet { text-decoration: line-through; }
+.bkPending { opacity: 0.55; filter: grayscale(0.6); }
+.bkPet {
+  font-size: 12px; font-weight: 700; color: var(--cream);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  display: flex; align-items: center; gap: 4px;
+}
+.bkSub {
+  font-size: 10px; color: var(--cream-m); margin-top: 1px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.bkStar { position: absolute; top: 3px; right: 4px; font-size: 9px; color: #FFCE58; line-height: 1; pointer-events: none; }
+.bkNameRotated {
+  writing-mode: vertical-rl; text-orientation: mixed;
+  transform: rotate(180deg); font-size: 11px; font-weight: 700; color: var(--cream);
+  white-space: nowrap; overflow: hidden; max-height: 100%;
+  text-overflow: ellipsis; line-height: 1.2;
+}
+
+/* Status dot (shared across page) */
+.sdot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+
+/* ── Blocked schedule blocks ── */
+.blockCard {
+  position: absolute; border-radius: 5px;
+  padding: 5px 8px; z-index: 3; overflow: hidden; cursor: pointer;
+  transition: filter 0.12s;
+}
+.blockCard:hover { filter: brightness(1.15); }
+.blockLbl { font-size: 11px; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.blockSub { font-size: 10px; color: rgba(255,255,255,0.65); margin-top: 2px; }
+
+/* ── Current time indicator ── */
+.timeNow { position: absolute; left: 0; right: 0; height: 2px; background: #FF6B6B; z-index: 20; pointer-events: none; }
+.timeNowDot { position: absolute; left: -4px; top: -4px; width: 10px; height: 10px; border-radius: 50%; background: #FF6B6B; }
+
+/* ── Month overlay ── */
+.calOverlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.55);
+  z-index: 300; display: flex; align-items: flex-start; justify-content: center;
+  padding-top: 56px;
+}
+.calModal {
+  background: var(--surface); border: 0.5px solid var(--border);
+  border-radius: 14px; padding: 16px; width: 300px; max-width: calc(100vw - 32px);
+}
+.calHeader { display: flex; align-items: center; gap: 6px; margin-bottom: 12px; }
+.calArrow {
+  font-size: 18px; color: var(--mid); background: transparent; border: none;
+  cursor: pointer; padding: 2px 8px; border-radius: 6px; font-family: 'Nunito', sans-serif;
+}
+.calArrow:hover { background: var(--raised); color: var(--cream); }
+.calMonthLbl { flex: 1; text-align: center; font-size: 14px; font-weight: 700; color: var(--cream); }
+.calClose {
+  font-size: 13px; color: var(--mid); background: transparent; border: none;
+  cursor: pointer; padding: 2px 6px; border-radius: 6px; font-family: 'Nunito', sans-serif;
+}
+.calClose:hover { background: var(--raised); }
+.calDows { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; margin-bottom: 4px; }
+.calDow { text-align: center; font-size: 11px; color: var(--mid); font-weight: 600; padding: 2px 0; }
+.calGrid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.calCell {
+  height: 36px; border-radius: 8px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  cursor: pointer; transition: background 0.12s; position: relative;
+}
+.calCell:hover { background: var(--raised); }
+.calCellOther { opacity: 0.3; pointer-events: none; }
+.calCellToday { background: var(--yellow); }
+.calCellToday .calNum { color: #3d2e00; font-weight: 700; }
+.calCellToday .calDot { background: #3d2e00; }
+.calCellSel { background: var(--raised); outline: 1.5px solid var(--blue); }
+.calNum { font-size: 13px; color: var(--cream-m); }
+.calDot { width: 4px; height: 4px; border-radius: 50%; background: var(--blue); margin-top: 1px; }
+
+/* ── Block drawer (slide-up panel) ── */
+.bdOverlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+  z-index: 200; display: flex; align-items: flex-end; justify-content: center;
+}
+@media (min-width: 480px) { .bdOverlay { align-items: center; } }
+.bdPanel {
+  background: var(--surface); border-radius: 16px 16px 0 0;
+  width: 100%; max-width: 480px; max-height: 90svh;
+  display: flex; flex-direction: column;
+}
+@media (min-width: 480px) { .bdPanel { border-radius: 16px; } }
+.bdHandle { width: 36px; height: 4px; background: var(--border); border-radius: 2px; margin: 12px auto 4px; flex-shrink: 0; }
+.bdBody { padding: 16px 20px 24px; overflow-y: auto; }
+.bdRef { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--mid); margin-bottom: 8px; }
+.bdTitleRow { display: flex; align-items: center; gap: 8px; margin-bottom: 2px; }
+.bdDot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.bdTitle { font-size: 20px; font-weight: 700; color: var(--cream); }
+.bdSubtype { font-size: 12px; color: var(--mid); margin-bottom: 14px; }
+.bdSec { border-top: 0.5px solid var(--border); padding-top: 12px; margin-top: 12px; }
+.bdSecTitle { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--mid); margin-bottom: 8px; }
+.bdRow { display: flex; gap: 8px; margin-bottom: 5px; font-size: 12px; }
+.bdKey { color: var(--mid); flex-shrink: 0; width: 70px; }
+.bdVal { color: var(--cream-m); }
+.bdDates { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.bdDatePill { font-size: 11px; padding: 3px 9px; border-radius: 20px; background: var(--bg); border: 0.5px solid var(--border); color: var(--cream-m); }
+.bdFooter { margin-top: 20px; display: flex; gap: 10px; justify-content: flex-end; }
+.bdDeleteBtn {
+  font-size: 12px; color: var(--error); background: transparent;
+  border: 0.5px solid var(--error); border-radius: 20px;
+  padding: 8px 16px; cursor: pointer; font-family: 'Nunito', sans-serif;
+}
+.bdDeleteBtn:disabled { opacity: 0.5; cursor: default; }
+.bdDoneBtn {
+  background: var(--yellow); color: var(--bg); border: none;
+  border-radius: 50px; padding: 8px 24px; font-size: 13px; font-weight: 700;
+  cursor: pointer; font-family: 'Nunito', sans-serif;
+}

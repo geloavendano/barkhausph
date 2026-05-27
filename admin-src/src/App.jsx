@@ -96,6 +96,7 @@ export default function App() {
       branches={branches}
       branchIdx={branchIdx}
       onBranchChange={setBranchIdx}
+      contentFill={page === 'calendar'}
     >
       {page === 'calendar' && <CalendarPage {...pageProps} />}
       {page === 'bookings' && <BookingsPage {...pageProps} />}
