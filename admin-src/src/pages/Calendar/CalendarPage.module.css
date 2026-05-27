@@ -163,7 +163,9 @@
 /* ── Booking cards ── */
 .bk {
   position: absolute; border-radius: 6px; padding: 5px 7px;
-  cursor: pointer; border-left: 3px solid transparent; overflow: hidden;
+  cursor: pointer; border-left: 3px solid transparent;
+  /* clip-path instead of overflow:hidden so sticky children can reach the scroll ancestor */
+  clip-path: inset(0 round 6px); overflow: visible;
   transition: filter 0.12s; z-index: 2;
 }
 .bk:hover { filter: brightness(1.1); z-index: 10; }
@@ -171,9 +173,12 @@
 .bkCancelled .bkPet { text-decoration: line-through; }
 .bkPending { opacity: 0.55; filter: grayscale(0.6); }
 .bkPet {
+  position: sticky; top: 0; z-index: 1;
+  background: inherit;
   font-size: 12px; font-weight: 700; color: var(--cream);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   display: flex; align-items: center; gap: 4px;
+  padding-bottom: 2px;
 }
 .bkSub {
   font-size: 10px; color: var(--cream-m); margin-top: 1px;

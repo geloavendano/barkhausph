@@ -1732,7 +1732,38 @@ function setMembership(val) {
     refreshAllTotals();
   }
 }
-var _petNameDebounce = null;
+var _petNameDebounce   = null;
+var _memberIdDebounce  = null;
+
+// Called on every keystroke in the Membership ID field.
+// Immediately invalidates any prior successful check, then re-validates after 600 ms.
+function onMembershipIdInput() {
+  refreshContinueBtn();
+  var idInput = (document.getElementById('membershipId') || {}).value || '';
+  if (idInput.trim().length < 4) {
+    // Too short to be a valid ID — just clear any stale validation state
+    booking.memberValid = false;
+    var msg = document.getElementById('memberValidMsg');
+    if (msg) msg.style.display = 'none';
+    refreshAllTotals();
+    return;
+  }
+  // Invalidate immediately so the discount can't persist while retyping
+  if (booking.memberValid) {
+    booking.memberValid = false;
+    var msg = document.getElementById('memberValidMsg');
+    if (msg) {
+      msg.style.display = 'block';
+      msg.textContent = 'Re-checking membership…';
+      msg.style.color = 'var(--mid)';
+    }
+    refreshAllTotals();
+    refreshContinueBtn();
+  }
+  clearTimeout(_memberIdDebounce);
+  _memberIdDebounce = setTimeout(function() { validateMemberId(); }, 600);
+}
+
 function onPetNameInput() {
   refreshContinueBtn();
   var idInput = (document.getElementById('membershipId') || {}).value || '';

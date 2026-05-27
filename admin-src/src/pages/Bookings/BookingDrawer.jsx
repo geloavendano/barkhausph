@@ -382,16 +382,27 @@ function ServiceRows({ b, gd, hd, dd, sd, addons, rooms }) {
 }
 
 function BillRows({ b, addons }) {
-  const baseAmt = (b.subtotal ?? b.total ?? 0) - addons.reduce((s, a) => s + (a.price ?? 0), 0) + (b.discount_amount ?? 0)
-  const svcLabel = { grooming: 'Grooming service', hotel: 'Hotel stay', daycare: 'Daycare', studio: 'Studio session' }[b.service] ?? 'Service'
+  const addonTotal = addons.reduce((s, a) => s + (a.price ?? 0), 0)
+  const discAmt    = b.discount_amount ?? 0
+  const convFee    = b.convenience_fee ?? 0
+  // subtotal includes addons for grooming; for other services it may not.
+  // Subtract addon total to get the pure service price (floor at 0).
+  const baseAmt    = Math.max(0, (b.subtotal ?? 0) - addonTotal)
+  const svcLabel   = { grooming: 'Grooming service', hotel: 'Hotel stay', daycare: 'Daycare', studio: 'Studio session' }[b.service] ?? 'Service'
   return (
     <>
       {baseAmt > 0 && <DR label={svcLabel} value={`₱${baseAmt.toLocaleString()}`} />}
       {addons.map((a, i) => <DR key={i} label={a.addon_name} value={`₱${(a.price ?? 0).toLocaleString()}`} />)}
-      {b.discount_amount > 0 && (
+      {discAmt > 0 && (
         <div className={styles.dr}>
           <span className={styles.drKey}>Member discount</span>
-          <span style={{ color: 'var(--success)' }}>−₱{b.discount_amount.toLocaleString()}</span>
+          <span style={{ color: 'var(--success)' }}>−₱{discAmt.toLocaleString()}</span>
+        </div>
+      )}
+      {convFee > 0 && (
+        <div className={styles.dr}>
+          <span className={styles.drKey}>Convenience fee</span>
+          <span className={styles.drVal}>₱{convFee.toLocaleString()}</span>
         </div>
       )}
       <div className={styles.dr} style={{ borderTop: '0.5px solid var(--border)', marginTop: 4, paddingTop: 8 }}>

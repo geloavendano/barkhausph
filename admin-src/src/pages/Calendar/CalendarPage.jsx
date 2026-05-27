@@ -21,7 +21,7 @@ const DAYS   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
 
 const CAL_SELECT = [
-  'id,ref_number,service,status,payment_status,booking_date,total,subtotal,discount_amount,created_at,booking_source,notes',
+  'id,ref_number,service,status,payment_status,booking_date,total,subtotal,discount_amount,convenience_fee,created_at,booking_source,notes',
   'waivers(general_terms,health_declaration,media_consent,studio_agreement,senior_medical_waiver,signed_at)',
   'owners(id,first_name,last_name,mobile,email,referral_source)',
   'pets(id,name,animal_type,breed,size,gender,age_value,age_unit,temperament,medical_notes)',
@@ -277,34 +277,6 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
 
           {/* Scrollable area */}
           <div className={styles.tlScroll}>
-            {/* Sticky pet-name header bar */}
-            {positioned.length > 0 && (
-              <div className={styles.stickyBar}>
-                <div className={styles.stickyTime} />
-                <div className={styles.stickyCards}>
-                  {positioned.map(item => {
-                    const b   = item.b, pet = first(b.pets) ?? {}, gd = first(b.grooming_details), hd = first(b.hotel_details)
-                    const color = getCardColor(b, rooms, groomers)
-                    const w = `${100/item.total - 0.8}%`, l = `${item.col/item.total*100 + 0.4}%`
-                    const detail = gd ? (gd.groom_service_name ?? 'Groom') : hd ? (ROOM_TYPE_LABELS[hd.room_type] ?? hd.room_type ?? 'Hotel') : first(b.daycare_details) ? 'Daycare' : first(b.studio_details) ? 'Studio' : ''
-                    const faded = b.status === 'cancelled' || b.status === 'rejected'
-                    return (
-                      <div key={b.id} className={styles.stickyItem}
-                        style={{ left: l, width: w, borderLeft: `3px solid ${color}`, opacity: faded ? 0.4 : b.status === 'pending' ? 0.65 : 1 }}
-                        onClick={() => setOpenId(b.id)}>
-                        <div className={styles.stickyPet}>
-                          <span className={styles.sdot} style={{ background: STATUS_COLORS[b.status] ?? '#888' }} />
-                          <span style={{ fontSize: 11 }}>{pet.animal_type === 'cat' ? '🐱' : '🐶'}</span>
-                          {pet.name ?? 'Pet'}
-                        </div>
-                        {detail && <div className={styles.stickyDetail}>{detail}</div>}
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
-
             {/* Timeline body */}
             <div className={styles.tlBody}>
               {/* Hour labels */}
