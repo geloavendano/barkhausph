@@ -2,6 +2,9 @@ import { useState, useEffect, useCallback } from 'react'
 import { sbGet } from '../../lib/supabase'
 import { SVC_LABELS, SVC_COLORS, STATUS_COLORS, PAY_COLORS, first, dayOffsetStr, todayStr, hexBg } from '../../lib/constants'
 import BookingDrawer from './BookingDrawer'
+import FAB from '../../components/FAB/FAB'
+import AddBookingPanel from '../../components/AddBookingPanel/AddBookingPanel'
+import BlockSchedulePanel from '../../components/BlockSchedulePanel/BlockSchedulePanel'
 import styles from './BookingsPage.module.css'
 
 const BOOKING_SELECT = [
@@ -20,14 +23,17 @@ const BOOKING_SELECT = [
 
 const SVC_FILTERS = ['all', 'grooming', 'hotel', 'daycare', 'studio']
 
-export default function BookingsPage({ branches, currentBranchIdx = 0, rooms, groomers }) {
-  const [bookings,   setBookings]   = useState([])
-  const [loading,    setLoading]    = useState(true)
-  const [error,      setError]      = useState('')
-  const [svcFilter,  setSvcFilter]  = useState('all')
-  const [daysBack,   setDaysBack]   = useState(7)
-  const [openId,     setOpenId]     = useState(null)
-  const [collapsed,  setCollapsed]  = useState({})
+export default function BookingsPage({ branches, currentBranchIdx = 0, rooms, groomers, studios = [] }) {
+  const [bookings,        setBookings]        = useState([])
+  const [loading,         setLoading]         = useState(true)
+  const [error,           setError]           = useState('')
+  const [svcFilter,       setSvcFilter]       = useState('all')
+  const [daysBack,        setDaysBack]        = useState(7)
+  const [openId,          setOpenId]          = useState(null)
+  const [collapsed,       setCollapsed]       = useState({})
+  const [showAddBooking,  setShowAddBooking]  = useState(false)
+  const [showBlockPanel,  setShowBlockPanel]  = useState(false)
+  const [editBooking,     setEditBooking]     = useState(null)
 
   const branch = branches?.[currentBranchIdx]
 
@@ -156,6 +162,36 @@ export default function BookingsPage({ branches, currentBranchIdx = 0, rooms, gr
           groomers={groomers}
           onClose={() => setOpenId(null)}
           onUpdated={() => { setOpenId(null); load(false, daysBack, svcFilter) }}
+          onEdit={b => { setOpenId(null); setEditBooking(b); setShowAddBooking(true) }}
+        />
+      )}
+
+      {/* ── FAB ── */}
+      <FAB
+        onAddBooking={() => { setEditBooking(null); setShowAddBooking(true) }}
+        onBlockSchedule={() => setShowBlockPanel(true)}
+      />
+
+      {showAddBooking && (
+        <AddBookingPanel
+          branch={branch}
+          rooms={rooms}
+          groomers={groomers}
+          studios={studios}
+          editBooking={editBooking}
+          onClose={() => { setShowAddBooking(false); setEditBooking(null) }}
+          onSaved={() => load(false, daysBack, svcFilter)}
+        />
+      )}
+
+      {showBlockPanel && (
+        <BlockSchedulePanel
+          branch={branch}
+          rooms={rooms}
+          groomers={groomers}
+          studios={studios}
+          onClose={() => setShowBlockPanel(false)}
+          onSaved={() => {}}
         />
       )}
     </div>

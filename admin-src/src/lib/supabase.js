@@ -48,6 +48,15 @@ export async function sbPatch(table, filter, body) {
   if (!res.ok) throw new Error(`PATCH ${table}: ${res.status} ${await res.text()}`)
 }
 
+/** Delete rows matching a PostgREST filter string */
+export async function sbDelete(table, filter) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${filter}`, {
+    method: 'DELETE',
+    headers: { ...(await authHeaders()), Prefer: 'return=minimal' },
+  })
+  if (!res.ok) throw new Error(`DELETE ${table}: ${res.status} ${await res.text()}`)
+}
+
 /** Build auth headers using the current session token */
 async function authHeaders() {
   const { data } = await supabase.auth.getSession()

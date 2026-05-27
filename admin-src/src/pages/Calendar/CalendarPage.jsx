@@ -2,6 +2,9 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { sbGet, sbPatch } from '../../lib/supabase'
 import { STATUS_COLORS, first, hexBg } from '../../lib/constants'
 import BookingDrawer from '../Bookings/BookingDrawer'
+import FAB from '../../components/FAB/FAB'
+import AddBookingPanel from '../../components/AddBookingPanel/AddBookingPanel'
+import BlockSchedulePanel from '../../components/BlockSchedulePanel/BlockSchedulePanel'
 import styles from './CalendarPage.module.css'
 
 // ── Constants ──────────────────────────────────────────────────────────────
@@ -94,6 +97,9 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
   const [calModalDate,     setCalModalDate]     = useState(() => new Date())
   const [openId,           setOpenId]           = useState(null)
   const [openBlockId,      setOpenBlockId]      = useState(null)
+  const [showAddBooking,   setShowAddBooking]   = useState(false)
+  const [showBlockPanel,   setShowBlockPanel]   = useState(false)
+  const [editBooking,      setEditBooking]      = useState(null)
 
   const branch  = branches?.[currentBranchIdx]
   const dateStr = useMemo(() => dateToISO(currentDate), [currentDate])
@@ -405,6 +411,36 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
           booking={openBooking} rooms={rooms} groomers={groomers}
           onClose={() => setOpenId(null)}
           onUpdated={() => { setOpenId(null); loadBookings(currentDate); loadBlocked() }}
+          onEdit={b => { setOpenId(null); setEditBooking(b); setShowAddBooking(true) }}
+        />
+      )}
+
+      {/* ── FAB ── */}
+      <FAB
+        onAddBooking={() => { setEditBooking(null); setShowAddBooking(true) }}
+        onBlockSchedule={() => setShowBlockPanel(true)}
+      />
+
+      {showAddBooking && (
+        <AddBookingPanel
+          branch={branch}
+          rooms={rooms}
+          groomers={groomers}
+          studios={studios}
+          editBooking={editBooking}
+          onClose={() => { setShowAddBooking(false); setEditBooking(null) }}
+          onSaved={() => { loadBookings(currentDate); loadBlocked() }}
+        />
+      )}
+
+      {showBlockPanel && (
+        <BlockSchedulePanel
+          branch={branch}
+          rooms={rooms}
+          groomers={groomers}
+          studios={studios}
+          onClose={() => setShowBlockPanel(false)}
+          onSaved={() => loadBlocked()}
         />
       )}
     </div>

@@ -16,6 +16,7 @@ export default function App() {
   const [branchIdx,    setBranchIdx]    = useState(0)
   const [rooms,        setRooms]        = useState([])
   const [groomers,     setGroomers]     = useState([])
+  const [studios,      setStudios]      = useState([])
 
   /* ── Auth ── */
   useEffect(() => {
@@ -67,12 +68,14 @@ export default function App() {
 
   async function loadResources(branchId) {
     try {
-      const [r, g] = await Promise.all([
+      const [r, g, s] = await Promise.all([
         sbGet('rooms',    `branch_id=eq.${branchId}&select=id,name,color,active&order=name`),
         sbGet('groomers', `branch_id=eq.${branchId}&select=id,name,color,active&order=name`),
+        sbGet('studios',  `branch_id=eq.${branchId}&active=eq.true&select=id,name,color&order=sort_order`),
       ])
       setRooms(r ?? [])
       setGroomers(g ?? [])
+      setStudios(s ?? [])
     } catch { /* non-fatal */ }
   }
 
@@ -86,7 +89,7 @@ export default function App() {
 
   if (!session || !allowed) return <Gate />
 
-  const pageProps = { branches, currentBranchIdx: branchIdx, rooms, groomers }
+  const pageProps = { branches, currentBranchIdx: branchIdx, rooms, groomers, studios }
 
   return (
     <Shell
