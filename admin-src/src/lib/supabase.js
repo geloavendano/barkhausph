@@ -1,9 +1,9 @@
 import { createClient } from '@supabase/supabase-js'
 
-// Anon keys are public by design — hardcoded fallbacks ensure the CI build
-// works even when GitHub Secrets are not configured.
-const SUPABASE_URL      = import.meta.env.VITE_SUPABASE_URL      ?? 'https://dxttnbtfhpanyiyduevn.supabase.co'
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY ?? 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4dHRuYnRmaHBhbnlpeWR1ZXZuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY1MjkyNDcsImV4cCI6MjA5MjEwNTI0N30.jrMk8-_Ga01TydNPUwCzlymf1W44PjaXXIUjCLALb2s'
+// Anon keys are public by design (browser-facing static site).
+// Hardcoded so local and CI builds are always identical — no GitHub Secrets needed.
+const SUPABASE_URL      = 'https://dxttnbtfhpanyiyduevn.supabase.co'
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4dHRuYnRmaHBhbnlpeWR1ZXZuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY1MjkyNDcsImV4cCI6MjA5MjEwNTI0N30.jrMk8-_Ga01TydNPUwCzlymf1W44PjaXXIUjCLALb2s'
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
