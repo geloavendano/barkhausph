@@ -5,6 +5,13 @@ on:
     branches: [main]
     paths:
       - 'admin-src/**'
+    # Don't re-trigger when the bot commits built files back
+    tags-ignore: ['**']
+
+# Prevent overlapping runs that cause the race condition
+concurrency:
+  group: build-admin
+  cancel-in-progress: false
 
 jobs:
   build:
