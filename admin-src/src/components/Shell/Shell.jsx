@@ -1,3 +1,4 @@
+import logo from '../../assets/barkhaus-logo.png'
 import styles from './Shell.module.css'
 
 const NAV_ITEMS = [
@@ -12,7 +13,7 @@ export default function Shell({ page, onPageChange, greeting, branches = [], bra
     <div className={styles.app}>
       {/* ── Top bar ── */}
       <header className={styles.topbar}>
-        <span className={styles.logo}>BARK<span>🐾</span>US</span>
+        <img src={logo} alt="Barkhaus" className={styles.logo} />
         {branches.length > 1 && (
           <div className={styles.branchTabs}>
             {branches.map((br, i) => (

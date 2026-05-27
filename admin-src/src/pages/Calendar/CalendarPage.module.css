@@ -286,3 +286,21 @@
   border-radius: 50px; padding: 8px 24px; font-size: 13px; font-weight: 700;
   cursor: pointer; font-family: 'Nunito', sans-serif;
 }
+
+/* ── Error banner ── */
+.errBanner {
+  padding: 10px 16px; background: rgba(255,80,80,0.12);
+  border-bottom: 0.5px solid rgba(255,80,80,0.4);
+  font-size: 12px; color: var(--error); flex-shrink: 0;
+}
+
+/* ── Empty state ── */
+.emptyState {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 6px;
+  padding: 40px 20px; flex: 1;
+  pointer-events: none;
+}
+.emptyIcon { font-size: 32px; }
+.emptyMsg { font-size: 14px; font-weight: 700; color: var(--mid); }
+.emptyHint { font-size: 12px; color: var(--mid); opacity: 0.7; text-align: center; max-width: 240px; }

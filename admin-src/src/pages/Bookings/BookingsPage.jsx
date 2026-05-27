@@ -28,7 +28,7 @@ export default function BookingsPage({ branches, currentBranchIdx = 0, rooms, gr
   const [loading,         setLoading]         = useState(true)
   const [error,           setError]           = useState('')
   const [svcFilter,       setSvcFilter]       = useState('all')
-  const [daysBack,        setDaysBack]        = useState(7)
+  const [daysBack,        setDaysBack]        = useState(30)
   const [openId,          setOpenId]          = useState(null)
   const [collapsed,       setCollapsed]       = useState({})
   const [showAddBooking,  setShowAddBooking]  = useState(false)
@@ -63,7 +63,7 @@ export default function BookingsPage({ branches, currentBranchIdx = 0, rooms, gr
     }
   }, [branch, daysBack, svcFilter])
 
-  useEffect(() => { load(false, 7, svcFilter) }, [branch, svcFilter])
+  useEffect(() => { load(false, 30, svcFilter) }, [branch, svcFilter])
 
   function handleFilterChange(svc) {
     setSvcFilter(svc)

@@ -19,12 +19,13 @@
 }
 
 .logo {
-  font-family: 'Fredoka One', cursive;
-  font-size: 17px;
-  color: var(--cream);
+  height: 28px;
+  width: auto;
+  object-fit: contain;
+  filter: brightness(0) invert(1);
   user-select: none;
+  flex-shrink: 0;
 }
-.logo span { color: var(--yellow); }
 
 .branchTabs { display: flex; gap: 4px; margin-left: 12px; }
 .branchTab {

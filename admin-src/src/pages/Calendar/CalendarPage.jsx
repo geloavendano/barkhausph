@@ -90,6 +90,7 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
   const [blockedSchedules, setBlockedSchedules] = useState([])
   const [studios,          setStudios]          = useState([])
   const [loading,          setLoading]          = useState(true)
+  const [loadError,        setLoadError]        = useState('')
   const [currentSvc,       setCurrentSvc]       = useState('hotel')
   const [activeFilter,     setActiveFilter]     = useState(null)
   const [monthDots,        setMonthDots]        = useState({})
@@ -107,13 +108,18 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
   // ── Loaders ───────────────────────────────────────────────────────────────
   const loadBookings = useCallback(async (date) => {
     if (!branch?.id) { setBookings([]); setLoading(false); return }
-    setLoading(true)
+    setLoading(true); setLoadError('')
     const ds = dateToISO(date)
+    // Bound the hotel query: only bookings whose booking_date falls within ±90 days
+    const dObj    = new Date(ds + 'T00:00:00')
+    const past90  = new Date(dObj); past90.setDate(past90.getDate() - 90)
+    const fut30   = new Date(dObj); fut30.setDate(fut30.getDate() + 30)
+    const past90s = dateToISO(past90), fut30s = dateToISO(fut30)
     try {
       const base = `branch_id=eq.${branch.id}&select=${CAL_SELECT}`
       const [dayRows, hotelAll] = await Promise.all([
-        sbGet('bookings', `${base}&booking_date=eq.${ds}&service=not.eq.hotel&order=created_at`),
-        sbGet('bookings', `${base}&service=eq.hotel&order=created_at`),
+        sbGet('bookings', `${base}&booking_date=eq.${ds}&service=neq.hotel&order=created_at`),
+        sbGet('bookings', `${base}&service=eq.hotel&booking_date=gte.${past90s}&booking_date=lte.${fut30s}&order=created_at`),
       ])
       const d = new Date(ds + 'T00:00:00')
       const hf = (hotelAll ?? []).filter(b => {
@@ -121,7 +127,11 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
         return new Date(hd.checkin_date + 'T00:00:00') <= d && d <= new Date(hd.checkout_date + 'T00:00:00')
       })
       setBookings([...(dayRows ?? []), ...hf])
-    } catch (err) { console.error(err); setBookings([]) }
+    } catch (err) {
+      console.error('Calendar load error:', err)
+      setLoadError(err.message)
+      setBookings([])
+    }
     finally { setLoading(false) }
   }, [branch?.id])
 
@@ -224,6 +234,13 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
         {loading && <span className={styles.loadDot} />}
       </div>
 
+      {/* ── Error banner ── */}
+      {loadError && (
+        <div className={styles.errBanner}>
+          ⚠️ {loadError}
+        </div>
+      )}
+
       {/* ── Body: sidebar + main ── */}
       <div className={styles.body}>
         {/* Calendar sidebar (rooms / groomers / studios) */}
@@ -280,6 +297,15 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
               </div>
             ))}
           </div>
+
+          {/* Empty state */}
+          {!loading && !loadError && filtered.length === 0 && (
+            <div className={styles.emptyState}>
+              <div className={styles.emptyIcon}>📅</div>
+              <div className={styles.emptyMsg}>No bookings for {dateLbl}</div>
+              <div className={styles.emptyHint}>Navigate to a different date or add a booking with the + button</div>
+            </div>
+          )}
 
           {/* Scrollable area */}
           <div className={styles.tlScroll}>
