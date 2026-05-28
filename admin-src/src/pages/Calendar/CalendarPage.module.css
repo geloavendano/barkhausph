@@ -287,6 +287,85 @@
   cursor: pointer; font-family: 'Nunito', sans-serif;
 }
 
+/* ── Mobile filter button (hidden on desktop — sidebar handles it there) ── */
+.filterBtn {
+  display: none; /* shown via media query below */
+  margin-left: auto;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  border-radius: 20px;
+  border: 0.5px solid var(--border);
+  background: transparent;
+  color: var(--mid);
+  font-size: 11px;
+  font-weight: 700;
+  font-family: 'Nunito', sans-serif;
+  cursor: pointer;
+  white-space: nowrap;
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
+}
+.filterBtn:hover { background: var(--raised); color: var(--cream); }
+.filterBtnOn {
+  border-color: var(--blue);
+  color: var(--cream);
+  background: var(--raised);
+}
+.filterBtnDot {
+  display: inline-block;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+@media (max-width: 640px) { .filterBtn { display: flex; } }
+
+/* ── Filter drawer (mobile bottom sheet) ── */
+.fdOverlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+  z-index: 200; display: flex; align-items: flex-end; justify-content: center;
+}
+.fdPanel {
+  background: var(--surface); border-radius: 16px 16px 0 0;
+  width: 100%; max-width: 480px; max-height: 80svh;
+  display: flex; flex-direction: column;
+}
+.fdHandle { width: 36px; height: 4px; background: var(--border); border-radius: 2px; margin: 12px auto 0; flex-shrink: 0; }
+.fdBody { padding: 12px 20px 32px; overflow-y: auto; }
+.fdHeader { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.fdTitle { font-size: 14px; font-weight: 700; color: var(--cream); }
+.fdClearBtn {
+  font-size: 12px; color: var(--blue); background: transparent;
+  border: none; cursor: pointer; font-family: 'Nunito', sans-serif; padding: 4px 0;
+}
+.fdSec { border-top: 0.5px solid var(--border); padding-top: 10px; margin-top: 10px; }
+.fdSecLbl {
+  font-size: 9px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--mid); margin: 0 0 6px 2px;
+}
+.fdItem {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 10px; border-radius: 8px; cursor: pointer;
+  transition: background 0.12s; margin-bottom: 2px;
+  user-select: none;
+}
+.fdItem:hover { background: var(--raised); }
+.fdItemOn { background: var(--raised); outline: 0.5px solid var(--border); }
+.fdDot { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+.fdDotRound { border-radius: 50%; }
+.fdLbl { font-size: 13px; color: var(--mid); flex: 1; }
+.fdItem:hover .fdLbl, .fdItemOn .fdLbl { color: var(--cream); }
+.fdCt { font-size: 13px; font-weight: 700; color: var(--mid); }
+.fdDoneBtn {
+  margin-top: 20px; width: 100%;
+  background: var(--yellow); color: var(--bg);
+  border: none; border-radius: 50px;
+  padding: 12px; font-size: 14px; font-weight: 700;
+  cursor: pointer; font-family: 'Nunito', sans-serif;
+}
+
 /* ── Error banner ── */
 .errBanner {
   padding: 10px 16px; background: rgba(255,80,80,0.12);

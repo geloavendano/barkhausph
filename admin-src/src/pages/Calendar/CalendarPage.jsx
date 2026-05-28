@@ -101,6 +101,7 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
   const [showAddBooking,   setShowAddBooking]   = useState(false)
   const [showBlockPanel,   setShowBlockPanel]   = useState(false)
   const [editBooking,      setEditBooking]      = useState(null)
+  const [filterOpen,       setFilterOpen]       = useState(false)
 
   const branch  = branches?.[currentBranchIdx]
   const dateStr = useMemo(() => dateToISO(currentDate), [currentDate])
@@ -110,16 +111,13 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
     if (!branch?.id) { setBookings([]); setLoading(false); return }
     setLoading(true); setLoadError('')
     const ds = dateToISO(date)
-    // Bound the hotel query: only bookings whose booking_date falls within ±90 days
-    const dObj    = new Date(ds + 'T00:00:00')
-    const past90  = new Date(dObj); past90.setDate(past90.getDate() - 90)
-    const fut30   = new Date(dObj); fut30.setDate(fut30.getDate() + 30)
-    const past90s = dateToISO(past90), fut30s = dateToISO(fut30)
     try {
       const base = `branch_id=eq.${branch.id}&select=${CAL_SELECT}`
       const [dayRows, hotelAll] = await Promise.all([
         sbGet('bookings', `${base}&booking_date=eq.${ds}&service=neq.hotel&order=created_at`),
-        sbGet('bookings', `${base}&service=eq.hotel&booking_date=gte.${past90s}&booking_date=lte.${fut30s}&order=created_at`),
+        // Hotel bookings: booking_date is often NULL (dates live in hotel_details).
+        // Fetch all and let the client-side checkin/checkout filter handle it.
+        sbGet('bookings', `${base}&service=eq.hotel&order=created_at`),
       ])
       const d = new Date(ds + 'T00:00:00')
       const hf = (hotelAll ?? []).filter(b => {
@@ -232,6 +230,23 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
         <button className={styles.navArrow} onClick={() => shiftDate(1)}>›</button>
         {!isToday && <button className={styles.todayBtn} onClick={goToday}>Today</button>}
         {loading && <span className={styles.loadDot} />}
+        {/* Mobile-only filter button — sidebar is hidden on small screens */}
+        {(rooms.length > 0 || groomers.length > 0 || studios.length > 0) && (() => {
+          const res = activeFilter
+            ? (activeFilter.type === 'room'    ? rooms.find(r => r.id === activeFilter.id)
+             : activeFilter.type === 'groomer' ? groomers.find(g => g.id === activeFilter.id)
+             : studios.find(s => s.id === activeFilter.id))
+            : null
+          return (
+            <button
+              className={`${styles.filterBtn} ${activeFilter ? styles.filterBtnOn : ''}`}
+              onClick={() => setFilterOpen(true)}
+            >
+              {res && <span className={styles.filterBtnDot} style={{ background: res.color }} />}
+              {res ? res.name : '⊟ Filter'}
+            </button>
+          )
+        })()}
       </div>
 
       {/* ── Error banner ── */}
@@ -469,6 +484,19 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
           onSaved={() => loadBlocked()}
         />
       )}
+
+      {filterOpen && (
+        <FilterDrawer
+          rooms={rooms}
+          groomers={groomers}
+          studios={studios}
+          bookings={bookings}
+          activeFilter={activeFilter}
+          onSelect={(type, id) => { toggleFilter(type, id); setFilterOpen(false) }}
+          onClear={() => { setActiveFilter(null); setFilterOpen(false) }}
+          onClose={() => setFilterOpen(false)}
+        />
+      )}
     </div>
   )
 }
@@ -531,6 +559,84 @@ function MonthOverlay({ modalDate, selectedDate, monthDots, onClose, onShift, on
                   {cell.hasDot && <div className={styles.calDot} />}
                 </div>
           ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function FilterDrawer({ rooms, groomers, studios, bookings, activeFilter, onSelect, onClear, onClose }) {
+  const countFor = (type, id) => bookings.filter(b => {
+    if (type === 'room')    return b.service === 'hotel'    && (first(b.hotel_details)    ?? {}).room_id    === id
+    if (type === 'groomer') return b.service === 'grooming' && (first(b.grooming_details) ?? {}).groomer_id === id
+    if (type === 'studio')  return b.service === 'studio'   && (first(b.studio_details)   ?? {}).studio_id  === id
+    return false
+  }).length
+
+  return (
+    <div className={styles.fdOverlay} onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className={styles.fdPanel}>
+        <div className={styles.fdHandle} />
+        <div className={styles.fdBody}>
+          <div className={styles.fdHeader}>
+            <span className={styles.fdTitle}>Filter by</span>
+            {activeFilter && (
+              <button className={styles.fdClearBtn} onClick={onClear}>Clear</button>
+            )}
+          </div>
+
+          {rooms.length > 0 && (
+            <div className={styles.fdSec}>
+              <p className={styles.fdSecLbl}>Rooms</p>
+              {rooms.map(r => (
+                <div
+                  key={r.id}
+                  className={`${styles.fdItem} ${activeFilter?.type === 'room' && activeFilter?.id === r.id ? styles.fdItemOn : ''}`}
+                  onClick={() => onSelect('room', r.id)}
+                >
+                  <span className={styles.fdDot} style={{ background: r.color }} />
+                  <span className={styles.fdLbl}>{r.name}</span>
+                  <span className={styles.fdCt}>{countFor('room', r.id)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {groomers.length > 0 && (
+            <div className={styles.fdSec}>
+              <p className={styles.fdSecLbl}>Groomers</p>
+              {groomers.map(g => (
+                <div
+                  key={g.id}
+                  className={`${styles.fdItem} ${activeFilter?.type === 'groomer' && activeFilter?.id === g.id ? styles.fdItemOn : ''}`}
+                  onClick={() => onSelect('groomer', g.id)}
+                >
+                  <span className={`${styles.fdDot} ${styles.fdDotRound}`} style={{ background: g.color }} />
+                  <span className={styles.fdLbl}>{g.name}</span>
+                  <span className={styles.fdCt}>{countFor('groomer', g.id)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {studios.length > 0 && (
+            <div className={styles.fdSec}>
+              <p className={styles.fdSecLbl}>Studios</p>
+              {studios.map(s => (
+                <div
+                  key={s.id}
+                  className={`${styles.fdItem} ${activeFilter?.type === 'studio' && activeFilter?.id === s.id ? styles.fdItemOn : ''}`}
+                  onClick={() => onSelect('studio', s.id)}
+                >
+                  <span className={`${styles.fdDot} ${styles.fdDotRound}`} style={{ background: s.color }} />
+                  <span className={styles.fdLbl}>{s.name}</span>
+                  <span className={styles.fdCt}>{countFor('studio', s.id)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <button className={styles.fdDoneBtn} onClick={onClose}>Done</button>
         </div>
       </div>
     </div>
