@@ -20,16 +20,35 @@ export default function App() {
 
   /* ── Auth ── */
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data }) => {
-      const sess = data?.session ?? null
-      setSession(sess)
-      if (sess) await onSessionReady(sess)
-    })
+    // Safety net: if getSession() hangs (e.g. stuck token-refresh request),
+    // fall through to the Gate login page after 6 s instead of spinning forever.
+    const giveUp = setTimeout(() => {
+      console.warn('getSession timed out — falling back to login')
+      setSession(s => s === undefined ? null : s)
+    }, 6000)
+
+    supabase.auth.getSession()
+      .then(async ({ data }) => {
+        clearTimeout(giveUp)
+        const sess = data?.session ?? null
+        setSession(sess)
+        if (sess) await onSessionReady(sess)
+      })
+      .catch(err => {
+        clearTimeout(giveUp)
+        console.error('getSession failed:', err)
+        setSession(null)
+      })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, sess) => {
       setSession(sess)
-      if (sess) await onSessionReady(sess)
-      else { setAllowed(false); setGreeting('') }
+      if (sess) {
+        try { await onSessionReady(sess) }
+        catch (err) { console.error('onSessionReady failed:', err) }
+      } else {
+        setAllowed(false)
+        setGreeting('')
+      }
     })
     return () => subscription.unsubscribe()
   }, [])
