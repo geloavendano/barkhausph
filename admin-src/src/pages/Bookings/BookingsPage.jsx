@@ -8,7 +8,7 @@ import BlockSchedulePanel from '../../components/BlockSchedulePanel/BlockSchedul
 import styles from './BookingsPage.module.css'
 
 const BOOKING_SELECT = [
-  'id,ref_number,service,status,payment_status,booking_date,total,subtotal,discount_amount,convenience_fee,created_at,booking_source,notes',
+  'id,ref_number,service,status,payment_status,booking_date,total,subtotal,discount_amount,created_at,booking_source,notes',
   'waivers(general_terms,health_declaration,media_consent,studio_agreement,senior_medical_waiver,signed_at)',
   'owners(id,first_name,last_name,mobile,email,referral_source)',
   'pets(id,name,animal_type,breed,size,gender,age_value,age_unit,temperament,medical_notes)',
