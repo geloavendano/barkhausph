@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react'
 import { supabase, sbGet, setAuthToken, SUPABASE_URL, SUPABASE_ANON_KEY } from './lib/supabase'
 import Gate        from './components/Gate/Gate'
 import Shell       from './components/Shell/Shell'
-import MembersPage  from './pages/Members/MembersPage'
-import BookingsPage from './pages/Bookings/BookingsPage'
-import CheckInPage  from './pages/CheckIn/CheckInPage'
-import CalendarPage from './pages/Calendar/CalendarPage'
+import MembersPage   from './pages/Members/MembersPage'
+import BookingsPage  from './pages/Bookings/BookingsPage'
+import CheckInPage   from './pages/CheckIn/CheckInPage'
+import CalendarPage  from './pages/Calendar/CalendarPage'
+import ResourcesPage from './pages/Resources/ResourcesPage'
 
 export default function App() {
   const [session,      setSession]      = useState(undefined)
@@ -138,10 +139,17 @@ export default function App() {
       onBranchChange={setBranchIdx}
       contentFill={page === 'calendar'}
     >
-      {page === 'calendar' && <CalendarPage {...pageProps} />}
-      {page === 'bookings' && <BookingsPage {...pageProps} />}
-      {page === 'checkin'  && <CheckInPage  {...pageProps} />}
-      {page === 'members'  && <MembersPage  {...pageProps} />}
+      {page === 'calendar'  && <CalendarPage  {...pageProps} />}
+      {page === 'bookings'  && <BookingsPage  {...pageProps} />}
+      {page === 'checkin'   && <CheckInPage   {...pageProps} />}
+      {page === 'members'   && <MembersPage   {...pageProps} />}
+      {page === 'resources' && (
+        <ResourcesPage
+          branches={branches}
+          currentBranchIdx={branchIdx}
+          onChanged={() => { if (branches[branchIdx]?.id) loadResources(branches[branchIdx].id) }}
+        />
+      )}
     </Shell>
   )
 }

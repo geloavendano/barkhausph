@@ -2,10 +2,11 @@ import logo from '../../assets/barkhaus-logo.png'
 import styles from './Shell.module.css'
 
 const NAV_ITEMS = [
-  { key: 'calendar', icon: '📅', label: 'Calendar' },
-  { key: 'bookings', icon: '📋', label: 'Bookings' },
-  { key: 'checkin',  icon: '🐾', label: 'Check In' },
-  { key: 'members',  icon: '👤', label: 'Members'  },
+  { key: 'calendar',  icon: '📅', label: 'Calendar'  },
+  { key: 'bookings',  icon: '📋', label: 'Bookings'  },
+  { key: 'checkin',   icon: '🐾', label: 'Check In'  },
+  { key: 'members',   icon: '👤', label: 'Members'   },
+  { key: 'resources', icon: '📦', label: 'Inventory' },
 ]
 
 export default function Shell({ page, onPageChange, greeting, branches = [], branchIdx = 0, onBranchChange, contentFill, children }) {
