@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { supabase, sbGet, SUPABASE_URL, SUPABASE_ANON_KEY } from './lib/supabase'
+import { supabase, sbGet, setAuthToken, SUPABASE_URL, SUPABASE_ANON_KEY } from './lib/supabase'
 import Gate        from './components/Gate/Gate'
 import Shell       from './components/Shell/Shell'
 import MembersPage  from './pages/Members/MembersPage'
@@ -31,16 +31,19 @@ export default function App() {
       .then(async ({ data }) => {
         clearTimeout(giveUp)
         const sess = data?.session ?? null
+        setAuthToken(sess?.access_token ?? null)
         setSession(sess)
         if (sess) await onSessionReady(sess)
       })
       .catch(err => {
         clearTimeout(giveUp)
         console.error('getSession failed:', err)
+        setAuthToken(null)
         setSession(null)
       })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, sess) => {
+      setAuthToken(sess?.access_token ?? null)
       setSession(sess)
       if (sess) {
         try { await onSessionReady(sess) }
@@ -69,7 +72,7 @@ export default function App() {
       const url = `${SUPABASE_URL}/rest/v1/admin_users?select=email&email=eq.${encodeURIComponent(sess.user.email)}&limit=1`
       const res = await fetch(url, {
         headers: {
-          apikey: SUPABASE_ANON_KEY,
+          apikey:         SUPABASE_ANON_KEY,
           Authorization: `Bearer ${sess.access_token}`,
         },
       })

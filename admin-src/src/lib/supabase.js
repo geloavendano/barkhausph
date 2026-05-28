@@ -14,6 +14,18 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   global:   { headers: { 'x-client-info': 'barkhaus-admin' } },
 })
 
+// ── Token cache ────────────────────────────────────────────────────────────
+// authHeaders() used to call supabase.auth.getSession() on every API call.
+// If a token refresh was in-flight, that would hang indefinitely — silently
+// blocking every sbGet/sbPost/etc before they even reached fetch().
+// Instead we cache the access token here and update it from App.jsx whenever
+// the auth state changes (sign-in, sign-out, token refresh).
+let _accessToken = null
+
+export function setAuthToken(token) {
+  _accessToken = token
+}
+
 /** Shorthand — fetch rows from a REST table with PostgREST query string */
 export async function sbGet(table, params = '') {
   const url = `${SUPABASE_URL}/rest/v1/${table}${params ? '?' + params : ''}`
@@ -63,13 +75,11 @@ export async function sbDelete(table, filter) {
   if (!res.ok) throw new Error(`DELETE ${table}: ${res.status} ${await res.text()}`)
 }
 
-/** Build auth headers using the current session token */
-async function authHeaders() {
-  const { data } = await supabase.auth.getSession()
-  const token = data?.session?.access_token ?? SUPABASE_ANON_KEY
+/** Build auth headers using the cached access token (set via setAuthToken) */
+function authHeaders() {
   return {
     apikey: SUPABASE_ANON_KEY,
-    Authorization: `Bearer ${token}`,
+    Authorization: `Bearer ${_accessToken ?? SUPABASE_ANON_KEY}`,
     'Content-Type': 'application/json',
   }
 }
