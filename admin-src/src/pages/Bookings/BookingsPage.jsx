@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { sbGet } from '../../lib/supabase'
+import { supabase, sbGet } from '../../lib/supabase'
 import { SVC_LABELS, SVC_COLORS, STATUS_COLORS, PAY_COLORS, first, dayOffsetStr, todayStr, hexBg } from '../../lib/constants'
 import BookingDrawer from './BookingDrawer'
 import FAB from '../../components/FAB/FAB'
@@ -64,6 +64,34 @@ export default function BookingsPage({ branches, currentBranchIdx = 0, rooms, gr
   }, [branch, daysBack, svcFilter])
 
   useEffect(() => { load(false, 30, svcFilter) }, [branch, svcFilter])
+
+  // ── Live updates: Realtime + 60-second poll + visibility change ───────────
+  useEffect(() => {
+    if (!branch?.id) return
+
+    let debounce = null
+    const refresh = () => {
+      clearTimeout(debounce)
+      debounce = setTimeout(() => load(false), 1200)
+    }
+
+    const channel = supabase
+      .channel(`bk-${branch.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, refresh)
+      .subscribe()
+
+    const poll = setInterval(() => load(false), 60_000)
+
+    const onVisible = () => { if (!document.hidden) load(false) }
+    document.addEventListener('visibilitychange', onVisible)
+
+    return () => {
+      clearTimeout(debounce)
+      supabase.removeChannel(channel)
+      clearInterval(poll)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [branch?.id, load]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleFilterChange(svc) {
     setSvcFilter(svc)

@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
-import { sbGet, sbPatch } from '../../lib/supabase'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { supabase, sbGet, sbPatch } from '../../lib/supabase'
 import { STATUS_COLORS, first, hexBg } from '../../lib/constants'
 import BookingDrawer from '../Bookings/BookingDrawer'
 import FAB from '../../components/FAB/FAB'
@@ -106,6 +106,11 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
   const branch  = branches?.[currentBranchIdx]
   const dateStr = useMemo(() => dateToISO(currentDate), [currentDate])
 
+  // Keep a ref so realtime/polling closures always see the latest currentDate
+  // without needing to re-subscribe every time the user navigates a day.
+  const currentDateRef = useRef(currentDate)
+  useEffect(() => { currentDateRef.current = currentDate }, [currentDate])
+
   // ── Loaders ───────────────────────────────────────────────────────────────
   const loadBookings = useCallback(async (date) => {
     if (!branch?.id) { setBookings([]); setLoading(false); return }
@@ -163,6 +168,38 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
     setCalModalDate(d)
     Promise.all([loadBookings(d), loadBlocked(), loadStudios(), loadMonthDots(d.getFullYear(), d.getMonth())])
   }, [branch?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Live updates: Realtime + 60-second poll + visibility change ───────────
+  useEffect(() => {
+    if (!branch?.id) return
+
+    let debounce = null
+    const refresh = () => {
+      // Debounce rapid-fire events (e.g. bulk inserts) to a single reload
+      clearTimeout(debounce)
+      debounce = setTimeout(() => loadBookings(currentDateRef.current), 1200)
+    }
+
+    // Supabase Realtime — instant update on any booking change for this branch
+    const channel = supabase
+      .channel(`cal-${branch.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, refresh)
+      .subscribe()
+
+    // 60-second polling fallback in case the WebSocket drops
+    const poll = setInterval(() => loadBookings(currentDateRef.current), 60_000)
+
+    // Refresh immediately when the user returns to this tab
+    const onVisible = () => { if (!document.hidden) loadBookings(currentDateRef.current) }
+    document.addEventListener('visibilitychange', onVisible)
+
+    return () => {
+      clearTimeout(debounce)
+      supabase.removeChannel(channel)
+      clearInterval(poll)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [branch?.id, loadBookings]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Date navigation ───────────────────────────────────────────────────────
   const shiftDate = (delta) => {

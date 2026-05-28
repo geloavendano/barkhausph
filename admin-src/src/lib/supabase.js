@@ -6,11 +6,8 @@ import { createClient } from '@supabase/supabase-js'
 export const SUPABASE_URL      = 'https://dxttnbtfhpanyiyduevn.supabase.co'
 export const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4dHRuYnRmaHBhbnlpeWR1ZXZuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY1MjkyNDcsImV4cCI6MjA5MjEwNTI0N30.jrMk8-_Ga01TydNPUwCzlymf1W44PjaXXIUjCLALb2s'
 
-// Disable realtime — this admin panel only uses REST/PostgREST.
-// The Phoenix WS library bundled with realtime uses patterns that trigger
-// eval()-related CSP warnings and can stall on constrained networks.
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  realtime: { params: { eventsPerSecond: 0 } },
+  realtime: { params: { eventsPerSecond: 10 } },
   global:   { headers: { 'x-client-info': 'barkhaus-admin' } },
 })
 
