@@ -9,6 +9,8 @@ import styles from './BookingDrawer.module.css'
 
 export default function BookingDrawer({ booking: b, rooms, groomers, onClose, onUpdated }) {
   const [payments,    setPayments]    = useState(null)
+  const [charges,     setCharges]     = useState([])
+  const [vaccDocs,    setVaccDocs]    = useState([])
   const [payOpen,     setPayOpen]     = useState(false)
   const [saving,      setSaving]      = useState(false)
   const [status,      setStatus]      = useState(b.status ?? 'pending')
@@ -27,11 +29,9 @@ export default function BookingDrawer({ booking: b, rooms, groomers, onClose, on
   const dd     = first(b.daycare_details)
   const sd     = first(b.studio_details)
   const cn     = first(b.checkin_notes)
-  const addons   = Array.isArray(b.booking_addons)      ? b.booking_addons      : (b.booking_addons      ? [b.booking_addons]      : [])
-  const charges  = Array.isArray(b.booking_charges)     ? b.booking_charges     : (b.booking_charges     ? [b.booking_charges]     : [])
-  const vaccines = Array.isArray(b.pet_vaccines)        ? b.pet_vaccines        : (b.pet_vaccines        ? [b.pet_vaccines]        : [])
-  const vaccDocs = Array.isArray(b.vaccine_documents)   ? b.vaccine_documents   : (b.vaccine_documents   ? [b.vaccine_documents]   : [])
-  const waiver = first(b.waivers)
+  const addons   = Array.isArray(b.booking_addons) ? b.booking_addons : (b.booking_addons ? [b.booking_addons] : [])
+  const vaccines = Array.isArray(b.pet_vaccines)   ? b.pet_vaccines   : (b.pet_vaccines   ? [b.pet_vaccines]   : [])
+  const waiver   = first(b.waivers)
 
   // Pre-select current assignment
   useEffect(() => {
@@ -39,9 +39,9 @@ export default function BookingDrawer({ booking: b, rooms, groomers, onClose, on
     else if (b.service === 'hotel') setInvVal(hd?.room_id ?? '')
   }, [b])
 
-  useEffect(() => { loadPayments() }, [b.id])
+  useEffect(() => { loadPayments(); loadCharges(); loadVaccDocs() }, [b.id])
 
-  // Generate 1-hour signed read URLs for vaccine documents
+  // Generate 1-hour signed read URLs for vaccine documents whenever they load
   useEffect(() => {
     if (vaccDocs.length === 0) return
     let cancelled = false
@@ -55,13 +55,27 @@ export default function BookingDrawer({ booking: b, rooms, groomers, onClose, on
     }
     loadDocUrls()
     return () => { cancelled = true }
-  }, [b.id])
+  }, [vaccDocs])
 
   async function loadPayments() {
     try {
       const rows = await sbGet('payments', `select=*&booking_id=eq.${b.id}&order=created_at`)
       setPayments(rows ?? [])
     } catch { setPayments([]) }
+  }
+
+  async function loadCharges() {
+    try {
+      const rows = await sbGet('booking_charges', `select=sort_order,type,label,amount&booking_id=eq.${b.id}&order=sort_order`)
+      setCharges(rows ?? [])
+    } catch { setCharges([]) }
+  }
+
+  async function loadVaccDocs() {
+    try {
+      const rows = await sbGet('vaccine_documents', `select=id,file_path,file_name&booking_id=eq.${b.id}`)
+      setVaccDocs(rows ?? [])
+    } catch { setVaccDocs([]) }
   }
 
   async function saveStatus() {
