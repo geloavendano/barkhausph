@@ -186,6 +186,62 @@ Deno.serve(async (req) => {
       refNumber = newBooking.ref_number;
     }
 
+    // ── 4b. Create the service detail row up front (best-effort) ──
+    // Holds service_date + the schedule, so this PENDING booking shows on the
+    // admin calendar immediately — before payment. The webhook later upserts the
+    // same row (onConflict booking_id) after payment, so this is idempotent.
+    // Non-fatal: if it fails, the booking still proceeds and the webhook creates
+    // the detail row post-payment (the booking just won't appear on the calendar
+    // until then). Requires a UNIQUE constraint on booking_id in each detail table
+    // so the webhook's upsert updates this row rather than erroring.
+    const detailTableFor: Record<string, string> = {
+      hotel: "hotel_details", grooming: "grooming_details",
+      daycare: "daycare_details", studio: "studio_details",
+    };
+    const detailTable = detailTableFor[body.service as string] || null;
+    try {
+      if (body.service === "hotel") {
+        await supabase.from("hotel_details").insert({
+          booking_id: bookingId,
+          checkin_date: body.hotelCheckin, checkout_date: body.hotelCheckout,
+          dropoff_time: body.hotelDropoff || null, pickup_time: body.hotelPickup || null,
+          pickup_hour: parseInt(body.hotelPickupHour) || 14,
+          room_type: body.hotelRoom || null, room_id: body.hotelRoomId || null,
+          playpark_consent: body.playparkConsent === "yes",
+          feeding_instructions: body.hotelFeeding || null, medications: body.hotelMeds || null,
+          vet_clinic: body.vetClinic || null, vet_contact: body.vetContact || null, vet_address: body.vetAddress || null,
+          emergency_name: body.emergencyName || null, emergency_phone: body.emergencyPhone || null,
+        });
+      } else if (body.service === "grooming") {
+        await supabase.from("grooming_details").insert({
+          booking_id: bookingId, service_date: body.groomDate || null,
+          timeslot: body.groomSlot,
+          preferred_stylist: body.preferredStylist || "any",
+          groomer_id: body.preferredStylistId || null,
+          groom_service_key: body.groomService || "", groom_service_name: body.groomServiceName || "",
+          special_requests: body.groomNotes || null,
+        });
+      } else if (body.service === "daycare") {
+        const openTime = body.daycareOpenTime === true;
+        await supabase.from("daycare_details").insert({
+          booking_id: bookingId, service_date: body.daycareDate || null,
+          dropoff_time: body.daycareDropoff || "", dropoff_hour: parseInt(body.daycareDropoffHour) || 0,
+          pickup_time: openTime ? null : (body.daycarePickup || null),
+          pickup_hour: openTime ? null : (parseInt(body.daycarePickupHour) || null),
+          hours_total: openTime ? 0 : Math.max(0, (parseInt(body.daycarePickupHour)||0) - (parseInt(body.daycareDropoffHour)||0)),
+          open_time: openTime, notes: body.daycareNotes || null,
+        });
+      } else if (body.service === "studio") {
+        await supabase.from("studio_details").insert({
+          booking_id: bookingId, service_date: body.studioDate || null,
+          timeslot: body.studioSlot || "",
+        });
+      }
+    } catch (detailErr) {
+      console.warn("Early service-detail insert failed (non-fatal — webhook will create it):",
+        detailErr instanceof Error ? detailErr.message : detailErr);
+    }
+
     // ── 5. Store full payload in pending_bookings (webhook uses this to create child records) ──
     const expiresAt = new Date(Date.now() + 20 * 60 * 1000).toISOString(); // 20-min window
     await supabase.from("pending_bookings").insert({
@@ -242,7 +298,10 @@ Deno.serve(async (req) => {
 
     if (!pmRes.ok) {
       console.error("PayMongo error:", JSON.stringify(pmData));
-      // Roll back — remove the booking and pending record since payment setup failed
+      // Roll back — remove the detail row, booking, and pending record since
+      // payment setup failed. Delete the detail row first in case the FK to
+      // bookings isn't ON DELETE CASCADE.
+      if (detailTable) await supabase.from(detailTable).delete().eq("booking_id", bookingId);
       await supabase.from("bookings").delete().eq("id", bookingId);
       await supabase.from("pending_bookings").delete().eq("ref_number", refNumber);
       throw new Error(pmData?.errors?.[0]?.detail || "Failed to create checkout session");

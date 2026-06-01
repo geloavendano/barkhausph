@@ -133,7 +133,8 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
     setLoading(true); setLoadError('')
     const ds = dateToISO(date)
     try {
-      const base = `branch_id=eq.${branch.id}`
+      // Exclude cancelled/rejected; keep pending (unpaid online holds) visible.
+      const base = `branch_id=eq.${branch.id}&status=not.in.(cancelled,rejected)`
       // Each non-hotel service is filtered server-side by its detail table's
       // service_date (via !inner). Hotel is fetched whole and filtered client-side
       // against its checkin/checkout range (a stay spans multiple days).
