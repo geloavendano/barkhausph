@@ -226,60 +226,60 @@
   /* ── PRINT STYLES ── */
   .print-logo { display: none; }
   @media print {
-    @page { margin: 10mm 12mm; size: A4 portrait; }
+    @page { margin: 8mm 10mm; size: A4 portrait; }
 
     /* Hide everything except the success screen */
-    body { background: #fff !important; color: #111 !important; margin: 0; padding: 0; font-size: 11px !important; }
+    body { background: #fff !important; color: #111 !important; margin: 0; padding: 0; font-size: 10px !important; }
     .booking-header, #progressWrap, #bottomNav, #toast,
-    .step-panel, #payReturnScreen, .btn-home, .btn-print { display: none !important; }
+    .step-panel, #payReturnScreen, .btn-home, .btn-print,
+    #successFooterStrip { display: none !important; }
 
-    /* Force success screen visible, full-width, compact */
-    #successScreen {
-      display: block !important;
-      padding: 0 !important;
-      text-align: left !important;
-      max-width: 100% !important;
-      animation: none !important;
-    }
+    /* Force success screen visible, full-width */
+    #successScreen { display: block !important; padding: 0 !important; text-align: left !important; max-width: 100% !important; animation: none !important; }
     .booking-main { padding: 0 !important; max-width: 100% !important; }
 
-    /* Logo — swap to horizontal version (renders on white) */
+    /* Logo */
     #successScreen .screen-logo { display: none !important; }
-    .print-logo { display: block !important; margin-bottom: 10px; }
-    .print-logo img { height: 32px !important; width: auto; }
+    .print-logo { display: block !important; margin-bottom: 6px; }
+    .print-logo img { height: 28px !important; width: auto; }
 
-    /* Title & msg */
-    .success-title { color: #111 !important; font-size: 18px !important; margin-bottom: 2px !important; }
-    .success-msg { color: #444 !important; max-width: 100% !important; font-size: 11px !important; margin-bottom: 10px !important; }
+    /* Title & msg — compact */
+    .success-title { color: #111 !important; font-size: 15px !important; margin-bottom: 1px !important; }
+    .success-msg { color: #444 !important; max-width: 100% !important; font-size: 9px !important; margin-bottom: 6px !important; }
 
     /* Ref block */
-    .success-ref { background: #f5f5f5 !important; border: 1px solid #ccc !important; display: inline-block; padding: 8px 14px !important; margin-bottom: 10px !important; border-radius: 8px !important; }
-    .success-ref-label { color: #666 !important; font-size: 8px !important; }
-    .success-ref-num { color: #c8990a !important; font-size: 16px !important; }
-    #bookingTimestamp { color: #666 !important; font-size: 10px !important; margin-top: 2px !important; }
+    .success-ref { background: #f5f5f5 !important; border: 1px solid #ccc !important; display: inline-block; padding: 5px 10px !important; margin-bottom: 6px !important; border-radius: 6px !important; }
+    .success-ref-label { color: #666 !important; font-size: 7px !important; }
+    .success-ref-num { color: #c8990a !important; font-size: 14px !important; }
+    #bookingTimestamp { color: #666 !important; font-size: 9px !important; margin-top: 1px !important; }
 
-    /* Info box */
-    .info-box { background: #eef6fb !important; border: 1px solid #b0d4e8 !important; color: #333 !important; padding: 7px 10px !important; font-size: 10px !important; margin: 8px 0 !important; }
+    /* Arrival info box — kept (useful on receipt) but compact */
+    .info-box { background: #eef6fb !important; border: 1px solid #b0d4e8 !important; color: #333 !important; padding: 4px 8px !important; font-size: 9px !important; margin: 4px 0 !important; }
     .info-box strong { color: #1a6a99 !important; }
 
-    /* Summary & price cards */
-    .summary-card, .price-breakdown {
-      background: #f9f9f9 !important;
-      border: 1px solid #ddd !important;
-      color: #111 !important;
-      padding: 8px 10px !important;
-      margin-bottom: 6px !important;
-      border-radius: 8px !important;
-      page-break-inside: avoid;
+    /* ── 2-column layout for summary groups ── */
+    .summary-card {
+      background: #f9f9f9 !important; border: 1px solid #ddd !important;
+      padding: 6px 8px !important; margin-bottom: 5px !important; border-radius: 6px !important;
+      display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 0 10px !important;
     }
-    .summary-row { padding: 4px 0 !important; border-bottom-color: #e0e0e0 !important; }
-    .summary-key { color: #555 !important; font-size: 8px !important; }
-    .summary-val { color: #111 !important; font-size: 11px !important; }
+    .summary-group { break-inside: avoid; page-break-inside: avoid; margin-bottom: 4px !important; }
+    .summary-group-title { color: #c8990a !important; font-size: 6.5px !important; padding: 4px 0 2px !important; margin-bottom: 1px !important; border-bottom-color: #ddd !important; }
+    .summary-group:first-child .summary-group-title { padding-top: 0 !important; }
+    .summary-row { padding: 2px 0 !important; border-bottom-color: #e8e8e8 !important; gap: 6px !important; }
+    .summary-key { color: #555 !important; font-size: 7px !important; }
+    .summary-val { color: #111 !important; font-size: 9px !important; font-weight: 600 !important; }
 
-    /* Footer strip */
-    #successFooterStrip { border-top-color: #ccc !important; margin-top: 8px !important; padding-top: 8px !important; }
-    #footerRefNum { color: #c8990a !important; font-size: 14px !important; }
-    #footerTimestamp { color: #666 !important; font-size: 10px !important; }
+    /* Price breakdown */
+    .price-breakdown { background: #f9f9f9 !important; border: 1px solid #ddd !important; padding: 6px 8px !important; margin-bottom: 5px !important; border-radius: 6px !important; break-inside: avoid; }
+    .price-line { padding: 2px 0 !important; border-bottom-color: #e8e8e8 !important; gap: 6px !important; }
+    .price-line-label { font-size: 9px !important; color: #333 !important; }
+    .price-line-val { font-size: 9px !important; color: #111 !important; }
+    .price-line.total-line .price-line-label { font-size: 10px !important; color: #111 !important; }
+    .price-line.total-line .price-line-val { font-size: 12px !important; color: #c8990a !important; font-family: inherit !important; }
+    .price-line.component .price-line-label { font-size: 8px !important; }
+    .price-line.component .price-line-val { font-size: 8px !important; }
+    .price-line-val.discount { color: #2a7a2a !important; }
   }
   .second-pet-section { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px; margin-top: 16px; }
   .second-pet-title { font-family: "Fredoka One", cursive; font-size: 18px; color: var(--cream); margin-bottom: 14px; }
@@ -1192,7 +1192,7 @@ async function checkGate() {
 <div class="success-screen" id="successScreen">
   <!-- Print-only logo (horizontal, works on white background) -->
   <div class="print-logo">
-    <img src="images/Barkhaus%20Logo%20Horizontal.png" alt="Barkhaus Pet Hotel">
+    <img src="images/Barkhaus%20Pet%20Hotel%20Logo.png" alt="Barkhaus Pet Hotel">
   </div>
   <!-- Screen logo (glows on dark background) -->
   <div class="screen-logo" style="margin-bottom:20px">
@@ -1223,7 +1223,7 @@ async function checkGate() {
   </div>
 
   <div style="display:flex;flex-direction:column;align-items:center;gap:12px;margin-top:24px">
-    <button class="btn-print" onclick="window.print()">
+    <button class="btn-print" onclick="printBooking()">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
       Print / Save as PDF
     </button>

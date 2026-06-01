@@ -975,7 +975,7 @@ function renderStylistGrid() {
   if (liveGroomers.length) {
     html += liveGroomers.map(function(g) {
       var colorDot = '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + (g.color||'#6AAEC8') + ';margin-right:4px;flex-shrink:0;vertical-align:middle"></span>';
-      var onclk = "selectStylist(this,'" + g.name.toLowerCase() + "','" + g.id + "')";
+      var onclk = "selectStylist(this,'" + g.name + "','" + g.id + "')";
       return '<div class="stylist-btn" onclick="' + onclk + '">' +
         '<span class="stylist-name">' + colorDot + g.name + '</span>' +
         '<span class="stylist-tag">Groomer</span></div>';
@@ -983,7 +983,7 @@ function renderStylistGrid() {
   } else {
     var fallback = ['Alex','Jamie','Sam','Paolo'];
     html += fallback.map(function(name) {
-      var onclk = "selectStylist(this,'" + name.toLowerCase() + "',null)";
+      var onclk = "selectStylist(this,'" + name + "',null)";
       return '<div class="stylist-btn" onclick="' + onclk + '">' +
         '<span class="stylist-name">' + name + '</span><span class="stylist-tag">Groomer</span></div>';
     }).join('');
@@ -2195,6 +2195,9 @@ function renderSuccessDetails(snap, detailsId, priceId) {
   var bk  = snap.bookingState || {};
   var svc = bk.service || '';
 
+  // Store meta for printBooking() to use as the PDF filename
+  window._printMeta = { branch: snap.location || '', service: snap.service || '' };
+
   var tempLabels = { friendly_all:'Friendly with all', friendly_shy:'Friendly but shy', selective:'Selective', reactive:'Reactive', first_time:'First time' };
 
   // ── grouped rows ──
@@ -2358,6 +2361,25 @@ function renderSuccessDetails(snap, detailsId, priceId) {
 
   var priceEl = document.getElementById(priceId || 'successPriceBreakdown');
   if (priceEl) priceEl.innerHTML = ph;
+}
+
+// ── PDF / Print ──
+// Sets the browser document title (which becomes the default PDF filename)
+// to <Branch>_<Service>_<RefNumber> before triggering the print dialog.
+function printBooking() {
+  var ref  = ((document.getElementById('refNum') || {}).textContent || '').trim();
+  var meta = window._printMeta || {};
+  var parts = [
+    (meta.branch  || '').replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_|_$/g, ''),
+    (meta.service || '').replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_|_$/g, ''),
+    ref
+  ].filter(Boolean);
+  var newTitle = parts.join('_') || document.title;
+  var orig = document.title;
+  document.title = newTitle;
+  window.print();
+  // Restore after dialog closes (slight delay to let browser pick up the title)
+  setTimeout(function() { document.title = orig; }, 2000);
 }
 
 // ── HANDLE RETURN FROM PAYMONGO ──
