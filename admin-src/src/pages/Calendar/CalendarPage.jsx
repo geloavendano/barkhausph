@@ -23,19 +23,35 @@ const SVCS = [
 const DAYS   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
 
-const CAL_SELECT = [
+// Common (non-service-detail) columns + embeds shared by every service query.
+const COMMON_SELECT = [
   'id,ref_number,service,status,payment_status,booking_date,total,subtotal,discount_amount,created_at,booking_source,notes',
   'waivers(general_terms,health_declaration,media_consent,studio_agreement,senior_medical_waiver,signed_at)',
   'owners(id,first_name,last_name,mobile,email,referral_source)',
   'pets(id,name,animal_type,breed,size,gender,age_value,age_unit,temperament,medical_notes)',
-  'grooming_details(timeslot,preferred_stylist,groom_service_name,groom_service_key,special_requests,groomer_id)',
-  'hotel_details(checkin_date,checkout_date,dropoff_time,pickup_time,room_type,room_id,playpark_consent,feeding_instructions,medications,emergency_name,emergency_phone,vet_clinic,vet_contact,vet_address)',
-  'daycare_details(dropoff_time,pickup_time,hours_total,open_time,notes)',
-  'studio_details(timeslot,studio_id)',
   'booking_addons(addon_name,price)',
   'pet_vaccines(vaccine_name,confirmed)',
   'checkin_notes(*)',
 ].join(',')
+
+// Per-service detail embeds. The service date now lives in each detail table's
+// service_date column (grooming/daycare/studio), mirroring hotel's checkin/checkout.
+const DETAIL_EMBED = {
+  grooming: 'grooming_details(timeslot,preferred_stylist,groom_service_name,groom_service_key,special_requests,groomer_id,service_date)',
+  hotel:    'hotel_details(checkin_date,checkout_date,dropoff_time,pickup_time,room_type,room_id,playpark_consent,feeding_instructions,medications,emergency_name,emergency_phone,vet_clinic,vet_contact,vet_address)',
+  daycare:  'daycare_details(dropoff_time,pickup_time,hours_total,open_time,notes,service_date)',
+  studio:   'studio_details(timeslot,studio_id,service_date)',
+}
+
+// Build a full select for one service, marking that service's detail embed as
+// !inner so we can filter parent bookings by the child's service_date. The other
+// detail embeds stay as left joins (harmlessly empty for the wrong service).
+function selectForService(innerSvc) {
+  const details = Object.keys(DETAIL_EMBED).map(svc =>
+    svc === innerSvc ? DETAIL_EMBED[svc].replace('(', '!inner(') : DETAIL_EMBED[svc]
+  )
+  return [COMMON_SELECT, ...details].join(',')
+}
 
 // ── Utilities ──────────────────────────────────────────────────────────────
 function dateToISO(d) {
@@ -117,19 +133,22 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
     setLoading(true); setLoadError('')
     const ds = dateToISO(date)
     try {
-      const base = `branch_id=eq.${branch.id}&select=${CAL_SELECT}`
-      const [dayRows, hotelAll] = await Promise.all([
-        sbGet('bookings', `${base}&booking_date=eq.${ds}&service=neq.hotel&order=created_at`),
-        // Hotel bookings: booking_date is often NULL (dates live in hotel_details).
-        // Fetch all and let the client-side checkin/checkout filter handle it.
-        sbGet('bookings', `${base}&service=eq.hotel&order=created_at`),
+      const base = `branch_id=eq.${branch.id}`
+      // Each non-hotel service is filtered server-side by its detail table's
+      // service_date (via !inner). Hotel is fetched whole and filtered client-side
+      // against its checkin/checkout range (a stay spans multiple days).
+      const [groomRows, dayRows, studioRows, hotelAll] = await Promise.all([
+        sbGet('bookings', `${base}&service=eq.grooming&grooming_details.service_date=eq.${ds}&order=created_at&select=${selectForService('grooming')}`),
+        sbGet('bookings', `${base}&service=eq.daycare&daycare_details.service_date=eq.${ds}&order=created_at&select=${selectForService('daycare')}`),
+        sbGet('bookings', `${base}&service=eq.studio&studio_details.service_date=eq.${ds}&order=created_at&select=${selectForService('studio')}`),
+        sbGet('bookings', `${base}&service=eq.hotel&order=created_at&select=${selectForService('hotel')}`),
       ])
       const d = new Date(ds + 'T00:00:00')
       const hf = (hotelAll ?? []).filter(b => {
         const hd = first(b.hotel_details); if (!hd) return false
         return new Date(hd.checkin_date + 'T00:00:00') <= d && d <= new Date(hd.checkout_date + 'T00:00:00')
       })
-      setBookings([...(dayRows ?? []), ...hf])
+      setBookings([...(groomRows ?? []), ...(dayRows ?? []), ...(studioRows ?? []), ...hf])
     } catch (err) {
       console.error('Calendar load error:', err)
       setLoadError(err.message)
@@ -155,8 +174,18 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
     const f = `${year}-${String(month+1).padStart(2,'0')}-01`
     const l = `${year}-${String(month+1).padStart(2,'0')}-${new Date(year,month+1,0).getDate()}`
     try {
-      const rows = await sbGet('bookings', `branch_id=eq.${branch.id}&booking_date=gte.${f}&booking_date=lte.${l}&status=not.in.(cancelled,rejected)&select=booking_date`)
-      const dots = {}; (rows ?? []).forEach(r => { if (r.booking_date) dots[r.booking_date] = true })
+      // Dots reflect SERVICE dates, which now live in the detail tables. Query each
+      // non-hotel detail table for service_date in range, scoped to this branch and
+      // excluding cancelled/rejected via an inner embed of the parent booking.
+      const sel  = 'service_date,bookings!inner(branch_id,status)'
+      const filt = `service_date=gte.${f}&service_date=lte.${l}&bookings.branch_id=eq.${branch.id}&bookings.status=not.in.(cancelled,rejected)`
+      const [g, dc, st] = await Promise.all([
+        sbGet('grooming_details', `select=${sel}&${filt}`),
+        sbGet('daycare_details',  `select=${sel}&${filt}`),
+        sbGet('studio_details',   `select=${sel}&${filt}`),
+      ])
+      const dots = {}
+      ;[g, dc, st].forEach(rows => (rows ?? []).forEach(r => { if (r.service_date) dots[r.service_date] = true }))
       setMonthDots(dots)
     } catch { setMonthDots({}) }
   }, [branch?.id])

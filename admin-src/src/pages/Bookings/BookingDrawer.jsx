@@ -113,10 +113,10 @@ export default function BookingDrawer({ booking: b, rooms, groomers, onClose, on
 
   // Time string
   let timeStr = ''
-  if (gd)      timeStr = (b.booking_date ? b.booking_date + ' · ' : '') + (gd.timeslot ?? '')
+  if (gd)      timeStr = (gd.service_date ? gd.service_date + ' · ' : '') + (gd.timeslot ?? '')
   else if (hd) timeStr = (hd.checkin_date ?? '') + ' to ' + (hd.checkout_date ?? '')
-  else if (dd) timeStr = (b.booking_date ? b.booking_date + ' · ' : '') + (dd.dropoff_time ?? '') + (dd.open_time ? ' to open' : (' to ' + (dd.pickup_time ?? '')))
-  else if (sd) timeStr = (b.booking_date ? b.booking_date + ' · ' : '') + (sd.timeslot ?? '')
+  else if (dd) timeStr = (dd.service_date ? dd.service_date + ' · ' : '') + (dd.dropoff_time ?? '') + (dd.open_time ? ' to open' : (' to ' + (dd.pickup_time ?? '')))
+  else if (sd) timeStr = (sd.service_date ? sd.service_date + ' · ' : '') + (sd.timeslot ?? '')
 
   const bookedAt = b.created_at ? (() => {
     const d = new Date(b.created_at)
@@ -401,7 +401,7 @@ function SmallBtn({ onClick, children }) {
 function ServiceRows({ b, gd, hd, dd, sd, addons, rooms }) {
   if (gd) return (
     <>
-      {b.booking_date && <DR label="Date" value={b.booking_date} />}
+      {gd.service_date && <DR label="Date" value={gd.service_date} />}
       <DR label="Time"    value={gd.timeslot} />
       <DR label="Service" value={gd.groom_service_name} />
       <DR label="Stylist" value={gd.preferred_stylist} />
@@ -426,7 +426,7 @@ function ServiceRows({ b, gd, hd, dd, sd, addons, rooms }) {
   }
   if (dd) return (
     <>
-      {b.booking_date && <DR label="Date" value={b.booking_date} />}
+      {dd.service_date && <DR label="Date" value={dd.service_date} />}
       <DR label="Drop-off" value={dd.dropoff_time} />
       <DR label="Pick-up"  value={dd.open_time ? 'Open time' : dd.pickup_time} />
       <DR label="Duration" value={dd.hours_total ? dd.hours_total + 'h' : '-'} />
@@ -435,7 +435,7 @@ function ServiceRows({ b, gd, hd, dd, sd, addons, rooms }) {
   )
   if (sd) return (
     <>
-      {b.booking_date && <DR label="Date" value={b.booking_date} />}
+      {sd.service_date && <DR label="Date" value={sd.service_date} />}
       <DR label="Slot" value={sd.timeslot} />
     </>
   )

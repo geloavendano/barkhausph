@@ -4,19 +4,32 @@ import { SVC_LABELS, SVC_COLORS, STATUS_COLORS, first, fmtTime } from '../../lib
 import BookingDrawer from '../Bookings/BookingDrawer'
 import styles from './CheckInPage.module.css'
 
-const CI_SELECT = [
+const CI_COMMON = [
   'id,ref_number,service,status,payment_status,booking_date,total,subtotal,discount_amount,created_at,booking_source,notes',
   'waivers(general_terms,health_declaration,media_consent,studio_agreement,senior_medical_waiver,signed_at)',
   'owners(id,first_name,last_name,mobile,email,referral_source)',
   'pets(id,name,animal_type,breed,size,gender,age_value,age_unit,temperament,medical_notes)',
-  'grooming_details(timeslot,preferred_stylist,groom_service_name,groom_service_key,special_requests,groomer_id)',
-  'hotel_details(checkin_date,checkout_date,dropoff_time,pickup_time,room_type,room_id,playpark_consent,feeding_instructions,medications,emergency_name,emergency_phone,vet_clinic,vet_contact,vet_address)',
-  'daycare_details(dropoff_time,pickup_time,hours_total,open_time,notes)',
-  'studio_details(timeslot,studio_id)',
   'booking_addons(addon_name,price)',
   'pet_vaccines(vaccine_name,confirmed)',
   'checkin_notes(*)',
 ].join(',')
+
+// Service date lives in each detail table's service_date column (mirrors hotel).
+const CI_DETAIL = {
+  grooming: 'grooming_details(timeslot,preferred_stylist,groom_service_name,groom_service_key,special_requests,groomer_id,service_date)',
+  hotel:    'hotel_details(checkin_date,checkout_date,dropoff_time,pickup_time,room_type,room_id,playpark_consent,feeding_instructions,medications,emergency_name,emergency_phone,vet_clinic,vet_contact,vet_address)',
+  daycare:  'daycare_details(dropoff_time,pickup_time,hours_total,open_time,notes,service_date)',
+  studio:   'studio_details(timeslot,studio_id,service_date)',
+}
+
+// Full select for one service, with that service's detail as !inner so we can
+// filter parent bookings by the child's service_date.
+function ciSelectFor(innerSvc) {
+  const details = Object.keys(CI_DETAIL).map(svc =>
+    svc === innerSvc ? CI_DETAIL[svc].replace('(', '!inner(') : CI_DETAIL[svc]
+  )
+  return [CI_COMMON, ...details].join(',')
+}
 
 function getBookingTime(b) {
   const gd = first(b.grooming_details)
@@ -49,15 +62,17 @@ export default function CheckInPage({ branches, currentBranchIdx = 0, rooms, gro
     setToday(todayISO)
 
     try {
-      const base = `branch_id=eq.${branch.id}&select=${CI_SELECT}`
+      const base   = `branch_id=eq.${branch.id}`
+      const status = 'status=in.(confirmed,pending,checked_in)'
 
-      const [nonHotelDue, nonHotelCI, hotelAll] = await Promise.all([
-        // Confirmed/Pending non-hotel with booking_date <= today
-        sbGet('bookings', `${base}&service=not.eq.hotel&status=in.(confirmed,pending)&booking_date=lte.${todayISO}&order=booking_date`),
-        // Checked-in non-hotel with booking_date <= today
-        sbGet('bookings', `${base}&service=not.eq.hotel&status=eq.checked_in&booking_date=lte.${todayISO}&order=booking_date`),
-        // All hotel confirmed/pending/checked_in — filter client-side on dates
-        sbGet('bookings', `${base}&service=eq.hotel&status=in.(confirmed,pending,checked_in)&order=created_at`),
+      // Non-hotel: due when the service date (in each detail table) is today or
+      // earlier. Filtered server-side via !inner on service_date.
+      const [groomRows, dayRows, studioRows, hotelAll] = await Promise.all([
+        sbGet('bookings', `${base}&service=eq.grooming&${status}&grooming_details.service_date=lte.${todayISO}&order=created_at&select=${ciSelectFor('grooming')}`),
+        sbGet('bookings', `${base}&service=eq.daycare&${status}&daycare_details.service_date=lte.${todayISO}&order=created_at&select=${ciSelectFor('daycare')}`),
+        sbGet('bookings', `${base}&service=eq.studio&${status}&studio_details.service_date=lte.${todayISO}&order=created_at&select=${ciSelectFor('studio')}`),
+        // Hotel: fetch all active and filter client-side on checkin/checkout.
+        sbGet('bookings', `${base}&service=eq.hotel&${status}&order=created_at&select=${ciSelectFor('hotel')}`),
       ])
 
       const hotelFiltered = (hotelAll ?? []).filter(bk => {
@@ -71,7 +86,7 @@ export default function CheckInPage({ branches, currentBranchIdx = 0, rooms, gro
       // Merge + deduplicate
       const seen = new Set()
       const all = []
-      for (const arr of [nonHotelDue ?? [], nonHotelCI ?? [], hotelFiltered]) {
+      for (const arr of [groomRows ?? [], dayRows ?? [], studioRows ?? [], hotelFiltered]) {
         for (const bk of arr) {
           if (!seen.has(bk.id)) { seen.add(bk.id); all.push(bk) }
         }

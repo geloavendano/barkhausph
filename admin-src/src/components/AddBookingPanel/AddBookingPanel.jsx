@@ -120,7 +120,7 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
       size: pet.size ?? 'small_dog',
       gsvc: gd?.groom_service_key ?? 'basic', stylist: gd?.preferred_stylist ?? 'any',
       stylistId: gd?.groomer_id ?? null,
-      gdate: b.booking_date ?? '', gslot: gd?.timeslot ?? '', gnotes: gd?.special_requests ?? '',
+      gdate: gd?.service_date ?? '', gslot: gd?.timeslot ?? '', gnotes: gd?.special_requests ?? '',
       addons: addonMap,
       hcin: hd?.checkin_date ?? '', hcout: hd?.checkout_date ?? '',
       hroom: hd?.room_type ?? '', hroom_id: hd?.room_id ?? null,
@@ -129,10 +129,10 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
       hfeed: hd?.feeding_instructions ?? '', hmeds: hd?.medications ?? '',
       hemerg: hd?.emergency_name ?? '', hemergp: hd?.emergency_phone ?? '',
       hvet: hd?.vet_clinic ?? '', hvetc: hd?.vet_contact ?? '', hvetaddr: hd?.vet_address ?? '',
-      dcdate: b.booking_date ?? '', dcdrop: dd?.dropoff_time ?? '09:00',
+      dcdate: dd?.service_date ?? '', dcdrop: dd?.dropoff_time ?? '09:00',
       dcpick: dd?.pickup_time ?? '17:00', dcopen: dd?.open_time ?? false,
       dcnotes: dd?.notes ?? '',
-      stdate: b.booking_date ?? '', stslot: sd?.timeslot ?? '',
+      stdate: sd?.service_date ?? '', stslot: sd?.timeslot ?? '',
       pname: pet.name ?? '', panimal: pet.animal_type ?? 'dog',
       pgender: pet.gender ?? 'male', pbreed: pet.breed ?? '',
       page: String(pet.age_value ?? ''), pageunit: pet.age_unit ?? 'years',
@@ -152,17 +152,18 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
     setSlotsLoading(true)
     const ALL = ['9:00 AM','10:00 AM','11:00 AM','12:00 PM','1:00 PM','2:00 PM','3:00 PM','4:00 PM','5:00 PM']
     try {
-      const bkRows = await sbGet('bookings',
-        `select=id&branch_id=eq.${branch.id}&booking_date=eq.${date}&status=neq.cancelled&status=neq.rejected`)
-      const bkIds = (bkRows ?? []).map(r => r.id)
+      // Grooming date now lives in grooming_details.service_date. Query it directly,
+      // scoped to this branch + active bookings via an inner embed of the parent.
+      const gdRows = await sbGet('grooming_details',
+        `select=timeslot,groomer_id,bookings!inner(branch_id,status)` +
+        `&service_date=eq.${date}` +
+        `&bookings.branch_id=eq.${branch.id}` +
+        `&bookings.status=neq.cancelled&bookings.status=neq.rejected`)
       const takenByGroomer = {}
-      if (bkIds.length) {
-        const gdRows = await sbGet('grooming_details', `select=timeslot,groomer_id&booking_id=in.(${bkIds.join(',')})`)
-        for (const r of (gdRows ?? [])) {
-          const gid = r.groomer_id ?? 'any'
-          if (!takenByGroomer[gid]) takenByGroomer[gid] = []
-          takenByGroomer[gid].push(r.timeslot)
-        }
+      for (const r of (gdRows ?? [])) {
+        const gid = r.groomer_id ?? 'any'
+        if (!takenByGroomer[gid]) takenByGroomer[gid] = []
+        takenByGroomer[gid].push(r.timeslot)
       }
       const disabled = new Set()
       for (const slot of ALL) {
@@ -265,9 +266,10 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
         const b = editBooking
         const pet = Array.isArray(b.pets) ? b.pets[0] : b.pets ?? {}
         const own = Array.isArray(b.owners) ? b.owners[0] : b.owners ?? {}
+        // booking_date is the creation date — left untouched here. The service
+        // date is edited on the service detail table below.
         await sbPatch('bookings', `id=eq.${b.id}`, {
           status: bk.status, payment_status: bk.paysts,
-          booking_date: bk.svc==='grooming' ? bk.gdate : bk.svc==='daycare' ? bk.dcdate : bk.svc==='studio' ? bk.stdate : null,
           subtotal: subtotal, discount_amount: disc, total,
         })
         // Refresh booking_charges — preserve convenience_fee (online bookings), replace the rest
@@ -289,6 +291,7 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
         if (bk.svc==='grooming') {
           const gsvc = GROOM_SVCS.find(x => x.k === bk.gsvc)
           await sbPatch('grooming_details', `booking_id=eq.${b.id}`, {
+            service_date: bk.gdate||null,
             timeslot: bk.gslot, preferred_stylist: bk.stylist||'any',
             groomer_id: bk.stylistId||null, groom_service_key: bk.gsvc||'basic',
             groom_service_name: gsvc?.n || '', special_requests: bk.gnotes||null,
@@ -311,10 +314,11 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
           vet_clinic: bk.hvet||null, vet_contact: bk.hvetc||null, vet_address: bk.hvetaddr||null,
         })
         if (bk.svc==='daycare') await sbPatch('daycare_details', `booking_id=eq.${b.id}`, {
+          service_date: bk.dcdate||null,
           dropoff_time: bk.dcdrop||'', pickup_time: bk.dcopen ? null : (bk.dcpick||null),
           open_time: bk.dcopen, notes: bk.dcnotes||null,
         })
-        if (bk.svc==='studio') await sbPatch('studio_details', `booking_id=eq.${b.id}`, { timeslot: bk.stslot||'' })
+        if (bk.svc==='studio') await sbPatch('studio_details', `booking_id=eq.${b.id}`, { service_date: bk.stdate||null, timeslot: bk.stslot||'' })
 
         await sbDelete('pet_vaccines', `booking_id=eq.${b.id}`)
         const vaccRows = Object.keys(bk.vacc).map(i => ({
