@@ -1772,6 +1772,7 @@ function setMembership(val) {
     document.getElementById('memberValidMsg').style.display = 'none';
     refreshAllTotals();
   }
+  refreshContinueBtn();
 }
 var _petNameDebounce   = null;
 var _memberIdDebounce  = null;
