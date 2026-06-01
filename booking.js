@@ -8,6 +8,7 @@
 // ── CONFIG ──
 var SUPABASE_URL        = 'https://dxttnbtfhpanyiyduevn.supabase.co';
 var CREATE_PAYMENT_URL  = SUPABASE_URL + '/functions/v1/create-payment';
+var GET_UPLOAD_URL      = SUPABASE_URL + '/functions/v1/get-upload-url';
 var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4dHRuYnRmaHBhbnlpeWR1ZXZuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY1MjkyNDcsImV4cCI6MjA5MjEwNTI0N30.jrMk8-_Ga01TydNPUwCzlymf1W44PjaXXIUjCLALb2s';
 var EDGE_FN_URL       = SUPABASE_URL + '/functions/v1/submit-booking';
 
@@ -1315,11 +1316,9 @@ function buildPickupTimeOptions() {
   while (sel.options.length > 2) sel.remove(2);
   var times = ['3:00 PM','4:00 PM','5:00 PM','6:00 PM','7:00 PM','8:00 PM'];
   for (var i = 0; i < times.length; i++) {
-    var h = 15 + i;
-    var fee = HOTEL_LATE_RATE * (h - 14);
     var opt = document.createElement('option');
-    opt.value = String(h);
-    opt.textContent = times[i] + ' (+₱' + fee.toLocaleString() + ')';
+    opt.value = String(15 + i);
+    opt.textContent = times[i];
     sel.appendChild(opt);
   }
   if (feeEl) feeEl.textContent = '+₱' + HOTEL_LATE_RATE.toLocaleString() + '/hour';
@@ -1364,6 +1363,18 @@ function calcHotelTotal() {
   booking.hotelPickupHour = pickupHour;
   var lateHours  = Math.max(0, pickupHour - 14);
   booking.hotelLateTotal = lateHours * HOTEL_LATE_RATE;
+
+  // Show / hide the late pick-up fee note below the selector
+  var lateNoteEl = document.getElementById('hotelLatePickupNote');
+  if (lateNoteEl) {
+    if (booking.hotelLateTotal > 0) {
+      lateNoteEl.innerHTML = '<strong>Late pick-up fee:</strong> +&#8369;' + booking.hotelLateTotal.toLocaleString() +
+        ' (' + lateHours + ' hr' + (lateHours !== 1 ? 's' : '') + ' &times; &#8369;' + HOTEL_LATE_RATE.toLocaleString() + '/hr)';
+      lateNoteEl.style.display = '';
+    } else {
+      lateNoteEl.style.display = 'none';
+    }
+  }
 
   var subtotal = baseTotal + booking.hotelLateTotal;
   var discount = booking.memberValid ? Math.round(subtotal * MEMBER_DISCOUNT.hotel) : 0;
@@ -2073,7 +2084,7 @@ function buildSummary() {
         lines.push({ label:addon.name, val:'for assessment', amount:0, assess:true });
       } else {
         var p = booking.selectedAddons[k];
-        lines.push({ label:addon.name, val:'\u20b1'+p.toLocaleString(), amount:p });
+        lines.push({ label:'Add-on \u2014 '+addon.name, val:'\u20b1'+p.toLocaleString(), amount:p });
         subtotal += p;
       }
     });
@@ -2146,6 +2157,180 @@ function showToast(msg, duration) {
   setTimeout(function() { t.classList.remove('show'); }, duration || 3000);
 }
 
+// ── RENDER SUCCESS / PAY-RETURN DETAIL CARDS ──────────────────────────────────
+// Mirrors buildSummary() but reads from the bk_snapshot saved before the
+// PayMongo redirect. Renders all grouped sections + fully itemised pricing
+// so the customer has a complete record of every detail they submitted.
+function renderSuccessDetails(snap, detailsId, priceId) {
+  if (!snap) return;
+  var bk  = snap.bookingState || {};
+  var svc = bk.service || '';
+
+  var tempLabels = { friendly_all:'Friendly with all', friendly_shy:'Friendly but shy', selective:'Selective', reactive:'Reactive', first_time:'First time' };
+
+  // ── grouped rows ──
+  var groups = [];
+  function grp(title) { var g = {title:title, rows:[]}; groups.push(g); return g; }
+  function row(g, k, v) { if (v != null && v !== '' && v !== '-') g.rows.push([k, String(v)]); }
+
+  var gBook = grp('Booking');
+  row(gBook, 'Branch',  snap.location || '-');
+  row(gBook, 'Service', snap.service  || '-');
+
+  var gSched = grp('Schedule');
+  row(gSched, 'Schedule', snap.schedule || '-');
+
+  if (svc === 'hotel') {
+    if (bk.hotelRoomName) row(gSched, 'Room', bk.hotelRoomName);
+    else if (bk.hotelRoomType) row(gSched, 'Room', (ROOM_LABELS && ROOM_LABELS[bk.hotelRoomType]) || bk.hotelRoomType.replace(/_/g,' ').replace(/\b\w/g, function(c){return c.toUpperCase();}));
+    if (bk.hotelDropoffTime) {
+      var dH = parseInt(bk.hotelDropoffTime);
+      row(gSched, 'Drop-off time', dH < 12 ? dH+':00 AM' : (dH===12?'12:00 PM':(dH-12)+':00 PM'));
+    }
+    if (bk.hotelPickupTime) row(gSched, 'Pick-up time', bk.hotelPickupTime);
+    if (bk.petSize !== 'cat') row(gSched, 'Play park', bk.playparkConsent === 'yes' ? 'Yes, with consent' : 'No');
+  }
+  if (svc === 'grooming') {
+    var groomSvcSpec = (GROOM_SERVICES||[]).find(function(s){return s.key===bk.groomService;});
+    if (groomSvcSpec) row(gSched, 'Grooming service', groomSvcSpec.name);
+    var addonList = snap.addons || [];
+    if (addonList.length) row(gSched, 'Add-ons', addonList.join(', '));
+    if (bk.preferredStylist && bk.preferredStylist !== 'any') row(gSched, 'Groomer', bk.preferredStylist);
+    if (bk.groomNotes) row(gSched, 'Grooming notes', bk.groomNotes);
+  }
+  if (svc === 'daycare') {
+    if (bk.daycareOpenTime) {
+      row(gSched, 'Drop-off', 'Open time'); row(gSched, 'Pick-up', 'Open time');
+    } else {
+      if (bk.daycareDropoffText) row(gSched, 'Drop-off', bk.daycareDropoffText);
+      if (bk.daycarePickupText)  row(gSched, 'Pick-up',  bk.daycarePickupText);
+    }
+    if (bk.daycareNotes) row(gSched, 'Daycare notes', bk.daycareNotes);
+  }
+  if (svc === 'studio') {
+    if (bk.studioNotes) row(gSched, 'Notes', bk.studioNotes);
+  }
+
+  var gPet = grp('Pet Details');
+  row(gPet, 'Name',         bk.petName);
+  if (bk.petAnimal) row(gPet, 'Animal', bk.petAnimal.charAt(0).toUpperCase()+bk.petAnimal.slice(1));
+  if (bk.petGender) row(gPet, 'Sex',    bk.petGender.charAt(0).toUpperCase()+bk.petGender.slice(1));
+  row(gPet, 'Breed', bk.petBreed);
+  if (bk.petAge)  row(gPet, 'Age',  bk.petAge + ' ' + (bk.petAgeUnit||''));
+  if (bk.petSize) row(gPet, 'Size', (PET_SIZE_LABELS && PET_SIZE_LABELS[bk.petSize]) || bk.petSize);
+  if (bk.petTemperament) row(gPet, 'Temperament', tempLabels[bk.petTemperament]||bk.petTemperament);
+  if (bk.petMedical && bk.petMedical.trim()) row(gPet, 'Medical notes', bk.petMedical.trim());
+  if (bk.memberValid && bk.membershipId) row(gPet, 'Membership', bk.membershipId + ' ✓');
+
+  var gHealth = grp('Health & Care');
+  row(gHealth, 'Vaccine records', snap.vaccineStatus || 'Not provided');
+  if (svc === 'hotel') {
+    if (bk.vetClinic || bk.vetContact) {
+      row(gHealth, 'Vet clinic',   bk.vetClinic);
+      row(gHealth, 'Vet contact',  bk.vetContact);
+      row(gHealth, 'Vet address',  bk.vetAddress);
+    }
+    if (bk.emergencyName || bk.emergencyPhone) {
+      row(gHealth, 'Emergency contact', bk.emergencyName);
+      row(gHealth, 'Emergency phone',   bk.emergencyPhone);
+    }
+    if (bk.hotelFeeding) row(gHealth, 'Feeding instructions', bk.hotelFeeding);
+    if (bk.hotelMeds)    row(gHealth, 'Medications',          bk.hotelMeds);
+  }
+
+  var gOwner = grp('Owner Details');
+  row(gOwner, 'Name',   (snap.ownerName || '').trim() || '-');
+  row(gOwner, 'Email',  bk.ownerEmail  || '-');
+  row(gOwner, 'Mobile', snap.mobile || bk.ownerPhone || '-');
+
+  function renderRow(r) {
+    return '<div class="summary-row"><span class="summary-key">'+r[0]+'</span><span class="summary-val">'+r[1]+'</span></div>';
+  }
+  var detailsEl = document.getElementById(detailsId || 'successDetails');
+  if (detailsEl) {
+    detailsEl.innerHTML = groups.map(function(g) {
+      if (!g.rows.length) return '';
+      return '<div class="summary-group"><div class="summary-group-title">'+g.title+'</div>' +
+        g.rows.map(renderRow).join('') + '</div>';
+    }).join('');
+  }
+
+  // ── itemised price breakdown ──
+  var plines = [];
+  var calcSub = 0;
+
+  if (svc === 'grooming') {
+    if (bk.groomServicePrice > 0) {
+      var groomSpec = (GROOM_SERVICES||[]).find(function(s){return s.key===bk.groomService;});
+      plines.push({ label: groomSpec ? groomSpec.name : 'Grooming service', amount: bk.groomServicePrice });
+      calcSub += bk.groomServicePrice;
+    }
+    Object.keys(bk.selectedAddons || {}).forEach(function(k) {
+      var addon = (ADDONS||[]).find(function(a){return a.key===k;});
+      var p = (bk.selectedAddons||{})[k] || 0;
+      if (p > 0) { plines.push({ label: 'Add-on — '+(addon?addon.name:k), amount: p }); calcSub += p; }
+    });
+  } else if (svc === 'hotel') {
+    var cin  = bk.hotelCheckin;
+    var cout = bk.hotelCheckout;
+    if (cin && cout) {
+      var room     = bk.hotelRoomType || 'small_cage';
+      var rateSize = (CAGE_RATE_SIZE||{})[room] || bk.petSize || 'small_dog';
+      var roomLbl  = bk.hotelRoomName || (ROOM_LABELS||{})[room] || room.replace(/_/g,' ');
+      var nights   = Math.round((new Date(cout+' 00:00:00') - new Date(cin+' 00:00:00')) / 86400000);
+      var wdCnt=0, weCnt=0, wdTot=0, weTot=0;
+      for (var ni=0; ni<nights; ni++) {
+        var nd = new Date(cin+' 00:00:00'); nd.setDate(nd.getDate()+ni);
+        var dow = nd.getDay(); var isWe = (dow===0||dow===5||dow===6);
+        if (isWe) { weCnt++; weTot += (HOTEL_RATES&&HOTEL_RATES.weekend&&HOTEL_RATES.weekend[rateSize])||0; }
+        else      { wdCnt++; wdTot += (HOTEL_RATES&&HOTEL_RATES.weekday&&HOTEL_RATES.weekday[rateSize])||0; }
+      }
+      if (wdCnt > 0) {
+        var wdRate = (HOTEL_RATES&&HOTEL_RATES.weekday&&HOTEL_RATES.weekday[rateSize])||0;
+        plines.push({ label: wdCnt+' weekday night'+(wdCnt!==1?'s':'')+' × ₱'+wdRate.toLocaleString()+' ('+roomLbl+')', amount: wdTot });
+        calcSub += wdTot;
+      }
+      if (weCnt > 0) {
+        var weRate = (HOTEL_RATES&&HOTEL_RATES.weekend&&HOTEL_RATES.weekend[rateSize])||0;
+        plines.push({ label: weCnt+' weekend/holiday night'+(weCnt!==1?'s':'')+' × ₱'+weRate.toLocaleString()+' ('+roomLbl+')', amount: weTot });
+        calcSub += weTot;
+      }
+    }
+    if (bk.hotelLateTotal > 0) {
+      var lateHrs = bk.hotelLateTotal / (HOTEL_LATE_RATE||100);
+      plines.push({ label: 'Late pick-up fee ('+lateHrs+' hr'+(lateHrs!==1?'s':'')+' × ₱'+(HOTEL_LATE_RATE||100).toLocaleString()+'/hr)', amount: bk.hotelLateTotal });
+      calcSub += bk.hotelLateTotal;
+    }
+  } else if (svc === 'daycare') {
+    var dcHrs = bk.daycareOpenTime ? 'Open time' : ((bk.daycarePickupHour||0) - (bk.daycareDropoffHour||0)) + ' hr';
+    plines.push({ label: 'Daycare ('+dcHrs+')', amount: bk.daycareTotal || snap.subtotal || 0 });
+    calcSub += bk.daycareTotal || snap.subtotal || 0;
+  } else if (svc === 'studio') {
+    plines.push({ label: 'Self-Shoot Studio session', amount: snap.subtotal || 0 });
+    calcSub += snap.subtotal || 0;
+  }
+
+  var baseSubtotal = snap.subtotal || calcSub;
+  var ph = plines.map(function(l){
+    return '<div class="price-line component"><span class="price-line-label">'+l.label+'</span><span class="price-line-val">₱'+l.amount.toLocaleString()+'</span></div>';
+  }).join('');
+
+  if (plines.length > 0) {
+    ph += '<div class="price-line subtotal-line"><span class="price-line-label">Subtotal</span><span class="price-line-val">₱'+baseSubtotal.toLocaleString()+'</span></div>';
+  }
+  if ((snap.discountAmount||0) > 0) {
+    var discPct = baseSubtotal > 0 ? Math.round(snap.discountAmount/baseSubtotal*100) : 0;
+    ph += '<div class="price-line"><span class="price-line-label">Member discount'+(discPct?(' ('+discPct+'%)'):'')+' </span><span class="price-line-val discount">−₱'+snap.discountAmount.toLocaleString()+'</span></div>';
+  }
+  if ((snap.convenienceFee||0) > 0) {
+    ph += '<div class="price-line"><span class="price-line-label">Convenience fee</span><span class="price-line-val">₱'+snap.convenienceFee.toLocaleString()+'</span></div>';
+  }
+  ph += '<div class="price-line total-line"><span class="price-line-label">Total Paid</span><span class="price-line-val">₱'+snap.total.toLocaleString()+'</span></div>';
+
+  var priceEl = document.getElementById(priceId || 'successPriceBreakdown');
+  if (priceEl) priceEl.innerHTML = ph;
+}
+
 // ── HANDLE RETURN FROM PAYMONGO ──
 (function checkPaymentReturn() {
   var params = new URLSearchParams(window.location.search);
@@ -2174,40 +2359,7 @@ function showToast(msg, duration) {
     try {
       var snap = JSON.parse(sessionStorage.getItem('bk_snapshot') || 'null');
       if (snap) {
-        var _dRows = [
-          ['Branch', snap.location||'-'], ['Service', snap.service||'-'],
-          ['Schedule', snap.schedule||'-']
-        ];
-        if (snap.groomServiceName) _dRows.push(['Grooming service', snap.groomServiceName]);
-        if (snap.addons && snap.addons.length) _dRows.push(['Add-ons', snap.addons.join(', ')]);
-        if (snap.preferredStylist && snap.preferredStylist !== 'any') _dRows.push(['Groomer', snap.preferredStylist]);
-        if (snap.hotelRoomName) _dRows.push(['Room', snap.hotelRoomName]);
-        else if (snap.hotelRoomType) _dRows.push(['Room', ROOM_LABELS[snap.hotelRoomType] || snap.hotelRoomType.replace(/_/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase();})]);
-        if (snap.hotelDropoffTime) {
-          var _dH = parseInt(snap.hotelDropoffTime);
-          var _dL = _dH < 12 ? _dH+':00 AM' : (_dH===12?'12:00 PM':(_dH-12)+':00 PM');
-          _dRows.push(['Drop-off time', _dL]);
-        }
-        if (snap.hotelPickupTime) _dRows.push(['Pick-up time', snap.hotelPickupTime]);
-        if (snap.daycareOpenTime) {
-          _dRows.push(['Drop-off', 'Open time']); _dRows.push(['Pick-up', 'Open time']);
-        } else if (snap.daycareDropoffText) {
-          _dRows.push(['Drop-off', snap.daycareDropoffText]); _dRows.push(['Pick-up', snap.daycarePickupText||'-']);
-        }
-        _dRows.push(['Pet', snap.petName||'-']);
-        _dRows.push(['Breed', snap.petBreed||'-']);
-        _dRows.push(['Size', snap.petSize||'-']);
-        _dRows.push(['Owner', (snap.ownerName||'-').trim()]);
-        _dRows.push(['Mobile', snap.mobile||'-']);
-        var _sdEl = document.getElementById('successDetails');
-        if (_sdEl) _sdEl.innerHTML = _dRows.map(function(r){return '<div class="summary-row"><span class="summary-key">'+r[0]+'</span><span class="summary-val">'+r[1]+'</span></div>';}).join('');
-        var _pl = [];
-        if (snap.subtotal > 0) _pl.push('<div class="summary-row"><span class="summary-key">Subtotal</span><span class="summary-val">&#8369;'+snap.subtotal.toLocaleString()+'</span></div>');
-        if (snap.discountAmount > 0) _pl.push('<div class="summary-row"><span class="summary-key">Member discount</span><span class="summary-val" style="color:var(--success)">&#8722;&#8369;'+snap.discountAmount.toLocaleString()+'</span></div>');
-        if (snap.convenienceFee > 0) _pl.push('<div class="summary-row"><span class="summary-key">Convenience fee</span><span class="summary-val">&#8369;'+snap.convenienceFee.toLocaleString()+'</span></div>');
-        _pl.push('<div class="summary-row" style="font-weight:700;font-size:15px;border-top:1px solid var(--border);padding-top:8px;margin-top:4px"><span class="summary-key">Total paid</span><span class="summary-val">&#8369;'+snap.total.toLocaleString()+'</span></div>');
-        var _spEl = document.getElementById('successPriceBreakdown');
-        if (_spEl) _spEl.innerHTML = _pl.join('');
+        renderSuccessDetails(snap, 'successDetails', 'successPriceBreakdown');
         sessionStorage.removeItem('bk_snapshot');
       }
     } catch(e) {}
@@ -2304,47 +2456,8 @@ function showPayReturnScreen(snap, ref) {
   var refEl = document.getElementById('payReturnRef');
   if (refEl) refEl.textContent = ref || snap.refNumber || 'BH-000000';
 
-  // Build details rows
-  var _dRows = [
-    ['Branch', snap.location||'-'],
-    ['Service', snap.service||'-'],
-    ['Schedule', snap.schedule||'-']
-  ];
-  if (snap.groomServiceName) _dRows.push(['Grooming service', snap.groomServiceName]);
-  if (snap.addons && snap.addons.length) _dRows.push(['Add-ons', snap.addons.join(', ')]);
-  if (snap.preferredStylist && snap.preferredStylist !== 'any') _dRows.push(['Groomer', snap.preferredStylist]);
-  if (snap.hotelRoomName) _dRows.push(['Room', snap.hotelRoomName]);
-  else if (snap.hotelRoomType) _dRows.push(['Room', (ROOM_LABELS && ROOM_LABELS[snap.hotelRoomType]) || snap.hotelRoomType.replace(/_/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase();})]);
-  if (snap.hotelDropoffTime) {
-    var _dH = parseInt(snap.hotelDropoffTime);
-    var _dL = _dH < 12 ? _dH+':00 AM' : (_dH===12 ? '12:00 PM' : (_dH-12)+':00 PM');
-    _dRows.push(['Drop-off time', _dL]);
-  }
-  if (snap.hotelPickupTime) _dRows.push(['Pick-up time', snap.hotelPickupTime]);
-  if (snap.daycareOpenTime) {
-    _dRows.push(['Drop-off', 'Open time']); _dRows.push(['Pick-up', 'Open time']);
-  } else if (snap.daycareDropoffText) {
-    _dRows.push(['Drop-off', snap.daycareDropoffText]); _dRows.push(['Pick-up', snap.daycarePickupText||'-']);
-  }
-  _dRows.push(['Pet', snap.petName||'-']);
-  _dRows.push(['Breed', snap.petBreed||'-']);
-  _dRows.push(['Size', snap.petSize||'-']);
-  _dRows.push(['Owner', (snap.ownerName||'-').trim()]);
-  _dRows.push(['Mobile', snap.mobile||'-']);
-
-  var detailsEl = document.getElementById('payReturnDetails');
-  if (detailsEl) detailsEl.innerHTML = _dRows.map(function(r) {
-    return '<div class="summary-row"><span class="summary-key">'+r[0]+'</span><span class="summary-val">'+r[1]+'</span></div>';
-  }).join('');
-
-  // Build price breakdown
-  var _pl = [];
-  if (snap.subtotal > 0) _pl.push('<div class="summary-row"><span class="summary-key">Subtotal</span><span class="summary-val">&#8369;'+snap.subtotal.toLocaleString()+'</span></div>');
-  if (snap.discountAmount > 0) _pl.push('<div class="summary-row"><span class="summary-key">Member discount</span><span class="summary-val" style="color:var(--success)">&#8722;&#8369;'+snap.discountAmount.toLocaleString()+'</span></div>');
-  if (snap.convenienceFee > 0) _pl.push('<div class="summary-row"><span class="summary-key">Convenience fee</span><span class="summary-val">&#8369;'+snap.convenienceFee.toLocaleString()+'</span></div>');
-  _pl.push('<div class="summary-row" style="font-weight:700;font-size:15px;border-top:1px solid var(--border);padding-top:8px;margin-top:4px"><span class="summary-key">Total</span><span class="summary-val">&#8369;'+snap.total.toLocaleString()+'</span></div>');
-  var priceEl = document.getElementById('payReturnPriceBreakdown');
-  if (priceEl) priceEl.innerHTML = _pl.join('');
+  // Render full details (same as success screen)
+  renderSuccessDetails(snap, 'payReturnDetails', 'payReturnPriceBreakdown');
 }
 
 // Re-submit payment for the same booking details
@@ -2720,6 +2833,36 @@ async function submitBooking() {
     groomServiceName = found ? found.name : booking.groomService;
   }
 
+  // ── Upload vaccine documents to Storage ──
+  // Each file gets a signed upload URL from get-upload-url, is PUT directly to Storage,
+  // and its path is passed to create-payment which inserts vaccine_documents rows.
+  var vaccineDocuments = {};
+  var vaccineFileNames = {};
+  if (uploadedVaccineFiles && uploadedVaccineFiles.length > 0) {
+    var uploadId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : 'upload-' + Date.now() + '-' + Math.random().toString(36).slice(2, 9);
+    for (var _vi = 0; _vi < uploadedVaccineFiles.length; _vi++) {
+      var _vf = uploadedVaccineFiles[_vi];
+      var _vKey = 'vaccine_' + _vi;
+      try {
+        var _vUrlRes = await fetch(GET_UPLOAD_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY },
+          body: JSON.stringify({ uploadId: uploadId, fileName: _vf.name, contentType: _vf.type, vaccineKey: _vKey }),
+        });
+        var _vUrlData = await _vUrlRes.json();
+        if (_vUrlData.uploadUrl && _vUrlData.path) {
+          await fetch(_vUrlData.uploadUrl, { method: 'PUT', body: _vf, headers: { 'Content-Type': _vf.type } });
+          vaccineDocuments[_vKey] = _vUrlData.path;
+          vaccineFileNames[_vKey] = _vf.name;
+        }
+      } catch (_ve) {
+        console.warn('Vaccine file upload failed (non-fatal):', _vf.name, _ve);
+      }
+    }
+  }
+
   var payload = {
     location:booking.location, service:booking.service,
     groomDate:booking.groomDate, groomSlot:booking.groomSlot,
@@ -2757,6 +2900,10 @@ async function submitBooking() {
     waiverPlaypark:document.getElementById('waiverPlaypark')?document.getElementById('waiverPlaypark').classList.contains('checked'):false,
     waiverTexts: buildWaiverTexts(),
     subtotal:subtotal, discountAmount:discAmt, convenienceFee:CONVENIENCE_FEE, total:total,
+    hotelLateTotal:    booking.hotelLateTotal    || 0,
+    groomServicePrice: booking.groomServicePrice || 0,
+    vaccineDocuments:  vaccineDocuments,
+    vaccineFileNames:  vaccineFileNames,
   };
 
   // Show loading state
@@ -2827,6 +2974,12 @@ async function submitBooking() {
       else if (svc === 'hotel') _sched = 'Check-in: ' + (booking.hotelCheckin||'-') + ' | Check-out: ' + (booking.hotelCheckout||'-');
       else if (svc === 'daycare') _sched = booking.daycareDate || '-';
       else if (svc === 'studio') _sched = (booking.studioDate||'-') + ' at ' + (booking.studioSlot||'-');
+      // Capture vaccine status from DOM before we leave the page
+      var _vaccFileCount = uploadedVaccineFiles ? uploadedVaccineFiles.length : 0;
+      var _bringVacc = document.getElementById('bringVaccines');
+      var _vaccStatus = _vaccFileCount > 0
+        ? (_vaccFileCount + ' file' + (_vaccFileCount > 1 ? 's' : '') + ' uploaded')
+        : (_bringVacc && _bringVacc.classList.contains('checked') ? 'Will bring to venue' : 'Not provided');
       sessionStorage.setItem('bk_snapshot', JSON.stringify({
         location: _locLbl[booking.location]||booking.location,
         service: _svcLbl[svc]||svc,
@@ -2835,6 +2988,7 @@ async function submitBooking() {
         ownerName: (booking.ownerFirst||'') + ' ' + (booking.ownerLast||''),
         mobile: booking.ownerPhone,
         schedule: _sched,
+        vaccineStatus: _vaccStatus,
         // Service specs
         groomServiceName: svc === 'grooming' && booking.groomService ? (GROOM_SERVICES.find(function(s){return s.key===booking.groomService;})||{name:null}).name : null,
         addons: svc === 'grooming' ? Object.keys(booking.selectedAddons).map(function(k){var a=ADDONS.find(function(x){return x.key===k;});return a?a.name:k;}) : [],
@@ -2874,39 +3028,7 @@ async function submitBooking() {
       try {
         var snap = JSON.parse(sessionStorage.getItem('bk_snapshot') || 'null');
         if (snap) {
-          var _dRows = [
-            ['Branch', snap.location||'-'], ['Service', snap.service||'-'],
-            ['Schedule', snap.schedule||'-']
-          ];
-          if (snap.groomServiceName) _dRows.push(['Grooming service', snap.groomServiceName]);
-          if (snap.addons && snap.addons.length) _dRows.push(['Add-ons', snap.addons.join(', ')]);
-          if (snap.preferredStylist && snap.preferredStylist !== 'any') _dRows.push(['Groomer', snap.preferredStylist]);
-          if (snap.hotelRoomName) _dRows.push(['Room', snap.hotelRoomName]);
-          else if (snap.hotelRoomType) _dRows.push(['Room', (ROOM_LABELS && ROOM_LABELS[snap.hotelRoomType]) || snap.hotelRoomType.replace(/_/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase();})]);
-          if (snap.hotelDropoffTime) {
-            var _dH = parseInt(snap.hotelDropoffTime);
-            var _dL = _dH < 12 ? _dH+':00 AM' : (_dH===12?'12:00 PM':(_dH-12)+':00 PM');
-            _dRows.push(['Drop-off time', _dL]);
-          }
-          if (snap.hotelPickupTime) _dRows.push(['Pick-up time', snap.hotelPickupTime]);
-          if (snap.daycareOpenTime) {
-            _dRows.push(['Drop-off', 'Open time']); _dRows.push(['Pick-up', 'Open time']);
-          } else if (snap.daycareDropoffText) {
-            _dRows.push(['Drop-off', snap.daycareDropoffText]); _dRows.push(['Pick-up', snap.daycarePickupText||'-']);
-          }
-          _dRows.push(['Pet', snap.petName||'-']);
-          _dRows.push(['Breed', snap.petBreed||'-']);
-          if (snap.petSize) _dRows.push(['Size', snap.petSize]);
-          _dRows.push(['Owner', (snap.ownerName||'-').trim()]);
-          _dRows.push(['Mobile', snap.mobile||'-']);
-          var _sdEl = document.getElementById('successDetails');
-          if (_sdEl) _sdEl.innerHTML = _dRows.map(function(r){return '<div class="summary-row"><span class="summary-key">'+r[0]+'</span><span class="summary-val">'+r[1]+'</span></div>';}).join('');
-          var _pl = [];
-          if (snap.subtotal > 0) _pl.push('<div class="summary-row"><span class="summary-key">Subtotal</span><span class="summary-val">&#8369;'+snap.subtotal.toLocaleString()+'</span></div>');
-          if (snap.discountAmount > 0) _pl.push('<div class="summary-row"><span class="summary-key">Member discount</span><span class="summary-val" style="color:var(--success)">&#8722;&#8369;'+snap.discountAmount.toLocaleString()+'</span></div>');
-          _pl.push('<div class="summary-row" style="font-weight:700;font-size:15px;border-top:1px solid var(--border);padding-top:8px;margin-top:4px"><span class="summary-key">Total</span><span class="summary-val">&#8369;'+(snap.total||0).toLocaleString()+'</span></div>');
-          var _spEl = document.getElementById('successPriceBreakdown');
-          if (_spEl) _spEl.innerHTML = _pl.join('');
+          renderSuccessDetails(snap, 'successDetails', 'successPriceBreakdown');
           sessionStorage.removeItem('bk_snapshot');
         }
       } catch(e) {}
@@ -2966,3 +3088,5 @@ function showContactModal(type) {
 function closeContactModal() {
   document.getElementById('contactModalOverlay').style.display = 'none';
 }
+function showStudioContactModal() { showContactModal('studio'); }
+function closeStudioContactModal() { closeContactModal(); }

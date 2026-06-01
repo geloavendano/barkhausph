@@ -727,8 +727,9 @@ async function checkGate() {
     <div class="info-box" style="margin-bottom:10px">Standard checkout is <strong>2:00 PM</strong>. Late pick-up up to 8:00 PM is <strong id="hotelLateRateFee">+&#8369;?/hour</strong>. Holiday rates may apply on public holidays. Extension beyond <strong>6 hours</strong> past standard checkout counts as <strong>1 additional night</strong>. Failure to pick up by 8:00 PM will be charged as an additional night.</div>
     <select class="form-select" id="hotelPickupTime" onchange="calcHotelTotal(); refreshContinueBtn();">
       <option value="">Select pick-up time</option>
-      <option value="14">On or before 2PM (standard)</option>
+      <option value="14">On or before 2:00 PM (standard)</option>
     </select>
+    <div id="hotelLatePickupNote" style="display:none" class="warn-box" style="margin-top:8px"></div>
     <hr class="divider">
     <div class="form-group">
       <label class="form-label">Play park consent</label>
@@ -1198,7 +1199,7 @@ async function checkGate() {
     <img src="images/Barkhaus Pet Hotel Logo.png" alt="Barkhaus Pet Hotel Logo" style="height:48px;width:auto;display:inline-block;filter:drop-shadow(0 0 12px rgba(77,150,185,0.4))">
   </div>
   <h2 class="success-title">You're all set!</h2>
-  <p class="success-msg">Your booking request has been received.</p>
+  <p class="success-msg">Your booking is confirmed. Please keep this page for your records.</p>
   <div class="success-ref">
     <div class="success-ref-label">Booking Reference</div>
     <div class="success-ref-num" id="refNum">BH-000000</div>
@@ -1207,7 +1208,11 @@ async function checkGate() {
   <div class="info-box" style="margin:16px 0">
     🕐 Please arrive <strong>15 minutes before</strong> your scheduled time.
   </div>
+
+  <!-- Full booking details — grouped sections mirroring the review screen -->
   <div class="summary-card" id="successDetails"></div>
+
+  <!-- Itemised price breakdown -->
   <div class="price-breakdown" id="successPriceBreakdown"></div>
 
   <!-- Bottom ref strip — visible for screenshots and in print -->
