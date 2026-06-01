@@ -53,15 +53,31 @@ export function fmtDate(d) {
   } catch { return d }
 }
 
-/** Format "14:00" → "2:00 PM" */
+/** Format time — handles 24-hour ("14:00", "14:00:00", "14"),
+ *  12-hour ("3:00 PM"), option-text ("On or before 2:00 PM (standard)"),
+ *  and legacy option-text with fee suffix ("3:00 PM (+₱400)"). */
 export function fmtTime(t) {
   if (!t) return ''
   try {
-    const [h, m] = t.split(':').map(Number)
+    // Strip parenthetical suffix like "(+₱400)" from option text
+    const s = String(t).trim().replace(/\s*\(.*\)/, '').trim()
+    // Already 12-hour format — re-parse to normalise (strips any stray chars)
+    if (/\b(am|pm)\b/i.test(s)) {
+      const upper = s.toUpperCase()
+      const ampm  = upper.includes('PM') ? 'PM' : 'AM'
+      const [hStr, mStr] = upper.replace(/[^0-9:]/g, '').split(':')
+      const hr = parseInt(hStr) || 12
+      const mn = parseInt(mStr) || 0
+      return `${hr}:${String(mn).padStart(2, '0')} ${ampm}`
+    }
+    // 24-hour: "14:00", "14:00:00", or bare "14"
+    const parts = s.split(':').map(Number)
+    const h = parts[0]
+    const m = parts[1] ?? 0
     const ampm = h >= 12 ? 'PM' : 'AM'
     const hr   = h % 12 || 12
     return `${hr}:${String(m).padStart(2, '0')} ${ampm}`
-  } catch { return t }
+  } catch { return String(t) }
 }
 
 /** Return first element if array, else value itself */

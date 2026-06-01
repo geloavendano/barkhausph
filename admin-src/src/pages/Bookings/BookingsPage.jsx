@@ -17,6 +17,7 @@ const BOOKING_SELECT = [
   'daycare_details(dropoff_time,pickup_time,hours_total,open_time,notes)',
   'studio_details(timeslot,studio_id)',
   'booking_addons(addon_name,price)',
+  'booking_charges(sort_order,type,label,amount)',
   'pet_vaccines(vaccine_name,confirmed)',
   'checkin_notes(*)',
 ].join(',')

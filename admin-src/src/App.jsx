@@ -129,6 +129,10 @@ export default function App() {
 
   const pageProps = { branches, currentBranchIdx: branchIdx, rooms, groomers, studios }
 
+  function handleSignOut() {
+    supabase.auth.signOut()
+  }
+
   return (
     <Shell
       page={page}
@@ -137,6 +141,7 @@ export default function App() {
       branches={branches}
       branchIdx={branchIdx}
       onBranchChange={setBranchIdx}
+      onSignOut={handleSignOut}
       contentFill={page === 'calendar'}
     >
       {page === 'calendar'  && <CalendarPage  {...pageProps} />}

@@ -9,7 +9,7 @@ const NAV_ITEMS = [
   { key: 'resources', icon: '📦', label: 'Inventory' },
 ]
 
-export default function Shell({ page, onPageChange, greeting, branches = [], branchIdx = 0, onBranchChange, contentFill, children }) {
+export default function Shell({ page, onPageChange, greeting, branches = [], branchIdx = 0, onBranchChange, onSignOut, contentFill, children }) {
   return (
     <div className={styles.app}>
       {/* ── Top bar ── */}
@@ -28,7 +28,12 @@ export default function Shell({ page, onPageChange, greeting, branches = [], bra
             ))}
           </div>
         )}
-        {greeting && <span className={styles.greeting}>{greeting}</span>}
+        <div className={styles.topRight}>
+          {greeting && <span className={styles.greeting}>{greeting}</span>}
+          <button className={styles.signOutBtn} onClick={onSignOut} title="Sign out">
+            ↪
+          </button>
+        </div>
       </header>
 
       {/* ── Body ── */}

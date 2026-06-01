@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { sbGet, sbPatch, sbPost } from '../../lib/supabase'
+import { supabase, sbGet, sbPatch, sbPost } from '../../lib/supabase'
 import {
   STATUS_COLORS, PAY_COLORS, SVC_LABELS, SIZE_LABELS,
   SRC_LABELS, first, fmtDate, fmtTime, hexBg, esc,
@@ -18,6 +18,7 @@ export default function BookingDrawer({ booking: b, rooms, groomers, onClose, on
   const [invVal,      setInvVal]      = useState('')
   const [savingInv,   setSavingInv]   = useState(false)
   const [err,         setErr]         = useState('')
+  const [docUrls,     setDocUrls]     = useState({})
 
   const pet    = first(b.pets)    ?? {}
   const owner  = first(b.owners)  ?? {}
@@ -26,8 +27,10 @@ export default function BookingDrawer({ booking: b, rooms, groomers, onClose, on
   const dd     = first(b.daycare_details)
   const sd     = first(b.studio_details)
   const cn     = first(b.checkin_notes)
-  const addons = Array.isArray(b.booking_addons) ? b.booking_addons : (b.booking_addons ? [b.booking_addons] : [])
-  const vaccines = Array.isArray(b.pet_vaccines) ? b.pet_vaccines : (b.pet_vaccines ? [b.pet_vaccines] : [])
+  const addons   = Array.isArray(b.booking_addons)      ? b.booking_addons      : (b.booking_addons      ? [b.booking_addons]      : [])
+  const charges  = Array.isArray(b.booking_charges)     ? b.booking_charges     : (b.booking_charges     ? [b.booking_charges]     : [])
+  const vaccines = Array.isArray(b.pet_vaccines)        ? b.pet_vaccines        : (b.pet_vaccines        ? [b.pet_vaccines]        : [])
+  const vaccDocs = Array.isArray(b.vaccine_documents)   ? b.vaccine_documents   : (b.vaccine_documents   ? [b.vaccine_documents]   : [])
   const waiver = first(b.waivers)
 
   // Pre-select current assignment
@@ -37,6 +40,22 @@ export default function BookingDrawer({ booking: b, rooms, groomers, onClose, on
   }, [b])
 
   useEffect(() => { loadPayments() }, [b.id])
+
+  // Generate 1-hour signed read URLs for vaccine documents
+  useEffect(() => {
+    if (vaccDocs.length === 0) return
+    let cancelled = false
+    async function loadDocUrls() {
+      const urls = {}
+      for (const doc of vaccDocs) {
+        const { data } = await supabase.storage.from('vaccine-docs').createSignedUrl(doc.file_path, 3600)
+        if (data?.signedUrl) urls[doc.file_path] = data.signedUrl
+      }
+      if (!cancelled) setDocUrls(urls)
+    }
+    loadDocUrls()
+    return () => { cancelled = true }
+  }, [b.id])
 
   async function loadPayments() {
     try {
@@ -239,10 +258,39 @@ export default function BookingDrawer({ booking: b, rooms, groomers, onClose, on
             </Section>
           )}
 
+          {/* Vaccine documents */}
+          {vaccDocs.length > 0 && (
+            <Section title="Vaccine documents">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {vaccDocs.map((doc, i) => {
+                  const url = docUrls[doc.file_path]
+                  const name = doc.file_name || `Document ${i + 1}`
+                  const ext  = doc.file_path?.split('.').pop()?.toLowerCase() ?? ''
+                  const isImg = ['jpg','jpeg','png','webp','heic','heif'].includes(ext)
+                  return (
+                    <div key={doc.id ?? i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      {url && isImg
+                        ? <a href={url} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
+                            <img src={url} alt={name} style={{ width: 52, height: 52, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--border)' }} />
+                            <span style={{ fontSize: 12, color: 'var(--cream-m)' }}>{name}</span>
+                          </a>
+                        : url
+                          ? <a href={url} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: 'var(--blue)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6 }}>
+                              📄 {name}
+                            </a>
+                          : <span style={{ fontSize: 12, color: 'var(--mid)' }}>⏳ {name}</span>
+                      }
+                    </div>
+                  )
+                })}
+              </div>
+            </Section>
+          )}
+
           {/* Bill */}
-          {b.subtotal > 0 && (
+          {b.total > 0 && (
             <Section title="Bill">
-              <BillRows b={b} addons={addons} />
+              <BillRows b={b} addons={addons} charges={charges} />
             </Section>
           )}
 
@@ -269,27 +317,28 @@ export default function BookingDrawer({ booking: b, rooms, groomers, onClose, on
             {ciOpen && <CheckInForm booking={b} onSaved={() => { onUpdated(); onClose() }} />}
           </Section>
 
-          {/* Update status */}
-          <Section title="Update status">
-            <select className="fi" style={{ marginBottom: 8 }} value={status} onChange={e => setStatus(e.target.value)}>
+        </div>
+
+        {/* ── Sticky footer ── */}
+        <div className={styles.stickyFooter}>
+          <div className={styles.stickySelects}>
+            <select className="fi" value={status} onChange={e => setStatus(e.target.value)}>
               {['pending','confirmed','checked_in','completed','cancelled'].map(s =>
                 <option key={s} value={s}>{s.replace('_', ' ')}</option>
               )}
             </select>
-            <select className="fi" style={{ marginBottom: 10 }} value={payStatus} onChange={e => setPayStatus(e.target.value)}>
+            <select className="fi" value={payStatus} onChange={e => setPayStatus(e.target.value)}>
               {['unpaid','partially_paid','paid','refunded'].map(s =>
                 <option key={s} value={s}>{s.replace('_', ' ')}</option>
               )}
             </select>
-            {err && <p className={styles.err}>{err}</p>}
-            <button className="btn-primary" onClick={saveStatus} disabled={saving} style={{ width: '100%' }}>
+          </div>
+          {err && <p className={styles.err}>{err}</p>}
+          <div className={styles.stickyBtns}>
+            <button className={styles.doneBtn} onClick={onClose}>Done</button>
+            <button className={styles.updateBtn} onClick={saveStatus} disabled={saving}>
               {saving ? 'Saving…' : 'Update'}
             </button>
-          </Section>
-
-          {/* Footer CTA */}
-          <div className={styles.footer}>
-            <button className={styles.doneBtn} onClick={onClose}>Done</button>
           </div>
         </div>
       </div>
@@ -348,10 +397,8 @@ function ServiceRows({ b, gd, hd, dd, sd, addons, rooms }) {
   )
   if (hd) {
     const rm      = rooms?.find(r => r.id === hd.room_id)
-    const pickHour = hd.pickup_time ? parseInt(hd.pickup_time) : 14
-    const lateFee  = Math.max(0, pickHour - 14) * 100
-    const cinStr   = fmtDate(hd.checkin_date)  + (hd.dropoff_time ? ' · ' + fmtTime(hd.dropoff_time) : '')
-    const coutStr  = fmtDate(hd.checkout_date) + (hd.pickup_time  ? ' · ' + fmtTime(hd.pickup_time) + (lateFee ? ` (+₱${lateFee.toLocaleString()})` : '') : '')
+    const cinStr  = fmtDate(hd.checkin_date)  + (hd.dropoff_time ? ' · ' + fmtTime(hd.dropoff_time) : '')
+    const coutStr = fmtDate(hd.checkout_date) + (hd.pickup_time  ? ' · ' + fmtTime(hd.pickup_time) : '')
     return (
       <>
         <DR label="Room"       value={rm?.name ?? hd.room_type ?? '-'} />
@@ -381,35 +428,93 @@ function ServiceRows({ b, gd, hd, dd, sd, addons, rooms }) {
   return <p className={styles.muted}>Details not recorded.</p>
 }
 
-function BillRows({ b, addons }) {
-  const addonTotal = addons.reduce((s, a) => s + (a.price ?? 0), 0)
-  const discAmt    = b.discount_amount ?? 0
-  const convFee    = b.convenience_fee ?? 0
-  // subtotal includes addons for grooming; for other services it may not.
-  // Subtract addon total to get the pure service price (floor at 0).
-  const baseAmt    = Math.max(0, (b.subtotal ?? 0) - addonTotal)
-  const svcLabel   = { grooming: 'Grooming service', hotel: 'Hotel stay', daycare: 'Daycare', studio: 'Studio session' }[b.service] ?? 'Service'
+function BillRows({ b, addons, charges }) {
+  const totalAmt = b.total ?? b.subtotal ?? 0
+
+  // ── New path: use booking_charges (accurate, structured) ──
+  // Formula: subtotal = base_service + addons + late_pickup
+  //          discount applies to subtotal
+  //          total   = subtotal − discount + convenience_fee
+  if (charges && charges.length > 0) {
+    const sorted       = [...charges].sort((a, z) => (a.sort_order ?? 0) - (z.sort_order ?? 0))
+    // Per-night hotel charges (new format) or single base_service (old format)
+    const nightCharges = sorted.filter(c => c.type === 'hotel_weekday' || c.type === 'hotel_weekend')
+    const base         = sorted.find(c => c.type === 'base_service')
+    const late         = sorted.find(c => c.type === 'late_pickup')
+    const disc         = sorted.find(c => c.type === 'member_discount')
+    const convCharge   = sorted.find(c => c.type === 'convenience_fee')
+    const serviceAmt   = nightCharges.length > 0
+      ? nightCharges.reduce((s, c) => s + (c.amount ?? 0), 0)
+      : (base?.amount ?? 0)
+    const subtotalAmt  = serviceAmt
+      + addons.reduce((s, a) => s + (a.price ?? 0), 0)
+      + (late?.amount ?? 0)
+    const convAmt      = convCharge?.amount ?? Math.max(0, totalAmt - subtotalAmt + (disc?.amount ?? 0))
+    const hasDeductions = (disc?.amount > 0) || (convAmt > 0)
+    return (
+      <>
+        {/* Per-night breakdown (new bookings) or lump base service (old backfilled bookings) */}
+        {nightCharges.length > 0
+          ? nightCharges.map((c, i) => <DR key={i} label={c.label} value={`₱${(c.amount ?? 0).toLocaleString()}`} />)
+          : base && base.amount > 0 && <DR label={base.label} value={`₱${base.amount.toLocaleString()}`} />
+        }
+        {addons.map((a, i) => <DR key={i} label={`Add-on — ${a.addon_name}`} value={`₱${(a.price ?? 0).toLocaleString()}`} />)}
+        {late && late.amount > 0 && <DR label="Late pickup fee" value={`₱${late.amount.toLocaleString()}`} />}
+        {hasDeductions && (
+          <div className={styles.dr} style={{ borderTop: '0.5px solid var(--border)', marginTop: 4, paddingTop: 6 }}>
+            <span style={{ fontSize: 11, color: 'var(--mid)' }}>Subtotal</span>
+            <span style={{ fontSize: 11, color: 'var(--mid)' }}>₱{subtotalAmt.toLocaleString()}</span>
+          </div>
+        )}
+        {disc && disc.amount > 0 && (
+          <div className={styles.dr}>
+            <span className={styles.drKey}>Member discount</span>
+            <span style={{ color: 'var(--success)' }}>−₱{disc.amount.toLocaleString()}</span>
+          </div>
+        )}
+        {convAmt > 0 && <DR label="Convenience fee" value={`₱${convAmt.toLocaleString()}`} />}
+        <div className={styles.dr} style={{ borderTop: '0.5px solid var(--border)', marginTop: 4, paddingTop: 8 }}>
+          <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--cream)' }}>Total</span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)' }}>₱{totalAmt.toLocaleString()}</span>
+        </div>
+      </>
+    )
+  }
+
+  // ── Fallback: older bookings without booking_charges ──
+  // For online bookings: subtotal already includes late, so the gap vs total is the convenience fee.
+  // For admin bookings:  late was added on top of subtotal (pre-Step-3 fix), so the gap is late fee.
+  const isOnline    = b.booking_source === 'online'
+  const addonTotal  = addons.reduce((s, a) => s + (a.price ?? 0), 0)
+  const discAmt     = b.discount_amount ?? 0
+  const gap         = Math.max(0, (b.total ?? 0) + discAmt - (b.subtotal ?? 0))
+  const lateAmt     = isOnline ? 0    : gap   // admin: gap is late fee
+  const convFee     = isOnline ? gap  : 0     // online: gap is convenience fee
+  const subtotalAmt = (b.total ?? 0) + discAmt - convFee   // = base + addons + late
+  const baseAmt     = Math.max(0, (b.subtotal ?? 0) - addonTotal)
+  const hasDeductions = discAmt > 0 || convFee > 0
+  const svcLabel    = { grooming: 'Grooming service', hotel: 'Hotel stay', daycare: 'Daycare', studio: 'Studio session' }[b.service] ?? 'Service'
   return (
     <>
       {baseAmt > 0 && <DR label={svcLabel} value={`₱${baseAmt.toLocaleString()}`} />}
-      {addons.map((a, i) => <DR key={i} label={a.addon_name} value={`₱${(a.price ?? 0).toLocaleString()}`} />)}
+      {addons.map((a, i) => <DR key={i} label={`Add-on — ${a.addon_name}`} value={`₱${(a.price ?? 0).toLocaleString()}`} />)}
+      {lateAmt > 0 && <DR label="Late pickup fee" value={`₱${lateAmt.toLocaleString()}`} />}
+      {hasDeductions && (
+        <div className={styles.dr} style={{ borderTop: '0.5px solid var(--border)', marginTop: 4, paddingTop: 6 }}>
+          <span style={{ fontSize: 11, color: 'var(--mid)' }}>Subtotal</span>
+          <span style={{ fontSize: 11, color: 'var(--mid)' }}>₱{subtotalAmt.toLocaleString()}</span>
+        </div>
+      )}
       {discAmt > 0 && (
         <div className={styles.dr}>
           <span className={styles.drKey}>Member discount</span>
           <span style={{ color: 'var(--success)' }}>−₱{discAmt.toLocaleString()}</span>
         </div>
       )}
-      {convFee > 0 && (
-        <div className={styles.dr}>
-          <span className={styles.drKey}>Convenience fee</span>
-          <span className={styles.drVal}>₱{convFee.toLocaleString()}</span>
-        </div>
-      )}
+      {convFee > 0 && <DR label="Convenience fee" value={`₱${convFee.toLocaleString()}`} />}
       <div className={styles.dr} style={{ borderTop: '0.5px solid var(--border)', marginTop: 4, paddingTop: 8 }}>
         <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--cream)' }}>Total</span>
-        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)' }}>
-          ₱{(b.total ?? b.subtotal ?? 0).toLocaleString()}
-        </span>
+        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)' }}>₱{totalAmt.toLocaleString()}</span>
       </div>
     </>
   )

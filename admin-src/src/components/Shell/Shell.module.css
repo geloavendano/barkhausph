@@ -38,10 +38,33 @@
 .branchTab:hover { background: var(--raised); color: var(--cream); }
 .branchOn { background: var(--raised); color: var(--cream); border-color: var(--blue); }
 
-.greeting {
+.topRight {
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.greeting {
   font-size: 12px;
   color: var(--mid);
+}
+
+.signOutBtn {
+  font-size: 16px;
+  line-height: 1;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 0.5px solid var(--border);
+  background: transparent;
+  color: var(--mid);
+  cursor: pointer;
+  font-family: 'Nunito', sans-serif;
+  transition: background 0.15s, color 0.15s;
+}
+.signOutBtn:hover {
+  background: var(--raised);
+  color: var(--cream);
 }
 
 /* ── Body layout ── */

@@ -68,6 +68,26 @@ export function calcNights(bk) {
   return Math.max(0, Math.round((new Date(bk.hcout) - new Date(bk.hcin)) / 86400000))
 }
 
+/** Returns { weekday: { count, rate, total }, weekend: { count, rate, total } } */
+export function calcHotelBreakdown(bk, p) {
+  const n = calcNights(bk)
+  if (!n) return null
+  const wdRate = p.hotel['weekday']?.[bk.size] ?? 0
+  const weRate = p.hotel['weekend']?.[bk.size] ?? 0
+  let wdCount = 0, weCount = 0
+  const d0 = new Date(bk.hcin)
+  for (let i = 0; i < n; i++) {
+    const d = new Date(d0); d.setDate(d.getDate() + i)
+    const dw = d.getDay()
+    if (dw === 0 || dw === 5 || dw === 6) weCount++
+    else wdCount++
+  }
+  return {
+    weekday: { count: wdCount, rate: wdRate, total: wdCount * wdRate },
+    weekend: { count: weCount, rate: weRate, total: weCount * weRate },
+  }
+}
+
 export function calcHotel(bk, p) {
   const n = calcNights(bk)
   if (!n) return 0
@@ -103,8 +123,9 @@ export function calcBase(bk, p) {
 }
 
 export function calcTotal(bk, p) {
-  const base = calcBase(bk, p)
-  const disc = bk.memvalid ? Math.round(base * (p.disc[bk.svc] ?? 0)) : 0
-  const late = calcLate(bk, p)
-  return { base, disc, late, total: base - disc + late }
+  const base     = calcBase(bk, p)
+  const late     = calcLate(bk, p)
+  const subtotal = base + late                                                    // pre-discount: base service + addons + late pickup
+  const disc     = bk.memvalid ? Math.round(subtotal * (p.disc[bk.svc] ?? 0)) : 0  // discount on full subtotal (consistent with online flow)
+  return { base, disc, late, subtotal, total: subtotal - disc }
 }

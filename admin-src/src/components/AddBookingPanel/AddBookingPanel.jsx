@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { sbGet, sbPost, sbPatch, sbDelete, SUPABASE_URL, SUPABASE_ANON_KEY } from '../../lib/supabase'
 import { supabase } from '../../lib/supabase'
-import { parsePricing, emptyPricing, calcBase, calcLate, calcTotal, calcNights, DEFAULT_ADDONS } from '../../lib/pricing'
+import { parsePricing, emptyPricing, calcBase, calcLate, calcTotal, calcNights, calcHotelBreakdown, DEFAULT_ADDONS } from '../../lib/pricing'
 import styles from './AddBookingPanel.module.css'
 
 // ── Constants ─────────────────────────────────────────────────────────────
@@ -20,6 +20,37 @@ const STUDIO_SLOTS = ['10:00 AM','11:00 AM','12:00 PM','1:00 PM','2:00 PM','3:00
 const STEP_NAMES   = ['Service','Schedule','Pet','Owner','Details','Summary']
 const PICK_OPTS    = [[14,'On or before 2PM'],[15,'3PM'],[16,'4PM'],[17,'5PM'],[18,'6PM'],[19,'7PM'],[20,'8PM']]
 const SVC_COLORS   = { grooming:'#4D96B9', hotel:'#EF9F27', daycare:'#1D9E75', studio:'#D4537E' }
+
+// ── Build booking_charges rows for admin-created / admin-edited bookings ──
+// Addons are already tracked in booking_addons; this covers the remaining line items.
+// No convenience_fee for admin bookings (no PayMongo).
+function buildAdminCharges(bookingId, bk, pricing, base, disc, late) {
+  const charges = []
+  let i = 0
+
+  // For grooming, calcBase returns package + addons combined.
+  // Subtract addons so the base_service charge is the package price only.
+  const addonTotal = bk.svc === 'grooming'
+    ? Object.keys(bk.addons).reduce((sum, k) => {
+        const a = pricing.addons.find(x => x.key === k)
+        if (!a || a.assessment) return sum
+        if (k === 'face_trim' && bk.gsvc === 'premium') return sum // included in premium
+        return sum + (a.sizeDependent ? (pricing.faceTrim[bk.size] ?? 0) : a.price)
+      }, 0)
+    : 0
+
+  const baseServiceAmt = Math.max(0, base - addonTotal)
+  // For hotel: base = nightly rates (calcHotel), late is always separate — no overlap.
+
+  const svcName = bk.svc === 'grooming'
+    ? (() => { const g = GROOM_SVCS.find(x => x.k === bk.gsvc); return g ? `Grooming – ${g.n}` : 'Grooming' })()
+    : ({ hotel: 'Pet Hotel Stay', daycare: 'Daycare', studio: 'Studio Session' }[bk.svc] ?? 'Service')
+
+  if (baseServiceAmt > 0) charges.push({ booking_id: bookingId, sort_order: i++, type: 'base_service',    label: svcName,          amount: baseServiceAmt })
+  if (late > 0)           charges.push({ booking_id: bookingId, sort_order: i++, type: 'late_pickup',     label: 'Late pickup fee', amount: late })
+  if (disc > 0)           charges.push({ booking_id: bookingId, sort_order: i++, type: 'member_discount', label: 'Member discount', amount: disc })
+  return charges
+}
 
 function mkBk(branchId) {
   return {
@@ -225,7 +256,7 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
     const vaccNames = bk.panimal === 'cat'
       ? ['Anti-rabies','All-in-1 shot','Anti-parasitic']
       : ['Anti-rabies','5/6/8-in-1 shot','Kennel Cough / Bordetella','Tick and flea treatment']
-    const { base, disc, late, total } = calcTotal(bk, pricing)
+    const { base, disc, late, subtotal, total } = calcTotal(bk, pricing)
     const payMethodDb = bk.paymethod ? bk.paymethod.toLowerCase().replace(/ \/ /g,'_').replace(/ /g,'_') : ''
 
     try {
@@ -237,8 +268,13 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
         await sbPatch('bookings', `id=eq.${b.id}`, {
           status: bk.status, payment_status: bk.paysts,
           booking_date: bk.svc==='grooming' ? bk.gdate : bk.svc==='daycare' ? bk.dcdate : bk.svc==='studio' ? bk.stdate : null,
-          subtotal: base, discount_amount: disc, total,
+          subtotal: subtotal, discount_amount: disc, total,
         })
+        // Refresh booking_charges — preserve convenience_fee (online bookings), replace the rest
+        await sbDelete('booking_charges', `booking_id=eq.${b.id}&type=neq.convenience_fee`)
+        const updatedCharges = buildAdminCharges(b.id, bk, pricing, base, disc, late)
+        if (updatedCharges.length > 0) await sbPost('booking_charges', updatedCharges)
+
         if (pet.id) await sbPatch('pets', `id=eq.${pet.id}`, {
           name: bk.pname.trim(), animal_type: bk.panimal, gender: bk.pgender,
           breed: bk.pbreed||null, age_value: bk.page ? parseInt(bk.page) : null,
@@ -338,7 +374,7 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
           waiverGeneral: bk.wgen, waiverVaccine: bk.wvacc,
           waiverSeniorMedical: false, waiverStudio: false, waiverMedia: bk.wmedia,
           membershipId: bk.memvalid ? bk.memcode : null,
-          subtotal: base, discountAmount: disc, total,
+          subtotal: subtotal, discountAmount: disc, total,
           adminCreated: true, booking_source: bk.mode || 'admin',
         }
         const { data: sess } = await supabase.auth.getSession()
@@ -357,6 +393,8 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
             await sbPost('payments', { booking_id: data.booking_id, amount: total, type: 'downpayment',
               method: payMethodDb, reference_number: bk.payref||null, recorded_by: bk.recby })
           }
+          const newCharges = buildAdminCharges(data.booking_id, bk, pricing, base, disc, late)
+          if (newCharges.length > 0) await sbPost('booking_charges', newCharges)
         }
         onSaved?.()
         onClose()
@@ -764,7 +802,7 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
     const vaccNames = bk.panimal === 'cat'
       ? ['Anti-rabies','All-in-1 shot','Anti-parasitic']
       : ['Anti-rabies','5/6/8-in-1 shot','Kennel Cough / Bordetella','Tick and flea treatment']
-    const { base, disc, late, total } = calcTotal(bk, pricing)
+    const { base, disc, late, subtotal, total } = calcTotal(bk, pricing)
     const gsvc = GROOM_SVCS.find(x => x.k === bk.gsvc)
     const hasFaceTrimIncluded = bk.svc==='grooming' && bk.gsvc==='premium' && bk.addons['face_trim']
     const hasAssess = bk.svc==='grooming' && Object.keys(bk.addons).some(k => DEFAULT_ADDONS.find(a => a.key===k && a.assessment))
@@ -807,13 +845,18 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
           {Object.keys(bk.addons).map(k => {
             const a = DEFAULT_ADDONS.find(x => x.key === k)
             if (!a) return null
-            return <SRow key={k} k={a.name} v={a.assessment ? 'For assessment' : a.sizeDependent ? fmt(pricing.faceTrim[bk.size]??0) : fmt(a.price)} />
+            return <SRow key={k} k={`Add-on — ${a.name}`} v={a.assessment ? 'For assessment' : a.sizeDependent ? fmt(pricing.faceTrim[bk.size]??0) : fmt(a.price)} />
           })}
         </>}
-        {bk.svc === 'hotel' && calcNights(bk) > 0 && <>
-          <SRow k={`Hotel (${calcNights(bk)} nights)`} v={fmt(calcLate({...bk,svc:'hotel'},pricing)===0 ? base : (base - calcLate(bk,pricing)))} />
-          {late > 0 && <SRow k="Late pick-up fee" v={fmt(late)} />}
-        </>}
+        {bk.svc === 'hotel' && calcNights(bk) > 0 && (() => {
+          const bd = calcHotelBreakdown(bk, pricing)
+          if (!bd) return null
+          return <>
+            {bd.weekday.count > 0 && <SRow k={`Weekday (${bd.weekday.count} night${bd.weekday.count !== 1 ? 's' : ''})`} v={fmt(bd.weekday.total)} />}
+            {bd.weekend.count > 0 && <SRow k={`Weekend (${bd.weekend.count} night${bd.weekend.count !== 1 ? 's' : ''})`} v={fmt(bd.weekend.total)} />}
+            {late > 0 && <SRow k="Late pickup fee" v={fmt(late)} />}
+          </>
+        })()}
         {bk.svc === 'daycare' && <SRow k="Daycare" v={fmt(pricing.daycare[bk.size] ?? 0)} />}
         {bk.svc === 'studio' && <SRow k="Studio session" v="Set at check-out" muted />}
         {hasAssess && <p className={styles.assessNote}>* Assessment items priced in-store</p>}
