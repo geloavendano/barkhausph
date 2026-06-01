@@ -525,6 +525,23 @@ function backFromEvents() {
   document.getElementById('progressWrap').style.display = '';
 }
 
+// ── Auto-scroll helper ──
+// Smoothly scrolls to `id` after `delay` ms (default 80ms, so display:block has
+// time to take effect). Only scrolls FORWARD — never jumps back up the page —
+// to avoid confusing the user when they edit an earlier choice.
+function autoScroll(id, delay) {
+  setTimeout(function() {
+    var el = document.getElementById(id);
+    if (!el || el.offsetParent === null) return;       // hidden or missing — skip
+    var hdr = document.querySelector('.booking-header');
+    var topOffset = (hdr ? hdr.offsetHeight : 0) + 16; // 16px breathing room
+    var targetY = el.getBoundingClientRect().top + window.pageYOffset - topOffset;
+    if (targetY > window.pageYOffset + 20) {           // only scroll if meaningfully forward
+      window.scrollTo({ top: targetY, behavior: 'smooth' });
+    }
+  }, delay || 80);
+}
+
 // ── STEP 3 PANEL ──
 function showStep3Panel() {
   ['groomSpecsSection','hotelDatesSection','daycareScheduleSection','studioSlotSection'].forEach(function(id) {
@@ -655,6 +672,7 @@ function selectGroomSize(el, val) {
   updateGroomTotal();
   updateNavTotal();
   refreshContinueBtn();
+  autoScroll('groomServiceSection');
 }
 
 function renderGroomServices() {
@@ -688,6 +706,7 @@ function selectGroomService(el, key, price) {
   updateGroomTotal();
   updateNavTotal();
   refreshContinueBtn();
+  autoScroll('addonSection');
 }
 
 function renderAddons() {
@@ -770,6 +789,7 @@ function selectStylist(el, val, groomerId) {
   booking.groomSlot = null;
   document.getElementById('groomSlotsSection').style.display = 'block';
   renderGroomSlots();
+  autoScroll('groomSlotsSection');
 }
 
 // Duration in minutes per service key
@@ -940,6 +960,7 @@ function onGroomDateChange() {
   document.getElementById('groomSlotsSection').style.display = 'none';
   renderStylistGrid();
   refreshContinueBtn();
+  autoScroll('stylistSection');
 }
 
 function renderStylistGrid() {
@@ -1016,6 +1037,7 @@ function selectHotelSize(el, val) {
   document.getElementById('hotelCheckout').value = '';
   document.getElementById('nightsDisplay').style.display = 'none';
   refreshContinueBtn();
+  autoScroll('hotelDatesBody');
 }
 
 function populateHotelDropoffTimes() {
@@ -1075,6 +1097,7 @@ function onHotelCheckoutChange() {
   booking.hotelCheckin  = cin;
   booking.hotelCheckout = cout;
   loadRoomAvailability();
+  autoScroll('roomAvailSection', 150);
   refreshContinueBtn();
 }
 
@@ -1178,6 +1201,7 @@ function selectRoomFromAvail(el, key, roomId) {
   calcHotelTotal();
   updateNavTotal();
   refreshContinueBtn();
+  autoScroll('hotelStep3Breakdown', 150);
 }
 
 async function getSelectedBranchId() {
@@ -1460,6 +1484,7 @@ function selectDaycareSize(el, val) {
   document.getElementById('daycareDateSection').style.display = 'block';
   calcDaycareTotal();
   refreshContinueBtn();
+  autoScroll('daycareDateSection');
 }
 function onDaycareDateChange() {
   var d = document.getElementById('daycareDate').value;
@@ -1493,6 +1518,7 @@ function onDaycareDateChange() {
   document.getElementById('daycareTimesSection').style.display = 'block';
   calcDaycareTotal();
   refreshContinueBtn();
+  autoScroll('daycareTimesSection');
 }
 // ── STUDIO DATE + SLOT AVAILABILITY ──
 function onStudioDateChange() {
@@ -1666,18 +1692,21 @@ function selectAnimalType(el, val) {
   booking.petAnimal = val;
   renderVaccines();
   refreshContinueBtn();
+  autoScroll('petGenderGrid');
 }
 function selectGender(el, val) {
   document.querySelectorAll('#petGenderGrid .gender-btn').forEach(function(b){b.classList.remove('selected');});
   el.classList.add('selected');
   booking.petGender = val;
   refreshContinueBtn();
+  autoScroll('petBreed');
 }
 function selectTemperament(el, val) {
   document.querySelectorAll('.temp-btn').forEach(function(b){b.classList.remove('selected');});
   el.classList.add('selected');
   booking.petTemperament = val;
   refreshContinueBtn();
+  autoScroll('vaccineSection');
 }
 function checkSeniorWaiver() {
   var ageVal  = parseInt(document.getElementById('petAgeNum').value) || 0;

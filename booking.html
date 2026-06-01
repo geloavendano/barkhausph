@@ -725,13 +725,13 @@ async function checkGate() {
     </div>
     <p class="section-label">Pick-up time</p>
     <div class="info-box" style="margin-bottom:10px">Standard checkout is <strong>2:00 PM</strong>. Late pick-up up to 8:00 PM is <strong id="hotelLateRateFee">+&#8369;?/hour</strong>. Holiday rates may apply on public holidays. Extension beyond <strong>6 hours</strong> past standard checkout counts as <strong>1 additional night</strong>. Failure to pick up by 8:00 PM will be charged as an additional night.</div>
-    <select class="form-select" id="hotelPickupTime" onchange="calcHotelTotal(); refreshContinueBtn();">
+    <select class="form-select" id="hotelPickupTime" onchange="calcHotelTotal(); refreshContinueBtn(); autoScroll('playparkSection', 100);">
       <option value="">Select pick-up time</option>
       <option value="14">On or before 2:00 PM (standard)</option>
     </select>
     <div id="hotelLatePickupNote" style="display:none" class="warn-box" style="margin-top:8px"></div>
     <hr class="divider">
-    <div class="form-group">
+    <div class="form-group" id="playparkSection">
       <label class="form-label">Play park consent</label>
       <div class="info-box" style="margin-bottom:10px">May we allow your pet to join the <strong>dog play park</strong> when space is available during their stay?</div>
       <div class="gender-grid">
@@ -845,7 +845,7 @@ async function checkGate() {
     </div>
   </div>
 
-  <p class="section-label">Vaccine records</p>
+  <p class="section-label" id="vaccineSection">Vaccine records</p>
   <div class="vaccine-grid" id="vaccineGrid"></div>
   <div class="form-group" style="margin-top:12px">
     <div class="file-upload" onclick="document.getElementById('vaccineFiles').click()">
