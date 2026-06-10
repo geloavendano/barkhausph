@@ -68,12 +68,23 @@ export function calcNights(bk) {
   return Math.max(0, Math.round((new Date(bk.hcout) - new Date(bk.hcin)) / 86400000))
 }
 
+// Hotel pricing key: dogs → pet size; cats → room type (single_cabin → cat_single_cabin, villa → cat_villa)
+export function hotelSizeKey(bk) {
+  if (bk.size === 'cat') {
+    if (bk.hroom_type === 'villa')         return 'cat_villa'
+    if (bk.hroom_type === 'single_cabin')  return 'cat_single_cabin'
+    return 'cat_single_cabin' // safe default if no room chosen yet
+  }
+  return bk.size
+}
+
 /** Returns { weekday: { count, rate, total }, weekend: { count, rate, total } } */
 export function calcHotelBreakdown(bk, p) {
   const n = calcNights(bk)
   if (!n) return null
-  const wdRate = p.hotel['weekday']?.[bk.size] ?? 0
-  const weRate = p.hotel['weekend']?.[bk.size] ?? 0
+  const sk = hotelSizeKey(bk)
+  const wdRate = p.hotel['weekday']?.[sk] ?? 0
+  const weRate = p.hotel['weekend']?.[sk] ?? 0
   let wdCount = 0, weCount = 0
   const d0 = new Date(bk.hcin)
   for (let i = 0; i < n; i++) {
@@ -91,12 +102,13 @@ export function calcHotelBreakdown(bk, p) {
 export function calcHotel(bk, p) {
   const n = calcNights(bk)
   if (!n) return 0
+  const sk = hotelSizeKey(bk)
   let tot = 0
   const d0 = new Date(bk.hcin)
   for (let i = 0; i < n; i++) {
     const d = new Date(d0); d.setDate(d.getDate() + i)
     const dw = d.getDay()
-    tot += (p.hotel[dw === 0 || dw === 5 || dw === 6 ? 'weekend' : 'weekday']?.[bk.size]) ?? 0
+    tot += (p.hotel[dw === 0 || dw === 5 || dw === 6 ? 'weekend' : 'weekday']?.[sk]) ?? 0
   }
   return tot
 }

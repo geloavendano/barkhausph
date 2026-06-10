@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { sbGet, sbPost, sbPatch, sbDelete, SUPABASE_URL, SUPABASE_ANON_KEY } from '../../lib/supabase'
 import { supabase } from '../../lib/supabase'
-import { parsePricing, emptyPricing, calcBase, calcLate, calcTotal, calcNights, calcHotelBreakdown, DEFAULT_ADDONS } from '../../lib/pricing'
+import { parsePricing, emptyPricing, calcBase, calcLate, calcTotal, calcNights, calcHotelBreakdown, hotelSizeKey, DEFAULT_ADDONS } from '../../lib/pricing'
 import styles from './AddBookingPanel.module.css'
 
 // ── Constants ─────────────────────────────────────────────────────────────
@@ -59,7 +59,7 @@ function mkBk(branchId) {
     size:'small_dog', gsvc:'basic', stylist:'any', stylistId:null,
     gdate:'', gslot:'', addons:{}, gnotes:'',
     // hotel
-    hcin:'', hcout:'', hroom:'', hroom_id:null,
+    hcin:'', hcout:'', hroom:'', hroom_id:null, hroom_type:'',
     hdrop:'10:00', hpickHour:14, hplay:false,
     hfeed:'', hmeds:'', hemerg:'', hemergp:'', hvet:'', hvetc:'', hvetaddr:'',
     // daycare
@@ -166,7 +166,7 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
       gdate: gd?.service_date ?? '', gslot: gd?.timeslot ?? '', gnotes: gd?.special_requests ?? '',
       addons: addonMap,
       hcin: hd?.checkin_date ?? '', hcout: hd?.checkout_date ?? '',
-      hroom: hd?.room_type ?? '', hroom_id: hd?.room_id ?? null,
+      hroom: hd?.room_type ?? '', hroom_id: hd?.room_id ?? null, hroom_type: hd?.room_type ?? '',
       hdrop: hd?.dropoff_time ?? '10:00', hpickHour: hd?.pickup_hour ?? 14,
       hplay: hd?.playpark_consent ?? false,
       hfeed: hd?.feeding_instructions ?? '', hmeds: hd?.medications ?? '',
@@ -588,16 +588,26 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
               onChange={e => updMany({ hcout: e.target.value })} />
           </FG>
         </div>
-        {nights > 0 && (
-          <IBox>{nights} night{nights !== 1 ? 's' : ''} — est. {fmt(calcLate(bk, pricing) > 0
-            ? (calcLate(bk,pricing) + (pricing.hotel['weekday']?.[bk.size] ?? 0) * nights)
-            : (pricing.hotel['weekday']?.[bk.size] ?? 0) * nights)}</IBox>
-        )}
+        {nights > 0 && (() => {
+          const sk      = hotelSizeKey(bk)
+          const wdRate  = pricing.hotel['weekday']?.[sk] ?? 0
+          const estBase = wdRate * nights
+          const late    = calcLate(bk, pricing)
+          const basisLbl = bk.size === 'cat'
+            ? (bk.hroom_type === 'villa' ? 'Cat Villa rate' : 'Cat Cabin rate')
+            : `${SIZE_LBL[bk.size]} rate`
+          return (
+            <IBox>
+              {nights} night{nights !== 1 ? 's' : ''} — est. {fmt(estBase + late)}
+              <span style={{ fontSize: 10, opacity: 0.65, marginLeft: 6 }}>({basisLbl}; weekday)</span>
+            </IBox>
+          )
+        })()}
         <FG label="Room" req>
           <select className={styles.sel} value={bk.hroom_id ?? ''}
             onChange={e => {
               const r = rooms.find(x => x.id === e.target.value)
-              updMany({ hroom_id: r?.id ?? null, hroom: r?.name ?? '' })
+              updMany({ hroom_id: r?.id ?? null, hroom: r?.name ?? '', hroom_type: r?.room_type ?? '' })
             }}>
             <option value="">Select room…</option>
             {rooms.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
