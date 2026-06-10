@@ -93,8 +93,8 @@ export default function App() {
     // Load rooms + groomers together; studios separately so a missing table can't block the others
     try {
       const [r, g] = await Promise.all([
-        sbGet('rooms',    `branch_id=eq.${branchId}&select=id,name,color,active&order=name`),
-        sbGet('groomers', `branch_id=eq.${branchId}&select=id,name,color,active&order=name`),
+        sbGet('rooms',    `branch_id=eq.${branchId}&active=eq.true&select=id,name,color,active&order=name`),
+        sbGet('groomers', `branch_id=eq.${branchId}&active=eq.true&select=id,name,color,active&order=name`),
       ])
       setRooms(r ?? [])
       setGroomers(g ?? [])
