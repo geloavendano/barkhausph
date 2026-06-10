@@ -2244,13 +2244,17 @@ function renderSuccessDetails(snap, detailsId, priceId) {
     if (bk.studioNotes) row(gSched, 'Notes', bk.studioNotes);
   }
 
+  // Pet fields prefer the full bookingState, but fall back to the top-level
+  // snapshot display fields (snap.petName/petBreed/petSize) so the screen still
+  // renders if bookingState is missing (older/partial snapshots).
   var gPet = grp('Pet Details');
-  row(gPet, 'Name',         bk.petName);
+  row(gPet, 'Name',         bk.petName || snap.petName);
   if (bk.petAnimal) row(gPet, 'Animal', bk.petAnimal.charAt(0).toUpperCase()+bk.petAnimal.slice(1));
   if (bk.petGender) row(gPet, 'Sex',    bk.petGender.charAt(0).toUpperCase()+bk.petGender.slice(1));
-  row(gPet, 'Breed', bk.petBreed);
+  row(gPet, 'Breed', bk.petBreed || snap.petBreed);
   if (bk.petAge)  row(gPet, 'Age',  bk.petAge + ' ' + (bk.petAgeUnit||''));
-  if (bk.petSize) row(gPet, 'Size', (PET_SIZE_LABELS && PET_SIZE_LABELS[bk.petSize]) || bk.petSize);
+  var petSizeVal = bk.petSize ? ((PET_SIZE_LABELS && PET_SIZE_LABELS[bk.petSize]) || bk.petSize) : snap.petSize;
+  if (petSizeVal) row(gPet, 'Size', petSizeVal);
   if (bk.petTemperament) row(gPet, 'Temperament', tempLabels[bk.petTemperament]||bk.petTemperament);
   if (bk.petMedical && bk.petMedical.trim()) row(gPet, 'Medical notes', bk.petMedical.trim());
   if (bk.memberValid && bk.membershipId) row(gPet, 'Membership', bk.membershipId + ' ✓');
