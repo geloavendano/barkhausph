@@ -80,3 +80,25 @@ function authHeaders() {
     'Content-Type': 'application/json',
   }
 }
+
+/**
+ * Create a signed read URL for a private storage object, using the cached
+ * authenticated token (the supabase JS client's session is unreliable here,
+ * so we hit the Storage REST API directly like every other admin call).
+ * Returns a full URL string, or null on failure.
+ */
+export async function sbSignedUrl(bucket, path, expiresIn = 3600) {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/storage/v1/object/sign/${bucket}/${path}`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ expiresIn }),
+    })
+    if (!res.ok) { console.error('sbSignedUrl', bucket, path, res.status, await res.text()); return null }
+    const data = await res.json()
+    return data?.signedURL ? `${SUPABASE_URL}/storage/v1${data.signedURL}` : null
+  } catch (e) {
+    console.error('sbSignedUrl error:', e)
+    return null
+  }
+}

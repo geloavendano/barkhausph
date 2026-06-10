@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { supabase, sbGet, sbPatch, sbPost } from '../../lib/supabase'
+import { supabase, sbGet, sbPatch, sbPost, sbSignedUrl } from '../../lib/supabase'
 import {
   STATUS_COLORS, PAY_COLORS, SVC_LABELS, SIZE_LABELS,
   SRC_LABELS, first, fmtDate, fmtTime, hexBg, esc,
@@ -48,8 +48,8 @@ export default function BookingDrawer({ booking: b, rooms, groomers, onClose, on
     async function loadDocUrls() {
       const urls = {}
       for (const doc of vaccDocs) {
-        const { data } = await supabase.storage.from('vaccine-docs').createSignedUrl(doc.file_path, 3600)
-        if (data?.signedUrl) urls[doc.file_path] = data.signedUrl
+        const signed = await sbSignedUrl('vaccine-docs', doc.file_path, 3600)
+        if (signed) urls[doc.file_path] = signed
       }
       if (!cancelled) setDocUrls(urls)
     }
