@@ -915,10 +915,21 @@ async function renderGroomSlots() {
     var candStart = slotToMins(slot);
     var candEnd   = candStart + myDuration;
     if (isAny) {
-      // Slot is available if AT LEAST ONE groomer in the pool is free for the full duration
-      return groomerPool.some(function(g) {
+      // Count how many groomers in the pool are actually free at this slot
+      var freeCount = groomerPool.filter(function(g) {
         return !overlaps(rangesFor(g.id), candStart, candEnd);
-      });
+      }).length;
+      // Also count unassigned (groomer_id = null) bookings that overlap this slot —
+      // each one consumes one of the free groomers, so it must be deducted.
+      var unassignedCount = bookingRows.filter(function(r) {
+        if (r.groomer_id != null) return false;
+        if (!r.timeslot) return false;
+        var dur = GROOM_SLOT_MINS[r.groom_service_key || 'basic'] || 60;
+        var st  = slotToMins(r.timeslot);
+        return st >= 0 && candStart < st + dur && candEnd > st;
+      }).length;
+      // Available only if more free groomers remain after accounting for unassigned bookings
+      return freeCount > unassignedCount;
     } else {
       return !overlaps(rangesFor(groomerId), candStart, candEnd);
     }
