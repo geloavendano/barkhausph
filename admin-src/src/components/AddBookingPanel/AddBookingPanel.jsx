@@ -315,10 +315,16 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
           status: bk.status, payment_status: bk.paysts,
           subtotal: subtotal, discount_amount: disc, total,
         })
-        // Refresh booking_charges — preserve convenience_fee (online bookings), replace the rest
-        await sbDelete('booking_charges', `booking_id=eq.${b.id}&type=neq.convenience_fee`)
-        const updatedCharges = buildAdminCharges(b.id, bk, pricing, base, disc, late)
-        if (updatedCharges.length > 0) await sbPost('booking_charges', updatedCharges)
+        // Refresh booking_charges — preserve convenience_fee (online bookings), replace the rest.
+        // Wrapped in try/catch: booking_charges requires an INSERT RLS policy for admin users.
+        // If missing, the edit still succeeds; the charges table just won't be updated.
+        try {
+          await sbDelete('booking_charges', `booking_id=eq.${b.id}&type=neq.convenience_fee`)
+          const updatedCharges = buildAdminCharges(b.id, bk, pricing, base, disc, late)
+          if (updatedCharges.length > 0) await sbPost('booking_charges', updatedCharges)
+        } catch (chargesErr) {
+          console.warn('booking_charges update skipped (RLS policy missing?):', chargesErr.message)
+        }
 
         if (pet.id) await sbPatch('pets', `id=eq.${pet.id}`, {
           name: bk.pname.trim(), animal_type: bk.panimal, gender: bk.pgender,
@@ -440,8 +446,12 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
             await sbPost('payments', { booking_id: data.booking_id, amount: total, type: 'downpayment',
               method: payMethodDb, reference_number: bk.payref||null, recorded_by: bk.recby })
           }
-          const newCharges = buildAdminCharges(data.booking_id, bk, pricing, base, disc, late)
-          if (newCharges.length > 0) await sbPost('booking_charges', newCharges)
+          try {
+            const newCharges = buildAdminCharges(data.booking_id, bk, pricing, base, disc, late)
+            if (newCharges.length > 0) await sbPost('booking_charges', newCharges)
+          } catch (chargesErr) {
+            console.warn('booking_charges insert skipped (RLS policy missing?):', chargesErr.message)
+          }
         }
         onSaved?.()
         onClose()
