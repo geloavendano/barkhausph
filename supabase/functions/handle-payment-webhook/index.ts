@@ -726,6 +726,17 @@ Deno.serve(async (req) => {
         }))
       );
     }
+    // Vaccine document uploads (paths from get-upload-url, carried in the payload)
+    if (body.vaccineDocuments && Object.keys(body.vaccineDocuments).length > 0) {
+      const { error: docErr } = await supabase.from("vaccine_documents").insert(
+        Object.entries(body.vaccineDocuments as Record<string, string>).map(([key, path]) => ({
+          booking_id: bookingId!,
+          file_path:  path,
+          file_name:  (body.vaccineFileNames && body.vaccineFileNames[key]) || path.split("/").pop(),
+        }))
+      );
+      if (docErr) console.error("Vaccine documents insert failed (non-fatal):", docErr.message);
+    }
     await supabase.from("waivers").insert({
       booking_id:            bookingId!,
       general_terms:         body.waiverGeneral        === true,

@@ -2919,6 +2919,18 @@ async function submitBooking() {
     }
   }
 
+  // Build the FULL vaccine map for this animal (all applicable vaccines with
+  // their checked state), not just the ones the user toggled — so the admin
+  // drawer can show every expected vaccine with a ✓/✗ rather than only checked ones.
+  var _vaccDogList = ['Anti-rabies','5/6/8-in-1 shot','Kennel Cough / Bordetella','Tick and Flea treatment'];
+  var _vaccCatList = ['Anti-rabies','All-in-1 shot','Anti-parasitic'];
+  var _vaccList    = (booking.petAnimal === 'cat') ? _vaccCatList : _vaccDogList;
+  var _fullVaccines = {};
+  _vaccList.forEach(function(v) {
+    var k = v.replace(/[^a-z0-9]/gi, '_');
+    _fullVaccines[k] = !!booking.vaccines[k];
+  });
+
   var payload = {
     location:booking.location, service:booking.service,
     groomDate:booking.groomDate, groomSlot:booking.groomSlot,
@@ -2944,7 +2956,7 @@ async function submitBooking() {
     petSize:booking.petSize, petMedical:booking.petMedical,
     petTemperament:booking.petTemperament,
     membershipId:booking.memberValid?booking.membershipId:null,
-    vaccines:booking.vaccines, addons:booking.selectedAddons,
+    vaccines:_fullVaccines, addons:booking.selectedAddons,
     ownerFirst:booking.ownerFirst, ownerLast:booking.ownerLast,
     ownerEmail:booking.ownerEmail, ownerPhone:booking.ownerPhone,
     ownerSource:booking.ownerSource,
@@ -2960,16 +2972,23 @@ async function submitBooking() {
     groomServicePrice: booking.groomServicePrice || 0,
     vaccineDocuments:  vaccineDocuments,
     vaccineFileNames:  vaccineFileNames,
+    // Walk-in bookings go through submit-booking (creates all child records,
+    // no payment), so flag them as admin-created with a walkin source.
+    adminCreated:  IS_WALKIN,
+    booking_source: IS_WALKIN ? 'walkin' : 'online',
   };
 
   // Show loading state
+  var _loadHead = IS_WALKIN ? 'Recording your booking...' : 'Preparing your payment...';
+  var _loadSub  = IS_WALKIN
+    ? 'Saving your booking — payment will be collected at the counter.'
+    : 'Your booking will be created with <strong style="color:var(--cream)">Pending</strong> status and your spot held for <strong style="color:var(--yellow)">15 minutes</strong>. It will be automatically released if payment is not completed in time.';
   document.getElementById('stepSummary').innerHTML =
     '<div class="pay-loading">' +
     '<div class="bh-spinner"></div>' +
-    '<p class="pay-loading-text">Preparing your payment...</p>' +
+    '<p class="pay-loading-text">' + _loadHead + '</p>' +
     '<p style="font-size:12px;color:var(--mid);margin-top:14px;line-height:1.7;max-width:280px;margin-left:auto;margin-right:auto">' +
-    'Your booking will be created with <strong style="color:var(--cream)">Pending</strong> status and your spot held for <strong style="color:var(--yellow)">15 minutes</strong>. ' +
-    'It will be automatically released if payment is not completed in time.</p>' +
+    _loadSub + '</p>' +
     '<p id="payDebug" style="font-size:11px;color:var(--mid);margin-top:8px"></p>' +
     '</div>';
 
@@ -2982,7 +3001,9 @@ async function submitBooking() {
     btn.disabled = false;
   }, 30000);
 
-  fetch(CREATE_PAYMENT_URL, {
+  // Walk-in → submit-booking (creates the full booking + all child records,
+  // no PayMongo). Online → create-payment (creates a pending booking + checkout).
+  fetch(IS_WALKIN ? EDGE_FN_URL : CREATE_PAYMENT_URL, {
     method: 'POST',
     headers: {
       'Content-Type':  'application/json',
@@ -3011,14 +3032,7 @@ async function submitBooking() {
       _submitting = false;
       buildSummary();
       updateBottomNavForSummary();
-      showToast('Payment error: ' + data.error, 6000);
-      return;
-    }
-    if (!data.checkout_url) {
-      _submitting = false;
-      buildSummary();
-      updateBottomNavForSummary();
-      showToast('No checkout URL returned. Please try again or contact the branch.', 6000);
+      showToast('Booking error: ' + data.error, 6000);
       return;
     }
     storePaymentRef(data.ref_number);
@@ -3088,6 +3102,14 @@ async function submitBooking() {
           sessionStorage.removeItem('bk_snapshot');
         }
       } catch(e) {}
+      return;
+    }
+    // Online path: a checkout URL is required to proceed to PayMongo.
+    if (!data.checkout_url) {
+      _submitting = false;
+      buildSummary();
+      updateBottomNavForSummary();
+      showToast('No checkout URL returned. Please try again or contact the branch.', 6000);
       return;
     }
     _redirectingToPayment = true;

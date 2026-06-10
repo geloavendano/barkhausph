@@ -13,6 +13,22 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Full add-on display names (mirror booking.js / handle-payment-webhook).
+const ADDON_NAMES: Record<string, string> = {
+  nail_trim:       "Nail Trim and Filing",
+  ear_clean:       "Ear Cleaning",
+  teeth:           "Teeth Brushing",
+  sanitary:        "Sanitary Clean",
+  antitick:        "Anti-tick and Flea Bath",
+  whitening:       "Whitening Bath",
+  paw_pads:        "Paw Pads Trim",
+  anal_gland:      "Anal Gland Expression",
+  face_trim:       "Face Trim",
+  deshed:          "Deshedding",
+  demat:           "Dematting",
+  premium_shampoo: "Premium Shampoo",
+};
+
 // ── Email helper ──────────────────────────────────────────────
 
 async function sendBookingConfirmation(details: any) {
@@ -297,6 +313,7 @@ Deno.serve(async (req) => {
         total,
         member_discount_applied: memberDiscountApplied,
         member_code_used:        memberCodeUsed,
+        booking_source:          body.booking_source || "admin",
       })
       .select("id, ref_number")
       .single();
@@ -375,7 +392,7 @@ Deno.serve(async (req) => {
       const addonRows = Object.entries(body.addons).map(([key, price]) => ({
         booking_id: bookingId,
         addon_key:  key,
-        addon_name: key.replace(/_/g, " "),
+        addon_name: ADDON_NAMES[key] ?? key.replace(/_/g, " "),
         price:      price as number,
       }));
       const { error } = await supabase.from("booking_addons").insert(addonRows);
@@ -391,6 +408,17 @@ Deno.serve(async (req) => {
       }));
       const { error } = await supabase.from("pet_vaccines").insert(vaccineRows);
       if (error) throw new Error(`Vaccines insert failed: ${error.message}`);
+    }
+
+    // 10b. Vaccine document uploads (paths produced by get-upload-url, passed in payload)
+    if (body.vaccineDocuments && Object.keys(body.vaccineDocuments).length > 0) {
+      const docRows = Object.entries(body.vaccineDocuments).map(([key, path]) => ({
+        booking_id: bookingId,
+        file_path:  path as string,
+        file_name:  (body.vaccineFileNames && body.vaccineFileNames[key]) || (path as string).split("/").pop(),
+      }));
+      const { error } = await supabase.from("vaccine_documents").insert(docRows);
+      if (error) console.error("Vaccine documents insert failed (non-fatal):", error.message);
     }
 
     // 11. Waivers
