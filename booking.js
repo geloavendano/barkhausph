@@ -864,20 +864,20 @@ async function renderGroomSlots() {
     var branchId = await getSelectedBranchId();
     if (!branchId || !dateVal || !groomerPool.length) throw new Error('missing_context');
 
-    // 1. All grooming bookings on this date (include groomer_id so we can split by groomer)
-    // Filter by service_date (appointment date) not bookings.booking_date (creation date)
+    // 1. ALL grooming bookings for this date/branch (no groomer filter) so that
+    //    unassigned bookings (groomer_id=null) are visible for any-groomer overflow math.
+    //    rangesFor() does client-side groomer filtering, so this is still correct.
     var bkQuery = 'select=timeslot,groom_service_key,groomer_id,bookings!inner(status,branch_id)' +
       '&service_date=eq.'        + dateVal +
       '&bookings.branch_id=eq.'  + branchId +
       '&bookings.status=not.in.(cancelled,rejected)';
-    if (!isAny) bkQuery += '&groomer_id=eq.' + groomerId;
     bookingRows = (await sbFetchPublic('grooming_details', bkQuery)) || [];
 
-    // 2. One-off blocked_schedules for these groomers on this date
+    // 2. ALL one-off blocked_schedules for groomers on this date (no resource filter).
+    //    rangesFor() does client-side resource filtering.
     var bsQuery = 'select=resource_id,start_time,end_time' +
       '&resource_type=eq.groomer&active=eq.true' +
       '&dates=cs.{' + dateVal + '}';
-    if (!isAny) bsQuery += '&resource_id=eq.' + groomerId;
     try { blockRows = (await sbFetchPublic('blocked_schedules', bsQuery)) || []; }
     catch(e) { blockRows = []; } // table may not exist yet — degrade gracefully
 
@@ -932,7 +932,22 @@ async function renderGroomSlots() {
       // Available only if more free groomers remain after accounting for unassigned bookings
       return freeCount > unassignedCount;
     } else {
-      return !overlaps(rangesFor(groomerId), candStart, candEnd);
+      // Is this specific groomer directly blocked/booked?
+      if (overlaps(rangesFor(groomerId), candStart, candEnd)) return false;
+      // Would unassigned bookings overflow into this groomer?
+      // Count other groomers (not this one) who are free at this slot.
+      var otherFreeCount = liveGroomers.filter(function(g) {
+        return g.id !== groomerId && !overlaps(rangesFor(g.id), candStart, candEnd);
+      }).length;
+      var unassignedAtSlot = bookingRows.filter(function(r) {
+        if (r.groomer_id != null) return false;
+        if (!r.timeslot) return false;
+        var dur = GROOM_SLOT_MINS[r.groom_service_key || 'basic'] || 60;
+        var st  = slotToMins(r.timeslot);
+        return st >= 0 && candStart < st + dur && candEnd > st;
+      }).length;
+      // If unassigned bookings exceed other free groomers, they'd spill into this groomer
+      return unassignedAtSlot <= otherFreeCount;
     }
   });
 
@@ -2811,10 +2826,10 @@ async function checkAvailabilityBeforePayment() {
       var myDuration = GROOM_SLOT_MINS[serviceKey] || 60;
       var candStart  = slotToMins(slot);
       var candEnd    = candStart + myDuration;
+      // Fetch ALL bookings for this date (no groomer filter) so unassigned ones are visible
       var bkQuery = 'select=timeslot,groom_service_key,groomer_id,bookings!inner(status,branch_id)' +
         '&service_date=eq.' + dateVal + '&bookings.branch_id=eq.' + branchId +
         '&bookings.status=not.in.(cancelled,rejected)';
-      if (!isAny) bkQuery += '&groomer_id=eq.' + groomerId;
       var bkRows = (await sbFetchPublic('grooming_details', bkQuery)) || [];
       function isGroomerFree(gId) {
         return !bkRows.filter(function(r){ return r.groomer_id === gId && r.timeslot; })
@@ -2824,16 +2839,24 @@ async function checkAvailabilityBeforePayment() {
             return st >= 0 && candStart < (st + dur) && candEnd > st;
           });
       }
-      var groomerPool = isAny ? liveGroomers : liveGroomers.filter(function(g){ return g.id === groomerId; });
-      var freeGroomers = groomerPool.filter(function(g){ return isGroomerFree(g.id); });
-      var unassignedCount = bkRows.filter(function(r) {
+      var unassignedAtSlot = bkRows.filter(function(r) {
         if (r.groomer_id != null) return false;
         var dur = GROOM_SLOT_MINS[r.groom_service_key || 'basic'] || 60;
         var st = slotToMins(r.timeslot || '');
         return st >= 0 && candStart < st + dur && candEnd > st;
       }).length;
-      var still = isAny ? freeGroomers.length > unassignedCount
-                        : (groomerPool.length > 0 && isGroomerFree(groomerId));
+      var groomerPool = isAny ? liveGroomers : liveGroomers.filter(function(g){ return g.id === groomerId; });
+      var freeGroomers = groomerPool.filter(function(g){ return isGroomerFree(g.id); });
+      var still;
+      if (isAny) {
+        still = freeGroomers.length > unassignedAtSlot;
+      } else {
+        // Specific groomer: directly free AND unassigned overflow won't consume them
+        var otherFreeCount = liveGroomers.filter(function(g) {
+          return g.id !== groomerId && isGroomerFree(g.id);
+        }).length;
+        still = groomerPool.length > 0 && isGroomerFree(groomerId) && unassignedAtSlot <= otherFreeCount;
+      }
       if (!still) return { available: false, conflict: 'slot' };
       return { available: true };
     }
