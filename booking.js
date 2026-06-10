@@ -2904,7 +2904,11 @@ async function submitBooking() {
       try {
         var _vUrlRes = await fetch(GET_UPLOAD_URL, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY },
+          headers: {
+            'Content-Type':  'application/json',
+            'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,   // required — without it the gateway returns 401
+            'apikey':        SUPABASE_ANON_KEY,
+          },
           body: JSON.stringify({ uploadId: uploadId, fileName: _vf.name, contentType: _vf.type, vaccineKey: _vKey }),
         });
         var _vUrlData = await _vUrlRes.json();
