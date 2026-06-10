@@ -107,7 +107,7 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
   const [studios,          setStudios]          = useState([])
   const [loading,          setLoading]          = useState(true)
   const [loadError,        setLoadError]        = useState('')
-  const [currentSvc,       setCurrentSvc]       = useState('hotel')
+  const [currentSvc,       setCurrentSvc]       = useState('all')
   const [activeFilter,     setActiveFilter]     = useState(null)
   const [monthDots,        setMonthDots]        = useState({})
   const [calOpen,          setCalOpen]          = useState(false)
@@ -196,6 +196,8 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
     const d = new Date()
     setCurrentDate(d)
     setCalModalDate(d)
+    setCurrentSvc('all')
+    setActiveFilter(null)
     Promise.all([loadBookings(d), loadBlocked(), loadStudios(), loadMonthDots(d.getFullYear(), d.getMonth())])
   }, [branch?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -418,8 +420,13 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
                     if (activeFilter?.id && bl.resource_id !== activeFilter.id) return null
                     const stMin = parseMins(bl.start_time), enMin = parseMins(bl.end_time)
                     if (stMin == null || enMin == null || stMin >= enMin) return null
-                    const top = Math.max(0, (stMin - DAY_START) * PX_PER_MIN)
-                    const ht  = Math.max(22, (enMin - stMin) * PX_PER_MIN)
+                    // Clip to visible window — a block starting before DAY_START
+                    // (e.g. 06:00–10:00) must only render its visible slice (9AM–10AM).
+                    const visStart = Math.max(stMin, DAY_START)
+                    const visEnd   = Math.min(enMin, DAY_END)
+                    if (visStart >= visEnd) return null
+                    const top = (visStart - DAY_START) * PX_PER_MIN
+                    const ht  = Math.max(22, (visEnd - visStart) * PX_PER_MIN)
                     const pool = bl.resource_type === 'groomer' ? groomers : bl.resource_type === 'studio' ? studios : rooms
                     const res  = pool.find(r => r.id === bl.resource_id)
                     const bc   = res?.color ?? '#9B95E8'
