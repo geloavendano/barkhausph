@@ -38,6 +38,14 @@
 .branchTab:hover { background: var(--raised); color: var(--cream); }
 .branchOn { background: var(--raised); color: var(--cream); border-color: var(--blue); }
 
+@media (max-width: 640px) {
+  .logo { height: 20px; }
+  .branchTabs { margin-left: 6px; gap: 3px; }
+  .branchTab { font-size: 11px; padding: 3px 9px; }
+  .greeting { display: none; }
+  .topbar { padding: 0 10px; gap: 6px; }
+}
+
 .topRight {
   margin-left: auto;
   display: flex;
@@ -156,3 +164,49 @@
 }
 .mobileBtn span:first-child { font-size: 18px; }
 .mobileBtn.active { color: var(--yellow); }
+
+/* ── More sheet (mobile) ── */
+.moreBackdrop {
+  display: none;
+}
+.moreSheet {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .moreBackdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 38;
+  }
+  .moreSheet {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    position: fixed;
+    bottom: 56px; /* sits just above the bottom nav */
+    left: 0;
+    right: 0;
+    background: var(--surface);
+    border-top: 0.5px solid var(--border);
+    border-bottom: 0.5px solid var(--border);
+    z-index: 39;
+  }
+  .moreSheetBtn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    padding: 12px 4px;
+    border: none;
+    background: transparent;
+    color: var(--mid);
+    font-family: 'Nunito', sans-serif;
+    font-size: 10px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .moreSheetBtn span:first-child { font-size: 22px; }
+  .moreSheetBtn.active { color: var(--yellow); }
+}

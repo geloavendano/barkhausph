@@ -109,10 +109,15 @@ export default function BookingsPage({ branches, currentBranchIdx = 0, rooms, gr
     setCollapsed(c => ({ ...c, [dt]: !c[dt] }))
   }
 
-  // Group by created_at date
+  // Group by created_at date in LOCAL timezone (created_at is UTC; splitting on 'T'
+  // gives the wrong date for bookings made past midnight UTC but still today locally)
   const groups = {}
   bookings.forEach(b => {
-    const dt = b.created_at ? b.created_at.split('T')[0] : 'Unknown'
+    let dt = 'Unknown'
+    if (b.created_at) {
+      const d = new Date(b.created_at)
+      dt = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+    }
     if (!groups[dt]) groups[dt] = []
     groups[dt].push(b)
   })
