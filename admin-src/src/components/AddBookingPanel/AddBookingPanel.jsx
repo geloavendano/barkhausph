@@ -81,6 +81,49 @@ function mkBk(branchId) {
 
 function fmt(n) { return '₱' + Number(n).toLocaleString() }
 
+// ── Helper components defined OUTSIDE AddBookingPanel ─────────────────────
+// If these were defined inside, every parent re-render (e.g. a keystroke)
+// would create a new function reference, causing React to unmount/remount
+// them and making every input lose focus after one character.
+
+function FG({ label, req, children }) {
+  return (
+    <div className={styles.fg}>
+      {label && <label className={styles.fl}>{label}{req && <span className={styles.req}> *</span>}</label>}
+      {children}
+    </div>
+  )
+}
+function IBox({ children }) { return <div className={styles.ibox}>{children}</div> }
+function SectionHead({ children }) { return <div className={styles.secHead}>{children}</div> }
+function Toggle({ label, val, onToggle }) {
+  return (
+    <div className={styles.toggleRow}>
+      <span className={styles.toggleLbl}>{label}</span>
+      <div className={`${styles.toggle} ${val ? styles.toggleOn : ''}`} onClick={onToggle} />
+    </div>
+  )
+}
+function SRow({ k, v, disc, muted }) {
+  return (
+    <div className={styles.srow}>
+      <span className={styles.srowK}>{k}</span>
+      <span className={`${styles.srowV} ${disc ? styles.srowDisc : ''} ${muted ? styles.srowMuted : ''}`}>{v}</span>
+    </div>
+  )
+}
+function SzPills({ filter, size, onSize }) {
+  const opts = filter ? BK_SIZES.filter(s => filter.includes(s)) : BK_SIZES
+  return (
+    <div className={styles.pills}>
+      {opts.map(s => (
+        <button key={s} className={`${styles.pill} ${size === s ? styles.pillOn : ''}`}
+          onClick={() => onSize(s)}>{SIZE_LBL[s]}</button>
+      ))}
+    </div>
+  )
+}
+
 export default function AddBookingPanel({ branch, rooms, groomers, studios = [], editBooking = null, onClose, onSaved }) {
   const [step,   setStep]   = useState(0)
   const [bk,     setBk]     = useState(() => mkBk(branch?.id))
@@ -412,6 +455,9 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
 
   // ── Step renderers ────────────────────────────────────────────────────────
 
+  // ── Step renderers (called as functions, not JSX components, so React never
+  // compares their references and no input loses focus on re-render) ──────────
+
   function StepService() {
     const svcs = [
       { k:'grooming', icon:'✂️', label:'Grooming',  color:'#4D96B9' },
@@ -433,22 +479,10 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
     )
   }
 
-  function SzPills({ filter }) {
-    const opts = filter ? BK_SIZES.filter(s => filter.includes(s)) : BK_SIZES
-    return (
-      <div className={styles.pills}>
-        {opts.map(s => (
-          <button key={s} className={`${styles.pill} ${bk.size === s ? styles.pillOn : ''}`}
-            onClick={() => upd('size', s)}>{SIZE_LBL[s]}</button>
-        ))}
-      </div>
-    )
-  }
-
   function StepGrooming() {
     return (
       <>
-        <FG label="Pet size" req><SzPills /></FG>
+        <FG label="Pet size" req><SzPills size={bk.size} onSize={s => upd('size', s)} /></FG>
 
         <FG label="Grooming service" req>
           <div className={styles.gsvcGrid}>
@@ -542,7 +576,7 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
     return (
       <>
         <FG label="Pet size" req>
-          <SzPills filter={['small_dog','medium_dog','large_dog','cat']} />
+          <SzPills filter={['small_dog','medium_dog','large_dog','cat']} size={bk.size} onSize={s => upd('size', s)} />
         </FG>
         <div className={styles.twoCol}>
           <FG label="Check-in" req>
@@ -594,7 +628,7 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
     return (
       <>
         <FG label="Pet size" req>
-          <SzPills filter={['small_dog','medium_dog','large_dog','cat']} />
+          <SzPills filter={['small_dog','medium_dog','large_dog','cat']} size={bk.size} onSize={s => upd('size', s)} />
         </FG>
         <FG label="Date" req>
           <input type="date" className={styles.inp} value={bk.dcdate}
@@ -926,42 +960,16 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
     )
   }
 
-  // ── Small helper components ───────────────────────────────────────────────
-  function FG({ label, req, children }) {
-    return (
-      <div className={styles.fg}>
-        {label && <label className={styles.fl}>{label}{req && <span className={styles.req}> *</span>}</label>}
-        {children}
-      </div>
-    )
-  }
-  function IBox({ children }) { return <div className={styles.ibox}>{children}</div> }
-  function SectionHead({ children }) { return <div className={styles.secHead}>{children}</div> }
-  function Toggle({ label, val, onToggle }) {
-    return (
-      <div className={styles.toggleRow}>
-        <span className={styles.toggleLbl}>{label}</span>
-        <div className={`${styles.toggle} ${val ? styles.toggleOn : ''}`} onClick={onToggle} />
-      </div>
-    )
-  }
-  function SRow({ k, v, disc, muted }) {
-    return (
-      <div className={styles.srow}>
-        <span className={styles.srowK}>{k}</span>
-        <span className={`${styles.srowV} ${disc ? styles.srowDisc : ''} ${muted ? styles.srowMuted : ''}`}>{v}</span>
-      </div>
-    )
-  }
-
   // ── Render ────────────────────────────────────────────────────────────────
+  // Call step renderers as plain functions (not JSX elements) so React never
+  // treats them as component types — no unmount/remount on parent re-renders.
   const stepComponents = [
-    <StepService key="svc" />,
-    bk.svc === 'grooming' ? <StepGrooming key="groom" /> : bk.svc === 'hotel' ? <StepHotel key="hotel" /> : bk.svc === 'daycare' ? <StepDaycare key="day" /> : <StepStudio key="stu" />,
-    <StepPet key="pet" />,
-    <StepOwner key="own" />,
-    <StepDetails key="det" />,
-    <StepSummary key="sum" />,
+    StepService(),
+    bk.svc === 'grooming' ? StepGrooming() : bk.svc === 'hotel' ? StepHotel() : bk.svc === 'daycare' ? StepDaycare() : StepStudio(),
+    StepPet(),
+    StepOwner(),
+    StepDetails(),
+    StepSummary(),
   ]
 
   const isLast = step === STEP_NAMES.length - 1
