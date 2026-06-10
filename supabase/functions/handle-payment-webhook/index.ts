@@ -781,7 +781,7 @@ Deno.serve(async (req) => {
         .eq("booking_id", bookingId!);
 
       // Derive vaccine status from the payload (mirrors booking.js logic)
-      const vaccFileCount   = body.vaccines ? Object.keys(body.vaccines).length : 0;
+      const vaccFileCount   = body.vaccineDocuments ? Object.keys(body.vaccineDocuments).length : 0;
       const bringVaccines   = body.bringVaccines === true || body.bringVaccines === "true";
       const vaccineStatus   = vaccFileCount > 0
         ? `${vaccFileCount} file${vaccFileCount > 1 ? "s" : ""} uploaded`

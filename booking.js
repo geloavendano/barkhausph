@@ -2972,6 +2972,7 @@ async function submitBooking() {
     groomServicePrice: booking.groomServicePrice || 0,
     vaccineDocuments:  vaccineDocuments,
     vaccineFileNames:  vaccineFileNames,
+    bringVaccines: (function(){ var el=document.getElementById('bringVaccines'); return !!(el && el.classList.contains('checked')); })(),
     // Walk-in bookings go through submit-booking (creates all child records,
     // no payment), so flag them as admin-created with a walkin source.
     adminCreated:  IS_WALKIN,

@@ -61,43 +61,116 @@ function fmtDate(d?: string) {
   } catch { return d; }
 }
 
-function serviceRows(d: any): string {
-  const row = (label: string, value: string, highlight = false) =>
-    `<tr style="border-bottom:0.5px solid rgba(77,150,185,0.12)">
-      <td style="padding:9px 14px;color:#6AAEC8;width:42%">${label}</td>
-      <td style="padding:9px 14px;color:${highlight ? "#FFCE58" : "#B8D4E0"};font-weight:${highlight ? "700" : "400"}">${value}</td>
-    </tr>`;
+// Derive the itemised charge list from the payload (mirrors handle-payment-webhook).
+type ChargeItem = { type: string; label: string; amount: number };
+function chargesFromPayload(body: Record<string, unknown>, subtotal: number, discountAmt: number): ChargeItem[] {
+  const lateFee       = parseInt(body.hotelLateTotal as string) || 0;
+  const convFee       = parseInt(body.convenienceFee as string) || 0;
+  const groomSvcPrice = parseInt(body.groomServicePrice as string) || 0;
+  const svcLabel = (body.service === "grooming" && body.groomServiceName)
+    ? `Grooming – ${body.groomServiceName}`
+    : ({ hotel: "Pet Hotel Stay", daycare: "Daycare", studio: "Self-Shoot Studio" } as Record<string, string>)[body.service as string]
+    ?? "Barkhaus Booking";
+  const baseAmt = body.service === "grooming" ? groomSvcPrice : subtotal - lateFee;
+  const rows: ChargeItem[] = [];
+  if (baseAmt > 0)     rows.push({ type: "base_service",    label: svcLabel,           amount: baseAmt });
+  if (lateFee > 0)     rows.push({ type: "late_pickup",     label: "Late pick-up fee", amount: lateFee });
+  if (discountAmt > 0) rows.push({ type: "member_discount", label: "Member discount",  amount: discountAmt });
+  if (convFee > 0)     rows.push({ type: "convenience_fee", label: "Convenience fee",  amount: convFee });
+  return rows;
+}
 
-  const svcLabel: Record<string, string> = {
-    grooming: "Grooming", hotel: "Pet Hotel", daycare: "Daycare", studio: "Studio",
-  };
+function detailRow(label: string, value: string): string {
+  return `<tr style="border-bottom:0.5px solid rgba(77,150,185,0.12)">
+    <td style="padding:9px 14px;color:#6AAEC8;width:42%;font-size:12px;font-weight:600;white-space:nowrap">${label}</td>
+    <td style="padding:9px 14px;color:#B8D4E0;font-size:13px">${value}</td>
+  </tr>`;
+}
 
-  let rows = row("Branch", d.branch.name) + row("Service", svcLabel[d.service] ?? d.service);
-
+function bookingDetailRows(d: any): string {
+  const svcLabel: Record<string, string> = { grooming: "Grooming", hotel: "Pet Hotel", daycare: "Daycare", studio: "Studio" };
+  let rows = detailRow("Branch", d.branch.name) + detailRow("Service", svcLabel[d.service] ?? d.service);
   if (d.service === "grooming") {
-    if (d.groomServiceName) rows += row("Package", d.groomServiceName);
-    if (d.addons?.length)   rows += row("Add-ons", d.addons.join(", "));
-    if (d.groomerName && d.groomerName !== "any") rows += row("Groomer", d.groomerName);
-    if (d.groomDate && d.groomSlot) rows += row("Date & time", `${fmtDate(d.groomDate)} · ${d.groomSlot}`);
+    if (d.groomServiceName) rows += detailRow("Package", d.groomServiceName);
+    if (d.addons?.length)   rows += detailRow("Add-ons", d.addons.join(", "));
+    if (d.groomerName && d.groomerName !== "any") {
+      const gName = (d.groomerName as string).replace(/\b\w/g, (c: string) => c.toUpperCase());
+      rows += detailRow("Groomer", gName);
+    }
+    if (d.groomDate && d.groomSlot) rows += detailRow("Date & time", `${fmtDate(d.groomDate)} · ${d.groomSlot}`);
+    if (d.groomNotes) rows += detailRow("Grooming notes", d.groomNotes);
   }
   if (d.service === "hotel") {
-    if (d.hotelRoomName)  rows += row("Room", d.hotelRoomName);
-    if (d.checkinDate)    rows += row("Check-in", fmtDate(d.checkinDate) + (d.dropoffTime ? ` · ${d.dropoffTime}` : ""));
-    if (d.checkoutDate)   rows += row("Check-out", fmtDate(d.checkoutDate) + (d.pickupTime ? ` · ${d.pickupTime}` : ""));
-    rows += row("Play park", d.playparkConsent ? "Yes, with consent" : "No");
+    if (d.hotelRoomName) rows += detailRow("Room", d.hotelRoomName);
+    if (d.checkinDate)   rows += detailRow("Check-in",  fmtDate(d.checkinDate)  + (d.dropoffTime ? ` · ${d.dropoffTime}` : ""));
+    if (d.checkoutDate)  rows += detailRow("Check-out", fmtDate(d.checkoutDate) + (d.pickupTime  ? ` · ${d.pickupTime}`  : ""));
+    rows += detailRow("Play park", d.playparkConsent ? "Yes, with consent" : "No");
   }
   if (d.service === "daycare") {
-    if (d.daycareDate)    rows += row("Date", fmtDate(d.daycareDate));
-    if (d.daycareDropoff) rows += row("Drop-off", d.daycareDropoff);
-    rows += row("Pick-up", d.daycareOpenTime ? "Open time" : (d.daycarePickup ?? "—"));
+    if (d.daycareDate) rows += detailRow("Date", fmtDate(d.daycareDate));
+    if (d.daycareOpenTime) rows += detailRow("Drop-off", "Open time") + detailRow("Pick-up", "Open time");
+    else { if (d.daycareDropoff) rows += detailRow("Drop-off", d.daycareDropoff); rows += detailRow("Pick-up", d.daycarePickup ?? "—"); }
+    if (d.daycareNotes) rows += detailRow("Daycare notes", d.daycareNotes);
   }
   if (d.service === "studio") {
-    if (d.studioDate) rows += row("Date", fmtDate(d.studioDate));
-    if (d.studioSlot) rows += row("Time slot", d.studioSlot);
+    if (d.studioDate) rows += detailRow("Date", fmtDate(d.studioDate));
+    if (d.studioSlot) rows += detailRow("Time slot", d.studioSlot);
   }
+  return rows;
+}
 
-  const payLabel = "Pay on arrival";
-  rows += row("Total", `₱${Number(d.total).toLocaleString()} · ${payLabel}`, true);
+function petDetailRows(d: any): string {
+  const sizeLabels: Record<string, string> = { tiny: "Tiny", small_dog: "Small", medium_dog: "Medium Dog", large_dog: "Large Dog", giant_dog: "Giant Dog", cat: "Cat" };
+  const tempLabels: Record<string, string> = { friendly_all: "Friendly with all", friendly_shy: "Friendly but shy", selective: "Selective", reactive: "Reactive", first_time: "First time" };
+  let rows = detailRow("Name", d.petName);
+  if (d.petAnimal) rows += detailRow("Animal", d.petAnimal.charAt(0).toUpperCase() + d.petAnimal.slice(1));
+  if (d.petGender) rows += detailRow("Sex",    d.petGender.charAt(0).toUpperCase() + d.petGender.slice(1));
+  if (d.petBreed)  rows += detailRow("Breed",  d.petBreed);
+  if (d.petAge)    rows += detailRow("Age",    `${d.petAge} ${d.petAgeUnit || "years"}`);
+  if (d.petSize)   rows += detailRow("Size",   sizeLabels[d.petSize] || d.petSize);
+  if (d.petTemperament) rows += detailRow("Temperament", tempLabels[d.petTemperament] || d.petTemperament);
+  if (d.petMedical?.trim()) rows += detailRow("Medical notes", d.petMedical.trim());
+  if (d.membershipId) rows += detailRow("Membership", `${d.membershipId} ✓`);
+  return rows;
+}
+
+function healthCareRows(d: any): string {
+  let rows = detailRow("Vaccine records", d.vaccineStatus || "Not provided");
+  if (d.service === "hotel") {
+    if (d.vetClinic)  rows += detailRow("Vet clinic",   d.vetClinic);
+    if (d.vetContact) rows += detailRow("Vet contact",  d.vetContact);
+    if (d.vetAddress) rows += detailRow("Vet address",  d.vetAddress);
+    if (d.emergencyName)  rows += detailRow("Emergency contact", d.emergencyName);
+    if (d.emergencyPhone) rows += detailRow("Emergency phone",   d.emergencyPhone);
+    if (d.hotelFeeding) rows += detailRow("Feeding instructions", d.hotelFeeding);
+    if (d.hotelMeds)    rows += detailRow("Medications",          d.hotelMeds);
+  }
+  return rows;
+}
+
+function ownerDetailRows(d: any): string {
+  let rows = detailRow("Name", `${d.ownerFirstName} ${d.ownerLastName || ""}`.trim());
+  if (d.ownerEmail)  rows += detailRow("Email",  d.ownerEmail);
+  if (d.ownerMobile) rows += detailRow("Mobile", d.ownerMobile);
+  return rows;
+}
+
+function paymentSummaryRows(charges: ChargeItem[], addonRows: Array<{ addon_name: string; price: number }>, total: number): string {
+  const stdRow = (label: string, value: string) =>
+    `<tr style="border-bottom:0.5px solid rgba(77,150,185,0.08)"><td style="padding:8px 14px;color:#6AAEC8;width:55%;font-size:13px">${label}</td><td style="padding:8px 14px;color:#B8D4E0;font-size:13px;text-align:right">${value}</td></tr>`;
+  const discRow = (label: string, value: string) =>
+    `<tr style="border-bottom:0.5px solid rgba(77,150,185,0.08)"><td style="padding:8px 14px;color:#6AAEC8;width:55%;font-size:13px">${label}</td><td style="padding:8px 14px;color:#6BCB77;font-size:13px;text-align:right">${value}</td></tr>`;
+  const totalRow = (label: string, value: string) =>
+    `<tr><td style="padding:10px 14px;color:#F0EDE6;width:55%;font-size:14px;font-weight:700;border-top:0.5px solid rgba(77,150,185,0.3)">${label}</td><td style="padding:10px 14px;color:#FFCE58;font-size:14px;font-weight:700;text-align:right;border-top:0.5px solid rgba(77,150,185,0.3)">${value}</td></tr>`;
+  let rows = "";
+  const base = charges.find(c => c.type === "base_service");
+  if (base && base.amount > 0) rows += stdRow(base.label, `₱${base.amount.toLocaleString()}`);
+  for (const a of (addonRows || [])) if ((a.price || 0) > 0) rows += stdRow(a.addon_name, `₱${a.price.toLocaleString()}`);
+  const late = charges.find(c => c.type === "late_pickup");
+  if (late && late.amount > 0) rows += stdRow("Late pickup fee", `₱${late.amount.toLocaleString()}`);
+  const disc = charges.find(c => c.type === "member_discount");
+  if (disc && disc.amount > 0) rows += discRow("Member discount", `−₱${disc.amount.toLocaleString()}`);
+  rows += totalRow("Total · Pay on arrival", `₱${total.toLocaleString()}`);
   return rows;
 }
 
@@ -148,9 +221,25 @@ function buildEmailHtml(d: any): string {
         ⚠️ <strong style="color:#FFCE58">Payment required in store.</strong> Please settle your payment at the branch upon arrival to confirm your booking.
       </p>
     </div>
-    <table width="100%" cellpadding="0" cellspacing="0" style="background:#1F3D55;border:0.5px solid rgba(77,150,185,0.25);border-radius:10px;overflow:hidden;margin-bottom:20px">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#1F3D55;border:0.5px solid rgba(77,150,185,0.25);border-radius:10px;overflow:hidden;margin-bottom:14px">
       <tr><td style="padding:9px 14px;font-size:9px;font-weight:700;color:#6AAEC8;text-transform:uppercase;letter-spacing:0.12em;border-bottom:0.5px solid rgba(77,150,185,0.2)">Booking details</td></tr>
-      ${serviceRows(d)}
+      ${bookingDetailRows(d)}
+    </table>
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#1F3D55;border:0.5px solid rgba(77,150,185,0.25);border-radius:10px;overflow:hidden;margin-bottom:14px">
+      <tr><td style="padding:9px 14px;font-size:9px;font-weight:700;color:#6AAEC8;text-transform:uppercase;letter-spacing:0.12em;border-bottom:0.5px solid rgba(77,150,185,0.2)">Pet details</td></tr>
+      ${petDetailRows(d)}
+    </table>
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#1F3D55;border:0.5px solid rgba(77,150,185,0.25);border-radius:10px;overflow:hidden;margin-bottom:14px">
+      <tr><td style="padding:9px 14px;font-size:9px;font-weight:700;color:#6AAEC8;text-transform:uppercase;letter-spacing:0.12em;border-bottom:0.5px solid rgba(77,150,185,0.2)">Health &amp; care</td></tr>
+      ${healthCareRows(d)}
+    </table>
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#1F3D55;border:0.5px solid rgba(77,150,185,0.25);border-radius:10px;overflow:hidden;margin-bottom:14px">
+      <tr><td style="padding:9px 14px;font-size:9px;font-weight:700;color:#6AAEC8;text-transform:uppercase;letter-spacing:0.12em;border-bottom:0.5px solid rgba(77,150,185,0.2)">Owner details</td></tr>
+      ${ownerDetailRows(d)}
+    </table>
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#1F3D55;border:0.5px solid rgba(77,150,185,0.25);border-radius:10px;overflow:hidden;margin-bottom:20px">
+      <tr><td colspan="2" style="padding:9px 14px;font-size:9px;font-weight:700;color:#6AAEC8;text-transform:uppercase;letter-spacing:0.12em;border-bottom:0.5px solid rgba(77,150,185,0.2)">Payment summary</td></tr>
+      ${paymentSummaryRows(d.charges || [], d.addonRows || [], d.total)}
     </table>
     <div style="background:rgba(255,206,88,0.08);border:0.5px solid rgba(255,206,88,0.25);border-radius:10px;padding:12px 14px;margin-bottom:14px">
       <p style="margin:0;font-size:13px;color:#B8D4E0;line-height:1.55">
@@ -447,19 +536,61 @@ Deno.serve(async (req) => {
           if (room?.name) hotelRoomName = room.name;
         }
 
+        // Derive vaccine status from uploaded docs / "will bring" flag.
+        const vaccFileCount = body.vaccineDocuments ? Object.keys(body.vaccineDocuments).length : 0;
+        const bringVaccines = body.bringVaccines === true || body.bringVaccines === "true";
+        const vaccineStatus = vaccFileCount > 0
+          ? `${vaccFileCount} file${vaccFileCount > 1 ? "s" : ""} uploaded`
+          : bringVaccines ? "Will bring to venue" : "Not provided";
+
+        // Add-ons with proper display names, for both the detail row and the bill.
+        const addonNames = body.addons
+          ? Object.keys(body.addons).map((k) => ADDON_NAMES[k] ?? k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()))
+          : [];
+        const emailAddonRows = body.addons
+          ? Object.entries(body.addons).map(([k, price]) => ({
+              addon_name: ADDON_NAMES[k] ?? k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+              price: Number(price) || 0,
+            }))
+          : [];
+        const emailCharges = chargesFromPayload(body, subtotal, discountAmt);
+
         await sendBookingConfirmation({
           ownerEmail:      body.ownerEmail,
           ownerFirstName:  body.ownerFirst,
+          ownerLastName:   body.ownerLast  || "",
+          ownerMobile:     body.ownerPhone || "",
           petName:         body.petName,
+          petAnimal:       body.petAnimal       || null,
+          petGender:       body.petGender       || null,
+          petBreed:        body.petBreed        || null,
+          petAge:          body.petAge          || null,
+          petAgeUnit:      body.petAgeUnit      || "years",
+          petSize:         body.petSize         || null,
+          petTemperament:  body.petTemperament  || null,
+          petMedical:      body.petMedical      || null,
+          membershipId:    body.membershipId    || null,
+          vaccineStatus,
+          vetClinic:       body.vetClinic       || null,
+          vetContact:      body.vetContact      || null,
+          vetAddress:      body.vetAddress      || null,
+          emergencyName:   body.emergencyName   || null,
+          emergencyPhone:  body.emergencyPhone  || null,
+          hotelFeeding:    body.hotelFeeding    || null,
+          hotelMeds:       body.hotelMeds       || null,
+          groomNotes:      body.groomNotes      || null,
+          daycareNotes:    body.daycareNotes    || null,
           refNumber:       booking.ref_number,
           status:          "pending",
           bookingSource:   body.booking_source || "admin",
           service:         body.service,
           branch,
           total,
+          charges:         emailCharges,
+          addonRows:       emailAddonRows,
           // Grooming
           groomServiceName: body.groomServiceName || null,
-          addons:           body.addons ? Object.keys(body.addons) : [],
+          addons:           addonNames,
           groomerName:      body.preferredStylist || null,
           groomDate:        body.groomDate || null,
           groomSlot:        body.groomSlot || null,
