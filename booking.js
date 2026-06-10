@@ -865,9 +865,10 @@ async function renderGroomSlots() {
     if (!branchId || !dateVal || !groomerPool.length) throw new Error('missing_context');
 
     // 1. All grooming bookings on this date (include groomer_id so we can split by groomer)
-    var bkQuery = 'select=timeslot,groom_service_key,groomer_id,bookings!inner(booking_date,status,branch_id)' +
-      '&bookings.booking_date=eq.' + dateVal +
-      '&bookings.branch_id=eq.'   + branchId +
+    // Filter by service_date (appointment date) not bookings.booking_date (creation date)
+    var bkQuery = 'select=timeslot,groom_service_key,groomer_id,bookings!inner(status,branch_id)' +
+      '&service_date=eq.'        + dateVal +
+      '&bookings.branch_id=eq.'  + branchId +
       '&bookings.status=not.in.(cancelled,rejected)';
     if (!isAny) bkQuery += '&groomer_id=eq.' + groomerId;
     bookingRows = (await sbFetchPublic('grooming_details', bkQuery)) || [];
@@ -2810,8 +2811,8 @@ async function checkAvailabilityBeforePayment() {
       var myDuration = GROOM_SLOT_MINS[serviceKey] || 60;
       var candStart  = slotToMins(slot);
       var candEnd    = candStart + myDuration;
-      var bkQuery = 'select=timeslot,groom_service_key,groomer_id,bookings!inner(booking_date,status,branch_id)' +
-        '&bookings.booking_date=eq.' + dateVal + '&bookings.branch_id=eq.' + branchId +
+      var bkQuery = 'select=timeslot,groom_service_key,groomer_id,bookings!inner(status,branch_id)' +
+        '&service_date=eq.' + dateVal + '&bookings.branch_id=eq.' + branchId +
         '&bookings.status=not.in.(cancelled,rejected)';
       if (!isAny) bkQuery += '&groomer_id=eq.' + groomerId;
       var bkRows = (await sbFetchPublic('grooming_details', bkQuery)) || [];
@@ -2824,7 +2825,14 @@ async function checkAvailabilityBeforePayment() {
           });
       }
       var groomerPool = isAny ? liveGroomers : liveGroomers.filter(function(g){ return g.id === groomerId; });
-      var still = isAny ? groomerPool.some(function(g){ return isGroomerFree(g.id); })
+      var freeGroomers = groomerPool.filter(function(g){ return isGroomerFree(g.id); });
+      var unassignedCount = bkRows.filter(function(r) {
+        if (r.groomer_id != null) return false;
+        var dur = GROOM_SLOT_MINS[r.groom_service_key || 'basic'] || 60;
+        var st = slotToMins(r.timeslot || '');
+        return st >= 0 && candStart < st + dur && candEnd > st;
+      }).length;
+      var still = isAny ? freeGroomers.length > unassignedCount
                         : (groomerPool.length > 0 && isGroomerFree(groomerId));
       if (!still) return { available: false, conflict: 'slot' };
       return { available: true };
