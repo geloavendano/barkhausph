@@ -158,16 +158,23 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
     const addonMap = {}
     addonsArr.forEach(a => { addonMap[a.addon_key ?? a.addon_name] = true })
 
-    // Vaccines: map vaccine_name back to the index used by bk.vacc
+    // Vaccines: match stored names to the admin form's index regardless of
+    // storage format (public flow stores e.g. "5 6 8 in 1 shot", admin stores
+    // "5/6/8-in-1 shot"). Normalise both sides to alphanumeric-only lowercase.
+    const norm = s => (s ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
     const vaccNamesForAnimal = (pet.animal_type === 'cat')
       ? ['Anti-rabies', 'All-in-1 shot', 'Anti-parasitic']
       : ['Anti-rabies', '5/6/8-in-1 shot', 'Kennel Cough / Bordetella', 'Tick and flea treatment']
+    const vaccNormed = vaccNamesForAnimal.map(norm)
     const vaccinesArr = Array.isArray(b.pet_vaccines) ? b.pet_vaccines : (b.pet_vaccines ? [b.pet_vaccines] : [])
     const vaccMap = {}
     vaccinesArr.forEach(v => {
-      const idx = vaccNamesForAnimal.indexOf(v.vaccine_name)
+      const idx = vaccNormed.indexOf(norm(v.vaccine_name))
       if (idx >= 0) vaccMap[idx] = v.confirmed
     })
+
+    // Skip the Service step when editing (service type is locked)
+    setStep(1)
 
     // Waivers
     const waiver = Array.isArray(b.waivers) ? b.waivers[0] : b.waivers
@@ -188,14 +195,16 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
       hroom: roomObj?.name ?? hd?.room_type ?? '',
       hroom_id: hd?.room_id ?? null,
       hroom_type: hd?.room_type ?? '',
-      hdrop: hd?.dropoff_time ?? '10:00',
+      hdrop: (() => { const t = hd?.dropoff_time; if (!t) return ''; const p = String(t).split(':'); return p.length >= 2 ? `${p[0].padStart(2,'0')}:${p[1].padStart(2,'0')}` : '' })(),
       hpickHour: hd?.pickup_hour ?? (hd?.pickup_time ? parseInt(hd.pickup_time) : 14),
       hplay: hd?.playpark_consent ?? false,
       hfeed: hd?.feeding_instructions ?? '', hmeds: hd?.medications ?? '',
       hemerg: hd?.emergency_name ?? '', hemergp: hd?.emergency_phone ?? '',
       hvet: hd?.vet_clinic ?? '', hvetc: hd?.vet_contact ?? '', hvetaddr: hd?.vet_address ?? '',
-      dcdate: dd?.service_date ?? '', dcdrop: dd?.dropoff_time ?? '09:00',
-      dcpick: dd?.pickup_time ?? '17:00', dcopen: dd?.open_time ?? false,
+      dcdate: dd?.service_date ?? '',
+      dcdrop: (() => { const t = dd?.dropoff_time; if (!t) return '09:00'; const p = String(t).split(':'); return p.length >= 2 ? `${p[0].padStart(2,'0')}:${p[1].padStart(2,'0')}` : '09:00' })(),
+      dcpick: (() => { const t = dd?.pickup_time;  if (!t) return '17:00'; const p = String(t).split(':'); return p.length >= 2 ? `${p[0].padStart(2,'0')}:${p[1].padStart(2,'0')}` : '17:00' })(),
+      dcopen: dd?.open_time ?? false,
       dcnotes: dd?.notes ?? '',
       stdate: sd?.service_date ?? '', stslot: sd?.timeslot ?? '',
       pname: pet.name ?? '', panimal: pet.animal_type ?? 'dog',
