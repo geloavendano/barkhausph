@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase, sbGet } from '../../lib/supabase'
-import { SVC_LABELS, SVC_COLORS, STATUS_COLORS, PAY_COLORS, first, dayOffsetStr, todayStr, hexBg } from '../../lib/constants'
+import { SVC_LABELS, SVC_COLORS, STATUS_COLORS, PAY_COLORS, first, hexBg } from '../../lib/constants'
 import BookingDrawer from './BookingDrawer'
 import FAB from '../../components/FAB/FAB'
 import AddBookingPanel from '../../components/AddBookingPanel/AddBookingPanel'
@@ -22,6 +22,7 @@ const BOOKING_SELECT = [
 ].join(',')
 
 const SVC_FILTERS = ['all', 'grooming', 'hotel', 'daycare', 'studio']
+const PAGE_SIZE   = 50   // rows per fetch (top-level bookings; embeds are nested)
 
 export default function BookingsPage({ branches, currentBranchIdx = 0, rooms, groomers, studios = [] }) {
   const [bookings,        setBookings]        = useState([])
@@ -30,7 +31,6 @@ export default function BookingsPage({ branches, currentBranchIdx = 0, rooms, gr
   const [reachedEnd,      setReachedEnd]      = useState(false)
   const [error,           setError]           = useState('')
   const [svcFilter,       setSvcFilter]       = useState('all')
-  const [daysBack,        setDaysBack]        = useState(30)
   const [openId,          setOpenId]          = useState(null)
   const [collapsed,       setCollapsed]       = useState({})
   const [showAddBooking,  setShowAddBooking]  = useState(false)
@@ -39,31 +39,41 @@ export default function BookingsPage({ branches, currentBranchIdx = 0, rooms, gr
 
   const branch = branches?.[currentBranchIdx]
 
-  const load = useCallback(async (append = false, days = daysBack, svc = svcFilter) => {
+  // How many rows are currently loaded — drives the offset for "load more"
+  // and the page size for refreshes (so realtime/poll preserve the expanded view).
+  const loadedCountRef = useRef(0)
+
+  const fetchRows = useCallback(async (offset, limit, svc) => {
+    const svcQ = svc !== 'all' ? `&service=eq.${svc}` : ''
+    return await sbGet(
+      'bookings',
+      `branch_id=eq.${branch.id}${svcQ}&order=created_at.desc&select=${BOOKING_SELECT}&limit=${limit}&offset=${offset}`
+    )
+  }, [branch])
+
+  // mode 'reset'  → reload from the top (offset 0), keeping at least the rows
+  //                 already shown so refreshes don't collapse the list
+  // mode 'more'   → append the next PAGE_SIZE rows after what's loaded
+  const load = useCallback(async (mode = 'reset', svc = svcFilter) => {
     if (!branch) return
-    if (!append) { setLoading(true); setError('') }
-    else         { setLoadingMore(true) }
+    if (mode === 'more') setLoadingMore(true)
+    else                 { setLoading(true); setError('') }
     try {
-      const fromDate = dayOffsetStr(days)
-      const toDate   = append ? dayOffsetStr(days - 7) : todayStr()
-      const svcQ     = svc !== 'all' ? `&service=eq.${svc}` : ''
-      const rows = await sbGet(
-        'bookings',
-        `branch_id=eq.${branch.id}&created_at=gte.${fromDate}T00:00:00&created_at=lte.${toDate}T23:59:59&order=created_at.desc&select=${BOOKING_SELECT}${svcQ}`
-      )
-      if (append) {
-        let added = 0
+      if (mode === 'more') {
+        const rows = (await fetchRows(loadedCountRef.current, PAGE_SIZE, svc)) ?? []
         setBookings(prev => {
           const ids = new Set(prev.map(b => b.id))
-          const fresh = (rows ?? []).filter(b => !ids.has(b.id))
-          added = fresh.length
+          const fresh = rows.filter(b => !ids.has(b.id))
+          loadedCountRef.current = prev.length + fresh.length
           return [...prev, ...fresh]
         })
-        // If no new rows came back, we've exhausted the history
-        if (!rows?.length || added === 0) setReachedEnd(true)
+        if (rows.length < PAGE_SIZE) setReachedEnd(true)
       } else {
-        setBookings(rows ?? [])
-        setReachedEnd(false)
+        const want = Math.max(PAGE_SIZE, loadedCountRef.current)
+        const rows = (await fetchRows(0, want, svc)) ?? []
+        setBookings(rows)
+        loadedCountRef.current = rows.length
+        setReachedEnd(rows.length < want)
       }
     } catch (err) {
       setError(err.message)
@@ -71,9 +81,14 @@ export default function BookingsPage({ branches, currentBranchIdx = 0, rooms, gr
       setLoading(false)
       setLoadingMore(false)
     }
-  }, [branch, daysBack, svcFilter])
+  }, [branch, svcFilter, fetchRows])
 
-  useEffect(() => { load(false, 30, svcFilter) }, [branch, svcFilter])
+  // Reload from scratch whenever the branch or service filter changes
+  useEffect(() => {
+    loadedCountRef.current = 0
+    setReachedEnd(false)
+    load('reset', svcFilter)
+  }, [branch?.id, svcFilter]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Live updates: Realtime + 60-second poll + visibility change ───────────
   useEffect(() => {
@@ -82,7 +97,7 @@ export default function BookingsPage({ branches, currentBranchIdx = 0, rooms, gr
     let debounce = null
     const refresh = () => {
       clearTimeout(debounce)
-      debounce = setTimeout(() => load(false), 1200)
+      debounce = setTimeout(() => load('reset'), 1200)
     }
 
     const channel = supabase
@@ -90,9 +105,9 @@ export default function BookingsPage({ branches, currentBranchIdx = 0, rooms, gr
       .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, refresh)
       .subscribe()
 
-    const poll = setInterval(() => load(false), 60_000)
+    const poll = setInterval(() => load('reset'), 60_000)
 
-    const onVisible = () => { if (!document.hidden) load(false) }
+    const onVisible = () => { if (!document.hidden) load('reset') }
     document.addEventListener('visibilitychange', onVisible)
 
     return () => {
@@ -117,24 +132,19 @@ export default function BookingsPage({ branches, currentBranchIdx = 0, rooms, gr
         if (tag === 'input' || tag === 'textarea' || tag === 'select') return
         if (document.activeElement?.isContentEditable) return
         if (showAddBooking || showBlockPanel || openId) return
-        load(false, daysBack, svcFilter)
+        load('reset')
       }
     }
     document.addEventListener('keydown', handleKey)
     return () => document.removeEventListener('keydown', handleKey)
-  }, [showAddBooking, showBlockPanel, openId, daysBack, svcFilter, load])
+  }, [showAddBooking, showBlockPanel, openId, load])
 
   function handleFilterChange(svc) {
-    setSvcFilter(svc)
-    setDaysBack(7)
-    setBookings([])
-    setReachedEnd(false)
+    setSvcFilter(svc)   // the [svcFilter] effect resets the list + pagination
   }
 
   function handleLoadMore() {
-    const next = daysBack + 7
-    setDaysBack(next)
-    load(true, next, svcFilter)
+    load('more')
   }
 
   function toggleGroup(dt) {
@@ -179,7 +189,7 @@ export default function BookingsPage({ branches, currentBranchIdx = 0, rooms, gr
       {error   && <p className={styles.err}>{error}</p>}
 
       {!loading && !error && sortedDates.length === 0 && (
-        <p className={styles.msg}>No bookings in this period.</p>
+        <p className={styles.msg}>No bookings found.</p>
       )}
 
       {sortedDates.map(dt => {
@@ -212,10 +222,10 @@ export default function BookingsPage({ branches, currentBranchIdx = 0, rooms, gr
         )
       })}
 
-      {!loading && (
+      {!loading && bookings.length > 0 && (
         <div className={styles.loadMore}>
           {reachedEnd ? (
-            <p className={styles.loadMoreEnd}>No more bookings to load.</p>
+            <p className={styles.loadMoreEnd}>You've reached the end — no more bookings.</p>
           ) : (
             <button
               className={styles.loadMoreBtn}
@@ -234,7 +244,7 @@ export default function BookingsPage({ branches, currentBranchIdx = 0, rooms, gr
           rooms={rooms}
           groomers={groomers}
           onClose={() => setOpenId(null)}
-          onUpdated={() => { setOpenId(null); load(false, daysBack, svcFilter) }}
+          onUpdated={() => { setOpenId(null); load('reset') }}
           onEdit={b => { setOpenId(null); setEditBooking(b); setShowAddBooking(true) }}
         />
       )}
@@ -253,7 +263,7 @@ export default function BookingsPage({ branches, currentBranchIdx = 0, rooms, gr
           studios={studios}
           editBooking={editBooking}
           onClose={() => { setShowAddBooking(false); setEditBooking(null) }}
-          onSaved={() => load(false, daysBack, svcFilter)}
+          onSaved={() => load('reset')}
         />
       )}
 
