@@ -18,7 +18,17 @@ const ROOM_TYPES   = { small_cage:'Small Cage', medium_cage:'Medium Cage', large
 const GROOM_SLOTS  = ['9:00 AM','10:00 AM','11:00 AM','1:00 PM','2:00 PM','3:00 PM','4:00 PM','5:00 PM']
 const STUDIO_SLOTS = ['10:00 AM','11:00 AM','12:00 PM','1:00 PM','2:00 PM','3:00 PM','4:00 PM','5:00 PM','6:00 PM','7:00 PM','8:00 PM','9:00 PM']
 const STEP_NAMES   = ['Service','Schedule','Pet','Owner','Details','Summary']
-const PICK_OPTS    = [[14,'On or before 2PM'],[15,'3PM'],[16,'4PM'],[17,'5PM'],[18,'6PM'],[19,'7PM'],[20,'8PM']]
+// Drop-off: 7 AM – 10 PM. Values stored as bare hour string ("10") to match public page.
+const DROP_OPTS = [
+  [7,'7:00 AM'],[8,'8:00 AM'],[9,'9:00 AM'],[10,'10:00 AM'],[11,'11:00 AM'],
+  [12,'12:00 PM'],[13,'1:00 PM'],[14,'2:00 PM'],[15,'3:00 PM'],[16,'4:00 PM'],
+  [17,'5:00 PM'],[18,'6:00 PM'],[19,'7:00 PM'],[20,'8:00 PM'],[21,'9:00 PM'],[22,'10:00 PM'],
+]
+// Pick-up: 2 PM (standard, no fee) through 8 PM (with late fees)
+const PICK_OPTS = [
+  [14,'2:00 PM (standard)'],[15,'3:00 PM'],[16,'4:00 PM'],[17,'5:00 PM'],
+  [18,'6:00 PM'],[19,'7:00 PM'],[20,'8:00 PM'],
+]
 const SVC_COLORS   = { grooming:'#4D96B9', hotel:'#EF9F27', daycare:'#1D9E75', studio:'#D4537E' }
 
 // ── Build booking_charges rows for admin-created / admin-edited bookings ──
@@ -60,7 +70,7 @@ function mkBk(branchId) {
     gdate:'', gslot:'', addons:{}, gnotes:'',
     // hotel
     hcin:'', hcout:'', hroom:'', hroom_id:null, hroom_type:'',
-    hdrop:'10:00', hpickHour:14, hplay:false,
+    hdrop:'10', hpickHour:14, hplay:false,
     hfeed:'', hmeds:'', hemerg:'', hemergp:'', hvet:'', hvetc:'', hvetaddr:'',
     // daycare
     dcdate:'', dcdrop:'09:00', dcpick:'17:00', dcopen:false, dcnotes:'',
@@ -207,7 +217,7 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
       hroom: roomObj?.name ?? hd?.room_type ?? '',
       hroom_id: hd?.room_id ?? null,
       hroom_type: hd?.room_type ?? '',
-      hdrop: toHHMM(hd?.dropoff_time),
+      hdrop: hd?.dropoff_time ? String(parseInt(hd.dropoff_time)) : '',
       hpickHour: hd?.pickup_hour ?? (hd?.pickup_time ? parseInt(hd.pickup_time) : 14),
       hplay: hd?.playpark_consent ?? false,
       hfeed: hd?.feeding_instructions ?? '', hmeds: hd?.medications ?? '',
@@ -688,15 +698,20 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
         </FG>
         <div className={styles.twoCol}>
           <FG label="Drop-off time">
-            <input type="time" className={styles.inp} value={bk.hdrop}
-              onChange={e => upd('hdrop', e.target.value)} />
+            <select className={styles.sel} value={String(bk.hdrop ?? '')}
+              onChange={e => upd('hdrop', e.target.value)}>
+              <option value="">Select time…</option>
+              {DROP_OPTS.map(([h, l]) => (
+                <option key={h} value={String(h)}>{l}</option>
+              ))}
+            </select>
           </FG>
           <FG label="Pick-up time">
             <select className={styles.sel} value={String(bk.hpickHour)}
               onChange={e => upd('hpickHour', parseInt(e.target.value))}>
               {PICK_OPTS.map(([h, l]) => {
-                const fee = (pricing.lateRate ?? 0) * (h - 14)
-                const lbl = h === 14 ? l : `${l} (+${fmt(fee)})`
+                const fee = (pricing.lateRate ?? 0) * Math.max(0, h - 14)
+                const lbl = fee > 0 ? `${l}  (+${fmt(fee)})` : l
                 return <option key={h} value={String(h)}>{lbl}</option>
               })}
             </select>
