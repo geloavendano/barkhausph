@@ -1364,16 +1364,19 @@ function buildPickupTimeOptions() {
   var sel = document.getElementById('hotelPickupTime');
   var feeEl = document.getElementById('hotelLateRateFee');
   if (!sel) return;
-  sel.innerHTML = '<option value="">Select pick-up time</option>' +
-    '<option value="14">2:00 PM (standard check-out)</option>';
-  var lateTimes = ['3:00 PM','4:00 PM','5:00 PM','6:00 PM','7:00 PM','8:00 PM'];
-  for (var i = 0; i < lateTimes.length; i++) {
+  var allTimes = [
+    [7,'7:00 AM'],[8,'8:00 AM'],[9,'9:00 AM'],[10,'10:00 AM'],[11,'11:00 AM'],
+    [12,'12:00 PM'],[13,'1:00 PM'],[14,'2:00 PM'],[15,'3:00 PM'],[16,'4:00 PM'],
+    [17,'5:00 PM'],[18,'6:00 PM'],[19,'7:00 PM'],[20,'8:00 PM']
+  ];
+  sel.innerHTML = '<option value="">Select pick-up time</option>';
+  for (var i = 0; i < allTimes.length; i++) {
     var opt = document.createElement('option');
-    opt.value = String(15 + i);
-    opt.textContent = lateTimes[i];
+    opt.value = String(allTimes[i][0]);
+    opt.textContent = allTimes[i][1];
     sel.appendChild(opt);
   }
-  if (feeEl) feeEl.textContent = '+₱' + HOTEL_LATE_RATE.toLocaleString() + '/hour';
+  if (feeEl) feeEl.textContent = '+₱' + HOTEL_LATE_RATE.toLocaleString() + '/hour after 2:00 PM';
 }
 
 function calcHotelTotal() {
