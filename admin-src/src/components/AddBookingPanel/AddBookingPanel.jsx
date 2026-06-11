@@ -157,16 +157,37 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
     const addonsArr = Array.isArray(b.booking_addons) ? b.booking_addons : (b.booking_addons ? [b.booking_addons] : [])
     const addonMap = {}
     addonsArr.forEach(a => { addonMap[a.addon_key ?? a.addon_name] = true })
+
+    // Vaccines: map vaccine_name back to the index used by bk.vacc
+    const vaccNamesForAnimal = (pet.animal_type === 'cat')
+      ? ['Anti-rabies', 'All-in-1 shot', 'Anti-parasitic']
+      : ['Anti-rabies', '5/6/8-in-1 shot', 'Kennel Cough / Bordetella', 'Tick and flea treatment']
+    const vaccinesArr = Array.isArray(b.pet_vaccines) ? b.pet_vaccines : (b.pet_vaccines ? [b.pet_vaccines] : [])
+    const vaccMap = {}
+    vaccinesArr.forEach(v => {
+      const idx = vaccNamesForAnimal.indexOf(v.vaccine_name)
+      if (idx >= 0) vaccMap[idx] = v.confirmed
+    })
+
+    // Waivers
+    const waiver = Array.isArray(b.waivers) ? b.waivers[0] : b.waivers
+
+    // Hotel room name (look up from rooms prop; fall back to room_type key)
+    const roomObj = rooms?.find(r => r.id === hd?.room_id)
+
     setBk({
       ...mkBk(branch?.id),
       svc: b.service, status: b.status, paysts: b.payment_status,
+      mode: b.booking_source ?? 'admin',
       size: pet.size ?? 'small_dog',
       gsvc: gd?.groom_service_key ?? 'basic', stylist: gd?.preferred_stylist ?? 'any',
       stylistId: gd?.groomer_id ?? null,
       gdate: gd?.service_date ?? '', gslot: gd?.timeslot ?? '', gnotes: gd?.special_requests ?? '',
       addons: addonMap,
       hcin: hd?.checkin_date ?? '', hcout: hd?.checkout_date ?? '',
-      hroom: hd?.room_type ?? '', hroom_id: hd?.room_id ?? null, hroom_type: hd?.room_type ?? '',
+      hroom: roomObj?.name ?? hd?.room_type ?? '',
+      hroom_id: hd?.room_id ?? null,
+      hroom_type: hd?.room_type ?? '',
       hdrop: hd?.dropoff_time ?? '10:00',
       hpickHour: hd?.pickup_hour ?? (hd?.pickup_time ? parseInt(hd.pickup_time) : 14),
       hplay: hd?.playpark_consent ?? false,
@@ -181,14 +202,18 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
       pgender: pet.gender ?? 'male', pbreed: pet.breed ?? '',
       page: String(pet.age_value ?? ''), pageunit: pet.age_unit ?? 'years',
       ptemp: pet.temperament ?? '', pmed: pet.medical_notes ?? '',
+      vacc: vaccMap,
       ofirst: own.first_name ?? '', olast: own.last_name ?? '',
       oemail: own.email ?? '', ophone: own.mobile ?? '',
       osource: own.referral_source ?? '', owner_id: own.id ?? null,
-      // Restore member code if one was used on the original booking
+      anotes: b.notes ?? '',
+      wgen:   waiver?.general_terms      ?? true,
+      wvacc:  waiver?.health_declaration ?? true,
+      wmedia: waiver?.media_consent      ?? true,
       memcode:  b.member_code_used ?? '',
       memvalid: !!(b.member_code_used && (b.discount_amount ?? 0) > 0),
     })
-  }, [editBooking, branch?.id])
+  }, [editBooking, branch?.id, rooms])
 
   const upd = (key, val) => setBk(prev => ({ ...prev, [key]: val }))
   const updMany = obj => setBk(prev => ({ ...prev, ...obj }))

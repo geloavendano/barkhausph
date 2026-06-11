@@ -16,7 +16,7 @@ const BOOKING_SELECT = [
   'hotel_details(checkin_date,checkout_date,dropoff_time,pickup_time,pickup_hour,room_type,room_id,playpark_consent,feeding_instructions,medications,emergency_name,emergency_phone,vet_clinic,vet_contact,vet_address)',
   'daycare_details(dropoff_time,pickup_time,hours_total,open_time,notes,service_date)',
   'studio_details(timeslot,studio_id,service_date)',
-  'booking_addons(addon_name,price)',
+  'booking_addons(addon_key,addon_name,price)',
   'pet_vaccines(vaccine_name,confirmed)',
   'checkin_notes(*)',
 ].join(',')
