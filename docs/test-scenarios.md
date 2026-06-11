@@ -9,11 +9,11 @@
 | Dimension | Values |
 |---|---|
 | **Source** | Public booking page (`booking.js` → `create-payment` → PayMongo → `handle-payment-webhook`); Admin **Add Booking** (`AddBookingPanel` mode `admin` → `submit-booking`); Admin **Walk-in** (`AddBookingPanel` mode `walkin` → `submit-booking`) |
-| **Service** | grooming, hotel, daycare, **studio** ⚠️ (studio is a real 4th service, often forgotten) |
+| **Service** | grooming, hotel, daycare, **studio** (studio: include in tests but **not** as a complete/paid booking flow — partial coverage only) |
 | **Branch** | Estancia, Eastwood (hours differ: Estancia Mon–Thu 11:00–21:00, Fri–Sun 10:00–22:00; Eastwood 10:00–22:00) |
 | **Pet type** | dog, cat |
 | **Pet size** | small_dog, medium_dog, large_dog, giant_dog, cat |
-| **Hotel rate key** ⚠️ | Driven by **cage type**, not pet size: small_cage→small_dog, medium_cage→medium_dog, large_cage→large_dog, single_cabin→cat_single_cabin, villa→cat_villa |
+| **Hotel rate key** | Driven by **cage type** (not pet size) **× day type (weekday/weekend)**: cage→rate-key small_cage→small_dog, medium_cage→medium_dog, large_cage→large_dog, single_cabin→cat_single_cabin, villa→cat_villa; each key has weekday & weekend rates (Fri/Sat/Sun = weekend) |
 | **Resource type** | Room/cage (hotel), Groomer (grooming), Studio (studio); daycare has no per-resource assignment |
 | **Membership** | none; Standard (branch-scoped); Passport (all branches); states: valid, inactive, expired, wrong-branch |
 | **Payment status** | unpaid, partially_paid, paid, refunded |
@@ -224,11 +224,22 @@ For each **source** × **service** combination, a full happy-path create:
 
 ---
 
-## Known gaps to decide on (not yet built)
+## Decisions (reviewed)
 
-1. Edit blocked schedule (only delete+recreate today).
-2. Per-member create/edit UI (CSV-only).
-3. Automated refunds (manual record only).
-4. Admin vaccine document upload (declarations only).
-5. Combined cancel+refund action.
-6. booking_charges RLS policy (SQL provided, not yet applied).
+- **Studio** — test partial flows only, not a complete/paid booking. ✅ decided.
+- **Hotel pricing** — cage type × weekday/weekend rate. ✅ confirmed.
+- **Confirmation emails** — correct as-is. ✅ confirmed.
+- **Create/update members** — CSV upload only (by design). ✅ confirmed.
+- **Refund customer** — manual `payments` row, type `refund`. ✅ confirmed (no automated refund).
+- **Admin vaccine upload** — declarations only, no file upload. ✅ confirmed.
+
+### Won't do / out of scope
+- **Edit blocked schedule** — excluded; delete + recreate is acceptable.
+
+### Still open
+- **booking_charges RLS policy** — SQL written at
+  `supabase/migrations/2026-06-11_booking_charges_rls.sql`; **needs to be run
+  against the database** (app currently soft-fails the charge write so bookings
+  still succeed).
+- **Combined cancel+refund action** — not built (cancel and refund are separate
+  steps today). Decide if needed.
