@@ -135,8 +135,20 @@ export function calcBase(bk, p) {
     return base + addonTotal
   }
   if (bk.svc === 'hotel')   return calcHotel(bk, p)
-  if (bk.svc === 'daycare') return (p.daycare[bk.size]) ?? 0
+  if (bk.svc === 'daycare') return calcDaycare(bk, p)
   return 0
+}
+
+/** Daycare: base rate + extra hourly rate for each hour beyond the first 3 */
+export function calcDaycare(bk, p) {
+  const base = p.daycare[bk.size] ?? 0
+  if (bk.dcopen || !bk.dcdrop || !bk.dcpick) return base
+  const dropH = parseInt(bk.dcdrop)   // "09:00" → 9
+  const pickH = parseInt(bk.dcpick)   // "17:00" → 17
+  if (isNaN(dropH) || isNaN(pickH) || pickH <= dropH) return base
+  const hours = pickH - dropH
+  const extra = Math.max(0, hours - 3)
+  return base + extra * (p.extra[bk.size] ?? 0)
 }
 
 export function calcTotal(bk, p) {

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { sbGet, sbPost, sbPatch, sbDelete, SUPABASE_URL, SUPABASE_ANON_KEY } from '../../lib/supabase'
 import { supabase } from '../../lib/supabase'
-import { parsePricing, emptyPricing, calcBase, calcLate, calcTotal, calcNights, calcHotelBreakdown, hotelSizeKey, DEFAULT_ADDONS } from '../../lib/pricing'
+import { parsePricing, emptyPricing, calcBase, calcLate, calcTotal, calcNights, calcHotelBreakdown, calcDaycare, hotelSizeKey, DEFAULT_ADDONS } from '../../lib/pricing'
 import styles from './AddBookingPanel.module.css'
 
 // ── Constants ─────────────────────────────────────────────────────────────
@@ -928,7 +928,18 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
             {late > 0 && <SRow k="Late pickup fee" v={fmt(late)} />}
           </>
         })()}
-        {bk.svc === 'daycare' && <SRow k="Daycare" v={fmt(pricing.daycare[bk.size] ?? 0)} />}
+        {bk.svc === 'daycare' && (() => {
+          const base   = pricing.daycare[bk.size] ?? 0
+          const dropH  = parseInt(bk.dcdrop)
+          const pickH  = parseInt(bk.dcpick)
+          const hours  = (!bk.dcopen && !isNaN(dropH) && !isNaN(pickH) && pickH > dropH) ? pickH - dropH : null
+          const extra  = hours != null ? Math.max(0, hours - 3) : 0
+          const total  = calcDaycare(bk, pricing)
+          const lbl    = hours != null
+            ? `Daycare (${hours}h${extra > 0 ? `, +${extra} extra hr${extra > 1 ? 's' : ''}` : ''})`
+            : 'Daycare'
+          return <SRow k={lbl} v={fmt(total)} />
+        })()}
         {bk.svc === 'studio' && <SRow k="Studio session" v="Set at check-out" muted />}
         {hasAssess && <p className={styles.assessNote}>* Assessment items priced in-store</p>}
 
