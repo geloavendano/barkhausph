@@ -81,6 +81,18 @@ function mkBk(branchId) {
 
 function fmt(n) { return '₱' + Number(n).toLocaleString() }
 
+/** Normalise any time value to HH:MM for <input type="time">.
+ *  Handles: "11" → "11:00", "11:00" → "11:00", "11:00:00" → "11:00" */
+function toHHMM(t) {
+  if (t == null || t === '') return ''
+  const s = String(t).trim()
+  const p = s.split(':')
+  const h = parseInt(p[0])
+  if (isNaN(h)) return ''
+  const m = p.length >= 2 ? parseInt(p[1]) : 0
+  return `${String(h).padStart(2,'0')}:${String(isNaN(m) ? 0 : m).padStart(2,'0')}`
+}
+
 // ── Helper components defined OUTSIDE AddBookingPanel ─────────────────────
 // If these were defined inside, every parent re-render (e.g. a keystroke)
 // would create a new function reference, causing React to unmount/remount
@@ -195,15 +207,15 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
       hroom: roomObj?.name ?? hd?.room_type ?? '',
       hroom_id: hd?.room_id ?? null,
       hroom_type: hd?.room_type ?? '',
-      hdrop: (() => { const t = hd?.dropoff_time; if (!t) return ''; const p = String(t).split(':'); return p.length >= 2 ? `${p[0].padStart(2,'0')}:${p[1].padStart(2,'0')}` : '' })(),
+      hdrop: toHHMM(hd?.dropoff_time),
       hpickHour: hd?.pickup_hour ?? (hd?.pickup_time ? parseInt(hd.pickup_time) : 14),
       hplay: hd?.playpark_consent ?? false,
       hfeed: hd?.feeding_instructions ?? '', hmeds: hd?.medications ?? '',
       hemerg: hd?.emergency_name ?? '', hemergp: hd?.emergency_phone ?? '',
       hvet: hd?.vet_clinic ?? '', hvetc: hd?.vet_contact ?? '', hvetaddr: hd?.vet_address ?? '',
       dcdate: dd?.service_date ?? '',
-      dcdrop: (() => { const t = dd?.dropoff_time; if (!t) return '09:00'; const p = String(t).split(':'); return p.length >= 2 ? `${p[0].padStart(2,'0')}:${p[1].padStart(2,'0')}` : '09:00' })(),
-      dcpick: (() => { const t = dd?.pickup_time;  if (!t) return '17:00'; const p = String(t).split(':'); return p.length >= 2 ? `${p[0].padStart(2,'0')}:${p[1].padStart(2,'0')}` : '17:00' })(),
+      dcdrop: toHHMM(dd?.dropoff_time) || '09:00',
+      dcpick: toHHMM(dd?.pickup_time)  || '17:00',
       dcopen: dd?.open_time ?? false,
       dcnotes: dd?.notes ?? '',
       stdate: sd?.service_date ?? '', stslot: sd?.timeslot ?? '',
