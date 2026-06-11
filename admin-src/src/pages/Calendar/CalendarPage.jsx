@@ -464,7 +464,7 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
                     const isCancelled = b.status === 'cancelled' || b.status === 'rejected'
                     const detail = gd
                       ? (gd.groom_service_name ?? 'Groom') + (gd.preferred_stylist && gd.preferred_stylist !== 'any' ? ` | ${gd.preferred_stylist}` : '')
-                      : hd ? (ROOM_TYPE_LABELS[hd.room_type] ?? hd.room_type ?? 'Hotel')
+                      : hd ? (rooms.find(r => r.id === hd.room_id)?.name ?? ROOM_TYPE_LABELS[hd.room_type] ?? hd.room_type ?? 'Hotel')
                       : first(b.daycare_details) ? 'Daycare' : first(b.studio_details) ? 'Studio' : ''
                     return (
                       <div key={b.id}
