@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Barkhaus — Admin Walkthrough Guide</title>
+<style>
+  :root {
+    --bg:#0F1C26;--surface:#1A3044;--raised:#1F3D55;
+    --border:rgba(77,150,185,0.28);--mid:#6AAEC8;
+    --cream:#F0EDE6;--cream-m:#B8D4E0;--blue:#4D96B9;--yellow:#FFCE58;
+    --error:#FF6B6B;--success:#6BCB77;--warn:#EF9F27;--purple:#9B95E8;--pink:#D4537E;--green:#1D9E75;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html{scroll-behavior:smooth;}
+  body{background:var(--bg);color:var(--cream);font-family:"Segoe UI",system-ui,sans-serif;font-size:14px;line-height:1.65;}
+
+  header{position:sticky;top:0;z-index:50;background:var(--surface);border-bottom:1px solid var(--border);padding:13px 24px;display:flex;align-items:center;gap:14px;}
+  header h1{font-size:16px;font-weight:700;}
+  header h1 span{color:var(--yellow);}
+  .draft-badge{background:rgba(239,159,39,.15);color:var(--warn);border:1px solid rgba(239,159,39,.4);border-radius:20px;font-size:10px;font-weight:700;letter-spacing:.08em;padding:3px 10px;text-transform:uppercase;}
+  header .meta{margin-left:auto;font-size:11px;color:var(--mid);}
+
+  .main{max-width:880px;margin:0 auto;padding:28px 24px 80px;}
+
+  /* TOC */
+  .toc{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px 20px;margin-bottom:34px;}
+  .toc h2{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--mid);margin-bottom:12px;}
+  .toc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:4px 18px;}
+  .toc a{color:var(--cream-m);text-decoration:none;font-size:13px;padding:4px 6px;border-radius:6px;display:flex;gap:8px;align-items:baseline;}
+  .toc a:hover{background:var(--raised);color:var(--cream);}
+  .toc a .n{color:var(--yellow);font-weight:700;font-size:11px;min-width:24px;}
+
+  /* Chapters */
+  .chapter{margin-bottom:56px;}
+  .ch-head{display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border);padding-bottom:10px;margin-bottom:6px;}
+  .ch-num{background:var(--yellow);color:#3d2e00;font-weight:800;font-size:13px;border-radius:8px;padding:3px 10px;flex-shrink:0;}
+  .ch-head h2{font-size:20px;font-weight:700;}
+  .ch-intro{color:var(--mid);font-size:13px;margin:8px 0 20px;}
+
+  h3{font-size:15px;font-weight:700;color:var(--yellow);margin:30px 0 8px;}
+  h3 .sub-n{color:var(--mid);font-weight:600;margin-right:6px;font-size:13px;}
+  p{margin-bottom:10px;color:var(--cream-m);}
+  p strong, li strong{color:var(--cream);}
+  ul,ol{margin:0 0 12px 22px;color:var(--cream-m);}
+  li{margin-bottom:5px;}
+  code{background:rgba(0,0,0,.35);border:1px solid var(--border);padding:1px 6px;border-radius:4px;font-family:"Fira Code","Cascadia Code",monospace;font-size:12px;color:var(--yellow);}
+  kbd{background:var(--raised);border:1px solid var(--border);border-bottom-width:2.5px;padding:1px 7px;border-radius:5px;font-family:inherit;font-size:12px;font-weight:700;color:var(--cream);}
+
+  /* Numbered callout badge — used in text AND listed under shots */
+  .co{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:var(--yellow);color:#3d2e00;font-size:11px;font-weight:800;vertical-align:-3px;margin:0 2px;}
+
+  /* Screenshot placeholder */
+  .shot{border:2px dashed rgba(255,206,88,.45);background:rgba(255,206,88,.04);border-radius:12px;padding:18px;margin:16px 0 22px;}
+  .shot-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;}
+  .shot-top .cam{font-size:18px;}
+  .shot-top .fname{font-family:"Fira Code",monospace;font-size:12px;color:var(--yellow);background:rgba(0,0,0,.3);padding:2px 8px;border-radius:5px;}
+  .vp{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;border-radius:20px;padding:2px 9px;border:1px solid;}
+  .vp.desk{color:var(--blue);border-color:rgba(77,150,185,.5);}
+  .vp.mob{color:var(--purple);border-color:rgba(155,149,232,.5);}
+  .shot-cap{font-size:12.5px;color:var(--cream-m);margin-bottom:8px;}
+  .shot-cap strong{color:var(--cream);}
+  .shot-cos{font-size:12px;color:var(--mid);}
+  .shot-cos .co{width:16px;height:16px;font-size:10px;}
+  .shot-cos li{margin-bottom:3px;}
+
+  /* Boxes */
+  .tip{background:rgba(107,203,119,.08);border:1px solid rgba(107,203,119,.3);border-radius:8px;padding:10px 14px;margin:12px 0;font-size:13px;}
+  .tip::before{content:"💡 Tip — ";font-weight:700;color:var(--success);}
+  .warn{background:rgba(239,159,39,.08);border:1px solid rgba(239,159,39,.35);border-radius:8px;padding:10px 14px;margin:12px 0;font-size:13px;}
+  .warn::before{content:"⚠️ Watch out — ";font-weight:700;color:var(--warn);}
+  .note{background:rgba(77,150,185,.08);border:1px solid rgba(77,150,185,.3);border-radius:8px;padding:10px 14px;margin:12px 0;font-size:13px;}
+  .note::before{content:"ℹ️ ";font-weight:700;}
+
+  /* Tables */
+  table{width:100%;border-collapse:collapse;margin:10px 0 18px;font-size:13px;}
+  th{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--mid);text-align:left;padding:7px 10px;border-bottom:1px solid var(--border);}
+  td{padding:7px 10px;border-bottom:0.5px solid rgba(77,150,185,.15);color:var(--cream-m);vertical-align:top;}
+  td:first-child{color:var(--cream);font-weight:600;white-space:nowrap;}
+  .swatch{display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:-1px;margin-right:7px;}
+  .pill-demo{display:inline-block;border-radius:20px;font-size:11px;font-weight:700;padding:2px 10px;}
+
+  .backtop{display:block;text-align:right;margin-top:14px;}
+  .backtop a{color:var(--mid);font-size:11px;text-decoration:none;}
+  .backtop a:hover{color:var(--cream);}
+
+  @media print{
+    body{background:#fff;color:#1a2530;}
+    header{position:static;background:#f2f4f6;color:#1a2530;}
+    .shot{border-color:#caa53d;background:#fffbef;}
+    p,li,td,.shot-cap,.ch-intro,.toc a{color:#33424e;}
+    h3,.toc a .n{color:#8a6d00;}
+    .ch-head h2,h1,td:first-child,li strong,p strong{color:#16222b;}
+    code{color:#7a5d00;background:#f4efdf;border-color:#e2d6ad;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Bark<span>haus</span> — Admin Walkthrough Guide</h1>
+  <span class="draft-badge">Draft · screenshots pending</span>
+  <span class="meta">v0.1 · June 2026 · for branch staff &amp; managers</span>
+</header>
+
+<div class="main">
+
+<!-- ════════════ TOC ════════════ -->
+<div class="toc">
+  <h2>Contents</h2>
+  <div class="toc-grid">
+    <a href="#ch1"><span class="n">1</span> Getting in &amp; finding your way</a>
+    <a href="#ch2"><span class="n">2</span> The Calendar — your home screen</a>
+    <a href="#ch3"><span class="n">3</span> Finding a booking</a>
+    <a href="#ch4"><span class="n">4</span> Inside a booking (the drawer)</a>
+    <a href="#ch5"><span class="n">5</span> Creating a booking</a>
+    <a href="#ch6"><span class="n">6</span> Changing a booking</a>
+    <a href="#ch7"><span class="n">7</span> Front desk: check-in to check-out</a>
+    <a href="#ch8"><span class="n">8</span> Managing the business</a>
+    <a href="#appA"><span class="n">A</span> Status &amp; color legend</a>
+    <a href="#appB"><span class="n">B</span> Pricing cheatsheet</a>
+    <a href="#appC"><span class="n">C</span> Shortcuts &amp; tips</a>
+    <a href="#appD"><span class="n">D</span> Troubleshooting / FAQ</a>
+  </div>
+</div>
+
+<div class="note">Every dashed box below is a <strong>screenshot placeholder</strong> — it names the image file, the device size to capture at, and the numbered callouts <span class="co">1</span><span class="co">2</span> that will be overlaid on the image. The numbers in the text refer to those same callouts. All screenshots must use seeded <strong>test data only</strong> — never real customer names, emails, or phone numbers.</div>
+
+<!-- ════════════ CHAPTER 1 ════════════ -->
+<section class="chapter" id="ch1">
+  <div class="ch-head"><span class="ch-num">Ch 1</span><h2>Getting in &amp; finding your way</h2></div>
+  <p class="ch-intro">Logging in, what's on screen, and the two ideas that shape everything: the branch switcher and live updates.</p>
+
+  <h3><span class="sub-n">1.1</span> Logging in</h3>
+  <p>The admin portal lives at <code>barkhaus.ph/admin/</code>. There is no password — you sign in with your <strong>Google account</strong> <span class="co">1</span>. Access is controlled by an allow-list: only Google accounts that have been registered as admins can get in.</p>
+  <div class="shot" data-img="images/01-login-gate.png">
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">01-login-gate.png</span><span class="vp desk">Desktop 1280</span></div>
+    <div class="shot-cap"><strong>Capture:</strong> the Gate screen, logged out — Barkhaus logo, "Admin Portal", and the "Sign in with Google" button.</div>
+    <ul class="shot-cos"><li><span class="co">1</span> Sign in with Google button</li></ul>
+  </div>
+  <div class="warn">If you sign in and land back on this screen, your Google account isn't on the admin list yet. Ask the owner/manager to add your email to the admin users table — then sign in again.</div>
+
+  <h3><span class="sub-n">1.2</span> The screen layout (desktop)</h3>
+  <p>Once in, you'll see three zones: the <strong>top bar</strong>, the <strong>navigation</strong>, and the page content.</p>
+  <ul>
+    <li><span class="co">1</span> <strong>Branch switcher</strong> — Estancia / Eastwood. This is the most important control in the app: <em>every page shows only the selected branch's data</em>.</li>
+    <li><span class="co">2</span> Greeting ("Hi, &lt;name&gt;") confirming who is signed in.</li>
+    <li><span class="co">3</span> <strong>Sign out</strong> (↪) — always sign out on shared devices.</li>
+    <li><span class="co">4</span> <strong>Sidebar navigation</strong> — Calendar, Bookings, Check In, Members, Inventory.</li>
+  </ul>
+  <div class="shot" data-img="images/02-layout-desktop.png">
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">02-layout-desktop.png</span><span class="vp desk">Desktop 1280</span></div>
+    <div class="shot-cap"><strong>Capture:</strong> full app on the Calendar page with a few bookings visible.</div>
+    <ul class="shot-cos">
+      <li><span class="co">1</span> Branch tabs in the top bar</li>
+      <li><span class="co">2</span> Greeting</li>
+      <li><span class="co">3</span> Sign-out button</li>
+      <li><span class="co">4</span> Sidebar nav items</li>
+    </ul>
+  </div>
+
+  <h3><span class="sub-n">1.3</span> The screen layout (mobile)</h3>
+  <p>On a phone, the sidebar disappears. Navigation moves to a <strong>bottom bar with four buttons</strong> — Calendar, Bookings, Check In, and <strong>More</strong> <span class="co">1</span>. Tapping More slides up a small sheet with <strong>Members</strong> and <strong>Inventory</strong> <span class="co">2</span>. The yellow <strong>＋ button (FAB)</strong> floats above the bottom bar <span class="co">3</span> — that's where you create bookings (Chapter 5).</p>
+  <div class="shot" data-img="images/03-layout-mobile-more.png">
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">03-layout-mobile-more.png</span><span class="vp mob">Mobile 390</span></div>
+    <div class="shot-cap"><strong>Capture:</strong> mobile Calendar with the "More" sheet open (Members + Inventory visible above the bottom nav).</div>
+    <ul class="shot-cos">
+      <li><span class="co">1</span> Bottom nav: Calendar · Bookings · Check In · More</li>
+      <li><span class="co">2</span> More sheet with Members / Inventory</li>
+      <li><span class="co">3</span> The ＋ FAB floating above the nav</li>
+    </ul>
+  </div>
+
+  <h3><span class="sub-n">1.4</span> Switching branches</h3>
+  <p>Tap the other branch name in the top bar. The calendar jumps back to <strong>today on the "All" tab</strong>, and the bookings list, check-in queue, members coverage, and inventory all reload for that branch. If something you expect to see is "missing", the selected branch is the first thing to check.</p>
+  <div class="shot" data-img="images/04-branch-switch.png">
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">04-branch-switch.png</span><span class="vp desk">Desktop 1280</span></div>
+    <div class="shot-cap"><strong>Capture:</strong> close crop of the top bar with Eastwood selected (highlighted tab) and Estancia unselected.</div>
+    <ul class="shot-cos"><li><span class="co">1</span> Active branch tab (highlighted border)</li></ul>
+  </div>
+
+  <h3><span class="sub-n">1.5</span> The app keeps itself fresh</h3>
+  <p>You normally don't need to reload anything. The Calendar and Bookings pages update themselves three ways:</p>
+  <ul>
+    <li><strong>Instantly</strong> when a booking is created or changed anywhere (including a customer booking online) — via a live connection;</li>
+    <li>a safety <strong>refresh every minute</strong>;</li>
+    <li>an immediate refresh whenever you <strong>return to the tab</strong>.</li>
+  </ul>
+  <p>You can also press <kbd>R</kbd> to refresh on demand, and <kbd>Esc</kbd> closes whatever panel or drawer is open. (Full list in <a href="#appC" style="color:var(--blue)">Appendix C</a>.)</p>
+  <div class="backtop"><a href="#top">↑ back to top</a></div>
+</section>
+
+<!-- ════════════ CHAPTER 2 ════════════ -->
+<section class="chapter" id="ch2">
+  <div class="ch-head"><span class="ch-num">Ch 2</span><h2>The Calendar — your home screen</h2></div>
+  <p class="ch-intro">The Calendar shows one day at a time as a 9 AM – 8 PM timeline. Every card is a booking; every hatched stripe is blocked time.</p>
+
+  <h3><span class="sub-n">2.1</span> Reading the day view</h3>
+  <ul>
+    <li><span class="co">1</span> <strong>Booking card</strong> — pet name with 🐶/🐱, plus the room/package and owner when the card is tall enough.</li>
+    <li><span class="co">2</span> <strong>Card color = resource color</strong>: each room and groomer has its own color (set in Inventory), so you can tell at a glance who/where a booking belongs.</li>
+    <li><span class="co">3</span> <strong>Status dot</strong> — small dot on each card showing booking status (legend in Appendix A).</li>
+    <li><span class="co">4</span> <strong>★ gold star</strong> — the booking has a member discount.</li>
+    <li><span class="co">5</span> <strong>Red "now" line</strong> — current time, only shown when viewing today.</li>
+    <li><span class="co">6</span> Cancelled bookings appear greyed-out with strikethrough.</li>
+  </ul>
+  <div class="shot" data-img="images/05-calendar-day.png">
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">05-calendar-day.png</span><span class="vp desk">Desktop 1280</span></div>
+    <div class="shot-cap"><strong>Capture:</strong> a busy seeded day — at least one hotel, one grooming, one daycare card, one member-starred card, and the now-line visible.</div>
+    <ul class="shot-cos">
+      <li><span class="co">1</span> A booking card</li>
+      <li><span class="co">2</span> Two cards with different resource colors</li>
+      <li><span class="co">3</span> Status dot</li>
+      <li><span class="co">4</span> Member star</li>
+      <li><span class="co">5</span> Current-time line</li>
+      <li><span class="co">6</span> A cancelled (struck-through) card if available</li>
+    </ul>
+  </div>
+
+  <h3><span class="sub-n">2.2</span> Moving between days</h3>
+  <p>Use the <strong>‹ ›</strong> arrows <span class="co">1</span> to step a day at a time. A <strong>Today</strong> button <span class="co">2</span> appears whenever you're on any other date. Tap the <strong>date itself</strong> <span class="co">3</span> to open the month picker — days with bookings show a small dot <span class="co">4</span>, today has a ring, and the selected day is filled.</p>
+  <div class="shot" data-img="images/06-month-picker.png">
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">06-month-picker.png</span><span class="vp desk">Desktop 1280</span></div>
+    <div class="shot-cap"><strong>Capture:</strong> month overlay open over the calendar, several dotted days visible, today ringed.</div>
+    <ul class="shot-cos">
+      <li><span class="co">1</span> Prev/next day arrows</li>
+      <li><span class="co">2</span> Today button</li>
+      <li><span class="co">3</span> Tappable date label</li>
+      <li><span class="co">4</span> Dots on days that have bookings</li>
+    </ul>
+  </div>
+
+  <h3><span class="sub-n">2.3</span> Service tabs</h3>
+  <p>Above the timeline sit the service tabs — <strong>All · Hotel · Grooming · Daycare · Studio</strong> — each with the day's booking count. The calendar always opens on <strong>All</strong>. Tap a service to see only that service's bookings; the Studio tab only appears at branches that have studios.</p>
+  <div class="shot" data-img="images/07-service-tabs.png">
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">07-service-tabs.png</span><span class="vp desk">Desktop 1280</span></div>
+    <div class="shot-cap"><strong>Capture:</strong> close crop of the tab row with non-zero counts, "All" active (underlined).</div>
+    <ul class="shot-cos"><li><span class="co">1</span> Active tab underline</li><li><span class="co">2</span> Per-service counts</li></ul>
+  </div>
+
+  <h3><span class="sub-n">2.4</span> Filtering to one room, groomer, or studio</h3>
+  <p><strong>Desktop:</strong> the left sidebar lists every room and groomer with its color and today's count <span class="co">1</span>. Click one to filter the calendar to just that resource <span class="co">2</span>; click it again to clear. <strong>Mobile:</strong> the sidebar is hidden — tap the <strong>⊟ Filter</strong> button in the date bar <span class="co">3</span> to open the same list as a bottom sheet <span class="co">4</span>.</p>
+  <div class="shot" data-img="images/08-sidebar-filter.png">
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">08-sidebar-filter.png</span><span class="vp desk">Desktop 1280</span></div>
+    <div class="shot-cap"><strong>Capture:</strong> calendar filtered to one groomer — sidebar item highlighted, only that groomer's bookings showing.</div>
+    <ul class="shot-cos"><li><span class="co">1</span> Sidebar resource list with counts</li><li><span class="co">2</span> Highlighted (active) resource</li></ul>
+  </div>
+  <div class="shot" data-img="images/09-mobile-filter-sheet.png">
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">09-mobile-filter-sheet.png</span><span class="vp mob">Mobile 390</span></div>
+    <div class="shot-cap"><strong>Capture:</strong> mobile calendar with the Filter bottom sheet open showing Rooms / Groomers sections.</div>
+    <ul class="shot-cos"><li><span class="co">3</span> ⊟ Filter button in date bar</li><li><span class="co">4</span> Bottom sheet with resource list</li></ul>
+  </div>
+
+  <h3><span class="sub-n">2.5</span> Hotel stays span days</h3>
+  <p>A hotel guest appears on <strong>every day of their stay</strong>, not just check-in day. On the check-in day the card starts at the drop-off time; on the check-out day it ends at pick-up time; on the days between it fills the whole day.</p>
+  <div class="shot" data-img="images/10-hotel-span.png">
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">10-hotel-span.png</span><span class="vp desk">Desktop 1280</span></div>
+    <div class="shot-cap"><strong>Capture:</strong> a "middle" day of a multi-night stay — hotel card filling the full timeline height.</div>
+    <ul class="shot-cos"><li><span class="co">1</span> Full-day hotel card mid-stay</li></ul>
+  </div>
+
+  <h3><span class="sub-n">2.6</span> Blocked time on the calendar</h3>
+  <p>Blocked schedules (Chapter 8.1) appear as <strong>hatched striped blocks</strong> in the blocked resource's color, labelled 🚫 with the resource name and reason <span class="co">1</span>. When a block and a booking share the same hour they sit <strong>side by side in separate columns</strong> <span class="co">2</span> — nothing is ever hidden underneath. Tap a block to see its details or delete it.</p>
+  <div class="shot" data-img="images/11-blocked-hatched.png">
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">11-blocked-hatched.png</span><span class="vp desk">Desktop 1280</span></div>
+    <div class="shot-cap"><strong>Capture:</strong> a day with a hatched groomer block next to a booking in the same time range (two columns).</div>
+    <ul class="shot-cos"><li><span class="co">1</span> Hatched block with 🚫 label</li><li><span class="co">2</span> Booking beside it, not underneath</li></ul>
+  </div>
+  <div class="backtop"><a href="#top">↑ back to top</a></div>
+</section>
+
+<!-- ════════════ CHAPTER 3 ════════════ -->
+<section class="chapter" id="ch3">
+  <div class="ch-head"><span class="ch-num">Ch 3</span><h2>Finding a booking</h2></div>
+  <p class="ch-intro">The Bookings page is the searchable history of everything ever booked at this branch — newest first, grouped by the day the booking was made.</p>
+
+  <h3><span class="sub-n">3.1</span> The list</h3>
+  <p>Bookings are grouped under date headers <span class="co">1</span> (the date the booking was <em>created</em>, not the appointment date). Tap a header to collapse/expand a day. Each row shows: status dot · service badge · reference number · pet &amp; owner · schedule · total <span class="co">2</span>. Cancelled rows are greyed with a struck-through reference <span class="co">3</span>.</p>
+  <div class="shot" data-img="images/12-bookings-list.png">
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">12-bookings-list.png</span><span class="vp desk">Desktop 1280</span></div>
+    <div class="shot-cap"><strong>Capture:</strong> Bookings page with 2–3 date groups, mixed services, one cancelled row.</div>
+    <ul class="shot-cos">
+      <li><span class="co">1</span> Date group header with count</li>
+      <li><span class="co">2</span> One row, label each column</li>
+      <li><span class="co">3</span> Cancelled (struck-through) row</li>
+    </ul>
+  </div>
+
+  <h3><span class="sub-n">3.2</span> Filter by service</h3>
+  <p>The chips at the top — <strong>All · Grooming · Hotel · Daycare · Studio</strong> — reload the list for one service. Switching back to All restores everything.</p>
+
+  <h3><span class="sub-n">3.3</span> Search</h3>
+  <p>Type at least <strong>2 characters</strong> into the search box <span class="co">1</span> to search by:</p>
+  <ul>
+    <li><strong>Reference number</strong> — e.g. <code>919A</code> finds BH-919A52</li>
+    <li><strong>Owner first or last name</strong></li>
+    <li><strong>Owner email</strong> (partial is fine)</li>
+    <li><strong>Pet name</strong></li>
+  </ul>
+  <p>Results replace the list with a count line <span class="co">2</span>; clear with ✕ <span class="co">3</span> to return to the normal list.</p>
+  <div class="warn">Search one name at a time. <code>Ana</code> or <code>Reyes</code> both work — <code>Ana Reyes</code> (full name) returns nothing.</div>
+  <div class="shot" data-img="images/13-search-results.png">
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">13-search-results.png</span><span class="vp desk">Desktop 1280</span></div>
+    <div class="shot-cap"><strong>Capture:</strong> search box with a pet name typed and 2–3 matching results shown with the "N results" line.</div>
+    <ul class="shot-cos"><li><span class="co">1</span> Search box</li><li><span class="co">2</span> Result count line</li><li><span class="co">3</span> ✕ clear button</li></ul>
+  </div>
+
+  <h3><span class="sub-n">3.4</span> Loading older bookings</h3>
+  <p>The list loads the most recent bookings first. The <strong>Load earlier bookings</strong> button at the bottom fetches the next batch — it shows <em>Loading…</em> while working, and when there is truly nothing older it is replaced by <em>"You've reached the end — no more bookings."</em></p>
+  <div class="shot" data-img="images/14-load-earlier-end.png">
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">14-load-earlier-end.png</span><span class="vp desk">Desktop 1280</span></div>
+    <div class="shot-cap"><strong>Capture:</strong> two crops side by side — the button in normal state, and the end-of-list message.</div>
+    <ul class="shot-cos"><li><span class="co">1</span> Load earlier button</li><li><span class="co">2</span> End-of-history message</li></ul>
+  </div>
+  <div class="backtop"><a href="#top">↑ back to top</a></div>
+</section>
+
+<!-- ════════════ CHAPTER 4 ════════════ -->
+<section class="chapter" id="ch4">
+  <div class="ch-head"><span class="ch-num">Ch 4</span><h2>Inside a booking — the drawer</h2></div>
+  <p class="ch-intro">Click any booking — on the Calendar, the Bookings list, or the Check In page — and the same drawer opens. Everything about one booking lives here.</p>
+
+  <h3><span class="sub-n">4.1</span> Top to bottom tour</h3>
+  <ul>
+    <li><span class="co">1</span> <strong>Reference number</strong> + when and how it was booked (Online / Admin / Walk-in).</li>
+    <li><span class="co">2</span> <strong>✏ Edit booking</strong> — opens the full edit wizard (Chapter 6).</li>
+    <li><span class="co">3</span> <strong>Pet header</strong> — name, breed, size, sex, age; ★ if member-discounted.</li>
+    <li><span class="co">4</span> <strong>Status pills</strong> — booking status and payment status at a glance.</li>
+    <li><span class="co">5</span> <strong>Medical notes</strong> — red box, impossible to miss. Read it before handling the pet.</li>
+    <li><span class="co">6</span> <strong>Temperament &amp; vaccines</strong> — declared vaccines show ✓/✕ per item. If the owner uploaded vaccine records online, the files are listed here too.</li>
+  </ul>
+  <div class="shot" data-img="images/15-drawer-top.png">
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">15-drawer-top.png</span><span class="vp mob">Mobile 390</span></div>
+    <div class="shot-cap"><strong>Capture:</strong> top half of the drawer for a hotel booking with medical notes and mixed vaccine ✓/✕.</div>
+    <ul class="shot-cos">
+      <li><span class="co">1</span> Ref + source line</li>
+      <li><span class="co">2</span> Edit booking button</li>
+      <li><span class="co">3</span> Pet header</li>
+      <li><span class="co">4</span> Status + payment pills</li>
+      <li><span class="co">5</span> Medical notes box</li>
+      <li><span class="co">6</span> Vaccines row</li>
+    </ul>
+  </div>
+
+  <h3><span class="sub-n">4.2</span> Waivers &amp; consent</h3>
+  <p>Each waiver shows ✓ (accepted), ✕ (declined), or — (not applicable). Two warnings appear automatically and <strong>must be respected by staff</strong>:</p>
+  <ul>
+    <li>⚠ <strong>No photo/video consent — do not post this pet</strong> (media consent declined)</li>
+    <li>⚠ <strong>No playpark consent — keep in room only</strong> (hotel dogs without play-park consent)</li>
+  </ul>
+  <div class="shot" data-img="images/16-waivers.png">
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">16-waivers.png</span><span class="vp mob">Mobile 390</span></div>
+    <div class="shot-cap"><strong>Capture:</strong> Waivers &amp; consent section with at least one ✕ and the playpark warning visible.</div>
+    <ul class="shot-cos"><li><span class="co">1</span> ✓/✕ waiver rows</li><li><span class="co">2</span> Orange warning line</li></ul>
+  </div>
+
+  <h3><span class="sub-n">4.3</span> Service details &amp; resource assignment</h3>
+  <p>The service section shows the booking's specifics — package and timeslot for grooming; room, check-in/out and times for hotel; drop-off/pick-up for daycare. Below it, the <strong>Room</strong> (hotel) or <strong>Groomer</strong> (grooming) section shows the current assignment <span class="co">1</span>. Tap <strong>Assign</strong> <span class="co">2</span> to pick from a dropdown and save.</p>
+  <div class="warn">A booking <strong>cannot be checked in until its room/groomer is assigned</strong>. "Any available" grooming bookings and unassigned hotel rooms show an <em>Unassigned</em> badge — assign them before the guest arrives.</div>
+  <div class="shot" data-img="images/17-assign-room.png">
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">17-assign-room.png</span><span class="vp mob">Mobile 390</span></div>
+    <div class="shot-cap"><strong>Capture:</strong> Room section with the Assign dropdown open, room list visible.</div>
+    <ul class="shot-cos"><li><span class="co">1</span> Current assignment with color dot</li><li><span class="co">2</span> Assign button + open dropdown</li></ul>
+  </div>
+
+  <h3><span class="sub-n">4.4</span> Owner, emergency &amp; vet</h3>
+  <p>The Owner card shows name, mobile, and email, with a one-tap <strong>Call</strong> button. Hotel bookings also carry an <strong>Emergency</strong> section: emergency contact and vet clinic details — exactly what you need if something goes wrong mid-stay.</p>
+  <div class="shot" data-img="images/18-owner-emergency.png">
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">18-owner-emergency.png</span><span class="vp mob">Mobile 390</span></div>
+    <div class="shot-cap"><strong>Capture:</strong> Owner section with Call button + Emergency section below it (hotel booking).</div>
+    <ul class="shot-cos"><li><span class="co">1</span> Call button</li><li><span class="co">2</span> Emergency contact + vet rows</li></ul>
+  </div>
+
+  <h3><span class="sub-n">4.5</span> Bill &amp; payments</h3>
+  <p>The <strong>Bill</strong> section itemizes the charges — base service (hotel shows weekday/weekend nights separately), add-ons, late-pickup fee, member discount, convenience fee (online bookings) — ending in the total <span class="co">1</span>. Below it, <strong>Payments</strong> lists every payment recorded so far <span class="co">2</span>, and <strong>+ Record</strong> <span class="co">3</span> opens the payment form (Chapter 7.4 covers when to use it).</p>
+  <div class="shot" data-img="images/19-bill-payments.png">
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">19-bill-payments.png</span><span class="vp mob">Mobile 390</span></div>
+    <div class="shot-cap"><strong>Capture:</strong> Bill with a member discount line + Payments list with one downpayment row.</div>
+    <ul class="shot-cos"><li><span class="co">1</span> Bill lines + total</li><li><span class="co">2</span> A recorded payment row</li><li><span class="co">3</span> + Record button</li></ul>
+  </div>
+
+  <h3><span class="sub-n">4.6</span> The sticky footer — changing status</h3>
+  <p>Pinned to the bottom of the drawer are two dropdowns and the action buttons <span class="co">1</span>: <strong>booking status</strong> (pending / confirmed / checked in / completed / cancelled) and <strong>payment status</strong> (unpaid / partially paid / paid / refunded). Change either, then press <strong>Update</strong> <span class="co">2</span>. <strong>Done</strong> just closes the drawer without saving.</p>
+  <div class="shot" data-img="images/20-sticky-footer.png">
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">20-sticky-footer.png</span><span class="vp mob">Mobile 390</span></div>
+    <div class="shot-cap"><strong>Capture:</strong> bottom of the drawer — both dropdowns + Done/Update buttons, with content scrolled behind to show it's pinned.</div>
+    <ul class="shot-cos"><li><span class="co">1</span> Status + payment dropdowns</li><li><span class="co">2</span> Update (yellow) and Done buttons</li></ul>
+  </div>
+  <div class="backtop"><a href="#top">↑ back to top</a></div>
+</section>
+
+<!-- ════════════ CHAPTER 5 ════════════ -->
+<section class="chapter" id="ch5">
+  <div class="ch-head"><span class="ch-num">Ch 5</span><h2>Creating a booking</h2></div>
+  <p class="ch-intro">Customers normally book online, but the front desk creates bookings for phone reservations and walk-ins. Everything starts at the yellow ＋ button.</p>
+
+  <h3><span class="sub-n">5.1</span> The ＋ button (FAB)</h3>
+  <p>Tap ＋ and three actions appear:</p>
+  <ul>
+    <li><span class="co">1</span> <strong>📋 Add Booking</strong> — the full admin wizard, this chapter.</li>
+    <li><span class="co">2</span> <strong>🚶 Walk-in</strong> — opens the <em>customer</em> booking page in a new tab in walk-in mode, so the customer can fill in their own details at the counter (§5.7).</li>
+    <li><span class="co">3</span> <strong>🚫 Block Schedule</strong> — reserve time for lunch, leave, or maintenance (Chapter 8.1).</li>
+  </ul>
+  <div class="shot" data-img="images/21-fab-open.png">
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">21-fab-open.png</span><span class="vp mob">Mobile 390</span></div>
+    <div class="shot-cap"><strong>Capture:</strong> FAB expanded with all three action buttons.</div>
+    <ul class="shot-cos"><li><span class="co">1</span> Add Booking</li><li><span class="co">2</span> Walk-in</li><li><span class="co">3</span> Block Schedule</li></ul>
+  </div>
+
+  <h3><span class="sub-n">5.2</span> The wizard at a glance</h3>
+  <p>Add Booking walks through six steps shown in the step bar: <strong>Service → Schedule → Pet → Owner → Details → Summary</strong>. You can tap a previous step's name to jump back. Step one is simply choosing the service — Grooming, Pet Hotel, Daycare, or Studio.</p>
+  <div class="shot" data-img="images/22-wizard-service.png">
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">22-wizard-service.png</span><span class="vp desk">Desktop 1280</span></div>
+    <div class="shot-cap"><strong>Capture:</strong> wizard open on the Service step, four service cards, step bar visible at top.</div>
+    <ul class="shot-cos"><li><span class="co">1</span> Step bar</li><li><span class="co">2</span> Service cards</li></ul>
+  </div>
+
+  <h3><span class="sub-n">5.3</span> Schedule — Grooming</h3>
+  <ul>
+    <li><span class="co">1</span> <strong>Pet size</strong> first — it sets the price of everything below.</li>
+    <li><span class="co">2</span> <strong>Package</strong> — Bath &amp; Dry (30 min), Basic (1 hr), Premium (2 hrs), or Ala Carte (add-ons only; requires at least one add-on).</li>
+    <li><span class="co">3</span> <strong>Add-ons</strong> — priced items toggle on/off. On Premium, Face Trim shows <em>included</em> and can't be toggled. Dematting/Deshedding show <em>Assessment</em> — priced in store, not here.</li>
+    <li><span class="co">4</span> <strong>Groomer</strong> — pick a specific groomer or leave "Any available".</li>
+    <li><span class="co">5</span> <strong>Date → time slots</strong> — slots load for that date; taken slots are disabled. The availability already accounts for other bookings, blocked time, and "any available" overflow.</li>
+  </ul>
+  <div class="shot" data-img="images/23-wizard-grooming.png">
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">23-wizard-grooming.png</span><span class="vp desk">Desktop 1280</span></div>
+    <div class="shot-cap"><strong>Capture:</strong> grooming Schedule step — Premium selected, Face Trim showing "included", slot grid with one disabled slot.</div>
+    <ul class="shot-cos">
+      <li><span class="co">1</span> Size pills</li><li><span class="co">2</span> Package cards with prices</li>
+      <li><span class="co">3</span> Add-on grid ("included" + "Assessment" items)</li>
+      <li><span class="co">4</span> Groomer dropdown</li><li><span class="co">5</span> Slot grid with a taken slot</li>
+    </ul>
+  </div>
+
+  <h3><span class="sub-n">5.4</span> Schedule — Hotel</h3>
+  <ul>
+    <li><span class="co">1</span> Pet size, then <strong>check-in and check-out dates</strong>. An estimate box appears showing nights and price, labelled with its basis — e.g. <em>(Large Cage rate; weekday)</em>.</li>
+    <li><span class="co">2</span> <strong>Room</strong> — the cage you pick <strong>sets the price</strong> (see Appendix B): a Large Cage costs the large-cage rate whichever pet sleeps in it. Cat Cabin and Cat Villa have their own rates.</li>
+    <li><span class="co">3</span> <strong>Drop-off and pick-up times</strong> — dropdowns limited to the branch's operating hours for those dates. Pick-ups after 2 PM add a late fee per hour (shown later in the bill).</li>
+    <li><span class="co">4</span> <strong>Play park consent</strong> toggle (dogs only).</li>
+  </ul>
+  <div class="shot" data-img="images/24-wizard-hotel.png">
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">24-wizard-hotel.png</span><span class="vp desk">Desktop 1280</span></div>
+    <div class="shot-cap"><strong>Capture:</strong> hotel Schedule step with dates set, estimate box showing "(… rate; weekday)", room selected, time dropdown open.</div>
+    <ul class="shot-cos">
+      <li><span class="co">1</span> Dates + estimate box</li><li><span class="co">2</span> Room selector</li>
+      <li><span class="co">3</span> Drop-off dropdown open (branch hours)</li><li><span class="co">4</span> Play park toggle</li>
+    </ul>
+  </div>
+
+  <h3><span class="sub-n">5.5</span> Schedule — Daycare</h3>
+  <p>Size, date, drop-off and pick-up times. The base rate covers the <strong>first 3 hours</strong>; each extra hour adds a per-size hourly rate — the Summary will show e.g. <em>Daycare (8h, +5 extra hrs)</em>. Toggle <strong>"Until open time"</strong> for open-ended pickup (base rate only; settle extras at checkout).</p>
+  <div class="shot" data-img="images/25-wizard-daycare.png">
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">25-wizard-daycare.png</span><span class="vp desk">Desktop 1280</span></div>
+    <div class="shot-cap"><strong>Capture:</strong> daycare Schedule step with 9:00–17:00 times and the open-time toggle visible.</div>
+    <ul class="shot-cos"><li><span class="co">1</span> Drop-off/pick-up times</li><li><span class="co">2</span> Open-time toggle</li></ul>
+  </div>
+
+  <h3><span class="sub-n">5.6</span> Pet, Owner, Details, Summary</h3>
+  <p><strong>Pet</strong> — name, species, sex, breed, size, age, temperament, medical notes, and the <strong>Vaccines on file</strong> Yes/No rows (dogs and cats have different vaccine lists).</p>
+  <p><strong>Owner</strong> — before typing anything, <strong>search by phone or email</strong> <span class="co">1</span>. If the customer has booked before, tap their entry to pre-fill everything <span class="co">2</span> — this keeps one customer = one record instead of duplicates.</p>
+  <div class="shot" data-img="images/26-owner-search.png">
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">26-owner-search.png</span><span class="vp desk">Desktop 1280</span></div>
+    <div class="shot-cap"><strong>Capture:</strong> Owner step with search results dropdown showing an existing owner match.</div>
+    <ul class="shot-cos"><li><span class="co">1</span> Search field</li><li><span class="co">2</span> Matching owner result row</li></ul>
+  </div>
+  <p><strong>Details</strong> — for hotel: feeding instructions, medications, emergency contact, vet info. For all services: the three waiver toggles (general terms, health declaration, media consent — confirm these verbally with the customer) and <strong>internal notes</strong> for staff.</p>
+  <p><strong>Summary</strong> — review everything, then:</p>
+  <ul>
+    <li><span class="co">1</span> <strong>Member code</strong> — type it and press <strong>Apply</strong>; a valid code shows ✓ and the discount line appears. Codes from the wrong branch, expired, or inactive memberships are rejected with a reason.</li>
+    <li><span class="co">2</span> <strong>Booking status</strong> — usually <em>Confirmed</em>; use <em>Checked in</em> if the pet is already in front of you.</li>
+    <li><span class="co">3</span> <strong>Payment status</strong> — if they pay now, set it and fill in <strong>method + reference #</strong>; a payment record is created automatically.</li>
+    <li><span class="co">4</span> <strong>Recorded by</strong> — your name, for the audit trail.</li>
+    <li><span class="co">5</span> <strong>Create booking</strong>.</li>
+  </ul>
+  <div class="shot" data-img="images/27-wizard-summary.png">
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">27-wizard-summary.png</span><span class="vp mob">Mobile 390</span></div>
+    <div class="shot-cap"><strong>Capture:</strong> Summary step with a member discount applied, status Confirmed, payment Unpaid.</div>
+    <ul class="shot-cos">
+      <li><span class="co">1</span> Member code + Apply with ✓ message</li>
+      <li><span class="co">2</span> Status pills</li><li><span class="co">3</span> Payment status select</li>
+      <li><span class="co">4</span> Recorded by</li><li><span class="co">5</span> Create booking button</li>
+    </ul>
+  </div>
+  <div class="note">If the owner's email is filled in, a <strong>confirmation email is sent immediately</strong> when you create the booking — admin bookings don't wait for payment.</div>
+
+  <h3><span class="sub-n">5.7</span> Walk-in bookings</h3>
+  <p>For walk-ins, prefer <strong>FAB → 🚶 Walk-in</strong> over the admin wizard: it opens the customer-facing booking flow in a new tab (secured by a one-time pass that only the admin app can create). Hand the customer the tablet/phone — they fill in their own pet, waivers, and contact details. Differences from an online booking: <strong>no convenience fee</strong>, no online payment — the final screen shows the <strong>amount to collect in-store</strong>, and the booking is tagged <em>Walk-in</em>. It appears on the Calendar instantly; collect payment and record it in the drawer (Chapter 7.4).</p>
+  <div class="shot" data-img="images/28-walkin-summary.png">
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">28-walkin-summary.png</span><span class="vp mob">Mobile 390</span></div>
+    <div class="shot-cap"><strong>Capture:</strong> walk-in booking page final screen — ₱0 convenience fee and "amount to collect in-store" visible.</div>
+    <ul class="shot-cos"><li><span class="co">1</span> Amount to collect in-store</li><li><span class="co">2</span> No payment-gateway step</li></ul>
+  </div>
+  <div class="backtop"><a href="#top">↑ back to top</a></div>
+</section>
+
+<!-- ════════════ CHAPTER 6 ════════════ -->
+<section class="chapter" id="ch6">
+  <div class="ch-head"><span class="ch-num">Ch 6</span><h2>Changing a booking</h2></div>
+  <p class="ch-intro">Plans change — dates move, rooms swap, bookings get cancelled. All of it happens from the drawer.</p>
+
+  <h3><span class="sub-n">6.1</span> The edit wizard</h3>
+  <p>Open the booking's drawer and tap <strong>✏ Edit booking</strong>. The same wizard from Chapter 5 opens, fully pre-filled, starting at the <strong>Schedule</strong> step. One deliberate restriction: <strong>the service type is locked</strong> — a hotel booking can't become a grooming booking <span class="co">1</span>. If the customer wants a different service, cancel this booking and create a new one.</p>
+  <div class="shot" data-img="images/29-edit-locked.png">
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">29-edit-locked.png</span><span class="vp desk">Desktop 1280</span></div>
+    <div class="shot-cap"><strong>Capture:</strong> Edit wizard on the Service step — other services dimmed, lock note visible.</div>
+    <ul class="shot-cos"><li><span class="co">1</span> Dimmed service cards + "cannot be changed" note</li></ul>
+  </div>
+
+  <h3><span class="sub-n">6.2</span> Price-affecting edits</h3>
+  <p>Change the dates, the cage, add-ons, pick-up hour, or the member code — the <strong>total recalculates automatically</strong> on the Summary step, and the bill lines in the drawer update when you save. If the customer already paid the old amount, the difference becomes a balance to collect (or refund) — see Chapter 7.4.</p>
+
+  <h3><span class="sub-n">6.3</span> Moving a guest to another room / groomer</h3>
+  <p>For a simple swap you don't need the full edit: use the <strong>Assign</strong> button in the drawer's Room/Groomer section (Chapter 4.3). The calendar updates immediately — the card moves to the new resource's color.</p>
+
+  <h3><span class="sub-n">6.4</span> Cancelling</h3>
+  <p>In the drawer's sticky footer, set booking status to <strong>cancelled</strong> and press Update. The booking disappears from the Check In page, frees its slot/room for new bookings, and appears greyed-out with strikethrough on the Calendar and Bookings list. It is never deleted — history stays intact.</p>
+
+  <h3><span class="sub-n">6.5</span> Refunds</h3>
+  <p>Refunds are <strong>recorded manually</strong> (money moves outside the system — cash drawer, bank, or e-wallet):</p>
+  <ol>
+    <li>Pay the customer back through the appropriate channel.</li>
+    <li>Drawer → Payments → <strong>+ Record</strong> → Type: <strong>Refund</strong>, with the amount and method.</li>
+    <li>Set payment status to <strong>refunded</strong> (full refund) or leave as partially paid (partial), and press Update.</li>
+  </ol>
+  <div class="shot" data-img="images/30-refund-record.png">
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">30-refund-record.png</span><span class="vp mob">Mobile 390</span></div>
+    <div class="shot-cap"><strong>Capture:</strong> Record Payment panel with Type = Refund selected.</div>
+    <ul class="shot-cos"><li><span class="co">1</span> Type dropdown showing Refund</li></ul>
+  </div>
+  <div class="backtop"><a href="#top">↑ back to top</a></div>
+</section>
+
+<!-- ════════════ CHAPTER 7 ════════════ -->
+<section class="chapter" id="ch7">
+  <div class="ch-head"><span class="ch-num">Ch 7</span><h2>Front desk: check-in to check-out</h2></div>
+  <p class="ch-intro">The Check In page (🐾) is the front desk's daily queue: who's arriving, who's here, and who's leaving.</p>
+
+  <h3><span class="sub-n">7.1</span> The three sections</h3>
+  <ul>
+    <li><span class="co">1</span> <strong>Awaiting Check-In</strong> — today's grooming/daycare/studio appointments plus hotel guests whose check-in date has arrived.</li>
+    <li><span class="co">2</span> <strong>In Progress</strong> — checked-in guests still being serviced or mid-stay.</li>
+    <li><span class="co">3</span> <strong>Due for Checkout</strong> — hotel guests whose check-out date is today; anything past its date is flagged <strong>⚠ Overdue</strong> in red <span class="co">4</span>.</li>
+  </ul>
+  <p>Each card shows the service, reference, pet, owner and time. The same <strong>search box</strong> works here too — and it searches <em>all</em> bookings, not just today's, so you can pull up any booking from the counter.</p>
+  <div class="shot" data-img="images/31-checkin-page.png">
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">31-checkin-page.png</span><span class="vp desk">Desktop 1280</span></div>
+    <div class="shot-cap"><strong>Capture:</strong> Check In page with all three sections populated, one overdue checkout if possible.</div>
+    <ul class="shot-cos">
+      <li><span class="co">1</span> Awaiting Check-In section</li><li><span class="co">2</span> In Progress</li>
+      <li><span class="co">3</span> Due for Checkout</li><li><span class="co">4</span> ⚠ Overdue pill</li>
+    </ul>
+  </div>
+
+  <h3><span class="sub-n">7.2</span> Checking a guest in</h3>
+  <ol>
+    <li>Tap the guest's card — the drawer opens.</li>
+    <li>Confirm identity, read the <strong>medical notes</strong>, check vaccines and waivers (especially play-park consent).</li>
+    <li>Make sure a <strong>room/groomer is assigned</strong> — the app blocks check-in until it is.</li>
+    <li>Fill in <strong>Check-in notes</strong> (next section).</li>
+    <li>Sticky footer → status <strong>checked in</strong> → <strong>Update</strong>. The guest moves to "In Progress".</li>
+  </ol>
+
+  <h3><span class="sub-n">7.3</span> Check-in notes</h3>
+  <p>In the drawer, the <strong>Check-in notes</strong> section (+ Add / Edit) opens a short condition report. The form adapts to the service:</p>
+  <ul>
+    <li><strong>Grooming</strong> — remarks + five Yes/No condition checks: vaccination complete, skin &amp; coat, ears/nose/eyes, nails, joints.</li>
+    <li><strong>Hotel</strong> — physical inspection notes, personal items left with the pet, add-on purchases.</li>
+    <li><strong>Daycare</strong> — remarks + add-on purchases.</li>
+  </ul>
+  <div class="tip">Fill this in <em>with the owner present</em>. A pre-existing skin condition noted at check-in protects both the pet and the staff later.</div>
+  <div class="shot" data-img="images/32-checkin-notes.png">
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">32-checkin-notes.png</span><span class="vp mob">Mobile 390</span></div>
+    <div class="shot-cap"><strong>Capture:</strong> grooming check-in notes form with the Yes/No rows, a couple toggled.</div>
+    <ul class="shot-cos"><li><span class="co">1</span> Remarks field</li><li><span class="co">2</span> Yes/No condition rows</li></ul>
+  </div>
+
+  <h3><span class="sub-n">7.4</span> Collecting money — at any point</h3>
+  <p>Whenever the customer pays — deposit at booking, balance at pickup, an add-on bought mid-stay — record it: drawer → Payments → <strong>+ Record</strong>:</p>
+  <ul>
+    <li><span class="co">1</span> <strong>Amount</strong> in pesos;</li>
+    <li><span class="co">2</span> <strong>Type</strong> — Downpayment, Balance, Add-on charge, or Refund;</li>
+    <li><span class="co">3</span> <strong>Method</strong> — Cash, Card, Bank transfer, or Online;</li>
+    <li><span class="co">4</span> Reference number (for card/transfer), optional notes, and <strong>your name</strong> under Recorded by.</li>
+  </ul>
+  <p>Then update the <strong>payment status</strong> in the sticky footer to match reality (partially paid / paid).</p>
+  <div class="shot" data-img="images/33-record-payment.png">
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">33-record-payment.png</span><span class="vp mob">Mobile 390</span></div>
+    <div class="shot-cap"><strong>Capture:</strong> Record Payment panel, filled with a sample balance payment.</div>
+    <ul class="shot-cos"><li><span class="co">1</span> Amount</li><li><span class="co">2</span> Type</li><li><span class="co">3</span> Method</li><li><span class="co">4</span> Reference + Recorded by</li></ul>
+  </div>
+
+  <h3><span class="sub-n">7.5</span> Checking out</h3>
+  <ol>
+    <li>Open the guest from <strong>Due for Checkout</strong> (or In Progress).</li>
+    <li><strong>Check for extra charges:</strong>
+      <ul>
+        <li><strong>Hotel late pick-up</strong> — every hour past 2 PM adds the hourly late fee; more than 6 hours past counts as an extra night; not picked up by 8 PM = an additional night.</li>
+        <li><strong>Daycare extra hours</strong> — hours beyond the first 3 (or beyond what was prepaid) at the per-size hourly rate.</li>
+        <li>Any unpaid in-store add-ons.</li>
+      </ul></li>
+    <li>Collect the balance and record it (§7.4); set payment status to <strong>paid</strong>.</li>
+    <li>Set booking status to <strong>completed</strong> → Update. The guest leaves the Check In page.</li>
+  </ol>
+  <div class="backtop"><a href="#top">↑ back to top</a></div>
+</section>
+
+<!-- ════════════ CHAPTER 8 ════════════ -->
+<section class="chapter" id="ch8">
+  <div class="ch-head"><span class="ch-num">Ch 8</span><h2>Managing the business</h2></div>
+  <p class="ch-intro">Blocking time off, membership records, and the rooms/groomers/studios themselves.</p>
+
+  <h3><span class="sub-n">8.1</span> Blocking a schedule</h3>
+  <p>Use a block whenever a resource shouldn't take bookings: a groomer's lunch or day off, a cage under repair, studio maintenance. Blocks remove those slots from the <strong>public booking site and the admin wizard simultaneously</strong>.</p>
+  <ol>
+    <li>＋ FAB → <strong>🚫 Block Schedule</strong>.</li>
+    <li>Pick the resource type <span class="co">1</span> — Hotel Room / Groomer / Studio — and which one <span class="co">2</span>.</li>
+    <li>Tap one or more dates on the mini calendar <span class="co">3</span> (the count confirms how many are selected).</li>
+    <li>Set start/end time <span class="co">4</span>, write a short reason ("Lunch", "On leave"), and save.</li>
+  </ol>
+  <div class="shot" data-img="images/34-block-panel.png">
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">34-block-panel.png</span><span class="vp mob">Mobile 390</span></div>
+    <div class="shot-cap"><strong>Capture:</strong> Block Schedule panel — Groomer type selected, 2 dates picked, 12:00–13:00, reason filled.</div>
+    <ul class="shot-cos">
+      <li><span class="co">1</span> Resource type toggle</li><li><span class="co">2</span> Resource dropdown</li>
+      <li><span class="co">3</span> Multi-date calendar with count</li><li><span class="co">4</span> Start/end time</li>
+    </ul>
+  </div>
+  <p>Tap a hatched block on the calendar to view its details. To change a block, <strong>delete it and create a new one</strong> (blocks can't be edited in place). Delete frees the time everywhere immediately.</p>
+  <div class="shot" data-img="images/35-block-drawer.png">
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">35-block-drawer.png</span><span class="vp mob">Mobile 390</span></div>
+    <div class="shot-cap"><strong>Capture:</strong> Block detail drawer — resource, time, reason, date pills, Delete Block button.</div>
+    <ul class="shot-cos"><li><span class="co">1</span> Blocked dates pills</li><li><span class="co">2</span> 🗑 Delete Block</li></ul>
+  </div>
+
+  <h3><span class="sub-n">8.2</span> Members</h3>
+  <p>The Members page does two jobs:</p>
+  <p><strong>Validate in-store</strong> <span class="co">1</span> — when a customer claims a membership, enter their code (and pet name). You'll get one of: <em>✓ valid</em> (with tier, coverage and expiry), <em>pet name doesn't match</em>, <em>expired</em> (with the date), or <em>not found / inactive</em>. Two tiers exist: <strong>Standard</strong> (one branch only) and <strong>Passport</strong> (all branches) — a Standard code from the other branch will be rejected at booking time.</p>
+  <p><strong>CSV upload</strong> <span class="co">2</span> — membership records are maintained as a spreadsheet and uploaded here. The file must have exactly these headers: <code>Membership ID</code>, <code>Pet Name</code>, <code>Valid Until Date</code>, <code>Branch</code>. Existing codes are updated, new codes added — the result line tells you how many of each.</p>
+  <div class="shot" data-img="images/36-members.png">
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">36-members.png</span><span class="vp desk">Desktop 1280</span></div>
+    <div class="shot-cap"><strong>Capture:</strong> Members page — validate card with a successful ✓ result, CSV card below/beside.</div>
+    <ul class="shot-cos"><li><span class="co">1</span> Validate card with result</li><li><span class="co">2</span> CSV upload card</li></ul>
+  </div>
+
+  <h3><span class="sub-n">8.3</span> Inventory — rooms, groomers, studios</h3>
+  <p>The Inventory page (📦) manages the resources everything else depends on. Three tabs: <strong>Rooms · Groomers · Studios</strong> <span class="co">1</span>, each listing the branch's active items with their color dot <span class="co">2</span>.</p>
+  <ul>
+    <li><strong>Add</strong> — the dashed button opens the form: name, <strong>color</strong> (this becomes the calendar color), and for rooms: cage type, pet type, and allowed pet sizes.</li>
+    <li><strong>Edit</strong> — tap an item. Rooms can be <strong>locked</strong> (with a reason) to stop new bookings; groomers/studios can be marked <strong>unavailable</strong> (with a reason) for longer absences. For a single day off, prefer a block (§8.1).</li>
+    <li><strong>Remove</strong> — retires the item: it vanishes from every dropdown and the public site, but old bookings keep showing its name. Nothing is lost.</li>
+  </ul>
+  <div class="shot" data-img="images/37-inventory.png">
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">37-inventory.png</span><span class="vp desk">Desktop 1280</span></div>
+    <div class="shot-cap"><strong>Capture:</strong> Inventory on the Rooms tab — tab counts, room cards with colors.</div>
+    <ul class="shot-cos"><li><span class="co">1</span> Three tabs with counts</li><li><span class="co">2</span> Room card with color dot + type</li></ul>
+  </div>
+  <div class="shot" data-img="images/38-inventory-edit.png">
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">38-inventory-edit.png</span><span class="vp mob">Mobile 390</span></div>
+    <div class="shot-cap"><strong>Capture:</strong> room edit panel — name, color swatches, cage type, size toggles, lock toggle.</div>
+    <ul class="shot-cos"><li><span class="co">1</span> Color swatches</li><li><span class="co">2</span> Allowed sizes toggles</li><li><span class="co">3</span> Lock toggle + reason</li></ul>
+  </div>
+  <div class="backtop"><a href="#top">↑ back to top</a></div>
+</section>
+
+<!-- ════════════ APPENDIX A ════════════ -->
+<section class="chapter" id="appA">
+  <div class="ch-head"><span class="ch-num">App A</span><h2>Status &amp; color legend</h2></div>
+
+  <h3>Booking statuses</h3>
+  <table>
+    <tr><th>Status</th><th>Meaning</th><th>Set by</th></tr>
+    <tr><td>pending</td><td>Created but not confirmed — online bookings awaiting payment. Auto-cancelled after ~15 minutes if unpaid.</td><td>System</td></tr>
+    <tr><td>confirmed</td><td>Booked and expected. The normal state before arrival.</td><td>Payment / admin</td></tr>
+    <tr><td>checked in</td><td>The pet is on the premises.</td><td>Front desk</td></tr>
+    <tr><td>completed</td><td>Service finished, guest gone, bill settled.</td><td>Front desk</td></tr>
+    <tr><td>cancelled</td><td>Called off — slot freed, kept in history (greyed + strikethrough).</td><td>Admin / customer / system</td></tr>
+    <tr><td>rejected</td><td>Declined by the branch.</td><td>Admin</td></tr>
+  </table>
+
+  <h3>Payment statuses</h3>
+  <table>
+    <tr><th>Status</th><th>Meaning</th></tr>
+    <tr><td>unpaid</td><td>No money received yet.</td></tr>
+    <tr><td>partially paid</td><td>Deposit/downpayment received, balance outstanding.</td></tr>
+    <tr><td>paid</td><td>Fully settled.</td></tr>
+    <tr><td>refunded</td><td>Money returned to the customer.</td></tr>
+  </table>
+
+  <h3>Service colors</h3>
+  <table>
+    <tr><th>Service</th><th>Color</th></tr>
+    <tr><td>Grooming</td><td><span class="swatch" style="background:#4D96B9"></span>blue</td></tr>
+    <tr><td>Pet Hotel</td><td><span class="swatch" style="background:#EF9F27"></span>amber</td></tr>
+    <tr><td>Daycare</td><td><span class="swatch" style="background:#1D9E75"></span>green</td></tr>
+    <tr><td>Studio</td><td><span class="swatch" style="background:#D4537E"></span>pink</td></tr>
+  </table>
+  <p>Calendar <em>cards</em>, by contrast, use the <strong>assigned room/groomer's color</strong> from Inventory — service colors appear on badges, tabs, and counts.</p>
+  <div class="backtop"><a href="#top">↑ back to top</a></div>
+</section>
+
+<!-- ════════════ APPENDIX B ════════════ -->
+<section class="chapter" id="appB">
+  <div class="ch-head"><span class="ch-num">App B</span><h2>Pricing cheatsheet</h2></div>
+  <p class="ch-intro">How each service is priced. Exact peso amounts live in the pricing table and appear automatically in the wizard — this is the <em>logic</em>.</p>
+
+  <table>
+    <tr><th>Service</th><th>How the price is built</th></tr>
+    <tr><td>Grooming</td><td><strong>Package price by pet size</strong> (Bath &amp; Dry / Basic / Premium; Ala Carte has no base) <em>+ add-ons</em>. Face Trim is size-priced and <strong>free with Premium</strong>. Dematting &amp; Deshedding are assessment-priced in store.</td></tr>
+    <tr><td>Hotel</td><td><strong>Nightly rate by cage type</strong> — Small/Medium/Large Cage, Cat Cabin, Cat Villa — <strong>× day type</strong>: Fri/Sat/Sun nights bill at the weekend rate, Mon–Thu at the weekday rate. <em>+ late pick-up</em>: per-hour fee after 2 PM; &gt;6 h late = extra night; not collected by 8 PM = extra night.</td></tr>
+    <tr><td>Daycare</td><td><strong>Base rate by pet size covers the first 3 hours</strong>; each additional hour adds a per-size hourly rate. Open-time = base now, extras settled at pickup.</td></tr>
+    <tr><td>Studio</td><td>Session priced at the studio; settled at check-out.</td></tr>
+    <tr><td>Member discount</td><td>Percentage off the subtotal — currently <strong>10% grooming</strong>, <strong>20% hotel</strong>, <strong>20% daycare</strong>. Standard = home branch only; Passport = both branches.</td></tr>
+    <tr><td>Convenience fee</td><td>Online card/e-wallet bookings only. Never added to admin or walk-in bookings.</td></tr>
+  </table>
+
+  <h3>Branch hours (drop-off / pick-up windows)</h3>
+  <table>
+    <tr><th>Branch</th><th>Mon–Thu</th><th>Fri–Sun</th></tr>
+    <tr><td>Estancia</td><td>11:00 AM – 9:00 PM</td><td>10:00 AM – 10:00 PM</td></tr>
+    <tr><td>Eastwood</td><td>10:00 AM – 10:00 PM</td><td>10:00 AM – 10:00 PM</td></tr>
+  </table>
+  <div class="backtop"><a href="#top">↑ back to top</a></div>
+</section>
+
+<!-- ════════════ APPENDIX C ════════════ -->
+<section class="chapter" id="appC">
+  <div class="ch-head"><span class="ch-num">App C</span><h2>Shortcuts &amp; tips</h2></div>
+  <table>
+    <tr><th>Action</th><th>Effect</th></tr>
+    <tr><td><kbd>Esc</kbd></td><td>Closes the top-most open panel — wizard, block panel, filter sheet, drawer, month picker — one layer at a time.</td></tr>
+    <tr><td><kbd>R</kbd></td><td>Refreshes the Calendar / Bookings data. Ignored while you're typing in a field or a panel is open.</td></tr>
+    <tr><td>Tap outside a panel</td><td>Closes it (same as Esc).</td></tr>
+    <tr><td>Tap a date group header</td><td>Collapses / expands that day in the Bookings list.</td></tr>
+  </table>
+  <ul>
+    <li><strong>Search beats scrolling</strong> — on Bookings and Check In, two characters of the pet's name is usually faster than hunting through the list.</li>
+    <li><strong>Always search for the owner first</strong> when creating bookings — duplicated owners fragment a customer's history.</li>
+    <li><strong>Record payments the moment they happen.</strong> The drawer's payment list is the branch's money trail.</li>
+    <li><strong>Use blocks for hours, Inventory lock/unavailable for long absences.</strong></li>
+  </ul>
+  <div class="backtop"><a href="#top">↑ back to top</a></div>
+</section>
+
+<!-- ════════════ APPENDIX D ════════════ -->
+<section class="chapter" id="appD">
+  <div class="ch-head"><span class="ch-num">App D</span><h2>Troubleshooting / FAQ</h2></div>
+  <table>
+    <tr><th>Symptom</th><th>Check, in order</th></tr>
+    <tr><td>"A booking is missing"</td><td>① Correct <strong>branch</strong> selected? ② Calendar on the right <strong>date</strong>? ③ A service tab or resource <strong>filter</strong> active? (Tap All / clear the filter.) ④ Was it <strong>cancelled</strong>? Search its ref on the Bookings page.</td></tr>
+    <tr><td>An online booking shows <em>pending / unpaid</em></td><td>The customer hasn't completed payment. They have ~15 minutes; if payment fails or lapses, the system auto-cancels and frees the slot. No action needed.</td></tr>
+    <tr><td>A grooming time slot is greyed out but the groomer "looks free"</td><td>The slot may be consumed by an <em>"Any available"</em> booking that hasn't been assigned yet, or by a block. Check the calendar's All view and any hatched blocks at that hour.</td></tr>
+    <tr><td>Can't check a guest in</td><td>Assign a room/groomer first — check-in is blocked while the booking is Unassigned.</td></tr>
+    <tr><td>Data looks stale</td><td>Press <kbd>R</kbd>, or switch away from the tab and back. The page also self-refreshes every minute.</td></tr>
+    <tr><td>"Not authorized" after Google sign-in</td><td>Your Google account isn't on the admin list — ask a manager to add it, then sign in again.</td></tr>
+    <tr><td>A member code is rejected</td><td>Read the message: wrong branch (Standard codes are branch-locked), expired, inactive, or a typo. Verify on the Members page.</td></tr>
+    <tr><td>Customer asks for an emailed receipt</td><td>Confirmation emails go out automatically — at payment for online bookings, immediately for admin-created ones — <em>if an email address is on the booking</em>. Check the Owner section; add the email via Edit and re-save if missing.</td></tr>
+  </table>
+  <div class="backtop"><a href="#top">↑ back to top</a></div>
+</section>
+
+<p style="text-align:center;color:var(--mid);font-size:11px;margin-top:40px">Barkhaus Admin Walkthrough Guide · draft v0.1 · 38 screenshots pending capture</p>
+
+</div>
+</body>
+</html>
