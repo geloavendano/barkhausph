@@ -26,6 +26,8 @@ const SVC_FILTERS = ['all', 'grooming', 'hotel', 'daycare', 'studio']
 export default function BookingsPage({ branches, currentBranchIdx = 0, rooms, groomers, studios = [] }) {
   const [bookings,        setBookings]        = useState([])
   const [loading,         setLoading]         = useState(true)
+  const [loadingMore,     setLoadingMore]     = useState(false)
+  const [reachedEnd,      setReachedEnd]      = useState(false)
   const [error,           setError]           = useState('')
   const [svcFilter,       setSvcFilter]       = useState('all')
   const [daysBack,        setDaysBack]        = useState(30)
@@ -40,6 +42,7 @@ export default function BookingsPage({ branches, currentBranchIdx = 0, rooms, gr
   const load = useCallback(async (append = false, days = daysBack, svc = svcFilter) => {
     if (!branch) return
     if (!append) { setLoading(true); setError('') }
+    else         { setLoadingMore(true) }
     try {
       const fromDate = dayOffsetStr(days)
       const toDate   = append ? dayOffsetStr(days - 7) : todayStr()
@@ -49,17 +52,24 @@ export default function BookingsPage({ branches, currentBranchIdx = 0, rooms, gr
         `branch_id=eq.${branch.id}&created_at=gte.${fromDate}T00:00:00&created_at=lte.${toDate}T23:59:59&order=created_at.desc&select=${BOOKING_SELECT}${svcQ}`
       )
       if (append) {
+        let added = 0
         setBookings(prev => {
           const ids = new Set(prev.map(b => b.id))
-          return [...prev, ...(rows ?? []).filter(b => !ids.has(b.id))]
+          const fresh = (rows ?? []).filter(b => !ids.has(b.id))
+          added = fresh.length
+          return [...prev, ...fresh]
         })
+        // If no new rows came back, we've exhausted the history
+        if (!rows?.length || added === 0) setReachedEnd(true)
       } else {
         setBookings(rows ?? [])
+        setReachedEnd(false)
       }
     } catch (err) {
       setError(err.message)
     } finally {
       setLoading(false)
+      setLoadingMore(false)
     }
   }, [branch, daysBack, svcFilter])
 
@@ -118,6 +128,7 @@ export default function BookingsPage({ branches, currentBranchIdx = 0, rooms, gr
     setSvcFilter(svc)
     setDaysBack(7)
     setBookings([])
+    setReachedEnd(false)
   }
 
   function handleLoadMore() {
@@ -203,9 +214,17 @@ export default function BookingsPage({ branches, currentBranchIdx = 0, rooms, gr
 
       {!loading && (
         <div className={styles.loadMore}>
-          <button className={styles.loadMoreBtn} onClick={handleLoadMore}>
-            Load earlier bookings
-          </button>
+          {reachedEnd ? (
+            <p className={styles.loadMoreEnd}>No more bookings to load.</p>
+          ) : (
+            <button
+              className={styles.loadMoreBtn}
+              onClick={handleLoadMore}
+              disabled={loadingMore}
+            >
+              {loadingMore ? 'Loading…' : 'Load earlier bookings'}
+            </button>
+          )}
         </div>
       )}
 

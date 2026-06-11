@@ -104,4 +104,6 @@
   border-radius: 20px; padding: 7px 20px;
   cursor: pointer; font-family: 'Nunito', sans-serif;
 }
-.loadMoreBtn:hover { background: var(--surface); }
+.loadMoreBtn:hover  { background: var(--surface); }
+.loadMoreBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+.loadMoreEnd { font-size: 12px; color: var(--mid); }
