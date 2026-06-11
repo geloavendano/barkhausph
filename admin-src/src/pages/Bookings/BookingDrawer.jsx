@@ -7,7 +7,7 @@ import {
 import PaymentPanel from './PaymentPanel'
 import styles from './BookingDrawer.module.css'
 
-export default function BookingDrawer({ booking: b, rooms, groomers, onClose, onUpdated }) {
+export default function BookingDrawer({ booking: b, rooms, groomers, onClose, onUpdated, onEdit }) {
   const [payments,    setPayments]    = useState(null)
   const [charges,     setCharges]     = useState([])
   const [vaccDocs,    setVaccDocs]    = useState([])
