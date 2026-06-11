@@ -1364,16 +1364,13 @@ function buildPickupTimeOptions() {
   var sel = document.getElementById('hotelPickupTime');
   var feeEl = document.getElementById('hotelLateRateFee');
   if (!sel) return;
-  // Rebuild all options: 2 PM standard (no fee) + 3 PM–8 PM with cumulative late fees
   sel.innerHTML = '<option value="">Select pick-up time</option>' +
     '<option value="14">2:00 PM (standard check-out)</option>';
   var lateTimes = ['3:00 PM','4:00 PM','5:00 PM','6:00 PM','7:00 PM','8:00 PM'];
   for (var i = 0; i < lateTimes.length; i++) {
-    var h   = 15 + i;
-    var fee = HOTEL_LATE_RATE * (h - 14);
     var opt = document.createElement('option');
-    opt.value = String(h);
-    opt.textContent = lateTimes[i] + ' (+₱' + fee.toLocaleString() + ')';
+    opt.value = String(15 + i);
+    opt.textContent = lateTimes[i];
     sel.appendChild(opt);
   }
   if (feeEl) feeEl.textContent = '+₱' + HOTEL_LATE_RATE.toLocaleString() + '/hour';

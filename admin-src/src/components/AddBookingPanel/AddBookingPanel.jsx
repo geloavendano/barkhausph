@@ -709,11 +709,9 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
           <FG label="Pick-up time">
             <select className={styles.sel} value={String(bk.hpickHour)}
               onChange={e => upd('hpickHour', parseInt(e.target.value))}>
-              {PICK_OPTS.map(([h, l]) => {
-                const fee = (pricing.lateRate ?? 0) * Math.max(0, h - 14)
-                const lbl = fee > 0 ? `${l}  (+${fmt(fee)})` : l
-                return <option key={h} value={String(h)}>{lbl}</option>
-              })}
+              {PICK_OPTS.map(([h, l]) => (
+                <option key={h} value={String(h)}>{l}</option>
+              ))}
             </select>
           </FG>
         </div>
