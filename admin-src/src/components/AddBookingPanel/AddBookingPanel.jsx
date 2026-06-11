@@ -94,6 +94,17 @@ function fmt(n) { return '₱' + Number(n).toLocaleString() }
 
 /** Normalise any time value to HH:MM for <input type="time">.
  *  Handles: "11" → "11:00", "11:00" → "11:00", "11:00:00" → "11:00" */
+/** Branch operating hours for hotel drop-off / pick-up based on day of week */
+function getHotelHours(branchName, dateStr) {
+  const dow  = dateStr ? new Date(dateStr + 'T00:00:00').getDay() : -1
+  const name = (branchName ?? '').toLowerCase()
+  if (name.includes('estancia')) {
+    const isWd = dow >= 1 && dow <= 4
+    return { start: dow < 0 ? 10 : (isWd ? 11 : 10), end: dow < 0 ? 22 : (isWd ? 21 : 22) }
+  }
+  return { start: 10, end: 22 } // Eastwood + default
+}
+
 function toHHMM(t) {
   if (t == null || t === '') return ''
   const s = String(t).trim()
@@ -651,8 +662,9 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
   }
 
   function StepHotel() {
-    const nights = calcNights(bk)
-    const hotelEst = nights > 0 ? fmt(calcLate(bk, pricing) > 0 ? (calcLate(bk,pricing)+calcNights(bk)) : 0) : null
+    const nights    = calcNights(bk)
+    const dropHours = getHotelHours(branch?.name, bk.hcin)
+    const pickHours = getHotelHours(branch?.name, bk.hcout)
     return (
       <>
         <FG label="Pet size" req>
@@ -701,16 +713,17 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
           <FG label="Drop-off time">
             <select className={styles.sel} value={String(bk.hdrop ?? '')}
               onChange={e => upd('hdrop', e.target.value)}>
-              <option value="">Select time…</option>
-              {DROP_OPTS.map(([h, l]) => (
+              <option value="">{bk.hcin ? 'Select time…' : 'Select check-in date first'}</option>
+              {DROP_OPTS.filter(([h]) => h >= dropHours.start && h <= dropHours.end).map(([h, l]) => (
                 <option key={h} value={String(h)}>{l}</option>
               ))}
             </select>
           </FG>
           <FG label="Pick-up time">
-            <select className={styles.sel} value={String(bk.hpickHour)}
-              onChange={e => upd('hpickHour', parseInt(e.target.value))}>
-              {PICK_OPTS.map(([h, l]) => (
+            <select className={styles.sel} value={String(bk.hpickHour ?? '')}
+              onChange={e => upd('hpickHour', e.target.value ? parseInt(e.target.value) : null)}>
+              <option value="">{bk.hcout ? 'Select time…' : 'Select check-out date first'}</option>
+              {PICK_OPTS.filter(([h]) => h >= pickHours.start && h <= pickHours.end).map(([h, l]) => (
                 <option key={h} value={String(h)}>{l}</option>
               ))}
             </select>

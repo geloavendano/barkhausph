@@ -1067,24 +1067,30 @@ function selectHotelSize(el, val) {
   autoScroll('hotelDatesBody');
 }
 
+// Returns {start, end} hour range for hotel based on branch location and date's day-of-week
+function getHotelHours(dateStr, location) {
+  var dow = dateStr ? new Date(dateStr + 'T00:00:00').getDay() : -1;
+  if ((location || '').indexOf('estancia') !== -1) {
+    var isWd = dow >= 1 && dow <= 4;
+    return { start: (dow < 0 ? 10 : (isWd ? 11 : 10)), end: (dow < 0 ? 22 : (isWd ? 21 : 22)) };
+  }
+  return { start: 10, end: 22 }; // Eastwood and default
+}
+
+function hotelTimeLabel(h) {
+  return h < 12 ? h + ':00 AM' : (h === 12 ? '12:00 PM' : (h - 12) + ':00 PM');
+}
+
 function populateHotelDropoffTimes() {
   var checkin = document.getElementById('hotelCheckin').value;
   var sel     = document.getElementById('hotelDropoffTime');
   if (!checkin) { sel.innerHTML = '<option value="">Select date first</option>'; return; }
-  var dow     = new Date(checkin + 'T00:00:00').getDay();
-  var startH, endH;
-  if (booking.location === 'estancia') {
-    var isWd = dow >= 1 && dow <= 4;
-    startH = isWd ? 11 : 10;
-    endH   = isWd ? 21 : 22;
-  } else { startH = 10; endH = 22; }
+  var hours = getHotelHours(checkin, booking.location);
   var html = '<option value="">Select time</option>';
-  for (var h = startH; h <= endH; h++) {
-    var label = h < 12 ? h + ':00 AM' : (h === 12 ? '12:00 PM' : (h-12) + ':00 PM');
-    html += '<option value="' + h + '">' + label + '</option>';
+  for (var h = hours.start; h <= hours.end; h++) {
+    html += '<option value="' + h + '">' + hotelTimeLabel(h) + '</option>';
   }
   sel.innerHTML = html;
-  // Restore previously saved drop-off time when returning to this step
   if (booking.hotelDropoffTime) sel.value = booking.hotelDropoffTime;
 }
 
@@ -1123,6 +1129,7 @@ function onHotelCheckoutChange() {
   document.getElementById('nightsDisplay').style.display = '';
   booking.hotelCheckin  = cin;
   booking.hotelCheckout = cout;
+  buildPickupTimeOptions(); // Rebuild pickup options for the checkout date's branch hours
   loadRoomAvailability();
   autoScroll('roomAvailSection', 150);
   refreshContinueBtn();
@@ -1361,21 +1368,20 @@ function calcNights() {
 }
 
 function buildPickupTimeOptions() {
-  var sel = document.getElementById('hotelPickupTime');
+  var sel   = document.getElementById('hotelPickupTime');
   var feeEl = document.getElementById('hotelLateRateFee');
   if (!sel) return;
-  var allTimes = [
-    [7,'7:00 AM'],[8,'8:00 AM'],[9,'9:00 AM'],[10,'10:00 AM'],[11,'11:00 AM'],
-    [12,'12:00 PM'],[13,'1:00 PM'],[14,'2:00 PM'],[15,'3:00 PM'],[16,'4:00 PM'],
-    [17,'5:00 PM'],[18,'6:00 PM'],[19,'7:00 PM'],[20,'8:00 PM']
-  ];
+  var cout  = document.getElementById('hotelCheckout') ? document.getElementById('hotelCheckout').value : '';
+  var hours = getHotelHours(cout, booking.location);
   sel.innerHTML = '<option value="">Select pick-up time</option>';
-  for (var i = 0; i < allTimes.length; i++) {
+  for (var h = hours.start; h <= hours.end; h++) {
     var opt = document.createElement('option');
-    opt.value = String(allTimes[i][0]);
-    opt.textContent = allTimes[i][1];
+    opt.value = String(h);
+    opt.textContent = hotelTimeLabel(h);
     sel.appendChild(opt);
   }
+  // Restore saved value after rebuild
+  if (booking.hotelPickupTime) sel.value = booking.hotelPickupTime;
   if (feeEl) feeEl.textContent = '+₱' + HOTEL_LATE_RATE.toLocaleString() + '/hour after 2:00 PM';
 }
 
