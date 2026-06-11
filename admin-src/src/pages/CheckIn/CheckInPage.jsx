@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { sbGet } from '../../lib/supabase'
 import { SVC_LABELS, SVC_COLORS, STATUS_COLORS, first, fmtTime } from '../../lib/constants'
+import { searchBookings } from '../../lib/search'
 import BookingDrawer from '../Bookings/BookingDrawer'
 import styles from './CheckInPage.module.css'
 
@@ -31,6 +32,9 @@ function ciSelectFor(innerSvc) {
   return [CI_COMMON, ...details].join(',')
 }
 
+// Search select: all detail embeds as left joins (any service can match).
+const CI_SEARCH_SELECT = [CI_COMMON, ...Object.values(CI_DETAIL)].join(',')
+
 function getBookingTime(b) {
   const gd = first(b.grooming_details)
   const hd = first(b.hotel_details)
@@ -50,8 +54,12 @@ export default function CheckInPage({ branches, currentBranchIdx = 0, rooms, gro
   const [collapsed, setCollapsed] = useState({})
   const [openId,    setOpenId]    = useState(null)
   const [today,     setToday]     = useState('')
+  const [searchQ,       setSearchQ]       = useState('')
+  const [searchResults, setSearchResults] = useState([])
+  const [searching,     setSearching]     = useState(false)
 
   const branch = branches?.[currentBranchIdx]
+  const searchActive = searchQ.trim().length >= 2
 
   const load = useCallback(async () => {
     if (!branch) return
@@ -103,6 +111,20 @@ export default function CheckInPage({ branches, currentBranchIdx = 0, rooms, gro
 
   useEffect(() => { load() }, [load])
 
+  // ── Search (ref #, owner name/email, pet name) — debounced ────────────────
+  useEffect(() => {
+    if (!searchActive || !branch?.id) { setSearchResults([]); setSearching(false); return }
+    setSearching(true)
+    const t = setTimeout(async () => {
+      try {
+        const rows = await searchBookings(branch.id, searchQ, CI_SEARCH_SELECT)
+        setSearchResults(rows)
+      } catch { setSearchResults([]) }
+      finally { setSearching(false) }
+    }, 300)
+    return () => clearTimeout(t)
+  }, [searchQ, searchActive, branch?.id])
+
   // Categorise
   const needCheckin  = []
   const inProgress   = []
@@ -135,7 +157,7 @@ export default function CheckInPage({ branches, currentBranchIdx = 0, rooms, gro
     : ''
 
   const toggle = id => setCollapsed(prev => ({ ...prev, [id]: !prev[id] }))
-  const openBooking = bookings.find(b => b.id === openId)
+  const openBooking = (searchActive ? searchResults : bookings).find(b => b.id === openId)
 
   if (!branch) return <p className={styles.msg}>No branch selected.</p>
 
@@ -151,6 +173,47 @@ export default function CheckInPage({ branches, currentBranchIdx = 0, rooms, gro
         </button>
       </div>
 
+      {/* Search */}
+      <div className={styles.searchRow}>
+        <span className={styles.searchIcon}>🔍</span>
+        <input
+          className={styles.searchInput}
+          value={searchQ}
+          onChange={e => setSearchQ(e.target.value)}
+          placeholder="Search ref #, owner name, email, or pet name…"
+        />
+        {searchQ && (
+          <button className={styles.searchClear} onClick={() => setSearchQ('')} title="Clear">✕</button>
+        )}
+      </div>
+
+      {/* ── Search results ── */}
+      {searchActive ? (
+        <>
+          <p className={styles.searchMeta}>
+            {searching ? 'Searching…' : `${searchResults.length} result${searchResults.length !== 1 ? 's' : ''} for "${searchQ.trim()}"`}
+          </p>
+          {!searching && searchResults.length === 0 && (
+            <div className={styles.empty}>
+              <p className={styles.emptyIcon}>🔍</p>
+              <p className={styles.emptyText}>No matching bookings.</p>
+            </div>
+          )}
+          <div className={styles.section}>
+            {searchResults.map(b => (
+              <BookingCard
+                key={b.id}
+                booking={b}
+                actionLabel={(b.status ?? '').replace(/_/g, ' ')}
+                actionColor={STATUS_COLORS[b.status] ?? '#888'}
+                today={today}
+                onClick={() => setOpenId(b.id)}
+              />
+            ))}
+          </div>
+        </>
+      ) : (
+      <>
       {loading && <p className={styles.msg}>Loading check-ins…</p>}
       {error   && <p className={styles.err}>{error}</p>}
 
@@ -210,6 +273,8 @@ export default function CheckInPage({ branches, currentBranchIdx = 0, rooms, gro
             />
           )}
         </>
+      )}
+      </>
       )}
 
       {openBooking && (

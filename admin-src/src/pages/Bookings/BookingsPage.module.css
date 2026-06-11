@@ -35,6 +35,36 @@
 .msg  { color: var(--mid); padding: 8px 0; font-size: 13px; }
 .err  { color: var(--error); font-size: 13px; }
 
+/* ── Search ── */
+.searchRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface);
+  border: 0.5px solid var(--border);
+  border-radius: 10px;
+  padding: 0 12px;
+  margin-bottom: 14px;
+}
+.searchIcon { font-size: 13px; opacity: 0.7; flex-shrink: 0; }
+.searchInput {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--cream);
+  font-family: 'Nunito', sans-serif;
+  font-size: 14px;
+  padding: 10px 0;
+}
+.searchInput::placeholder { color: var(--mid); }
+.searchClear {
+  background: transparent; border: none; cursor: pointer;
+  color: var(--mid); font-size: 14px; padding: 4px; flex-shrink: 0;
+}
+.searchClear:hover { color: var(--cream); }
+.searchMeta { color: var(--mid); font-size: 12px; margin: 0 0 12px; }
+
 /* ── Date group ── */
 .group { margin-bottom: 20px; }
 

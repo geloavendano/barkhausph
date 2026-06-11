@@ -5,6 +5,7 @@ import BookingDrawer from './BookingDrawer'
 import FAB from '../../components/FAB/FAB'
 import AddBookingPanel from '../../components/AddBookingPanel/AddBookingPanel'
 import BlockSchedulePanel from '../../components/BlockSchedulePanel/BlockSchedulePanel'
+import { searchBookings } from '../../lib/search'
 import styles from './BookingsPage.module.css'
 
 const BOOKING_SELECT = [
@@ -36,8 +37,12 @@ export default function BookingsPage({ branches, currentBranchIdx = 0, rooms, gr
   const [showAddBooking,  setShowAddBooking]  = useState(false)
   const [showBlockPanel,  setShowBlockPanel]  = useState(false)
   const [editBooking,     setEditBooking]     = useState(null)
+  const [searchQ,         setSearchQ]         = useState('')
+  const [searchResults,   setSearchResults]   = useState([])
+  const [searching,       setSearching]       = useState(false)
 
   const branch = branches?.[currentBranchIdx]
+  const searchActive = searchQ.trim().length >= 2
 
   // How many rows are currently loaded — drives the offset for "load more"
   // and the page size for refreshes (so realtime/poll preserve the expanded view).
@@ -89,6 +94,20 @@ export default function BookingsPage({ branches, currentBranchIdx = 0, rooms, gr
     setReachedEnd(false)
     load('reset', svcFilter)
   }, [branch?.id, svcFilter]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Search (ref #, owner name/email, pet name) — debounced ────────────────
+  useEffect(() => {
+    if (!searchActive || !branch?.id) { setSearchResults([]); setSearching(false); return }
+    setSearching(true)
+    const t = setTimeout(async () => {
+      try {
+        const rows = await searchBookings(branch.id, searchQ, BOOKING_SELECT)
+        setSearchResults(rows)
+      } catch { setSearchResults([]) }
+      finally { setSearching(false) }
+    }, 300)
+    return () => clearTimeout(t)
+  }, [searchQ, searchActive, branch?.id])
 
   // ── Live updates: Realtime + 60-second poll + visibility change ───────────
   useEffect(() => {
@@ -151,10 +170,13 @@ export default function BookingsPage({ branches, currentBranchIdx = 0, rooms, gr
     setCollapsed(c => ({ ...c, [dt]: !c[dt] }))
   }
 
+  // When searching, show the search results in place of the paginated list
+  const displayed = searchActive ? searchResults : bookings
+
   // Group by created_at date in LOCAL timezone (created_at is UTC; splitting on 'T'
   // gives the wrong date for bookings made past midnight UTC but still today locally)
   const groups = {}
-  bookings.forEach(b => {
+  displayed.forEach(b => {
     let dt = 'Unknown'
     if (b.created_at) {
       const d = new Date(b.created_at)
@@ -165,7 +187,7 @@ export default function BookingsPage({ branches, currentBranchIdx = 0, rooms, gr
   })
   const sortedDates = Object.keys(groups).sort((a, b) => b.localeCompare(a))
 
-  const openBooking = bookings.find(b => b.id === openId)
+  const openBooking = displayed.find(b => b.id === openId)
 
   return (
     <div className={styles.page}>
@@ -185,11 +207,31 @@ export default function BookingsPage({ branches, currentBranchIdx = 0, rooms, gr
         </div>
       </div>
 
-      {loading && <p className={styles.msg}>Loading…</p>}
+      {/* Search */}
+      <div className={styles.searchRow}>
+        <span className={styles.searchIcon}>🔍</span>
+        <input
+          className={styles.searchInput}
+          value={searchQ}
+          onChange={e => setSearchQ(e.target.value)}
+          placeholder="Search ref #, owner name, email, or pet name…"
+        />
+        {searchQ && (
+          <button className={styles.searchClear} onClick={() => setSearchQ('')} title="Clear">✕</button>
+        )}
+      </div>
+
+      {searchActive && (
+        <p className={styles.searchMeta}>
+          {searching ? 'Searching…' : `${searchResults.length} result${searchResults.length !== 1 ? 's' : ''} for "${searchQ.trim()}"`}
+        </p>
+      )}
+
+      {!searchActive && loading && <p className={styles.msg}>Loading…</p>}
       {error   && <p className={styles.err}>{error}</p>}
 
-      {!loading && !error && sortedDates.length === 0 && (
-        <p className={styles.msg}>No bookings found.</p>
+      {!loading && !error && !searching && sortedDates.length === 0 && (
+        <p className={styles.msg}>{searchActive ? 'No matching bookings.' : 'No bookings found.'}</p>
       )}
 
       {sortedDates.map(dt => {
@@ -222,7 +264,7 @@ export default function BookingsPage({ branches, currentBranchIdx = 0, rooms, gr
         )
       })}
 
-      {!loading && bookings.length > 0 && (
+      {!searchActive && !loading && bookings.length > 0 && (
         <div className={styles.loadMore}>
           {reachedEnd ? (
             <p className={styles.loadMoreEnd}>You've reached the end — no more bookings.</p>
