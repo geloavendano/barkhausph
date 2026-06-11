@@ -234,6 +234,33 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
     }
   }, [branch?.id, loadBookings]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Keyboard shortcuts ────────────────────────────────────────────────────
+  useEffect(() => {
+    function handleKey(e) {
+      // Esc: close overlays in priority order (innermost first)
+      if (e.key === 'Escape') {
+        if (showAddBooking)  { setShowAddBooking(false); setEditBooking(null); return }
+        if (showBlockPanel)  { setShowBlockPanel(false); return }
+        if (filterOpen)      { setFilterOpen(false);     return }
+        if (openId)          { setOpenId(null);           return }
+        if (openBlockId)     { setOpenBlockId(null);      return }
+        if (calOpen)         { setCalOpen(false);         return }
+        return
+      }
+      // r / R: refresh when nothing is open and no input is focused
+      if (e.key === 'r' || e.key === 'R') {
+        const tag = document.activeElement?.tagName?.toLowerCase()
+        if (tag === 'input' || tag === 'textarea' || tag === 'select') return
+        if (document.activeElement?.isContentEditable) return
+        if (showAddBooking || showBlockPanel || filterOpen || openId || openBlockId || calOpen) return
+        loadBookings(currentDateRef.current)
+        loadBlocked()
+      }
+    }
+    document.addEventListener('keydown', handleKey)
+    return () => document.removeEventListener('keydown', handleKey)
+  }, [showAddBooking, showBlockPanel, filterOpen, openId, openBlockId, calOpen, loadBookings, loadBlocked]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Date navigation ───────────────────────────────────────────────────────
   const shiftDate = (delta) => {
     const d = new Date(currentDate); d.setDate(d.getDate() + delta)

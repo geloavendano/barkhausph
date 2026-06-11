@@ -93,6 +93,27 @@ export default function BookingsPage({ branches, currentBranchIdx = 0, rooms, gr
     }
   }, [branch?.id, load]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Keyboard shortcuts ────────────────────────────────────────────────────
+  useEffect(() => {
+    function handleKey(e) {
+      if (e.key === 'Escape') {
+        if (showAddBooking) { setShowAddBooking(false); setEditBooking(null); return }
+        if (showBlockPanel) { setShowBlockPanel(false); return }
+        if (openId)         { setOpenId(null);           return }
+        return
+      }
+      if (e.key === 'r' || e.key === 'R') {
+        const tag = document.activeElement?.tagName?.toLowerCase()
+        if (tag === 'input' || tag === 'textarea' || tag === 'select') return
+        if (document.activeElement?.isContentEditable) return
+        if (showAddBooking || showBlockPanel || openId) return
+        load(false, daysBack, svcFilter)
+      }
+    }
+    document.addEventListener('keydown', handleKey)
+    return () => document.removeEventListener('keydown', handleKey)
+  }, [showAddBooking, showBlockPanel, openId, daysBack, svcFilter, load])
+
   function handleFilterChange(svc) {
     setSvcFilter(svc)
     setDaysBack(7)
