@@ -476,16 +476,25 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
       { k:'studio',   icon:'📷', label:'Studio',    color:'#D4537E' },
     ].filter(s => s.k !== 'studio' || studios.length > 0)
     return (
-      <div className={styles.svcGrid}>
-        {svcs.map(s => (
-          <div key={s.k} className={`${styles.svcCard} ${bk.svc === s.k ? styles.svcOn : ''}`}
-            style={{ borderColor: bk.svc === s.k ? s.color : undefined }}
-            onClick={() => updMany({ svc: s.k, addons: {} })}>
-            <span className={styles.svcIcon}>{s.icon}</span>
-            <span className={styles.svcLbl}>{s.label}</span>
-          </div>
-        ))}
-      </div>
+      <>
+        {isEdit && (
+          <p className={styles.svcLockNote}>Service type cannot be changed when editing a booking.</p>
+        )}
+        <div className={styles.svcGrid}>
+          {svcs.map(s => {
+            const isLocked = isEdit && s.k !== bk.svc
+            return (
+              <div key={s.k}
+                className={`${styles.svcCard} ${bk.svc === s.k ? styles.svcOn : ''} ${isLocked ? styles.svcLocked : ''}`}
+                style={{ borderColor: bk.svc === s.k ? s.color : undefined }}
+                onClick={() => { if (!isLocked) updMany({ svc: s.k, addons: {} }) }}>
+                <span className={styles.svcIcon}>{s.icon}</span>
+                <span className={styles.svcLbl}>{s.label}</span>
+              </div>
+            )
+          })}
+        </div>
+      </>
     )
   }
 

@@ -110,6 +110,8 @@
 }
 .svcCard:hover { background: var(--raised); }
 .svcOn { background: var(--raised); border-width: 1.5px; }
+.svcLocked { opacity: 0.3; cursor: not-allowed; pointer-events: none; }
+.svcLockNote { font-size: 11px; color: var(--mid); margin-bottom: 10px; font-style: italic; }
 .svcIcon { font-size: 26px; }
 .svcLbl { font-size: 13px; font-weight: 700; color: var(--cream); }
 
