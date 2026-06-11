@@ -68,14 +68,19 @@ export function calcNights(bk) {
   return Math.max(0, Math.round((new Date(bk.hcout) - new Date(bk.hcin)) / 86400000))
 }
 
-// Hotel pricing key: dogs → pet size; cats → room type (single_cabin → cat_single_cabin, villa → cat_villa)
+// Hotel pricing key is determined by ROOM TYPE, mirroring the public booking flow.
+// Pricing table keys: small_dog, medium_dog, large_dog, cat_single_cabin, cat_villa
+const ROOM_TYPE_TO_RATE_KEY = {
+  small_cage:   'small_dog',
+  medium_cage:  'medium_dog',
+  large_cage:   'large_dog',
+  single_cabin: 'cat_single_cabin',
+  villa:        'cat_villa',
+}
 export function hotelSizeKey(bk) {
-  if (bk.size === 'cat') {
-    if (bk.hroom_type === 'villa')         return 'cat_villa'
-    if (bk.hroom_type === 'single_cabin')  return 'cat_single_cabin'
-    return 'cat_single_cabin' // safe default if no room chosen yet
-  }
-  return bk.size
+  // Use the selected room's type to look up the rate key, exactly like the public booking page.
+  // Fall back to pet size only when no room has been chosen yet.
+  return ROOM_TYPE_TO_RATE_KEY[bk.hroom_type] ?? bk.size ?? 'small_dog'
 }
 
 /** Returns { weekday: { count, rate, total }, weekend: { count, rate, total } } */

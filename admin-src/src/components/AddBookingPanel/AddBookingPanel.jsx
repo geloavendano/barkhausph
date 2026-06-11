@@ -603,9 +603,13 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
           const wdRate  = pricing.hotel['weekday']?.[sk] ?? 0
           const estBase = wdRate * nights
           const late    = calcLate(bk, pricing)
-          const basisLbl = bk.size === 'cat'
-            ? (bk.hroom_type === 'villa' ? 'Cat Villa rate' : 'Cat Cabin rate')
-            : `${SIZE_LBL[bk.size]} rate`
+          const roomLabelMap = {
+            small_cage: 'Small Cage rate', medium_cage: 'Medium Cage rate',
+            large_cage: 'Large Cage rate', single_cabin: 'Cat Cabin rate', villa: 'Cat Villa rate',
+          }
+          const basisLbl = bk.hroom_type
+            ? (roomLabelMap[bk.hroom_type] ?? bk.hroom_type)
+            : 'select a room for accurate estimate'
           return (
             <IBox>
               {nights} night{nights !== 1 ? 's' : ''} — est. {fmt(estBase + late)}
