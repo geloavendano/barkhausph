@@ -183,6 +183,9 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
       ofirst: own.first_name ?? '', olast: own.last_name ?? '',
       oemail: own.email ?? '', ophone: own.mobile ?? '',
       osource: own.referral_source ?? '', owner_id: own.id ?? null,
+      // Restore member code if one was used on the original booking
+      memcode:  b.member_code_used ?? '',
+      memvalid: !!(b.member_code_used && (b.discount_amount ?? 0) > 0),
     })
   }, [editBooking, branch?.id])
 
