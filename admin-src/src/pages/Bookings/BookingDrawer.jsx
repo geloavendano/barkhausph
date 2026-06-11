@@ -148,7 +148,12 @@ export default function BookingDrawer({ booking: b, rooms, groomers, onClose, on
 
         {/* ── Header ── */}
         <div className={styles.scrollBody}>
-          <p className={styles.ref}>{b.ref_number ?? ''}</p>
+          <div className={styles.refRow}>
+            <p className={styles.ref}>{b.ref_number ?? ''}</p>
+            {onEdit && (
+              <button className={styles.editBtn} onClick={() => onEdit(b)}>✏ Edit booking</button>
+            )}
+          </div>
           {bookedAt && <p className={styles.meta}>Booked {bookedAt}</p>}
           {b.booking_source && <p className={styles.meta}>{SRC_LABELS[b.booking_source] ?? b.booking_source}</p>}
 

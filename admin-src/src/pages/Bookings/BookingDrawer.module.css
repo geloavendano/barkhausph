@@ -36,7 +36,26 @@
 }
 
 /* ── Header ── */
-.ref    { font-size: 11px; color: var(--mid); font-weight: 700; letter-spacing: 0.06em; margin-bottom: 2px; }
+.refRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 2px;
+}
+.ref    { font-size: 11px; color: var(--mid); font-weight: 700; letter-spacing: 0.06em; }
+.editBtn {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--blue);
+  background: transparent;
+  border: 0.5px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 10px;
+  cursor: pointer;
+  font-family: 'Nunito', sans-serif;
+  white-space: nowrap;
+}
+.editBtn:hover { background: var(--raised); }
 .meta   { font-size: 10px; color: var(--mid); margin-bottom: 2px; }
 .petName {
   font-family: 'Fredoka One', cursive;
