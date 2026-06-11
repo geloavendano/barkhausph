@@ -38,7 +38,7 @@ const COMMON_SELECT = [
 // service_date column (grooming/daycare/studio), mirroring hotel's checkin/checkout.
 const DETAIL_EMBED = {
   grooming: 'grooming_details(timeslot,preferred_stylist,groom_service_name,groom_service_key,special_requests,groomer_id,service_date)',
-  hotel:    'hotel_details(checkin_date,checkout_date,dropoff_time,pickup_time,room_type,room_id,playpark_consent,feeding_instructions,medications,emergency_name,emergency_phone,vet_clinic,vet_contact,vet_address)',
+  hotel:    'hotel_details(checkin_date,checkout_date,dropoff_time,pickup_time,pickup_hour,room_type,room_id,playpark_consent,feeding_instructions,medications,emergency_name,emergency_phone,vet_clinic,vet_contact,vet_address)',
   daycare:  'daycare_details(dropoff_time,pickup_time,hours_total,open_time,notes,service_date)',
   studio:   'studio_details(timeslot,studio_id,service_date)',
 }
