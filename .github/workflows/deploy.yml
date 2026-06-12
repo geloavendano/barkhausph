@@ -1,0 +1,70 @@
+name: Deploy site
+
+# Builds the admin SPA fresh and deploys the whole site as a Pages artifact.
+# Replaces the old "build and commit /admin/" bot — no build output in git,
+# no bot commits, no race conditions.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time; newest push wins.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: admin-src/package-lock.json
+
+      - name: Build admin SPA
+        working-directory: admin-src
+        run: |
+          npm ci
+          npm run build   # vite outputs to ../admin/
+
+      - name: Assemble site
+        run: |
+          mkdir -p _site
+          rsync -a \
+            --exclude '.git' \
+            --exclude '.github' \
+            --exclude '_site' \
+            --exclude 'admin-src' \
+            --exclude 'supabase' \
+            --exclude '.claude' \
+            ./ _site/
+          touch _site/.nojekyll
+
+      - name: Configure Pages (switches repo to artifact deploys on first run)
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
