@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Barkhaus — Functional Specifications</title>
+<style>
+  :root {
+    --bg:#0F1C26;--surface:#1A3044;--raised:#1F3D55;
+    --border:rgba(77,150,185,0.28);--mid:#6AAEC8;
+    --cream:#F0EDE6;--cream-m:#B8D4E0;--blue:#4D96B9;--yellow:#FFCE58;
+    --error:#FF6B6B;--success:#6BCB77;--warn:#EF9F27;--purple:#9B95E8;--pink:#D4537E;--green:#1D9E75;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html{scroll-behavior:smooth;}
+  body{background:var(--bg);color:var(--cream);font-family:"Segoe UI",system-ui,sans-serif;font-size:14px;line-height:1.65;}
+  header{position:sticky;top:0;z-index:50;background:var(--surface);border-bottom:1px solid var(--border);height:52px;padding:0 24px;display:flex;align-items:center;gap:14px;}
+  header h1{font-size:16px;font-weight:700;}
+  header h1 span{color:var(--yellow);}
+  header .meta{margin-left:auto;font-size:11px;color:var(--mid);}
+  .badge{background:rgba(77,150,185,.15);color:var(--blue);border:1px solid rgba(77,150,185,.4);border-radius:20px;font-size:10px;font-weight:700;letter-spacing:.08em;padding:3px 10px;text-transform:uppercase;}
+  .main{max-width:880px;margin:0 auto;padding:28px 24px 80px;}
+  section{scroll-margin-top:66px;}
+  .sidenav{display:none;}
+  @media (min-width:981px){
+    .sidenav{display:block;position:fixed;top:52px;left:0;bottom:0;width:232px;overflow-y:auto;background:var(--surface);border-right:1px solid var(--border);padding:16px 10px 30px;z-index:40;}
+    .sidenav .nav-label{font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--mid);padding:0 10px;margin:14px 0 6px;}
+    .sidenav .nav-label:first-child{margin-top:0;}
+    .sidenav a{display:flex;gap:9px;align-items:baseline;color:var(--cream-m);text-decoration:none;font-size:12.5px;line-height:1.4;padding:6px 10px;border-radius:7px;margin-bottom:1px;border-left:2px solid transparent;}
+    .sidenav a:hover{background:var(--raised);color:var(--cream);}
+    .sidenav a.active{background:var(--raised);color:var(--yellow);border-left-color:var(--yellow);}
+    .sidenav a .n{color:var(--yellow);font-weight:700;font-size:10.5px;min-width:20px;flex-shrink:0;}
+    .main{margin-left:232px;}
+  }
+  .ch-head{display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border);padding-bottom:10px;margin:46px 0 6px;}
+  section:first-of-type .ch-head{margin-top:0;}
+  .ch-num{background:var(--yellow);color:#3d2e00;font-weight:800;font-size:13px;border-radius:8px;padding:3px 10px;flex-shrink:0;}
+  .ch-head h2{font-size:20px;font-weight:700;}
+  .ch-intro{color:var(--mid);font-size:13px;margin:8px 0 18px;}
+  h3{font-size:15px;font-weight:700;color:var(--yellow);margin:28px 0 8px;}
+  h4{font-size:13.5px;font-weight:700;color:var(--cream);margin:18px 0 6px;}
+  p{margin-bottom:10px;color:var(--cream-m);}
+  p strong,li strong,td strong{color:var(--cream);}
+  ul,ol{margin:0 0 12px 22px;color:var(--cream-m);}
+  li{margin-bottom:5px;}
+  code{background:rgba(0,0,0,.35);border:1px solid var(--border);padding:1px 6px;border-radius:4px;font-family:"Fira Code","Cascadia Code",monospace;font-size:12px;color:var(--yellow);}
+  table{width:100%;border-collapse:collapse;margin:10px 0 18px;font-size:13px;}
+  th{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--mid);text-align:left;padding:7px 10px;border-bottom:1px solid var(--border);}
+  td{padding:7px 10px;border-bottom:0.5px solid rgba(77,150,185,.15);color:var(--cream-m);vertical-align:top;}
+  td:first-child{color:var(--cream);font-weight:600;}
+  .rule{background:rgba(255,206,88,.06);border:1px solid rgba(255,206,88,.3);border-left-width:4px;border-radius:8px;padding:10px 14px;margin:12px 0;font-size:13px;}
+  .rule::before{content:"📐 Rule — ";font-weight:700;color:var(--yellow);}
+  .note{background:rgba(77,150,185,.08);border:1px solid rgba(77,150,185,.3);border-radius:8px;padding:10px 14px;margin:12px 0;font-size:13px;}
+  .note::before{content:"ℹ️ ";}
+  .gap{background:rgba(239,159,39,.08);border:1px solid rgba(239,159,39,.35);border-radius:8px;padding:10px 14px;margin:12px 0;font-size:13px;}
+  .gap::before{content:"🚧 Not built — ";font-weight:700;color:var(--warn);}
+  .pill{display:inline-block;border-radius:20px;font-size:11px;font-weight:700;padding:2px 10px;margin-right:4px;}
+  .backtop{display:block;text-align:right;margin-top:14px;}
+  .backtop a{color:var(--mid);font-size:11px;text-decoration:none;}
+  @media print{body{background:#fff;color:#1a2530;} p,li,td{color:#33424e;} h3{color:#8a6d00;} .ch-head h2,td:first-child{color:#16222b;}}
+</style>
+</head>
+<body>
+
+<header id="top">
+  <h1>Bark<span>haus</span> — Functional Specifications</h1>
+  <span class="badge">v1.0</span>
+  <span class="meta">June 2026 · barkhaus.ph · companion: technical-doc.html</span>
+</header>
+
+<nav class="sidenav" aria-label="Sections">
+  <div class="nav-label">Specification</div>
+  <a href="#s1"><span class="n">1</span> Platform overview &amp; actors</a>
+  <a href="#s2"><span class="n">2</span> Public website</a>
+  <a href="#s3"><span class="n">3</span> Online booking system</a>
+  <a href="#s4"><span class="n">4</span> Payments &amp; booking lifecycle</a>
+  <a href="#s5"><span class="n">5</span> Walk-in mode</a>
+  <a href="#s6"><span class="n">6</span> Admin dashboard</a>
+  <a href="#s7"><span class="n">7</span> Emails &amp; notifications</a>
+  <a href="#s8"><span class="n">8</span> Memberships</a>
+  <a href="#s9"><span class="n">9</span> Pricing &amp; business rules</a>
+  <a href="#s10"><span class="n">10</span> SEO, analytics &amp; content</a>
+  <a href="#s11"><span class="n">11</span> Known gaps / out of scope</a>
+</nav>
+
+<div class="main">
+
+<!-- ════════ 1 ════════ -->
+<section id="s1">
+  <div class="ch-head"><span class="ch-num">1</span><h2>Platform overview &amp; actors</h2></div>
+  <p>Barkhaus is a two-branch pet-services business (<strong>Estancia</strong> and <strong>Eastwood</strong>, Metro Manila) offering <strong>grooming, pet hotel, daycare, and self-shoot studio</strong> services. The platform consists of a public marketing site, a customer self-service booking system with online payment, and an internal admin dashboard for branch operations — all served from a single domain, <code>barkhaus.ph</code>.</p>
+
+  <h3>Actors</h3>
+  <table>
+    <tr><th>Actor</th><th>Capabilities</th></tr>
+    <tr><td>Visitor</td><td>Browses landing page, services, locations, membership info, blog, FAQ. No account needed.</td></tr>
+    <tr><td>Customer (online)</td><td>Books a service end-to-end and pays online via card / e-wallet. No account — identified per-booking by contact details; repeat customers are matched by email/phone.</td></tr>
+    <tr><td>Customer (walk-in)</td><td>Completes the same booking form on a staff device at the counter, without online payment (pays in store).</td></tr>
+    <tr><td>Branch staff / Admin</td><td>Signs in with Google. Full admin dashboard: calendar, bookings, check-in/out, payments, members, inventory, blocked schedules. Access controlled by an allow-list (<code>admin_users</code>).</td></tr>
+    <tr><td>System</td><td>Automated behaviors: payment webhooks, confirmation emails, 15-minute pending-booking auto-cancel, live data refresh.</td></tr>
+  </table>
+
+  <h3>Module map</h3>
+  <table>
+    <tr><th>Module</th><th>Surface</th><th>Spec section</th></tr>
+    <tr><td>Landing page</td><td><code>barkhaus.ph/</code> (+ blog, FAQ)</td><td>§2, §10</td></tr>
+    <tr><td>Booking system</td><td><code>/booking.html</code></td><td>§3–§5</td></tr>
+    <tr><td>Admin dashboard</td><td><code>/admin/</code> (React SPA)</td><td>§6</td></tr>
+    <tr><td>Emails</td><td>Resend (transactional)</td><td>§7</td></tr>
+    <tr><td>Memberships</td><td>Booking flow + admin Members page</td><td>§8</td></tr>
+    <tr><td>Pricing engine</td><td>DB-driven <code>pricing</code> table, shared logic</td><td>§9</td></tr>
+  </table>
+  <div class="backtop"><a href="#top">↑ top</a></div>
+</section>
+
+<!-- ════════ 2 ════════ -->
+<section id="s2">
+  <div class="ch-head"><span class="ch-num">2</span><h2>Public website (landing, blog, FAQ)</h2></div>
+  <p class="ch-intro">A single-page marketing site with content sections, dynamic galleries, and a persistent "Book Now" call-to-action into the booking system.</p>
+
+  <h3>2.1 Landing page sections</h3>
+  <table>
+    <tr><th>Section</th><th>Behavior</th></tr>
+    <tr><td>Hero</td><td>Animated headline + primary CTA → booking page. Decorative paw background animation.</td></tr>
+    <tr><td>Services</td><td>Card grid for Grooming / Hotel / Daycare / Studio. Each opens a modal with a swipeable image carousel (arrows, dots, thumbnails), feature list, and a "Book this service" CTA.</td></tr>
+    <tr><td>Locations</td><td>Branch switcher (Estancia / Eastwood) with photo gallery per branch, address, hours, contact. Gallery images are loaded dynamically from Supabase Storage at runtime (new photos appear without a deploy); a lightbox with dot navigation opens on click. Auto-rotates until the user interacts.</td></tr>
+    <tr><td>Membership</td><td>Marketing section for the membership program (tiers, perks). CTA to inquire/avail in store.</td></tr>
+    <tr><td>Blog</td><td>Card list of articles, loaded dynamically; links to the 5 static blog posts (§10.3).</td></tr>
+    <tr><td>FAQ fold</td><td>Top questions inline with link to the full <code>/faq</code> page.</td></tr>
+    <tr><td>Contact / footer</td><td>Per-branch phone, Instagram, map links, hours.</td></tr>
+  </table>
+
+  <h3>2.2 FAQ page</h3>
+  <p>Standalone page (<code>faq.html</code>) with categorized expandable questions covering all four services, payments, cancellation, and membership policies. Carries the same GA tracking and global navigation.</p>
+  <div class="backtop"><a href="#top">↑ top</a></div>
+</section>
+
+<!-- ════════ 3 ════════ -->
+<section id="s3">
+  <div class="ch-head"><span class="ch-num">3</span><h2>Online booking system</h2></div>
+  <p class="ch-intro">A 7-step wizard at <code>/booking.html</code>. State lives client-side until payment; the booking row is only created when the customer proceeds to pay (or, for walk-ins, on submission).</p>
+
+  <h3>3.1 Step flow</h3>
+  <table>
+    <tr><th>Step</th><th>Name</th><th>Contents &amp; gates</th></tr>
+    <tr><td>1</td><td>Location</td><td>Estancia or Eastwood. Selecting auto-advances. Everything downstream (availability, hours, resources) is scoped to this branch.</td></tr>
+    <tr><td>2</td><td>Service</td><td>Grooming / Pet Hotel / Daycare / Studio / Events. Studio is enabled only at branches that have studios (Eastwood). Events shows an info page with a back link (inquiry only, no booking).</td></tr>
+    <tr><td>3</td><td>Specs</td><td>Service-specific: size/package/add-ons (grooming), size/dates/room (hotel), size/date/times (daycare), date/slot (studio). See §3.2–§3.5.</td></tr>
+    <tr><td>4</td><td>Schedule</td><td>Service-specific scheduling: groomer + time slot (grooming), drop-off/pick-up times + play park (hotel). For daycare/studio this is merged into step 3.</td></tr>
+    <tr><td>5</td><td>Pet</td><td>Pet profile, vaccines, membership. See §3.6.</td></tr>
+    <tr><td>6</td><td>Owner ("You")</td><td>Name, email, mobile, referral source ("How did you hear about us" — selecting <em>Other</em> reveals a free-text field that is stored with the booking).</td></tr>
+    <tr><td>7</td><td>Waivers + Summary</td><td>Service-specific waivers (all required), then a grouped summary (Booking / Schedule / Pet Details / Health &amp; Care / Owner Details) with a hierarchical price breakdown and Confirm.</td></tr>
+  </table>
+  <p>Every step has explicit validation; the Continue button is visually dimmed when incomplete but still tappable — tapping it fires an alert naming exactly what's missing (deliberate UX choice over a dead button). Back-navigation preserves all entered state.</p>
+
+  <h3>3.2 Grooming</h3>
+  <ul>
+    <li><strong>Sizes:</strong> small / medium / large / giant dog, cat — sets all prices.</li>
+    <li><strong>Packages:</strong> Bath &amp; Dry (30 min), Basic (1 hr), Premium (2 hrs), Ala Carte (no base; requires ≥1 add-on).</li>
+    <li><strong>Add-ons:</strong> fixed-price items; <strong>Face Trim</strong> is size-priced and <em>included free with Premium</em> (shown "included", not toggleable); <strong>Dematting / Deshedding</strong> are assessment-priced in store (selected but billed later).</li>
+    <li><strong>Groomer preference:</strong> a specific groomer or "Any available" (clearly disclaimed: may be reassigned if absent).</li>
+    <li><strong>Slot availability</strong> (hourly slots 9 AM–5 PM) excludes, per groomer: existing bookings on the <em>appointment date</em> (each booking blocks its package duration), recurring schedule restrictions (days off, daily start/end), and one-off blocked schedules. <em>Any available</em> shows a slot only if at least one groomer survives all three checks <strong>after subtracting unassigned ("any") bookings already holding that slot</strong>; a specific groomer is hidden when unassigned bookings would overflow onto them as the last free groomer.</li>
+  </ul>
+  <div class="rule">Availability is keyed on the appointment date (<code>service_date</code>), never the date the booking was created.</div>
+
+  <h3>3.3 Pet Hotel</h3>
+  <ul>
+    <li><strong>Cats only at Eastwood</strong> — selecting Cat at Estancia is blocked with a redirect hint.</li>
+    <li><strong>Dates:</strong> check-in/check-out (min 1 night, no past dates). Nights counter shown. Stays of 7+ nights display a complimentary Bath &amp; Dry note.</li>
+    <li><strong>Room availability:</strong> rooms are filtered by pet-size compatibility (small dog → small/medium/large cage; large/giant → large cage; cats → cabin/villa), per-cage-type capacity, overlapping confirmed stays, and room locks. Fully booked rooms render disabled.</li>
+    <li><strong>Pricing is per cage type × day type</strong> (weekday vs weekend) — see §9. A live rate breakdown (weekday nights × rate + weekend nights × rate) appears as soon as dates + room are chosen.</li>
+    <li><strong>Drop-off / pick-up times:</strong> hour dropdowns limited to branch operating hours for the respective date. Pick-up after 2 PM accrues the late ladder (§9). Values stored as bare hour integers.</li>
+    <li><strong>Play park consent</strong> (dogs only): explicit Yes/No; "No" is honored operationally (pet stays in room) and flagged in the admin drawer.</li>
+    <li><strong>Cat villa:</strong> selecting a villa reveals an optional second-cat section.</li>
+    <li><strong>Health &amp; care details:</strong> feeding instructions, medications, emergency contact, vet clinic/contact/address — all carried to the admin drawer.</li>
+  </ul>
+
+  <h3>3.4 Daycare</h3>
+  <ul>
+    <li>Size + date + drop-off/pick-up times. Pick-up must be after drop-off (validated).</li>
+    <li><strong>Open pickup</strong> toggle hides the pick-up field; pet stays until closing ("last pet out") and extras settle at pickup.</li>
+    <li>Price = base (first 3 hours) + per-size hourly rate for each additional hour, computed live with an hours label.</li>
+  </ul>
+
+  <h3>3.5 Self-shoot Studio</h3>
+  <ul>
+    <li>Eastwood only. Date + hourly slot (10 AM–9 PM); slots disabled when taken by other bookings or blocked schedules.</li>
+    <li>Session price is settled at the studio (summary shows "Set at check-out"); the Studio Usage Agreement waiver is required.</li>
+  </ul>
+
+  <h3>3.6 Pet profile, vaccines &amp; senior waiver</h3>
+  <ul>
+    <li>Pet name, animal (locked to dog/cat by the size already chosen), sex, breed, age (+years/months), temperament, medical notes.</li>
+    <li><strong>Senior / pre-existing-condition waiver</strong> auto-appears when age ≥ 6 years <em>or</em> medical notes are non-empty (age in months never triggers it). It must be checked to continue, and resurfaces as a required waiver block at step 7.</li>
+    <li><strong>Vaccine declaration:</strong> per-vaccine checklist — dogs: Anti-rabies, 5/6/8-in-1, Kennel Cough/Bordetella, Tick &amp; flea; cats: Anti-rabies, All-in-1, Anti-parasitic. The full map (checked and unchecked) is stored so the admin sees ✓/✕ per vaccine.</li>
+    <li><strong>Vaccine record upload:</strong> customer may upload photo/PDF records (multiple files, to Supabase Storage). When no file is uploaded, an "I will bring my pet's vaccine records to the venue" checkbox is auto-checked (can be unchecked; one of the two paths is required).</li>
+    <li><strong>Membership:</strong> Yes/No. Yes requires a member code + pet name that validate together (§8). A failed validation blocks Continue; the error is deliberately generic ("Member not found.") to avoid leaking which part failed.</li>
+  </ul>
+
+  <h3>3.7 Waivers (step 7)</h3>
+  <table>
+    <tr><th>Waiver</th><th>Applies to</th></tr>
+    <tr><td>General terms / service waiver</td><td>All services (text varies per service: grooming risks, hotel house rules &amp; abandonment policy, daycare play-park release)</td></tr>
+    <tr><td>Health / vaccine declaration</td><td>All services</td></tr>
+    <tr><td>Media consent (photos/videos)</td><td>All services; declining is allowed and flags "do not post this pet" in admin</td></tr>
+    <tr><td>Senior / medical waiver</td><td>Conditional (§3.6)</td></tr>
+    <tr><td>Play park consent</td><td>Hotel dogs (Yes/No captured at step 4)</td></tr>
+    <tr><td>Studio usage agreement</td><td>Studio only</td></tr>
+  </table>
+  <p>All applicable waivers must be accepted before Confirm enables. Acceptance states + signing timestamp persist on the booking.</p>
+  <div class="backtop"><a href="#top">↑ top</a></div>
+</section>
+
+<!-- ════════ 4 ════════ -->
+<section id="s4">
+  <div class="ch-head"><span class="ch-num">4</span><h2>Payments &amp; booking lifecycle</h2></div>
+
+  <h3>4.1 Checkout (online)</h3>
+  <ol>
+    <li>On Confirm, the system first <strong>re-checks availability</strong> (room still free for the date span / slot still free). If taken in the meantime: toast ("That room was just booked" / "That time slot was just taken") and the customer is returned to the relevant step with a refreshed grid and cleared selection.</li>
+    <li>A <strong>pending booking</strong> row is created (status <code>pending</code>, payment <code>unpaid</code>) with a generated reference number (<code>BH-XXXXXX</code>), and the customer is redirected to a hosted <strong>PayMongo checkout</strong> (cards, GCash, etc.). A <strong>convenience fee</strong> is added for online payment only.</li>
+    <li>The pending booking <strong>holds the slot/room for ~15 minutes</strong> (communicated on the payment loading screen). A scheduled job auto-cancels pending+unpaid bookings older than 15 minutes, freeing inventory.</li>
+  </ol>
+
+  <h3>4.2 Payment success</h3>
+  <ul>
+    <li>PayMongo webhooks confirm payment; processing is <strong>idempotent</strong> (PayMongo fires two event shapes for one payment).</li>
+    <li>The booking flips to <code>confirmed / paid</code>; all detail rows are written (service details with appointment date, add-ons, itemized charges, vaccines, waiver record, uploaded vaccine documents).</li>
+    <li>A <strong>confirmation email</strong> is sent (§7) and the customer returns to a success screen: full booking recap, price breakdown, "arrive 15 minutes early" note, and a print/PDF prompt.</li>
+  </ul>
+
+  <h3>4.3 Payment cancelled / failed</h3>
+  <ul>
+    <li>Returning with <code>?payment=cancelled</code> or <code>failed</code> shows a <strong>payment-return screen</strong> (not step 1): reference number, full recap, price breakdown, and two actions.</li>
+    <li><strong>Retry Payment</strong> — creates a fresh checkout for the same pending booking.</li>
+    <li><strong>Edit booking details</strong> — cancels the pending booking server-side (freeing inventory), then restores the entire wizard from a session snapshot at the Summary step; the customer can walk back through fully pre-filled steps, change anything, and confirm again (new reference number).</li>
+    <li>If the snapshot is missing (e.g. new browser), degrade gracefully to step 1 with a toast.</li>
+  </ul>
+
+  <h3>4.4 Booking statuses</h3>
+  <table>
+    <tr><th>Status</th><th>Meaning / transitions</th></tr>
+    <tr><td>pending</td><td>Awaiting payment. → confirmed (webhook) · → cancelled (auto-cancel, customer edit, admin)</td></tr>
+    <tr><td>confirmed</td><td>Paid online, or created by admin. → checked_in · → cancelled / rejected</td></tr>
+    <tr><td>checked_in</td><td>Pet on premises (requires assigned room/groomer). → completed</td></tr>
+    <tr><td>completed</td><td>Service done, settled. Terminal.</td></tr>
+    <tr><td>cancelled / rejected</td><td>Slot freed; kept in history (greyed + strikethrough). Terminal.</td></tr>
+  </table>
+  <p>Payment statuses: <code>unpaid → partially_paid → paid</code>, plus <code>refunded</code>. Admin sets these manually for in-store money; online payments set <code>paid</code> automatically.</p>
+  <div class="backtop"><a href="#top">↑ top</a></div>
+</section>
+
+<!-- ════════ 5 ════════ -->
+<section id="s5">
+  <div class="ch-head"><span class="ch-num">5</span><h2>Walk-in mode</h2></div>
+  <p>The same booking page, opened from the admin FAB in <strong>walk-in mode</strong> so a counter customer fills their own details on a staff device.</p>
+  <ul>
+    <li><strong>Access control:</strong> the admin app mints a <strong>single-use token</strong> and opens <code>booking.html?walkin=1&amp;token=…</code>. The page verifies and consumes the token before unlocking; without a valid token an <em>Access Restricted</em> screen is shown. This prevents customers from self-serving the fee-free flow from home.</li>
+    <li><strong>Differences from online:</strong> convenience fee is ₱0; no payment gateway — the final screen shows the <strong>amount to collect in-store</strong> and a printable recap with full booking details; booking is created immediately as <code>confirmed/unpaid</code> with source <code>walkin</code>.</li>
+    <li>The booking appears on the admin calendar in real time; staff collect payment and record it in the drawer.</li>
+  </ul>
+  <div class="backtop"><a href="#top">↑ top</a></div>
+</section>
+
+<!-- ════════ 6 ════════ -->
+<section id="s6">
+  <div class="ch-head"><span class="ch-num">6</span><h2>Admin dashboard</h2></div>
+  <p class="ch-intro">React single-page app at <code>/admin/</code>. Full operational walkthrough with screenshots lives in <code>docs/admin-guide.html</code>; this section specifies the functionality.</p>
+
+  <h3>6.1 Authentication (SSO) &amp; shell</h3>
+  <ul>
+    <li><strong>Google sign-in only</strong> (OAuth via Supabase Auth). After sign-in, the user's email is checked against the <code>admin_users</code> allow-list; non-admins stay at the gate.</li>
+    <li>Top bar: <strong>branch switcher</strong> (all data branch-scoped), greeting, sign-out. Desktop sidebar with 5 pages (Calendar, Bookings, Check In, Members, Inventory); mobile bottom nav with 4 + a <em>More</em> sheet. A floating <strong>＋ FAB</strong> exposes Add Booking / Walk-in / Block Schedule.</li>
+    <li><strong>Keyboard:</strong> <code>Esc</code> closes the topmost overlay; <code>R</code> refreshes data (suppressed while typing or when an overlay is open).</li>
+    <li><strong>Live updates:</strong> Calendar and Bookings self-refresh via a realtime subscription on bookings (1.2 s debounce), a 60-second polling fallback, and an immediate refresh on tab re-focus.</li>
+  </ul>
+
+  <h3>6.2 Calendar</h3>
+  <ul>
+    <li>One-day timeline (9 AM–8 PM). Cards colored by <strong>assigned resource's color</strong>; status dot, ★ member badge, current-time line (today only); cancelled cards greyed/struck.</li>
+    <li>Date arrows, <em>Today</em> shortcut, month overlay with booking-dots; service tabs <strong>All</strong> (default) / Hotel / Grooming / Daycare / Studio with counts; resource filter via sidebar (desktop) or filter bottom-sheet (mobile).</li>
+    <li>Hotel stays render on every day of the stay (drop-off→end on check-in day, start→pick-up on check-out day, full-day between). Blocked schedules render as hatched blocks, column-laid-out <em>beside</em> bookings (never stacked), clipped to visible hours.</li>
+  </ul>
+
+  <h3>6.3 Bookings list &amp; search</h3>
+  <ul>
+    <li>History list grouped by creation date (local timezone), newest first; collapsible groups; service filter chips.</li>
+    <li><strong>Search</strong> (min 2 chars, debounced): reference number, owner first/last name, owner email, pet name — branch-scoped, replaces the list while active.</li>
+    <li><strong>Pagination:</strong> 50-row pages via "Load earlier bookings" (loading state; definitive "You've reached the end" terminal state). Background refreshes preserve however many rows are expanded.</li>
+  </ul>
+
+  <h3>6.4 Booking drawer</h3>
+  <ul>
+    <li>Single source for one booking: ref + source + <strong>✏ Edit</strong>; pet header; status pills; <strong>medical-notes alert</strong>; vaccines ✓/✕ with any uploaded documents; waivers with operational warnings ("no media consent — do not post", "no playpark consent — keep in room"); service details; <strong>room/groomer assignment</strong> (required before check-in; "Assign" inline editor); owner card with call link; emergency + vet (hotel); itemized <strong>Bill</strong> (from booking charges, incl. weekday/weekend split, discount, convenience fee); <strong>Payments</strong> list + <em>+ Record</em>; admin notes; <strong>check-in notes</strong>; sticky footer with status + payment-status selects and Update.</li>
+    <li><strong>Record Payment:</strong> amount, type (downpayment / balance / add-on charge / refund), method (cash / card / bank transfer / online), reference #, notes, recorded-by. Amount must be a positive number.</li>
+    <li><strong>Check-in notes</strong> per service — grooming: remarks + 5 yes/no condition checks (vaccination, skin&amp;coat, ears/nose/eyes, nails, joints); hotel: physical inspection, personal items, add-on purchases; daycare: remarks + add-on purchases.</li>
+  </ul>
+
+  <h3>6.5 Creating &amp; editing bookings (admin)</h3>
+  <ul>
+    <li><strong>Add Booking wizard</strong> (Service → Schedule → Pet → Owner → Details → Summary): mirrors public logic and pricing exactly; respects availability/blocks; owner step has a <strong>search-by-phone/email</strong> that reuses existing owner records; Summary applies member codes, sets initial status (pending/confirmed/checked-in) and payment status (auto-creating a payment record when paid), captures "recorded by", and sends the confirmation email immediately when an owner email is present.</li>
+    <li><strong>Edit:</strong> opens the same wizard pre-filled at Schedule; <strong>service type is locked</strong> (cancel + rebook to change service); price-affecting edits recalculate totals and rewrite the itemized charges (preserving the online convenience fee); resource-affecting edits update the calendar instantly. An edit audit row is recorded.</li>
+    <li><strong>Cancel:</strong> status → cancelled in the drawer; frees inventory, retains history. <strong>Refund:</strong> manual — record a Refund payment, set payment status refunded.</li>
+  </ul>
+
+  <h3>6.6 Check In page</h3>
+  <ul>
+    <li>Today's operational queue in three sections: <strong>Awaiting Check-In</strong> (due appointments + hotel arrivals, incl. overdue past dates), <strong>In Progress</strong> (checked-in), <strong>Due for Checkout</strong> (hotel checkouts today, with red <em>⚠ Overdue</em> past their date). Cards sorted by time; same search box (searches all bookings); same drawer.</li>
+  </ul>
+
+  <h3>6.7 Members page</h3>
+  <ul>
+    <li><strong>Validate in-store:</strong> code + pet name → ✓ valid (tier, coverage, expiry) / pet-name mismatch / expired (with date) / not found-inactive.</li>
+    <li><strong>CSV upload:</strong> bulk upsert with required headers <code>Membership ID, Pet Name, Valid Until Date, Branch</code>; reports added vs updated counts; malformed headers rejected.</li>
+  </ul>
+
+  <h3>6.8 Inventory page</h3>
+  <ul>
+    <li>Tabs: Rooms / Groomers / Studios, branch-scoped, with counts. Create &amp; edit: name + <strong>calendar color</strong> (8-color palette); rooms add cage type, pet type, allowed sizes; rooms support <strong>lock</strong> (+reason), groomers/studios support <strong>unavailable</strong> (+reason). <strong>Remove = soft delete</strong>: disappears from all pickers and public availability; historical bookings keep the name.</li>
+  </ul>
+
+  <h3>6.9 Blocked schedules</h3>
+  <ul>
+    <li>Block a room / groomer / studio for one or more dates with a start–end time and reason. Removes availability from public + admin simultaneously; renders hatched on the calendar; detail drawer with delete (no in-place edit — delete &amp; recreate).</li>
+  </ul>
+  <div class="backtop"><a href="#top">↑ top</a></div>
+</section>
+
+<!-- ════════ 7 ════════ -->
+<section id="s7">
+  <div class="ch-head"><span class="ch-num">7</span><h2>Emails &amp; notifications</h2></div>
+  <table>
+    <tr><th>Email</th><th>Trigger</th><th>Contents</th></tr>
+    <tr><td>Booking confirmation (online)</td><td>Payment success webhook — never before payment</td><td>Subject "Booking Confirmed — BH-XXXXXX". Branded HTML: branch, service details per type (package/add-ons/groomer/date-time, room/check-in-out/play park, daycare times, studio slot), pet profile incl. membership line, vaccine-records status, health &amp; emergency info (hotel), owner details, itemized price breakdown, branch footer. No-reply notice directing changes to the branch.</td></tr>
+    <tr><td>Booking confirmation (admin / walk-in)</td><td>Immediately on creation, when an owner email exists</td><td>Same template; not gated on payment.</td></tr>
+  </table>
+  <div class="note">There are deliberately <strong>no reminder, cancellation, or refund emails</strong> at this stage; those are phone/Instagram interactions.</div>
+  <div class="backtop"><a href="#top">↑ top</a></div>
+</section>
+
+<!-- ════════ 8 ════════ -->
+<section id="s8">
+  <div class="ch-head"><span class="ch-num">8</span><h2>Memberships</h2></div>
+  <ul>
+    <li><strong>Record model:</strong> member code (e.g. <code>BH-M001</code>) tied to a registered <em>pet name</em>, a tier, a validity date, an active flag, and (for Standard) a home branch.</li>
+    <li><strong>Tiers:</strong> <span class="pill" style="background:rgba(77,150,185,.2);color:var(--blue)">Standard</span> valid at its home branch only · <span class="pill" style="background:rgba(155,149,232,.2);color:var(--purple)">Passport</span> valid at all branches.</li>
+    <li><strong>Validation rules</strong> (same everywhere — public flow, admin wizard, Members page): code exists ∧ active ∧ not expired ∧ pet name matches ∧ branch in scope. Public-facing failures return a generic "Member not found." (no hint which check failed); the staff validator shows the precise reason.</li>
+    <li><strong>Benefit:</strong> percentage discount on the booking subtotal — grooming 10%, hotel 20%, daycare 20% (rates DB-driven). Discounted bookings carry a ★ across admin surfaces and the code used is stored on the booking.</li>
+    <li><strong>Administration:</strong> CSV bulk upload is the system of record (§6.7) — no per-member edit UI by design.</li>
+  </ul>
+  <div class="backtop"><a href="#top">↑ top</a></div>
+</section>
+
+<!-- ════════ 9 ════════ -->
+<section id="s9">
+  <div class="ch-head"><span class="ch-num">9</span><h2>Pricing &amp; business rules</h2></div>
+  <p>All rates live in a single <code>pricing</code> database table and are fetched at runtime by both the public flow and the admin app — <strong>price changes require no deploy</strong>. If pricing fails to load, both surfaces show a persistent error banner and hard-block booking creation (guard against ₱0 bookings).</p>
+
+  <h3>9.1 Price computation</h3>
+  <table>
+    <tr><th>Service</th><th>Formula</th></tr>
+    <tr><td>Grooming</td><td>package[size] + Σ add-ons (face trim by size; free with Premium; assessment items excluded from prepaid total). Ala Carte = add-ons only.</td></tr>
+    <tr><td>Hotel</td><td>Σ per night: rate[cage-type][weekday|weekend]. Cage type → rate key: small/medium/large cage → small/medium/large-dog rate; cat cabin / cat villa → own rates. <strong>Fri, Sat, Sun nights bill at the weekend rate.</strong> + late pick-up (below).</td></tr>
+    <tr><td>Daycare</td><td>base[size] (covers first 3 h) + extra[size] × max(0, hours − 3). Open-time = base now, extras at pickup.</td></tr>
+    <tr><td>Studio</td><td>Settled at the studio.</td></tr>
+  </table>
+
+  <h3>9.2 Fees &amp; discounts</h3>
+  <table>
+    <tr><th>Item</th><th>Rule</th></tr>
+    <tr><td>Late pick-up (hotel)</td><td>Per-hour fee for every hour past 2 PM; <strong>&gt; 6 h past = +1 night</strong>; not collected by 8 PM = +1 night.</td></tr>
+    <tr><td>Member discount</td><td>% of subtotal (base + add-ons + late fee): grooming 10 / hotel 20 / daycare 20.</td></tr>
+    <tr><td>Convenience fee</td><td>Online card/e-wallet checkout only; never on admin or walk-in bookings; excluded from discount base.</td></tr>
+    <tr><td>Itemized charges</td><td>Every booking stores line items (base service or weekday/weekend night lines, late fee, discount, convenience fee) so the admin bill always reconciles with the stored totals.</td></tr>
+  </table>
+
+  <h3>9.3 Operating hours (scheduling windows)</h3>
+  <table>
+    <tr><th>Branch</th><th>Mon–Thu</th><th>Fri–Sun</th></tr>
+    <tr><td>Estancia</td><td>11:00 AM – 9:00 PM</td><td>10:00 AM – 10:00 PM</td></tr>
+    <tr><td>Eastwood</td><td colspan="2">10:00 AM – 10:00 PM daily</td></tr>
+  </table>
+
+  <h3>9.4 Data conventions (functionally significant)</h3>
+  <ul>
+    <li><code>booking_date</code> on a booking = <strong>creation date</strong>; the appointment date lives in each service's detail record (<code>service_date</code>, or check-in/out for hotel). All availability and check-in queues key off the latter.</li>
+    <li>Drop-off/pick-up hours stored as bare hour integers ("14"); grooming/studio slots as display strings ("2:00 PM").</li>
+    <li>Soft deletes everywhere user-visible (resources <code>active=false</code>, blocks <code>active=false</code>, bookings → cancelled) — nothing operational is hard-deleted.</li>
+  </ul>
+  <div class="backtop"><a href="#top">↑ top</a></div>
+</section>
+
+<!-- ════════ 10 ════════ -->
+<section id="s10">
+  <div class="ch-head"><span class="ch-num">10</span><h2>SEO, analytics &amp; content</h2></div>
+
+  <h3>10.1 Analytics</h3>
+  <ul>
+    <li><strong>Google Analytics 4</strong> (<code>G-LBWQT2HSGQ</code>) via gtag.js on every public page: landing, booking, FAQ, and all blog posts. The admin app is not tracked.</li>
+  </ul>
+
+  <h3>10.2 SEO</h3>
+  <ul>
+    <li><strong>Structured data:</strong> JSON-LD on the landing page — <code>WebSite</code> + <code>LocalBusiness</code> entries per branch (name, URL, phone, postal address).</li>
+    <li><strong>robots.txt:</strong> allow all; disallow the legacy <code>/admin.html</code> and the internal test suite; sitemap reference.</li>
+    <li><strong>sitemap.xml:</strong> 7 URLs — home, FAQ, and the 5 blog posts (extensionless paths).</li>
+    <li>Per-page titles/meta descriptions; OpenGraph tags on content pages; custom domain via CNAME (<code>barkhaus.ph</code>) with HTTPS.</li>
+  </ul>
+
+  <h3>10.3 Content (blog)</h3>
+  <p>Five evergreen articles targeting service keywords, statically served and surfaced as cards on the landing page: indoor play benefits · hotel vs daycare · preparing for daycare · what to pack for a hotel stay · grooming &amp; health.</p>
+  <div class="backtop"><a href="#top">↑ top</a></div>
+</section>
+
+<!-- ════════ 11 ════════ -->
+<section id="s11">
+  <div class="ch-head"><span class="ch-num">11</span><h2>Known gaps / out of scope</h2></div>
+  <div class="gap">Editing a blocked schedule in place (delete &amp; recreate is the accepted flow).</div>
+  <div class="gap">Per-member create/edit UI — memberships are CSV-managed by design.</div>
+  <div class="gap">Automated payment-gateway refunds — refunds are recorded manually after money moves outside the system.</div>
+  <div class="gap">Vaccine file upload from the admin wizard (declarations only; uploads are an online-customer feature).</div>
+  <div class="gap">Combined cancel-and-refund action; reminder / cancellation emails; customer accounts &amp; booking self-management; full-name ("First Last") search matching.</div>
+  <p style="margin-top:14px">Scenario-level acceptance criteria for everything above are maintained in <code>docs/test-scenarios.md</code>, with executable checks in the internal test suite.</p>
+  <div class="backtop"><a href="#top">↑ top</a></div>
+</section>
+
+</div>
+
+<script>
+(function(){
+  var links = Array.prototype.slice.call(document.querySelectorAll('.sidenav a'));
+  if(!links.length) return;
+  var byId = {};
+  links.forEach(function(a){ byId[a.getAttribute('href').slice(1)] = a; });
+  function setActive(id){ links.forEach(function(a){a.classList.remove('active');}); if(byId[id]) byId[id].classList.add('active'); }
+  var obs = new IntersectionObserver(function(es){ es.forEach(function(e){ if(e.isIntersecting) setActive(e.target.id); }); }, {rootMargin:'-15% 0px -75% 0px'});
+  document.querySelectorAll('.main > section').forEach(function(s){ obs.observe(s); });
+  links.forEach(function(a){ a.addEventListener('click', function(){ setActive(a.getAttribute('href').slice(1)); }); });
+})();
+</script>
+</body>
+</html>

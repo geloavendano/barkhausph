@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Barkhaus — Technical Documentation</title>
+<style>
+  :root {
+    --bg:#0F1C26;--surface:#1A3044;--raised:#1F3D55;
+    --border:rgba(77,150,185,0.28);--mid:#6AAEC8;
+    --cream:#F0EDE6;--cream-m:#B8D4E0;--blue:#4D96B9;--yellow:#FFCE58;
+    --error:#FF6B6B;--success:#6BCB77;--warn:#EF9F27;--purple:#9B95E8;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html{scroll-behavior:smooth;}
+  body{background:var(--bg);color:var(--cream);font-family:"Segoe UI",system-ui,sans-serif;font-size:14px;line-height:1.65;}
+  header{position:sticky;top:0;z-index:50;background:var(--surface);border-bottom:1px solid var(--border);height:52px;padding:0 24px;display:flex;align-items:center;gap:14px;}
+  header h1{font-size:16px;font-weight:700;}
+  header h1 span{color:var(--yellow);}
+  header .meta{margin-left:auto;font-size:11px;color:var(--mid);}
+  .badge{background:rgba(77,150,185,.15);color:var(--blue);border:1px solid rgba(77,150,185,.4);border-radius:20px;font-size:10px;font-weight:700;letter-spacing:.08em;padding:3px 10px;text-transform:uppercase;}
+  .main{max-width:920px;margin:0 auto;padding:28px 24px 80px;}
+  section{scroll-margin-top:66px;}
+  .sidenav{display:none;}
+  @media (min-width:1010px){
+    .sidenav{display:block;position:fixed;top:52px;left:0;bottom:0;width:232px;overflow-y:auto;background:var(--surface);border-right:1px solid var(--border);padding:16px 10px 30px;z-index:40;}
+    .sidenav .nav-label{font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--mid);padding:0 10px;margin:14px 0 6px;}
+    .sidenav .nav-label:first-child{margin-top:0;}
+    .sidenav a{display:flex;gap:9px;align-items:baseline;color:var(--cream-m);text-decoration:none;font-size:12.5px;line-height:1.4;padding:6px 10px;border-radius:7px;margin-bottom:1px;border-left:2px solid transparent;}
+    .sidenav a:hover{background:var(--raised);color:var(--cream);}
+    .sidenav a.active{background:var(--raised);color:var(--yellow);border-left-color:var(--yellow);}
+    .sidenav a .n{color:var(--yellow);font-weight:700;font-size:10.5px;min-width:20px;flex-shrink:0;}
+    .main{margin-left:232px;}
+  }
+  .ch-head{display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border);padding-bottom:10px;margin:46px 0 6px;}
+  section:first-of-type .ch-head{margin-top:0;}
+  .ch-num{background:var(--yellow);color:#3d2e00;font-weight:800;font-size:13px;border-radius:8px;padding:3px 10px;flex-shrink:0;}
+  .ch-head h2{font-size:20px;font-weight:700;}
+  .ch-intro{color:var(--mid);font-size:13px;margin:8px 0 18px;}
+  h3{font-size:15px;font-weight:700;color:var(--yellow);margin:28px 0 8px;}
+  p{margin-bottom:10px;color:var(--cream-m);}
+  p strong,li strong,td strong{color:var(--cream);}
+  ul,ol{margin:0 0 12px 22px;color:var(--cream-m);}
+  li{margin-bottom:5px;}
+  code{background:rgba(0,0,0,.35);border:1px solid var(--border);padding:1px 6px;border-radius:4px;font-family:"Fira Code","Cascadia Code",monospace;font-size:12px;color:var(--yellow);}
+  pre.tree{background:#0a151e;border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin:10px 0 18px;font-family:"Fira Code","Cascadia Code",monospace;font-size:12px;line-height:1.6;color:#a8c7d8;overflow-x:auto;}
+  pre.tree b{color:var(--yellow);font-weight:600;}
+  table{width:100%;border-collapse:collapse;margin:10px 0 18px;font-size:13px;}
+  th{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--mid);text-align:left;padding:7px 10px;border-bottom:1px solid var(--border);}
+  td{padding:7px 10px;border-bottom:0.5px solid rgba(77,150,185,.15);color:var(--cream-m);vertical-align:top;}
+  td:first-child{color:var(--cream);font-weight:600;white-space:nowrap;}
+  .note{background:rgba(77,150,185,.08);border:1px solid rgba(77,150,185,.3);border-radius:8px;padding:10px 14px;margin:12px 0;font-size:13px;}
+  .note::before{content:"ℹ️ ";}
+  .warn{background:rgba(239,159,39,.08);border:1px solid rgba(239,159,39,.35);border-radius:8px;padding:10px 14px;margin:12px 0;font-size:13px;}
+  .warn::before{content:"⚠️ ";}
+  .diagram{background:#0a151e;border:1px solid var(--border);border-radius:12px;padding:16px;margin:14px 0 22px;overflow-x:auto;}
+  .diagram .dg-title{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--mid);margin-bottom:10px;}
+  pre.mermaid{background:transparent;color:#a8c7d8;font-size:12px;}
+  .backtop{display:block;text-align:right;margin-top:14px;}
+  .backtop a{color:var(--mid);font-size:11px;text-decoration:none;}
+</style>
+</head>
+<body>
+
+<header id="top">
+  <h1>Bark<span>haus</span> — Technical Documentation</h1>
+  <span class="badge">v1.0</span>
+  <span class="meta">June 2026 · companion: functional-spec.html · admin-guide.html</span>
+</header>
+
+<nav class="sidenav" aria-label="Sections">
+  <div class="nav-label">Architecture</div>
+  <a href="#t1"><span class="n">1</span> System architecture</a>
+  <a href="#t2"><span class="n">2</span> Tech stack</a>
+  <a href="#t3"><span class="n">3</span> Repository layout</a>
+  <div class="nav-label">Components</div>
+  <a href="#t4"><span class="n">4</span> Frontend services</a>
+  <a href="#t5"><span class="n">5</span> Backend (edge functions &amp; jobs)</a>
+  <a href="#t6"><span class="n">6</span> Data model</a>
+  <a href="#t7"><span class="n">7</span> Security model</a>
+  <div class="nav-label">Flows</div>
+  <a href="#t8"><span class="n">8</span> Sequence diagrams</a>
+  <a href="#t9"><span class="n">9</span> Third-party integrations</a>
+  <div class="nav-label">Operations</div>
+  <a href="#t10"><span class="n">10</span> Build &amp; deployment</a>
+  <a href="#t11"><span class="n">11</span> Testing &amp; documentation</a>
+  <a href="#t12"><span class="n">12</span> Operational gotchas</a>
+</nav>
+
+<div class="main">
+
+<!-- ════════ 1 ════════ -->
+<section id="t1">
+  <div class="ch-head"><span class="ch-num">1</span><h2>System architecture</h2></div>
+  <p>Barkhaus is a <strong>static-frontend + Backend-as-a-Service</strong> architecture: all HTML/JS/CSS is served by GitHub Pages under the custom domain <code>barkhaus.ph</code>; every dynamic capability (database, auth, storage, realtime, serverless functions, scheduled jobs) is Supabase; payments and email are external SaaS reached from edge functions.</p>
+
+  <div class="diagram"><div class="dg-title">High-level architecture</div>
+  <pre class="mermaid">
+flowchart LR
+  subgraph Client["Browser"]
+    PUB["Public site\nindex / booking / faq / blog\n(vanilla JS)"]
+    ADM["Admin SPA\n/admin/\n(React + Vite)"]
+  end
+  subgraph GH["GitHub Pages · barkhaus.ph"]
+    STATIC["Static assets\nHTML · JS · CSS · images"]
+  end
+  subgraph SB["Supabase"]
+    PG[("Postgres\n+ RLS · PostgREST")]
+    AUTH["Auth (GoTrue)\nGoogle OAuth"]
+    RT["Realtime\npostgres_changes"]
+    ST["Storage\nvaccine docs · gallery"]
+    EF["Edge Functions (Deno)\nsubmit-booking · create-payment\nhandle-payment-webhook\ncancel-pending-booking · get-upload-url"]
+    CRON["pg_cron\nauto-cancel pendings (5 min)"]
+  end
+  PM["PayMongo\nhosted checkout + webhooks"]
+  RS["Resend\ntransactional email"]
+  GA["Google Analytics 4"]
+
+  Client -- HTTPS --> GH
+  PUB -- "REST (anon key)" --> PG
+  PUB -- upload --> ST
+  PUB --> EF
+  ADM -- "REST (user JWT)" --> PG
+  ADM --> AUTH
+  ADM -- websocket --> RT
+  ADM --> EF
+  EF --> PG
+  EF --> PM
+  EF --> RS
+  PM -- webhook --> EF
+  CRON --> PG
+  PUB --> GA
+  </pre></div>
+
+  <ul>
+    <li><strong>No customer accounts:</strong> the public flow runs on the anon key with row-level security limiting what it can read/write; identity is per-booking.</li>
+    <li><strong>Admin is a separate SPA</strong> compiled from <code>admin-src/</code> into <code>/admin/</code>; it authenticates real users (Google) and operates on the same database under authenticated RLS policies.</li>
+    <li><strong>Money paths never trust the client:</strong> booking confirmation and all post-payment writes happen inside the webhook edge function using the service-role key.</li>
+  </ul>
+  <div class="backtop"><a href="#top">↑ top</a></div>
+</section>
+
+<!-- ════════ 2 ════════ -->
+<section id="t2">
+  <div class="ch-head"><span class="ch-num">2</span><h2>Tech stack</h2></div>
+  <table>
+    <tr><th>Layer</th><th>Technology</th><th>Notes</th></tr>
+    <tr><td>Hosting</td><td>GitHub Pages + CNAME</td><td>Repo root is the site root; HTTPS; no server to operate.</td></tr>
+    <tr><td>Public frontend</td><td>Vanilla JS + HTML/CSS</td><td>No framework, no build step. <code>booking.js</code> ≈ 3.2k lines (wizard state machine), <code>index.js</code> ≈ 860 (landing interactions), shared <code>pricing.js</code> / <code>validation.js</code> / <code>images.js</code>.</td></tr>
+    <tr><td>Admin frontend</td><td>React 18 + Vite 8 (Rolldown), CSS Modules</td><td><code>admin-src/</code> ≈ 7.3k lines; built bundle committed to <code>/admin/</code>; base path <code>/admin/</code>.</td></tr>
+    <tr><td>Database</td><td>Supabase Postgres + PostgREST</td><td>All reads/writes via PostgREST REST API with embedded-resource selects; RLS on.</td></tr>
+    <tr><td>Auth</td><td>Supabase Auth (GoTrue)</td><td>Google OAuth provider; admin allow-list via <code>admin_users</code> table.</td></tr>
+    <tr><td>Realtime</td><td>Supabase Realtime</td><td><code>postgres_changes</code> on <code>bookings</code>; drives admin live refresh.</td></tr>
+    <tr><td>Storage</td><td>Supabase Storage</td><td>Vaccine documents (signed upload URLs) + landing-page branch galleries (listed at runtime).</td></tr>
+    <tr><td>Serverless</td><td>Supabase Edge Functions (Deno/TS)</td><td>5 functions, ≈ 2k lines total (§5).</td></tr>
+    <tr><td>Scheduled jobs</td><td>pg_cron</td><td>Auto-cancel pending+unpaid bookings &gt; 15 min old; runs every 5 min.</td></tr>
+    <tr><td>Payments</td><td>PayMongo</td><td>Hosted Checkout Sessions; webhook events <code>payment.paid</code> + <code>checkout_session.payment.paid</code>.</td></tr>
+    <tr><td>Email</td><td>Resend</td><td>Inline-HTML branded transactional emails from edge functions.</td></tr>
+    <tr><td>Analytics</td><td>Google Analytics 4</td><td><code>G-LBWQT2HSGQ</code> on all public pages.</td></tr>
+    <tr><td>Fonts/UI</td><td>Google Fonts (Fredoka One, Nunito)</td><td>Shared dark navy/cream/yellow design language across site, admin, and docs.</td></tr>
+  </table>
+  <div class="backtop"><a href="#top">↑ top</a></div>
+</section>
+
+<!-- ════════ 3 ════════ -->
+<section id="t3">
+  <div class="ch-head"><span class="ch-num">3</span><h2>Repository layout</h2></div>
+  <pre class="tree">barkhausph/                       <b>← repo root = site root (GitHub Pages)</b>
+├── index.html / index.js         landing page + interactions (hero, galleries, modals, blog cards)
+├── booking.html / booking.js     7-step booking wizard (3.2k lines) + payment return flow
+├── pricing.js                    shared rate tables — zeroed; hydrated from the pricing DB table
+├── validation.js                 per-step validation helpers for the booking flow
+├── images.js                     path-based image references for the public site
+├── faq.html · blog/*.html (5)    content pages
+├── sitemap.xml · robots.txt · CNAME · favicon.ico
+├── admin/                        <b>built</b> admin SPA (Vite output — committed)
+├── admin-src/                    admin source (React)
+│   └── src/
+│       ├── App.jsx               auth bootstrap, branch + resource loading, routing
+│       ├── components/           Gate (SSO) · Shell (nav) · FAB · AddBookingPanel ·
+│       │                         BlockSchedulePanel · ErrorBoundary · BranchPicker
+│       ├── pages/                Calendar · Bookings (+ BookingDrawer, PaymentPanel) ·
+│       │                         CheckIn · Members · Resources
+│       └── lib/                  supabase.js (client + REST helpers + token cache) ·
+│                                 pricing.js · search.js · constants.js
+├── supabase/
+│   ├── functions/                5 Deno edge functions (§5)
+│   └── migrations/               SQL migrations (service_date move · booking_charges RLS)
+└── docs/                         test-scenarios.md · admin-guide.html ·
+                                  functional-spec.html · technical-doc.html (this file)</pre>
+  <div class="backtop"><a href="#top">↑ top</a></div>
+</section>
+
+<!-- ════════ 4 ════════ -->
+<section id="t4">
+  <div class="ch-head"><span class="ch-num">4</span><h2>Frontend services</h2></div>
+
+  <h3>4.1 Public site modules</h3>
+  <table>
+    <tr><th>Module</th><th>Responsibility</th></tr>
+    <tr><td>index.js</td><td>Branch gallery loader (lists Supabase Storage at runtime and upgrades static images), location switcher with auto-rotation + lightbox, service modals with carousels, dynamic blog cards, scroll/entrance animations.</td></tr>
+    <tr><td>booking.js</td><td>The booking state machine: a single <code>booking</code> object + step navigation; availability queries against PostgREST (rooms by capacity/size/locks; groomer slots from <code>grooming_details!inner</code> on <code>service_date</code> + recurring restrictions + <code>blocked_schedules</code>, with unassigned-overflow math; studio slots); live price calculators per service; membership validation; vaccine upload orchestration; walk-in gate (single-use token verify + consume); pre-payment conflict re-check; payment return screens with full session-snapshot restore (<code>bk_snapshot</code>).</td></tr>
+    <tr><td>pricing.js</td><td>Declares all rate tables zeroed (groom, face-trim, addons, hotel weekday/weekend by cage-rate-key, daycare base/extra, late rate, member %, convenience fee) and hydrates them from the <code>pricing</code> table on load; exposes <code>_pricingLoaded</code> guard — booking submission is blocked and a sticky error banner shown if hydration failed.</td></tr>
+    <tr><td>validation.js</td><td>Pure per-step validators consumed by booking.js.</td></tr>
+  </table>
+
+  <h3>4.2 Admin SPA</h3>
+  <table>
+    <tr><th>Area</th><th>Key implementation details</th></tr>
+    <tr><td>lib/supabase.js</td><td>Supabase client (Realtime enabled) + thin REST helpers (<code>sbGet/sbPost/sbPatch/sbUpsert/sbDelete</code>). <strong>Token-cache pattern:</strong> <code>authHeaders()</code> is synchronous, reading a module-level token set by App.jsx on every auth event — calling <code>getSession()</code> per request previously deadlocked behind in-flight token refreshes.</td></tr>
+    <tr><td>App.jsx</td><td>Auth bootstrap with a 6-second watchdog (falls back to the Gate if <code>getSession()</code> hangs), admin verification against <code>admin_users</code>, branch + resource loading (active-only rooms/groomers/studios incl. <code>room_type</code> for pricing).</td></tr>
+    <tr><td>CalendarPage</td><td>Per-service parallel queries (<code>!inner</code> on detail-table <code>service_date</code>; hotel fetched whole and span-filtered client-side), unified column layout for bookings + blocked-schedule segments, month-dot loader, live updates (realtime channel + 60 s poll + visibilitychange, 1.2 s debounce), keyboard shortcuts.</td></tr>
+    <tr><td>BookingsPage</td><td>Offset pagination (50-row pages; end = short page; resets refetch <code>max(50, loaded)</code>), local-timezone date grouping, debounced multi-field search via lib/search.js (three parallel branch-scoped queries — ref ilike, owners!inner or-filter, pets!inner — merged unique).</td></tr>
+    <tr><td>BookingDrawer</td><td>Composite reads: booking embed + separate <code>booking_charges</code>/<code>payments</code>/vaccine-document queries; inline room/groomer assignment; per-service check-in-notes forms; sticky status footer.</td></tr>
+    <tr><td>AddBookingPanel</td><td>6-step wizard reusing lib/pricing.js (cage-type×day hotel key, daycare hourly, late ladder); edit mode pre-population (vaccine-name normalisation, bare-hour times, member code restore) with service-type lock; create via <code>submit-booking</code>, edit via direct PATCHes + charge rewrite + audit row. Step renderers are called as functions and shared field components live at module scope — defining them inside the component remounts the subtree per keystroke and drops input focus.</td></tr>
+    <tr><td>FAB</td><td>Mints a single-use row in <code>walkin_tokens</code> then opens <code>booking.html?walkin=1&amp;token=…</code> in a new tab.</td></tr>
+  </table>
+  <div class="backtop"><a href="#top">↑ top</a></div>
+</section>
+
+<!-- ════════ 5 ════════ -->
+<section id="t5">
+  <div class="ch-head"><span class="ch-num">5</span><h2>Backend — edge functions &amp; scheduled jobs</h2></div>
+  <p>All functions are Deno/TypeScript on Supabase, using the <strong>service-role key</strong> (RLS bypass) for writes. CORS open; secrets via function env (<code>PAYMONGO_SECRET_KEY</code>, <code>RESEND_API_KEY</code>).</p>
+  <table>
+    <tr><th>Function</th><th>Caller</th><th>Behavior</th></tr>
+    <tr><td>create-payment <span style="color:var(--mid)">(332 L)</span></td><td>booking.js (online checkout)</td><td>Validates required fields → resolves branch → upserts owner/pet → inserts <strong>pending</strong> booking (ref number, totals, charges payload retained) → creates PayMongo Checkout Session (line items incl. convenience fee; success/cancel URLs back to booking.html) → returns <code>checkout_url</code>. Carries the full booking payload + vaccine document paths in session metadata for the webhook.</td></tr>
+    <tr><td>handle-payment-webhook <span style="color:var(--mid)">(858 L)</span></td><td>PayMongo</td><td>Verifies webhook signature → accepts only paid events. Handles both <code>checkout_session.payment.paid</code> (primary; carries metadata) and <code>payment.paid</code> (acks/no-ops when identifiers are absent). <strong>Idempotent</strong>: a conditional update guards double-processing. Flips booking → confirmed/paid, inserts service-detail row (with <code>service_date</code>), addons, itemized <code>booking_charges</code>, vaccines, waiver record, <code>vaccine_documents</code> → sends the Resend confirmation email.</td></tr>
+    <tr><td>submit-booking <span style="color:var(--mid)">(646 L)</span></td><td>Admin wizard · walk-in page</td><td>Direct full-booking creation without a gateway: owner upsert by email, pet insert, booking (status <code>pending</code>, source <code>admin</code>/<code>walkin</code>; admin then PATCHes status/payment), detail row per service, addons, charges, vaccines, waivers. Sends the confirmation email immediately when <code>adminCreated</code> + owner email.</td></tr>
+    <tr><td>cancel-pending-booking <span style="color:var(--mid)">(58 L)</span></td><td>booking.js (edit-after-failed-payment)</td><td>Sets <code>status='cancelled'</code> with reason, <strong>only where status is still pending</strong> — can never cancel a confirmed booking.</td></tr>
+    <tr><td>get-upload-url <span style="color:var(--mid)">(95 L)</span></td><td>booking.js (vaccine files)</td><td>Issues signed Supabase Storage upload URLs per file; resulting paths flow through create-payment metadata → webhook persists <code>vaccine_documents</code> rows.</td></tr>
+  </table>
+  <h3>Scheduled job</h3>
+  <p><strong>pg_cron</strong> (defined in the database): every 5 minutes, cancel bookings still <code>pending + unpaid</code> after 15 minutes, with a cron-tagged <code>cancellation_reason</code> — this is the inventory-hold release.</p>
+  <div class="backtop"><a href="#top">↑ top</a></div>
+</section>
+
+<!-- ════════ 6 ════════ -->
+<section id="t6">
+  <div class="ch-head"><span class="ch-num">6</span><h2>Data model</h2></div>
+  <p>Core entity relationships (columns abridged; full DDL in <code>supabase/migrations/</code> + the live schema):</p>
+
+  <div class="diagram"><div class="dg-title">Entity-relationship overview</div>
+  <pre class="mermaid">
+erDiagram
+  BRANCHES ||--o{ BOOKINGS : "branch_id"
+  BRANCHES ||--o{ ROOMS : ""
+  BRANCHES ||--o{ GROOMERS : ""
+  BRANCHES ||--o{ STUDIOS : ""
+  OWNERS ||--o{ BOOKINGS : "owner_id"
+  PETS ||--o{ BOOKINGS : "pet_id"
+  BOOKINGS ||--o| GROOMING_DETAILS : "1:1 by service"
+  BOOKINGS ||--o| HOTEL_DETAILS : ""
+  BOOKINGS ||--o| DAYCARE_DETAILS : ""
+  BOOKINGS ||--o| STUDIO_DETAILS : ""
+  BOOKINGS ||--o{ BOOKING_ADDONS : ""
+  BOOKINGS ||--o{ BOOKING_CHARGES : "itemized bill"
+  BOOKINGS ||--o{ PAYMENTS : "money trail"
+  BOOKINGS ||--o{ PET_VACCINES : "declarations"
+  BOOKINGS ||--o{ VACCINE_DOCUMENTS : "uploads"
+  BOOKINGS ||--o| WAIVERS : ""
+  BOOKINGS ||--o| CHECKIN_NOTES : ""
+  BOOKINGS ||--o{ BOOKING_EDITS : "audit"
+  ROOMS ||--o{ HOTEL_DETAILS : "room_id"
+  GROOMERS ||--o{ GROOMING_DETAILS : "groomer_id"
+  STUDIOS ||--o{ STUDIO_DETAILS : "studio_id"
+  BLOCKED_SCHEDULES }o--|| BRANCHES : "resource_type+id"
+
+  BOOKINGS {
+    uuid id PK
+    text ref_number "BH-XXXXXX"
+    text service "grooming|hotel|daycare|studio"
+    text status "pending..completed"
+    text payment_status
+    date booking_date "CREATION date"
+    int subtotal
+    int discount_amount
+    int total
+    text member_code_used
+    text booking_source "online|admin|walkin"
+  }
+  GROOMING_DETAILS {
+    date service_date "APPOINTMENT date"
+    text timeslot
+    uuid groomer_id "null = any"
+    text groom_service_key
+  }
+  HOTEL_DETAILS {
+    date checkin_date
+    date checkout_date
+    text dropoff_time "bare hour"
+    int pickup_hour
+    uuid room_id
+    bool playpark_consent
+  }
+  MEMBERS {
+    text member_code PK
+    text tier "standard|passport"
+    text pet_name
+    date valid_until
+    uuid branch_id "null = passport"
+    bool active
+  }
+  PRICING {
+    text category
+    text service_key
+    text size_key
+    text day_type "weekday|weekend"
+    int price
+  }
+  </pre></div>
+
+  <h3>Supporting tables</h3>
+  <table>
+    <tr><th>Table</th><th>Purpose</th></tr>
+    <tr><td>pricing</td><td>Single source of all rates (grooming/face-trim/addons/hotel/daycare/late/member %/convenience). Hydrates both frontends at runtime.</td></tr>
+    <tr><td>admin_users</td><td>Email allow-list gating the admin app and authenticated RLS policies.</td></tr>
+    <tr><td>walkin_tokens</td><td>Single-use UUIDs minted by the admin FAB; verified + deleted by the walk-in gate.</td></tr>
+    <tr><td>blocked_schedules</td><td>resource_type (room/groomer/studio) + resource_id + <code>dates[]</code> + start/end time + reason + active.</td></tr>
+    <tr><td>booking_edits</td><td>Audit rows written on admin edits (who + change blob).</td></tr>
+  </table>
+
+  <h3>Conventions</h3>
+  <ul>
+    <li><strong><code>booking_date</code> = creation date</strong> (matches <code>created_at::date</code>); the appointment date is <code>service_date</code> in the service-detail table (hotel: <code>checkin_date/checkout_date</code>). Every availability/check-in query keys on the latter.</li>
+    <li>Soft deletes via <code>active</code> flags (resources, blocks) and <code>cancelled</code> status (bookings); no operational hard deletes.</li>
+    <li>Detail-table embeds are promoted to <code>!inner</code> when the parent must be filtered by child columns (PostgREST).</li>
+    <li>Resource colors constrained to an 8-value CHECK list; they drive calendar rendering.</li>
+  </ul>
+  <div class="backtop"><a href="#top">↑ top</a></div>
+</section>
+
+<!-- ════════ 7 ════════ -->
+<section id="t7">
+  <div class="ch-head"><span class="ch-num">7</span><h2>Security model</h2></div>
+  <table>
+    <tr><th>Concern</th><th>Mechanism</th></tr>
+    <tr><td>Public (anon) access</td><td>The anon key is shipped in client JS <em>by design</em>; RLS limits it to the reads the booking flow needs (branches, pricing, resources, availability projections) and the narrow writes it performs (e.g. consuming a walk-in token). No anon access to other customers' personal data.</td></tr>
+    <tr><td>Admin SSO</td><td>Google OAuth via Supabase Auth → JWT. App-level gate + RLS policies both check membership in <code>admin_users</code> by JWT email (e.g. <code>booking_charges</code>: FOR ALL TO authenticated USING/WITH CHECK admin-exists).</td></tr>
+    <tr><td>Privileged writes</td><td>Only edge functions hold the service-role key; booking confirmation, detail/charge writes, and emails happen server-side. The webhook verifies the PayMongo signature and rejects unsigned calls.</td></tr>
+    <tr><td>Idempotency</td><td>Webhook double-fire (two event types per payment) is neutralized by conditional status transitions.</td></tr>
+    <tr><td>Walk-in gating</td><td>Fee-free mode requires a single-use server-minted token; consumed atomically on entry.</td></tr>
+    <tr><td>Pending-hold abuse</td><td>pg_cron auto-cancel caps inventory lockup from abandoned checkouts at ~15 minutes.</td></tr>
+    <tr><td>Surface hygiene</td><td><code>robots.txt</code> disallows the legacy admin page and test suite; the React admin is unindexed and gate-protected; admin app sends <code>x-client-info</code> for traceability.</td></tr>
+    <tr><td>Secrets</td><td>PayMongo + Resend keys only in Supabase function env; nothing secret in the repo.</td></tr>
+  </table>
+  <div class="backtop"><a href="#top">↑ top</a></div>
+</section>
+
+<!-- ════════ 8 ════════ -->
+<section id="t8">
+  <div class="ch-head"><span class="ch-num">8</span><h2>Sequence diagrams</h2></div>
+
+  <div class="diagram"><div class="dg-title">A · Online booking — happy path</div>
+  <pre class="mermaid">
+sequenceDiagram
+  autonumber
+  actor C as Customer
+  participant B as booking.html
+  participant CP as create-payment (EF)
+  participant PM as PayMongo
+  participant WH as webhook (EF)
+  participant DB as Postgres
+  participant RM as Resend
+
+  C->>B: complete 7 steps + Confirm
+  B->>DB: availability re-check (room/slot)
+  alt taken meanwhile
+    B-->>C: toast + return to step w/ refreshed grid
+  end
+  B->>CP: payload (booking + vaccine doc paths)
+  CP->>DB: upsert owner/pet · insert PENDING booking (BH-ref)
+  CP->>PM: create Checkout Session (metadata = payload)
+  CP-->>B: checkout_url
+  B->>PM: redirect (customer pays)
+  PM->>WH: checkout_session.payment.paid (signed)
+  WH->>WH: verify signature · idempotency guard
+  WH->>DB: booking → confirmed/paid · insert details,<br/>addons, charges, vaccines, waivers, vaccine_documents
+  WH->>RM: send confirmation email
+  PM->>B: redirect ?payment=success
+  B-->>C: success screen (recap + print)
+  note over DB: pg_cron (every 5 min) cancels any booking<br/>still pending+unpaid after 15 min
+  </pre></div>
+
+  <div class="diagram"><div class="dg-title">B · Payment cancelled / failed — retry &amp; edit</div>
+  <pre class="mermaid">
+sequenceDiagram
+  autonumber
+  actor C as Customer
+  participant B as booking.html
+  participant CXL as cancel-pending-booking (EF)
+  participant CP as create-payment (EF)
+  participant DB as Postgres
+
+  C->>B: returns ?payment=cancelled|failed&ref=BH-XXXX
+  B-->>C: payment-return screen (recap from bk_snapshot)
+  alt Retry Payment
+    B->>CP: new checkout for same pending booking
+    B->>C: redirect to PayMongo again
+  else Edit booking details
+    B->>CXL: cancel ref (only if still pending)
+    CXL->>DB: status=cancelled (inventory freed)
+    B-->>C: wizard restored at Summary, fully pre-filled
+    C->>B: adjust + Confirm → new booking (new ref)
+  end
+  </pre></div>
+
+  <div class="diagram"><div class="dg-title">C · Admin &amp; walk-in creation</div>
+  <pre class="mermaid">
+sequenceDiagram
+  autonumber
+  actor A as Admin
+  participant SPA as Admin SPA
+  participant DB as Postgres
+  participant SB as submit-booking (EF)
+  participant RM as Resend
+  actor W as Walk-in customer
+
+  rect rgba(77,150,185,0.08)
+  note over A,RM: Add Booking (admin wizard)
+  A->>SPA: FAB → Add Booking → 6 steps
+  SPA->>SB: payload (adminCreated=true)
+  SB->>DB: owner upsert · pet · booking · details · charges
+  SB->>RM: confirmation email (if owner email)
+  SPA->>DB: PATCH status/payment chosen at Summary
+  end
+  rect rgba(255,206,88,0.06)
+  note over A,W: Walk-in
+  A->>SPA: FAB → Walk-in
+  SPA->>DB: INSERT walkin_tokens (uuid)
+  SPA->>W: open booking.html?walkin=1&token
+  W->>DB: verify + consume token (single use)
+  W->>SB: complete form (no gateway · fee = 0)
+  SB->>DB: booking (source=walkin, unpaid)
+  SB->>RM: confirmation email
+  end
+  DB--)SPA: realtime → calendar updates instantly
+  </pre></div>
+
+  <div class="diagram"><div class="dg-title">D · Admin SSO &amp; gate</div>
+  <pre class="mermaid">
+sequenceDiagram
+  autonumber
+  actor A as Staff
+  participant SPA as /admin/ (React)
+  participant GO as Google OAuth
+  participant AU as Supabase Auth
+  participant DB as Postgres
+
+  A->>SPA: open /admin/
+  SPA->>AU: getSession() (6 s watchdog → Gate on hang)
+  alt no session
+    SPA-->>A: Gate — "Sign in with Google"
+    A->>GO: OAuth consent
+    GO->>AU: code exchange → JWT
+    AU-->>SPA: session (onAuthStateChange)
+  end
+  SPA->>SPA: cache access token (sync authHeaders)
+  SPA->>DB: admin_users lookup by email
+  alt not allow-listed
+    SPA-->>A: stays at Gate
+  else admin
+    SPA->>DB: load branches + active resources
+    SPA-->>A: dashboard
+  end
+  </pre></div>
+
+  <div class="diagram"><div class="dg-title">E · Live updates (admin)</div>
+  <pre class="mermaid">
+sequenceDiagram
+  autonumber
+  participant SPA as Calendar / Bookings page
+  participant RT as Supabase Realtime
+  participant DB as Postgres
+
+  SPA->>RT: subscribe postgres_changes (bookings)
+  loop any booking INSERT/UPDATE/DELETE
+    DB--)RT: change event
+    RT--)SPA: notify
+    SPA->>SPA: debounce 1.2 s
+    SPA->>DB: reload current view
+  end
+  loop every 60 s (fallback)
+    SPA->>DB: reload
+  end
+  note over SPA: visibilitychange → immediate reload<br/>keyboard "R" → manual reload
+  </pre></div>
+
+  <div class="diagram"><div class="dg-title">F · Vaccine document upload</div>
+  <pre class="mermaid">
+sequenceDiagram
+  autonumber
+  actor C as Customer
+  participant B as booking.html
+  participant GU as get-upload-url (EF)
+  participant ST as Supabase Storage
+  participant CP as create-payment
+  participant WH as webhook
+  participant DB as Postgres
+
+  C->>B: attach vaccine file(s)
+  loop per file
+    B->>GU: request signed upload URL
+    GU-->>B: signed URL + path
+    B->>ST: PUT file
+  end
+  B->>CP: payload includes vaccineDocuments{key→path}
+  note over CP,WH: paths ride checkout metadata
+  WH->>DB: INSERT vaccine_documents rows (post-payment)
+  note over B: admin drawer lists the files for staff review
+  </pre></div>
+  <div class="backtop"><a href="#top">↑ top</a></div>
+</section>
+
+<!-- ════════ 9 ════════ -->
+<section id="t9">
+  <div class="ch-head"><span class="ch-num">9</span><h2>Third-party integrations</h2></div>
+  <table>
+    <tr><th>Service</th><th>Integration detail</th></tr>
+    <tr><td>PayMongo</td><td>Hosted Checkout Sessions created server-side with line items (service + convenience fee) and success/cancel redirect URLs. Webhook endpoint = <code>handle-payment-webhook</code>; signature verified; both paid-event shapes handled idempotently. No card data ever touches Barkhaus code.</td></tr>
+    <tr><td>Resend</td><td>Single branded HTML template family rendered inline in the edge functions (booking details / pet / health / owner / price sections vary by service). Sender domain configured in Resend; fire-and-forget with errors logged, never blocking the booking.</td></tr>
+    <tr><td>Google OAuth</td><td>Supabase Auth provider; redirect back to <code>/admin/</code>; no separate Google Cloud session handling in app code.</td></tr>
+    <tr><td>Google Analytics 4</td><td>gtag.js snippet on all public pages (single property). Page-view based; no custom events wired yet — candidate enhancement: funnel events per booking step.</td></tr>
+    <tr><td>Supabase Storage</td><td>Two uses: vaccine-document bucket (signed-URL uploads from the booking flow) and branch gallery buckets listed by the landing page at runtime so photo updates need no deploy.</td></tr>
+  </table>
+  <div class="backtop"><a href="#top">↑ top</a></div>
+</section>
+
+<!-- ════════ 10 ════════ -->
+<section id="t10">
+  <div class="ch-head"><span class="ch-num">10</span><h2>Build &amp; deployment</h2></div>
+  <ul>
+    <li><strong>Public site:</strong> zero build — edit, commit, push to <code>main</code>; GitHub Pages redeploys.</li>
+    <li><strong>Admin:</strong> <code>cd admin-src &amp;&amp; npm run build</code> → Vite emits hashed bundles into <code>../admin/</code>, which are <strong>committed</strong> alongside the source change and served by Pages at <code>/admin/</code>.</li>
+    <li><strong>Database:</strong> DDL changes belong in <code>supabase/migrations/*.sql</code> and are applied via the Supabase SQL editor/CLI. After DDL, reload PostgREST's schema cache (<code>NOTIFY pgrst, 'reload schema';</code>) — stale caches have caused phantom-relationship errors.</li>
+    <li><strong>Edge functions:</strong> deployed with the Supabase CLI (<code>supabase functions deploy &lt;name&gt;</code>); env secrets managed in the dashboard.</li>
+    <li><strong>Local preview:</strong> <code>.claude/launch.json</code> defines a static server (python http.server :8788) for the repo root.</li>
+  </ul>
+  <div class="warn">A CI job ("chore: build admin app [skip ci]") also rebuilds and commits <code>/admin/</code>. It has once raced a source change and effectively reverted it; committed-bundle + bot-commit is the most fragile part of the pipeline (see §12 and the build retrospective).</div>
+  <div class="backtop"><a href="#top">↑ top</a></div>
+</section>
+
+<!-- ════════ 11 ════════ -->
+<section id="t11">
+  <div class="ch-head"><span class="ch-num">11</span><h2>Testing &amp; documentation</h2></div>
+  <table>
+    <tr><th>Artifact</th><th>Contents</th></tr>
+    <tr><td>barkhaus-tests.html <span style="color:var(--mid)">(internal, outside repo)</span></td><td>Self-contained test console: live API/database assertions (anon key), paste-in E2E console scripts for booking.html (21 scenarios) and the admin SPA (15 scenarios incl. pricing math, cage×day rates, daycare hours, branch hours, search query construction, pagination), a 270-item manual checklist with persisted progress, and SQL tools for slot-filling/cleanup/auto-cancel verification.</td></tr>
+    <tr><td>docs/test-scenarios.md</td><td>The scenario matrix: every create/manage/admin flow with decisions and known gaps — source of truth for coverage.</td></tr>
+    <tr><td>docs/admin-guide.html</td><td>Image-driven staff walkthrough (screenshots in progress).</td></tr>
+    <tr><td>docs/functional-spec.html · technical-doc.html</td><td>This document pair.</td></tr>
+  </table>
+  <div class="backtop"><a href="#top">↑ top</a></div>
+</section>
+
+<!-- ════════ 12 ════════ -->
+<section id="t12">
+  <div class="ch-head"><span class="ch-num">12</span><h2>Operational gotchas (learned the hard way)</h2></div>
+  <table>
+    <tr><th>Gotcha</th><th>Detail / standing fix</th></tr>
+    <tr><td>booking_date semantics</td><td>It is the <em>creation</em> date. Filtering availability by it silently misses anything booked on a different day — always join the detail table's <code>service_date</code>.</td></tr>
+    <tr><td>Timezones</td><td><code>created_at</code> is UTC; PHT is UTC+8. Group/display using local conversions, never string-split the ISO timestamp.</td></tr>
+    <tr><td>Time formats</td><td>Hotel/daycare hours are stored as bare hour strings ("18"); normalize (<code>parseInt</code>/<code>toHHMM</code>) before feeding time inputs or formatters — "6:undefined PM" class of bugs.</td></tr>
+    <tr><td>PostgREST embeds</td><td>Filtering parents by child columns requires <code>!inner</code>; multiple FKs between two tables make embeds ambiguous (HTTP 300) — disambiguate <code>table!fk_name(...)</code>; after DDL, <code>NOTIFY pgrst, 'reload schema'</code>.</td></tr>
+    <tr><td>RLS soft-fails</td><td>An INSERT-only policy on <code>booking_charges</code> let edits insert new lines while DELETEs silently failed → duplicate charges. Policy is now FOR ALL; treat silent catch-and-continue around DB writes as a smell.</td></tr>
+    <tr><td>Auth deadlock</td><td>Never call <code>supabase.auth.getSession()</code> inside per-request header builders — it queues behind token refreshes. Use the cached-token pattern (lib/supabase.js).</td></tr>
+    <tr><td>React nested components</td><td>Components defined inside a component remount per render (input focus loss). Hoist to module scope or call as plain functions.</td></tr>
+    <tr><td>Committed bundles</td><td><code>/admin/</code> hashed assets churn every build and conflict across branches/bots; long-term fix is building in CI (Pages artifact) instead of committing output.</td></tr>
+  </table>
+  <div class="backtop"><a href="#top">↑ top</a></div>
+</section>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+<script>
+if (window.mermaid) {
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'dark',
+    themeVariables: {
+      darkMode: true,
+      background: '#0a151e',
+      primaryColor: '#1F3D55',
+      primaryTextColor: '#F0EDE6',
+      primaryBorderColor: '#4D96B9',
+      lineColor: '#6AAEC8',
+      secondaryColor: '#1A3044',
+      tertiaryColor: '#0F1C26',
+      noteBkgColor: '#243b50',
+      noteTextColor: '#F0EDE6',
+      actorBkg: '#1F3D55',
+      actorTextColor: '#F0EDE6',
+      actorBorder: '#4D96B9',
+      signalTextColor: '#B8D4E0',
+      labelBoxBkgColor: '#1F3D55',
+      labelTextColor: '#F0EDE6'
+    },
+    sequence: { actorMargin: 36, width: 130, mirrorActors: false },
+    er: { fontSize: 12 }
+  });
+}
+(function(){
+  var links = Array.prototype.slice.call(document.querySelectorAll('.sidenav a'));
+  if(!links.length) return;
+  var byId = {};
+  links.forEach(function(a){ byId[a.getAttribute('href').slice(1)] = a; });
+  function setActive(id){ links.forEach(function(a){a.classList.remove('active');}); if(byId[id]) byId[id].classList.add('active'); }
+  var obs = new IntersectionObserver(function(es){ es.forEach(function(e){ if(e.isIntersecting) setActive(e.target.id); }); }, {rootMargin:'-15% 0px -75% 0px'});
+  document.querySelectorAll('.main > section').forEach(function(s){ obs.observe(s); });
+  links.forEach(function(a){ a.addEventListener('click', function(){ setActive(a.getAttribute('href').slice(1)); }); });
+})();
+</script>
+</body>
+</html>
