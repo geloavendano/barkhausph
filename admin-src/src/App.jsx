@@ -58,19 +58,23 @@ export default function App() {
   }, [])
 
   async function onSessionReady(sess) {
-    const ok = await verifyAdmin(sess)
-    setAllowed(ok)
-    if (ok) {
+    const adminRow = await verifyAdmin(sess)
+    setAllowed(!!adminRow)
+    if (adminRow) {
       const meta = sess.user.user_metadata ?? {}
       const name = meta.full_name ?? meta.name ?? sess.user.email ?? ''
       setGreeting('Hi, ' + (name.split(' ')[0] || 'Admin'))
-      await loadBranches()
+      // branch_ids restricts which branches this admin sees; null/empty = all.
+      // (undefined when the column doesn't exist yet → treated as all.)
+      await loadBranches(adminRow.branch_ids)
     }
   }
 
   async function verifyAdmin(sess) {
     try {
-      const url = `${SUPABASE_URL}/rest/v1/admin_users?select=email&email=eq.${encodeURIComponent(sess.user.email)}&limit=1`
+      // select=* so this keeps working before the branch_ids column is added
+      // (a named select on a missing column would 400 and lock everyone out).
+      const url = `${SUPABASE_URL}/rest/v1/admin_users?select=*&email=eq.${encodeURIComponent(sess.user.email)}&limit=1`
       const res = await fetch(url, {
         headers: {
           apikey:         SUPABASE_ANON_KEY,
@@ -78,14 +82,19 @@ export default function App() {
         },
       })
       const rows = await res.json()
-      return Array.isArray(rows) && rows.length > 0
-    } catch { return false }
+      return (Array.isArray(rows) && rows.length > 0) ? rows[0] : null
+    } catch { return null }
   }
 
-  async function loadBranches() {
+  async function loadBranches(allowedIds) {
     try {
       const rows = await sbGet('branches', 'select=id,name&order=created_at')
-      setBranches(rows ?? [])
+      let list = rows ?? []
+      // Restrict to the admin's allowed branches. NULL / empty / missing = all branches.
+      if (Array.isArray(allowedIds) && allowedIds.length > 0) {
+        list = list.filter(b => allowedIds.includes(b.id))
+      }
+      setBranches(list)
     } catch { /* non-fatal */ }
   }
 

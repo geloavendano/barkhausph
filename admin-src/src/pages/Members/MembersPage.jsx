@@ -56,11 +56,12 @@ function ValidateCard({ branches }) {
       }
 
       const isPassport = m.tier === 'passport'
-      const tierLabel  = isPassport ? 'Passport' : 'Standard'
       const branchObj  = m.branch_id ? branches?.find(b => b.id === m.branch_id) : null
       const branchName = isPassport
         ? 'All Branches'
         : (branchObj?.name ?? (m.branch_id ? 'Unknown branch' : '⚠ No branch assigned'))
+      // Tier label spells out the branch for Standard memberships
+      const tierLabel  = isPassport ? 'Passport' : `Standard · ${branchName}`
       const validStr = m.valid_until
         ? 'Valid until ' + new Date(m.valid_until + 'T00:00:00').toLocaleDateString('en-PH', {
             year: 'numeric', month: 'long', day: 'numeric',
@@ -176,6 +177,9 @@ function CsvUploadCard({ branches }) {
           pet_name:    (cols[petIdx] ?? '').trim() || null,
           valid_until: (dateIdx >= 0 && cols[dateIdx]) ? cols[dateIdx] || null : null,
           branch_id:   brMatch ? brMatch.id : null,
+          // Tier is derived from branch: a branch-bound member is Standard,
+          // a member with no branch is Passport (valid at all branches).
+          tier:        brMatch ? 'standard' : 'passport',
           active:      true,
           updated_at:  new Date().toISOString(),
         })

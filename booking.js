@@ -481,6 +481,11 @@ function selectLocation(el, val) {
   // Reset live data for new branch
   liveRooms = []; liveGroomers = []; liveGroomerBlocks = []; liveStudios = []; liveStudioBlocks = [];
   window._branchIds = null;
+  // Membership validity is branch-dependent (Standard memberships are branch-bound) —
+  // force re-verification after a branch change so a discount can't carry across branches.
+  booking.memberValid = false;
+  var _mvMsg = document.getElementById('memberValidMsg');
+  if (_mvMsg) _mvMsg.style.display = 'none';
   loadLiveRoomsAndGroomers();
   if (booking.service === 'studio') { booking.service = null; document.querySelectorAll('#serviceGrid .option-card').forEach(function(c){c.classList.remove('selected');}); }
   // Cat availability for hotel / daycare
@@ -1884,6 +1889,16 @@ async function validateMemberId() {
     var member = await sbRpcPublic('validate_member', { p_code: idInput });
     if (!member || !member.member_code) {
       msg.textContent = 'Member ID not found.'; msg.style.color = 'var(--error)';
+      booking.memberValid = false;
+    } else if (member.active === false) {
+      msg.textContent = 'This membership is inactive.'; msg.style.color = 'var(--error)';
+      booking.memberValid = false;
+    } else if (member.valid_until && new Date(member.valid_until + 'T23:59:59') < new Date()) {
+      msg.textContent = 'This membership expired on ' + member.valid_until + '.'; msg.style.color = 'var(--error)';
+      booking.memberValid = false;
+    } else if (member.tier !== 'passport' && member.branch_id && member.branch_id !== (await getSelectedBranchId())) {
+      // Standard membership is valid only at its home branch; Passport works anywhere.
+      msg.textContent = 'This membership can only be used at its home branch.'; msg.style.color = 'var(--error)';
       booking.memberValid = false;
     } else {
       // Build petList from pet_name (singular \u2014 current members table schema).
