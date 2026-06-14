@@ -19,6 +19,3 @@ node_modules/
 # Vite admin app
 admin-src/.env.local
 admin-src/dist/
-
-# Built admin SPA — rebuilt by CI on deploy, never committed
-/admin/
