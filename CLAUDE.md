@@ -13,16 +13,19 @@ admin SPA (`admin-src/` → served at `/admin/`), 5 edge functions (`supabase/fu
 |---|---|
 | Local preview (whole site) | `python3 -m http.server 8788` from repo root (see `.claude/launch.json`) |
 | Admin dev server | `cd admin-src && npm run dev` |
-| Admin production build | `cd admin-src && npm run build` → outputs to `../admin/` (**gitignored — do not commit**) |
-| Deploy (everything) | just `git push` to `main` — `.github/workflows/deploy.yml` builds admin fresh and deploys the Pages artifact |
+| Admin production build | `cd admin-src && npm run build` → outputs to `../admin/` (**committed** — see below) |
+| Deploy (everything) | `git push` to `main`; GitHub Pages serves repo content from the branch |
 | Edge function deploy | `supabase functions deploy <name>` |
 | DB changes | SQL file in `supabase/migrations/`, apply via dashboard/CLI, **then** `NOTIFY pgrst, 'reload schema';` |
 
 ## Deployment model
 
-CI (`deploy.yml`) is the **only** builder: every push to `main` builds `admin-src` and
-deploys repo content + fresh `/admin/` as a Pages artifact. Build output is never
-committed; there is no build bot committing to the repo. `docs/` is publicly served.
+GitHub Pages serves the **repo branch** directly (no build step for the static site).
+The built admin SPA in `/admin/` **is committed**. On pushes that touch `admin-src/**`,
+`.github/workflows/build-admin.yml` rebuilds `/admin/` and commits it back (concurrency
+guard prevents overlapping runs). If you change `admin-src` locally and push, either let
+the bot rebuild, or run `npm run build` and commit `/admin/` yourself in the same push to
+avoid a follow-up bot commit. `docs/` is publicly served.
 
 ## Conventions & hard-won gotchas
 
