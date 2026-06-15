@@ -65,7 +65,9 @@
   /* Numbered callout badge — used in text AND listed under shots */
   .co{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:var(--yellow);color:#3d2e00;font-size:11px;font-weight:800;vertical-align:-3px;margin:0 2px;}
 
-  /* Screenshot placeholder */
+  /* Screenshot placeholder
+     Images are synthetic test-data mocks for now. Replace the PNGs in docs/images
+     with seeded-environment captures when the live admin screenshot pass is ready. */
   .shot{border:2px dashed rgba(255,206,88,.45);background:rgba(255,206,88,.04);border-radius:12px;padding:18px;margin:16px 0 22px;}
   .shot-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;}
   .shot-top .cam{font-size:18px;}
@@ -75,6 +77,9 @@
   .vp.mob{color:var(--purple);border-color:rgba(155,149,232,.5);}
   .shot-cap{font-size:12.5px;color:var(--cream-m);margin-bottom:8px;}
   .shot-cap strong{color:var(--cream);}
+  .shot-img-wrap{margin:12px 0 12px;border:1px solid var(--border);border-radius:10px;overflow:hidden;background:#0b1620;box-shadow:0 14px 38px rgba(0,0,0,.24);}
+  .shot-img{display:block;width:100%;height:auto;}
+  .shot-note{font-size:11px;color:var(--mid);margin:0;padding:8px 12px 12px;}
   .shot-cos{font-size:12px;color:var(--mid);}
   .shot-cos .co{width:16px;height:16px;font-size:10px;}
   .shot-cos li{margin-bottom:3px;}
@@ -114,7 +119,7 @@
 
 <header id="top">
   <h1>Bark<span>haus</span> — Admin Walkthrough Guide</h1>
-  <span class="draft-badge">Draft · screenshots pending</span>
+  <span class="draft-badge">Draft · screenshot mocks added</span>
   <span class="meta">v0.1 · June 2026 · for branch staff &amp; managers</span>
 </header>
 
@@ -792,11 +797,33 @@
   <div class="backtop"><a href="#top">↑ back to top</a></div>
 </section>
 
-<p style="text-align:center;color:var(--mid);font-size:11px;margin-top:40px">Barkhaus Admin Walkthrough Guide · draft v0.1 · 38 screenshots pending capture</p>
+<p style="text-align:center;color:var(--mid);font-size:11px;margin-top:40px">Barkhaus Admin Walkthrough Guide · draft v0.1 · 38 synthetic test-data screenshot mocks</p>
 
 </div>
 
 <script>
+// Screenshot loader — keeps the guide source compact while preserving the capture checklist.
+(function(){
+  document.querySelectorAll('.shot[data-img]').forEach(function(shot){
+    if (shot.querySelector('.shot-img')) return;
+    var filename = shot.querySelector('.fname');
+    var caption = shot.querySelector('.shot-cap');
+    var wrap = document.createElement('div');
+    var img = document.createElement('img');
+    var note = document.createElement('p');
+    wrap.className = 'shot-img-wrap';
+    img.className = 'shot-img';
+    img.src = shot.getAttribute('data-img');
+    img.loading = 'lazy';
+    img.alt = filename ? filename.textContent : 'Barkhaus admin screenshot';
+    note.className = 'shot-note';
+    note.textContent = 'Synthetic test-data mock. Replace this PNG with a seeded admin capture when available.';
+    wrap.appendChild(img);
+    wrap.appendChild(note);
+    (caption || shot.querySelector('.shot-top')).insertAdjacentElement('afterend', wrap);
+  });
+})();
+
 // Scrollspy — highlight the sidebar link for the section currently in view
 (function(){
   var links = Array.prototype.slice.call(document.querySelectorAll('.sidenav a'));
