@@ -34,14 +34,13 @@ teammates. Keep entries short and current.
 Record any edge function deploys, table/schema changes, RLS policy changes, or schema-cache
 reloads the human needs to apply manually.
 
-- Deploy `submit-booking` so manual-upload payment rows use `method = 'manual_online'`
-  and write the destination bank to `payments.notes`. Latest code also uses
-  `type = 'downpayment'` for compatibility with the existing payment type constraint.
-- Apply `supabase/migrations/2026-06-16_payments_method_manual_online.sql` so
-  `payments.method = 'manual_online'` passes the database check constraint.
+- None.
 
 ## Done
 
+- 2026-06-16 - Human/Codex: manual-payment receipt setup is verified live. Supabase
+  `payments.receipt_path` exists, `payments.method = 'manual_online'` is allowed,
+  `submit-booking` was redeployed, and payment details now appear in the admin drawer.
 - 2026-06-16 - Codex: added idempotent receipt setup migration, committed
   `get-upload-url` source, and changed `submit-booking` to fail/rollback if a manual
   payment receipt row cannot be recorded.
