@@ -21,6 +21,7 @@ export default function BookingDrawer({ booking: b, rooms, groomers, onClose, on
   const [savingInv,   setSavingInv]   = useState(false)
   const [err,         setErr]         = useState('')
   const [docUrls,     setDocUrls]     = useState({})
+  const [receiptUrls, setReceiptUrls] = useState({})
 
   const pet    = first(b.pets)    ?? {}
   const owner  = first(b.owners)  ?? {}
@@ -56,6 +57,22 @@ export default function BookingDrawer({ booking: b, rooms, groomers, onClose, on
     loadDocUrls()
     return () => { cancelled = true }
   }, [vaccDocs])
+
+  // Sign payment-receipt images (stored in the same private bucket)
+  useEffect(() => {
+    const paths = (payments ?? []).map(p => p.receipt_path).filter(Boolean)
+    if (paths.length === 0) return
+    let cancelled = false
+    ;(async () => {
+      const urls = {}
+      for (const path of paths) {
+        const signed = await sbSignedUrl('vaccine-docs', path, 3600)
+        if (signed) urls[path] = signed
+      }
+      if (!cancelled) setReceiptUrls(urls)
+    })()
+    return () => { cancelled = true }
+  }, [payments])
 
   async function loadPayments() {
     try {
@@ -319,7 +336,7 @@ export default function BookingDrawer({ booking: b, rooms, groomers, onClose, on
               ? <p className={styles.muted}>Loading…</p>
               : payments.length === 0
                 ? <p className={styles.muted}>No payments recorded.</p>
-                : payments.map(p => <PayRow key={p.id} pay={p} />)
+                : payments.map(p => <PayRow key={p.id} pay={p} receiptUrl={p.receipt_path ? receiptUrls[p.receipt_path] : null} />)
             }
           </Section>
 
@@ -539,16 +556,27 @@ function BillRows({ b, addons, charges }) {
   )
 }
 
-function PayRow({ pay }) {
+const BANK_LABELS = { gcash: 'GCash', bpi: 'BPI', bdo: 'BDO', transfer: 'Bank transfer', cash: 'Cash', card: 'Card', bank_transfer: 'Bank transfer' }
+
+function PayRow({ pay, receiptUrl }) {
   const isRefund = pay.type === 'refund'
+  const methodLabel = BANK_LABELS[pay.method] ?? (pay.method ?? '').replace(/_/g, ' ')
   return (
-    <div className={styles.payRow}>
-      <div>
+    <div className={styles.payRow} style={{ alignItems: 'flex-start' }}>
+      <div style={{ flex: 1 }}>
         <p className={styles.payAmt}>{isRefund ? '−' : ''}₱{(pay.amount ?? 0).toLocaleString()}</p>
         <p className={styles.payMeta}>
-          {pay.type.replace(/_/g, ' ')} · {pay.method.replace(/_/g, ' ')}
+          {pay.type.replace(/_/g, ' ')} · {methodLabel}
           {pay.reference_number ? ` · ${pay.reference_number}` : ''}
         </p>
+        {pay.receipt_path && (
+          receiptUrl
+            ? <a href={receiptUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', marginTop: 6 }}>
+                <img src={receiptUrl} alt="Transfer receipt"
+                  style={{ maxWidth: 120, maxHeight: 150, borderRadius: 6, border: '0.5px solid var(--border)' }} />
+              </a>
+            : <span style={{ fontSize: 11, color: 'var(--mid)' }}>⏳ loading receipt…</span>
+        )}
       </div>
       <p className={styles.payDate}>{new Date(pay.created_at).toLocaleDateString()}</p>
     </div>

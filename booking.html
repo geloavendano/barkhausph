@@ -1146,6 +1146,50 @@ async function checkGate() {
   <div class="price-breakdown" id="priceBreakdown"></div>
 </div>
 
+<!-- MANUAL PAYMENT (online transfer) -->
+<style>
+  .pay-amount-box{display:flex;align-items:center;justify-content:space-between;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px 18px;margin-bottom:20px;}
+  .pay-amount-label{font-size:13px;color:var(--mid);font-weight:600;}
+  .pay-amount-val{font-family:'Fredoka One',cursive;font-size:26px;color:var(--yellow);}
+  .pay-bank-btns{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px;}
+  .pay-bank-btn{padding:11px 6px;border-radius:10px;border:1.5px solid var(--border);background:var(--surface);color:var(--cream-m);font-family:'Nunito',sans-serif;font-size:14px;font-weight:700;cursor:pointer;text-align:center;transition:border-color .15s,background .15s;}
+  .pay-bank-btn.selected{border-color:var(--yellow);background:var(--raised);color:var(--cream);}
+  .pay-method-detail{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px;text-align:center;}
+  .pay-qr{width:230px;max-width:75%;border-radius:12px;background:#fff;padding:10px;margin:0 auto 14px;display:block;}
+  .pay-acct-row{display:inline-flex;align-items:center;gap:10px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:9px 14px;}
+  .pay-acct-label{font-size:11px;color:var(--mid);text-transform:uppercase;letter-spacing:.06em;}
+  .pay-acct-num{font-family:'Fira Code',monospace;font-size:16px;font-weight:700;color:var(--cream);letter-spacing:.04em;}
+  .pay-copy-btn{background:var(--raised);border:1px solid var(--border);border-radius:7px;color:var(--cream);font-size:12px;font-weight:700;padding:5px 10px;cursor:pointer;font-family:'Nunito',sans-serif;white-space:nowrap;}
+  .pay-copy-btn.copied{background:rgba(107,203,119,.18);color:var(--success);border-color:var(--success);}
+  .pay-acct-name{font-size:12px;color:var(--mid);margin-top:10px;}
+  .pay-upload{display:flex;align-items:center;justify-content:center;min-height:80px;border:1.5px dashed var(--border);border-radius:12px;color:var(--mid);font-size:13px;font-weight:600;cursor:pointer;text-align:center;padding:14px;transition:border-color .15s,color .15s;}
+  .pay-upload:hover{border-color:var(--blue);color:var(--cream-m);}
+  .pay-upload.has-file{border-style:solid;border-color:var(--success);color:var(--success);}
+  .pay-receipt-thumb{max-width:100%;max-height:280px;border-radius:10px;border:1px solid var(--border);display:block;margin:0 auto;}
+</style>
+<div class="step-panel" id="stepPayment">
+  <p class="step-eyebrow">Final step</p>
+  <h1 class="step-title">Complete your payment</h1>
+  <div class="info-box" style="margin-bottom:18px">💡 We're working toward a more seamless checkout — including credit cards and instant online payments. For now, please send your payment via bank or e-wallet transfer below, then upload your receipt to confirm your booking.</div>
+
+  <div class="pay-amount-box">
+    <span class="pay-amount-label">Amount to pay</span>
+    <span class="pay-amount-val" id="payAmount">&#8369;0</span>
+  </div>
+
+  <p class="section-label">Send your payment to</p>
+  <div class="pay-bank-btns" id="payBankBtns"></div>
+  <div class="pay-method-detail" id="payMethodDetail"></div>
+
+  <p class="section-label" style="margin-top:20px">Upload your transfer receipt <span class="required">*</span></p>
+  <p style="font-size:12px;color:var(--mid);margin-bottom:10px;line-height:1.6">Attach a screenshot or photo that clearly shows the <strong style="color:var(--cream-m)">recipient, amount, date &amp; time, and reference number</strong>. One image, max 5&nbsp;MB.</p>
+  <label class="pay-upload" id="payUploadLabel">
+    <input type="file" id="payReceiptInput" accept="image/*" style="display:none" onchange="onReceiptSelected(this)">
+    <span id="payUploadText">&#128206; Tap to attach receipt image</span>
+  </label>
+  <div id="payReceiptPreview" style="display:none;margin-top:12px"></div>
+</div>
+
 <!-- EVENTS CONTACT PAGE -->
 <div class="step-panel" id="stepEvents">
   <button class="btn-text-back" onclick="backFromEvents()">← Back to services</button>

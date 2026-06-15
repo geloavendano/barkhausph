@@ -111,6 +111,16 @@ var saveDetails = false;
 var uploadedVaccineFiles = [];
 var secondCatVisible = false;
 
+// ── Manual transfer payment (online flow; PayMongo archived) ──
+var onPaymentScreen     = false;
+var paymentReceiptFile  = null;   // the single uploaded receipt File
+var selectedPaymentBank = 'gcash';
+var PAYMENT_METHODS = {
+  gcash: { label: 'GCash', account: '0917 1468032',  raw: '09171468032',  name: 'GCash account', qr: 'images/payment/gcash-qr.png' },
+  bpi:   { label: 'BPI',   account: '3509 005841',   raw: '3509005841',   name: 'BPI account',   qr: 'images/payment/bpi-qr.png' },
+  bdo:   { label: 'BDO',   account: '0035 2034 7924', raw: '003520347924', name: 'BDO account',   qr: null },
+};
+
 var SERVICE_CONFIG = {
   grooming: {
     step3: { sectionId:'groomSpecsSection',     title:'Grooming specs',      subtitle:'Choose your service and any add-ons.' },
@@ -211,8 +221,8 @@ async function loadPricing() {
   try {
     var rows = await sbFetchPublic('pricing', 'select=category,service_key,size_key,day_type,price');
     loadPricingData(rows);
-    // Walk-in mode never charges a convenience fee regardless of DB value
-    if (IS_WALKIN) CONVENIENCE_FEE = 0;
+    // PayMongo is archived; the manual-transfer flow charges no convenience fee.
+    CONVENIENCE_FEE = 0;
   } catch(e) {
     console.warn('Pricing fetch failed:', e);
     // Show a persistent banner — pricing failure is not a recoverable state without a refresh
@@ -271,6 +281,7 @@ function nextStep() {
 var onSummaryScreen = false;
 
 function prevStep() {
+  if (onPaymentScreen) { backFromPayment(); return; }
   if (onSummaryScreen) {
     onSummaryScreen = false;
     document.getElementById('stepSummary').classList.remove('active');
@@ -310,6 +321,101 @@ function goToStep(n) {
   // Validate after panel setup so restored values are counted
   refreshContinueBtn();
 }
+// ── Manual transfer payment page (online flow) ──
+function showPaymentPage() {
+  if (!_pricingLoaded) { showToast('Pricing data is unavailable. Please refresh the page and try again.', 7000); return; }
+  collectAllState();
+  onSummaryScreen = false;
+  onPaymentScreen = true;
+  var ss = document.getElementById('stepSummary'); if (ss) ss.classList.remove('active');
+  document.getElementById('progressWrap').style.display = 'none';
+  var pp = document.getElementById('stepPayment'); if (pp) pp.classList.add('active');
+
+  var amt = getRunningTotal(); // subtotal − member discount (convenience fee is 0)
+  document.getElementById('payAmount').textContent = '₱' + (amt || 0).toLocaleString();
+
+  var btns = document.getElementById('payBankBtns');
+  btns.innerHTML = Object.keys(PAYMENT_METHODS).map(function(k){
+    return '<button type="button" class="pay-bank-btn" data-bank="'+k+'" onclick="renderPaymentMethod(\''+k+'\')">'+PAYMENT_METHODS[k].label+'</button>';
+  }).join('');
+  renderPaymentMethod(selectedPaymentBank || 'gcash');
+
+  // Restore a previously chosen receipt (e.g. returning after an error)
+  var _up = document.getElementById('payUploadLabel');
+  var _prev = document.getElementById('payReceiptPreview');
+  if (paymentReceiptFile) {
+    document.getElementById('payUploadText').textContent = '✓ ' + paymentReceiptFile.name + ' — tap to change';
+    _up.classList.add('has-file');
+    _prev.innerHTML = '<img class="pay-receipt-thumb" src="'+URL.createObjectURL(paymentReceiptFile)+'" alt="Receipt preview">';
+    _prev.style.display = 'block';
+  } else {
+    document.getElementById('payUploadText').textContent = '📎 Tap to attach receipt image';
+    _up.classList.remove('has-file');
+    _prev.style.display = 'none'; _prev.innerHTML = '';
+  }
+
+  document.getElementById('btnBack').style.display = '';
+  var next = document.getElementById('btnNext');
+  next.textContent = 'Submit Payment';
+  next.className = 'btn-submit';
+  next.onclick = function(){ submitBooking(); };
+  refreshPaymentSubmit();
+  window.scrollTo(0,0);
+}
+
+function renderPaymentMethod(bank) {
+  selectedPaymentBank = bank;
+  var m = PAYMENT_METHODS[bank]; if (!m) return;
+  document.querySelectorAll('#payBankBtns .pay-bank-btn').forEach(function(b){
+    b.classList.toggle('selected', b.getAttribute('data-bank') === bank);
+  });
+  var html = '';
+  if (m.qr) html += '<img class="pay-qr" src="'+m.qr+'" alt="'+m.label+' QR code" onerror="this.style.display=\'none\'">';
+  html += '<div class="pay-acct-row">' +
+            '<span class="pay-acct-label">'+m.label+'</span>' +
+            '<span class="pay-acct-num">'+m.account+'</span>' +
+            '<button type="button" class="pay-copy-btn" onclick="copyAccount(\''+m.raw+'\', this)">Copy</button>' +
+          '</div>' +
+          '<p class="pay-acct-name">Scan the QR or send to the account number above.</p>';
+  document.getElementById('payMethodDetail').innerHTML = html;
+}
+
+function copyAccount(raw, btn) {
+  function done(){ btn.textContent = 'Copied ✓'; btn.classList.add('copied'); setTimeout(function(){ btn.textContent='Copy'; btn.classList.remove('copied'); }, 1800); }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(raw).then(done).catch(function(){ _legacyCopy(raw); done(); });
+  } else { _legacyCopy(raw); done(); }
+}
+function _legacyCopy(text){ try{ var t=document.createElement('textarea'); t.value=text; t.style.position='fixed'; t.style.opacity='0'; document.body.appendChild(t); t.focus(); t.select(); document.execCommand('copy'); document.body.removeChild(t);}catch(e){} }
+
+function onReceiptSelected(input) {
+  var f = input.files && input.files[0];
+  if (!f) return;
+  if (!/^image\//.test(f.type)) { showToast('Please upload an image file (JPG or PNG).', 5000); input.value=''; return; }
+  if (f.size > 5 * 1024 * 1024) { showToast('That image is too large. Please keep it under 5 MB.', 5000); input.value=''; return; }
+  paymentReceiptFile = f;
+  document.getElementById('payUploadText').textContent = '✓ ' + f.name + ' — tap to change';
+  document.getElementById('payUploadLabel').classList.add('has-file');
+  var prev = document.getElementById('payReceiptPreview');
+  prev.innerHTML = '<img class="pay-receipt-thumb" src="'+URL.createObjectURL(f)+'" alt="Receipt preview">';
+  prev.style.display = 'block';
+  refreshPaymentSubmit();
+}
+
+function refreshPaymentSubmit() {
+  if (!onPaymentScreen) return;
+  var next = document.getElementById('btnNext');
+  var ready = !!paymentReceiptFile && !!selectedPaymentBank;
+  next.disabled = !ready;
+  next.style.opacity = ready ? '' : '0.5';
+}
+
+function backFromPayment() {
+  onPaymentScreen = false;
+  var pp = document.getElementById('stepPayment'); if (pp) pp.classList.remove('active');
+  showSummary();
+}
+
 function showSummary() {
   var flow    = booking.service ? FLOWS[booking.service] : null;
   var maxStep = flow ? flow.steps.length : 7;
@@ -434,9 +540,16 @@ function refreshContinueBtn() {
 function updateBottomNavForSummary() {
   document.getElementById('btnBack').style.display = '';
   var next = document.getElementById('btnNext');
-  next.textContent = 'Confirm Booking';
   next.className = 'btn-submit';
-  next.onclick = function() { submitBooking(); };
+  next.disabled = false;
+  if (IS_WALKIN) {
+    // Walk-in pays at the counter — no online transfer page.
+    next.textContent = 'Confirm Booking';
+    next.onclick = function() { submitBooking(); };
+  } else {
+    next.textContent = 'Proceed to Payment';
+    next.onclick = function() { showPaymentPage(); };
+  }
   var total = getRunningTotal();
   var navEl = document.getElementById('navTotal');
   if (total > 0) {
@@ -2224,7 +2337,7 @@ function buildSummary() {
       var discPct = Math.round(discRate * 100);
       html += '<div class="price-line"><span class="price-line-label">Member discount ('+discPct+'%)</span><span class="price-line-val discount">-\u20b1'+discAmt.toLocaleString()+'</span></div>';
     }
-    html += '<div class="price-line"><span class="price-line-label">Convenience fee</span><span class="price-line-val">\u20b1'+CONVENIENCE_FEE.toLocaleString()+'</span></div>';
+    if (CONVENIENCE_FEE > 0) html += '<div class="price-line"><span class="price-line-label">Convenience fee</span><span class="price-line-val">\u20b1'+CONVENIENCE_FEE.toLocaleString()+'</span></div>';
     html += '<div class="price-line total-line"><span class="price-line-label">Total</span><span class="price-line-val">\u20b1'+total.toLocaleString()+'</span></div>';
   }
   document.getElementById('priceBreakdown').innerHTML = html || '<div class="price-line"><span class="price-line-label">No price estimate available</span><span class="price-line-val">-</span></div>';
@@ -2990,6 +3103,30 @@ async function submitBooking() {
     }
   }
 
+  // ── Upload the manual-transfer receipt (online flow only) ──
+  var paymentReceiptPath = null, paymentReceiptName = null;
+  if (!IS_WALKIN && paymentReceiptFile) {
+    try {
+      var _rId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : 'receipt-' + Date.now();
+      var _rRes = await fetch(GET_UPLOAD_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SUPABASE_ANON_KEY, 'apikey': SUPABASE_ANON_KEY },
+        body: JSON.stringify({ uploadId: _rId, fileName: paymentReceiptFile.name, contentType: paymentReceiptFile.type, vaccineKey: 'receipt' }),
+      });
+      var _rData = await _rRes.json();
+      if (_rData.uploadUrl && _rData.path) {
+        await fetch(_rData.uploadUrl, { method: 'PUT', body: paymentReceiptFile, headers: { 'Content-Type': paymentReceiptFile.type } });
+        paymentReceiptPath = _rData.path; paymentReceiptName = paymentReceiptFile.name;
+      }
+    } catch (_re) { console.warn('Receipt upload failed:', _re); }
+    if (!paymentReceiptPath) {
+      _submitting = false;
+      showToast('Could not upload your receipt. Please check your connection and try again.', 6000);
+      if (btn) { btn.textContent = 'Submit Payment'; btn.disabled = false; btn.style.opacity = ''; }
+      return;
+    }
+  }
+
   // Build the FULL vaccine map for this animal (all applicable vaccines with
   // their checked state), not just the ones the user toggled — so the admin
   // drawer can show every expected vaccine with a ✓/✗ rather than only checked ones.
@@ -3048,13 +3185,29 @@ async function submitBooking() {
     // no payment), so flag them as admin-created with a walkin source.
     adminCreated:  IS_WALKIN,
     booking_source: IS_WALKIN ? 'walkin' : 'online',
+    // Online bookings now pay via manual bank/e-wallet transfer (PayMongo archived).
+    // submit-booking uses this to mark the booking confirmed + paid, record the
+    // payment with the receipt, and send the confirmation email.
+    manualPayment: (!IS_WALKIN && paymentReceiptPath) ? {
+      method:          selectedPaymentBank,
+      receiptPath:     paymentReceiptPath,
+      receiptFileName: paymentReceiptName,
+    } : null,
   };
 
-  // Show loading state
-  var _loadHead = IS_WALKIN ? 'Recording your booking...' : 'Preparing your payment...';
+  // Show loading state. Move the spinner to the summary panel (and away from the
+  // payment form) so that error/timeout recovery — which rebuilds the summary —
+  // always has a valid panel to land on. The receipt stays in paymentReceiptFile,
+  // so re-entering the payment page restores it.
+  if (!IS_WALKIN && onPaymentScreen) {
+    onPaymentScreen = false; onSummaryScreen = true;
+    var _ppHide = document.getElementById('stepPayment'); if (_ppHide) _ppHide.classList.remove('active');
+    var _ssShow = document.getElementById('stepSummary'); if (_ssShow) _ssShow.classList.add('active');
+  }
+  var _loadHead = IS_WALKIN ? 'Recording your booking...' : 'Confirming your booking...';
   var _loadSub  = IS_WALKIN
     ? 'Saving your booking — payment will be collected at the counter.'
-    : 'Your booking will be created with <strong style="color:var(--cream)">Pending</strong> status and your spot held for <strong style="color:var(--yellow)">15 minutes</strong>. It will be automatically released if payment is not completed in time.';
+    : 'We&rsquo;re recording your payment and confirming your booking. This will only take a moment.';
   document.getElementById('stepSummary').innerHTML =
     '<div class="pay-loading">' +
     '<div class="bh-spinner"></div>' +
@@ -3066,16 +3219,16 @@ async function submitBooking() {
 
   // 30-second timeout guard
   var payTimeout = setTimeout(function() {
+    _submitting = false;
     buildSummary();
-    updateBottomNavForSummary();
+    updateBottomNavForSummary();  // restores the correct button label + enabled state
     showToast('Request timed out. Please try again.', 5000);
-    btn.textContent = 'Confirm Booking';
-    btn.disabled = false;
   }, 30000);
 
-  // Walk-in → submit-booking (creates the full booking + all child records,
-  // no PayMongo). Online → create-payment (creates a pending booking + checkout).
-  fetch(IS_WALKIN ? EDGE_FN_URL : CREATE_PAYMENT_URL, {
+  // Both walk-in and online manual-transfer bookings go through submit-booking,
+  // which creates the full booking + all child records. (PayMongo's create-payment
+  // is archived for later re-enablement.)
+  fetch(EDGE_FN_URL, {
     method: 'POST',
     headers: {
       'Content-Type':  'application/json',
@@ -3176,25 +3329,28 @@ async function submitBooking() {
       } catch(e) {}
       return;
     }
-    // Online path: a checkout URL is required to proceed to PayMongo.
-    if (!data.checkout_url) {
-      _submitting = false;
-      buildSummary();
-      updateBottomNavForSummary();
-      showToast('No checkout URL returned. Please try again or contact the branch.', 6000);
-      return;
-    }
-    _redirectingToPayment = true;
-    window.location.href = data.checkout_url;
+    // Online manual-transfer path → booking is confirmed + paid; show success.
+    var refNumOnline = data.ref_number || data.booking_id || 'BK-' + Date.now();
+    document.querySelectorAll('.step-panel').forEach(function(el){ el.classList.remove('active'); });
+    var pwO = document.getElementById('progressWrap'); if (pwO) pwO.style.display = 'none';
+    var bnO = document.getElementById('bottomNav');    if (bnO) bnO.style.display = 'none';
+    var ssO = document.getElementById('successScreen');
+    if (ssO) { ssO.style.display = ''; ssO.classList.add('active'); }
+    setSuccessTimestamp(refNumOnline);
+    var msgO = ssO ? ssO.querySelector('.success-msg') : null;
+    if (msgO) msgO.textContent = 'Your booking is confirmed and your payment has been received. A confirmation email is on its way — please arrive 15 minutes early.';
+    try {
+      var snapO = JSON.parse(sessionStorage.getItem('bk_snapshot') || 'null');
+      if (snapO) { renderSuccessDetails(snapO, 'successDetails', 'successPriceBreakdown'); sessionStorage.removeItem('bk_snapshot'); }
+    } catch(e) {}
   })
   .catch(function(err) {
     _submitting = false;
     clearTimeout(payTimeout);
     console.error('Payment error:', err);
     buildSummary();
-    updateBottomNavForSummary();
+    updateBottomNavForSummary();  // restores the correct button label + enabled state
     showToast('Connection error: ' + err.message, 6000);
-    if (btn) { btn.textContent = 'Confirm Booking'; btn.disabled = false; }
   });
 }
 

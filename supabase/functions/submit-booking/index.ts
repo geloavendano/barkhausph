@@ -387,6 +387,9 @@ Deno.serve(async (req) => {
     // table's service_date column (mirrors hotel's checkin_date/checkout_date).
     const bookingDate = new Date().toISOString().split("T")[0];
 
+    // Online manual bank/e-wallet transfer: confirmed + paid on submit, with a receipt.
+    const manual = body.manualPayment && body.manualPayment.receiptPath ? body.manualPayment : null;
+
     // 7. Insert booking
     const { data: booking, error: bookingErr } = await supabase
       .from("bookings")
@@ -395,7 +398,8 @@ Deno.serve(async (req) => {
         owner_id:                ownerId,
         pet_id:                  pet.id,
         service:                 body.service,
-        status:                  "pending",
+        status:                  manual ? "confirmed" : "pending",
+        payment_status:          manual ? "paid" : "unpaid",
         booking_date:            bookingDate,
         subtotal,
         discount_amount:         discountAmt,
@@ -409,6 +413,20 @@ Deno.serve(async (req) => {
     if (bookingErr) throw new Error(`Booking insert failed: ${bookingErr.message}`);
 
     bookingId = booking.id;
+
+    // 7b. Record the manual transfer payment (with the uploaded receipt path)
+    if (manual) {
+      const { error: payErr } = await supabase.from("payments").insert({
+        booking_id:   bookingId,
+        amount:       total,
+        type:         "online_transfer",
+        method:       manual.method || "transfer",
+        receipt_path: manual.receiptPath,
+        recorded_by:  "customer",
+        notes:        manual.receiptFileName ? `Receipt: ${manual.receiptFileName}` : null,
+      });
+      if (payErr) console.error("Payment insert failed (non-fatal):", payErr.message);
+    }
 
     // 8. Service detail rows
     if (body.service === "hotel") {
@@ -523,10 +541,10 @@ Deno.serve(async (req) => {
     });
     if (waiverErr) throw new Error(`Waiver insert failed: ${waiverErr.message}`);
 
-    // 12. Send confirmation email for admin-created bookings
-    // Only fires when adminCreated is true — online bookings get their email
-    // from handle-payment-webhook after payment is confirmed.
-    if (body.adminCreated === true && body.ownerEmail) {
+    // 12. Send confirmation email for admin-created OR manual-transfer-paid bookings.
+    // (Admin/walk-in bookings and online manual-transfer bookings both confirm here;
+    // the archived PayMongo path emailed from handle-payment-webhook instead.)
+    if ((body.adminCreated === true || manual) && body.ownerEmail) {
       try {
         // Look up room name for hotel bookings
         let hotelRoomName = body.hotelRoom || null;
@@ -581,7 +599,7 @@ Deno.serve(async (req) => {
           groomNotes:      body.groomNotes      || null,
           daycareNotes:    body.daycareNotes    || null,
           refNumber:       booking.ref_number,
-          status:          "pending",
+          status:          manual ? "confirmed" : "pending",
           bookingSource:   body.booking_source || "admin",
           service:         body.service,
           branch,
