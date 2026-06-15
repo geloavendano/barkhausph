@@ -21,6 +21,9 @@ teammates. Keep entries short and current.
   `method = 'manual_online'` and the selected destination bank (`GCash`, `BPI`, or `BDO`)
   in `payments.notes`. Admin drawer now labels `manual_online` as "Manual online" and
   shows payment notes under the payment metadata.
+- 2026-06-16 - Codex: customer test exposed the live `payments_method_check`
+  constraint rejecting `manual_online`. Added a migration to expand the allowed payment
+  methods and made booking error recovery restore the summary markup before rebuilding it.
 
 ## Supabase Manual Queue
 
@@ -29,6 +32,8 @@ reloads the human needs to apply manually.
 
 - Deploy `submit-booking` so manual-upload payment rows use `method = 'manual_online'`
   and write the destination bank to `payments.notes`.
+- Apply `supabase/migrations/2026-06-16_payments_method_manual_online.sql` so
+  `payments.method = 'manual_online'` passes the database check constraint.
 
 ## Done
 

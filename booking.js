@@ -2154,6 +2154,7 @@ function buildWaiverTexts() {
 }
 function buildSummary() {
   collectAllState();
+  ensureSummaryMarkup();
   var svc = booking.service;
   var locLabels = { estancia:'Estancia (Pasig)', eastwood:'Eastwood (QC)' };
   var svcLabels = { grooming:'Grooming', hotel:'Pet Hotel', daycare:'Daycare', studio:'Self-Shoot Studio' };
@@ -2254,7 +2255,9 @@ function buildSummary() {
   function renderRow(r) {
     return '<div class="summary-row"><span class="summary-key">'+r[0]+'</span><span class="summary-val">'+r[1]+'</span></div>';
   }
-  document.getElementById('bookingDetailsSummary').innerHTML = groups.map(function(g) {
+  var detailsSummaryEl = document.getElementById('bookingDetailsSummary');
+  if (!detailsSummaryEl) return;
+  detailsSummaryEl.innerHTML = groups.map(function(g) {
     if (!g.rows.length) return '';
     return '<div class="summary-group"><div class="summary-group-title">'+g.title+'</div>' +
       g.rows.map(renderRow).join('') + '</div>';
@@ -2340,7 +2343,21 @@ function buildSummary() {
     if (CONVENIENCE_FEE > 0) html += '<div class="price-line"><span class="price-line-label">Convenience fee</span><span class="price-line-val">\u20b1'+CONVENIENCE_FEE.toLocaleString()+'</span></div>';
     html += '<div class="price-line total-line"><span class="price-line-label">Total</span><span class="price-line-val">\u20b1'+total.toLocaleString()+'</span></div>';
   }
-  document.getElementById('priceBreakdown').innerHTML = html || '<div class="price-line"><span class="price-line-label">No price estimate available</span><span class="price-line-val">-</span></div>';
+  var priceBreakdownEl = document.getElementById('priceBreakdown');
+  if (priceBreakdownEl) priceBreakdownEl.innerHTML = html || '<div class="price-line"><span class="price-line-label">No price estimate available</span><span class="price-line-val">-</span></div>';
+}
+
+function ensureSummaryMarkup() {
+  var summary = document.getElementById('stepSummary');
+  if (!summary) return;
+  if (document.getElementById('bookingDetailsSummary') && document.getElementById('priceBreakdown')) return;
+  summary.innerHTML =
+    '<p class="step-eyebrow">Almost done!</p>' +
+    '<h1 class="step-title">Review your booking</h1>' +
+    '<p class="step-subtitle">Please confirm the details below before submitting.</p>' +
+    '<div class="summary-card" id="bookingDetailsSummary"></div>' +
+    '<p class="section-label">Price breakdown</p>' +
+    '<div class="price-breakdown" id="priceBreakdown"></div>';
 }
 
 // ── SHOW TOAST ──
