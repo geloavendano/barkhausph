@@ -24,6 +24,10 @@ teammates. Keep entries short and current.
 - 2026-06-16 - Codex: customer test exposed the live `payments_method_check`
   constraint rejecting `manual_online`. Added a migration to expand the allowed payment
   methods and made booking error recovery restore the summary markup before rebuilding it.
+- 2026-06-16 - Codex: customer retest exposed `payments_type_check` rejecting
+  `online_transfer`. Changed manual-upload payment rows to use the existing allowed
+  `type = 'downpayment'` while keeping `method = 'manual_online'` and destination bank in
+  `payments.notes`.
 
 ## Supabase Manual Queue
 
@@ -31,7 +35,8 @@ Record any edge function deploys, table/schema changes, RLS policy changes, or s
 reloads the human needs to apply manually.
 
 - Deploy `submit-booking` so manual-upload payment rows use `method = 'manual_online'`
-  and write the destination bank to `payments.notes`.
+  and write the destination bank to `payments.notes`. Latest code also uses
+  `type = 'downpayment'` for compatibility with the existing payment type constraint.
 - Apply `supabase/migrations/2026-06-16_payments_method_manual_online.sql` so
   `payments.method = 'manual_online'` passes the database check constraint.
 

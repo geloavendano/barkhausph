@@ -425,7 +425,7 @@ Deno.serve(async (req) => {
       const { error: payErr } = await supabase.from("payments").insert({
         booking_id:   bookingId,
         amount:       total,
-        type:         "online_transfer",
+        type:         "downpayment",
         method:       "manual_online",
         receipt_path: manual.receiptPath,
         recorded_by:  "customer",
