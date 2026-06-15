@@ -556,7 +556,16 @@ function BillRows({ b, addons, charges }) {
   )
 }
 
-const BANK_LABELS = { gcash: 'GCash', bpi: 'BPI', bdo: 'BDO', transfer: 'Bank transfer', cash: 'Cash', card: 'Card', bank_transfer: 'Bank transfer' }
+const BANK_LABELS = {
+  gcash: 'GCash',
+  bpi: 'BPI',
+  bdo: 'BDO',
+  transfer: 'Bank transfer',
+  cash: 'Cash',
+  card: 'Card',
+  bank_transfer: 'Bank transfer',
+  manual_online: 'Manual online',
+}
 
 function PayRow({ pay, receiptUrl }) {
   const isRefund = pay.type === 'refund'
@@ -569,6 +578,7 @@ function PayRow({ pay, receiptUrl }) {
           {pay.type.replace(/_/g, ' ')} · {methodLabel}
           {pay.reference_number ? ` · ${pay.reference_number}` : ''}
         </p>
+        {pay.notes && <p className={styles.payMeta}>{pay.notes}</p>}
         {pay.receipt_path && (
           receiptUrl
             ? <a href={receiptUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', marginTop: 6 }}>

@@ -416,14 +416,20 @@ Deno.serve(async (req) => {
 
     // 7b. Record the manual transfer payment (with the uploaded receipt path)
     if (manual) {
+      const bankLabels: Record<string, string> = {
+        gcash: "GCash",
+        bpi:   "BPI",
+        bdo:   "BDO",
+      };
+      const destinationBank = bankLabels[String(manual.method || "").toLowerCase()] || "Manual transfer";
       const { error: payErr } = await supabase.from("payments").insert({
         booking_id:   bookingId,
         amount:       total,
         type:         "online_transfer",
-        method:       manual.method || "transfer",
+        method:       "manual_online",
         receipt_path: manual.receiptPath,
         recorded_by:  "customer",
-        notes:        manual.receiptFileName ? `Receipt: ${manual.receiptFileName}` : null,
+        notes:        destinationBank,
       });
       if (payErr) throw new Error(`Payment insert failed: ${payErr.message}`);
     }
