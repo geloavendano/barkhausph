@@ -425,7 +425,7 @@ Deno.serve(async (req) => {
         recorded_by:  "customer",
         notes:        manual.receiptFileName ? `Receipt: ${manual.receiptFileName}` : null,
       });
-      if (payErr) console.error("Payment insert failed (non-fatal):", payErr.message);
+      if (payErr) throw new Error(`Payment insert failed: ${payErr.message}`);
     }
 
     // 8. Service detail rows
