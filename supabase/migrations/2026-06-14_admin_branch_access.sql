@@ -13,6 +13,12 @@ ALTER TABLE public.admin_users
 COMMENT ON COLUMN public.admin_users.branch_ids IS
   'Branches this admin may access in the dashboard. NULL/empty = all branches.';
 
+-- Drop the legacy single-branch column. It predates this feature, is NULL on every
+-- row, and is read by no code (the array column above replaces it — an admin can be
+-- granted multiple branches, which a single uuid cannot express).
+ALTER TABLE public.admin_users
+  DROP COLUMN IF EXISTS branch_id;
+
 -- ── Usage examples (run as needed) ─────────────────────────────────────────
 -- Find branch IDs:
 --   SELECT id, name FROM public.branches ORDER BY created_at;
