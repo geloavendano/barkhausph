@@ -98,10 +98,22 @@
   grid-template-columns: 150px 1.2fr 1.7fr 120px;
   gap: 12px;
   align-items: center;
+  width: 100%;
   padding: 11px 14px;
+  border: 0;
   border-bottom: 0.5px solid var(--border);
+  background: transparent;
+  color: inherit;
+  font-family: 'Nunito', sans-serif;
+  text-align: left;
+  cursor: pointer;
 }
 .row:last-child { border-bottom: none; }
+.row:hover,
+.row:focus-visible {
+  background: var(--raised);
+  outline: none;
+}
 
 .date,
 .service { color: var(--cream-m); font-size: 12px; }

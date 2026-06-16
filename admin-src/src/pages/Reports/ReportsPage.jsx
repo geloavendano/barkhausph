@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { sbGet } from '../../lib/supabase'
 import { first, fmtDate } from '../../lib/constants'
 import { hasDurationAddon } from '../../lib/grooming'
+import BookingDrawer from '../Bookings/BookingDrawer'
 import styles from './ReportsPage.module.css'
 
 function todayISO() {
@@ -10,13 +11,20 @@ function todayISO() {
 }
 
 const REPORT_SELECT = [
-  'id,ref_number,status,subtotal,discount_amount,total',
-  'pets(name)',
+  'id,ref_number,service,status,payment_status,booking_date,total,subtotal,discount_amount,member_code_used,created_at,booking_source,notes',
+  'waivers(general_terms,health_declaration,media_consent,studio_agreement,senior_medical_waiver,signed_at)',
+  'owners(id,first_name,last_name,mobile,email,referral_source)',
+  'pets(id,name,animal_type,breed,size,gender,age_value,age_unit,temperament,medical_notes)',
   'booking_addons(addon_key,addon_name,price)',
+  'pet_vaccines(vaccine_name,confirmed)',
+  'checkin_notes(*)',
   'grooming_details!inner(service_date,timeslot,groom_service_name,groom_service_key,groomer_id)',
+  'hotel_details(checkin_date,checkout_date,dropoff_time,pickup_time,pickup_hour,room_type,room_id,playpark_consent,feeding_instructions,medications,emergency_name,emergency_phone,vet_clinic,vet_contact,vet_address)',
+  'daycare_details(dropoff_time,pickup_time,hours_total,open_time,notes,service_date)',
+  'studio_details(timeslot,studio_id,service_date)',
 ].join(',')
 
-export default function ReportsPage({ branches, currentBranchIdx = 0, groomers = [] }) {
+export default function ReportsPage({ branches, currentBranchIdx = 0, rooms = [], groomers = [] }) {
   const branch = branches?.[currentBranchIdx]
   const [from, setFrom] = useState(todayISO())
   const [to, setTo] = useState(todayISO())
@@ -24,6 +32,7 @@ export default function ReportsPage({ branches, currentBranchIdx = 0, groomers =
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState('')
+  const [openId, setOpenId] = useState(null)
 
   const selectedGroomerId = groomerId || groomers[0]?.id || ''
 
@@ -69,6 +78,26 @@ export default function ReportsPage({ branches, currentBranchIdx = 0, groomers =
   }, [visibleRows])
 
   const groomerName = groomers.find(g => g.id === selectedGroomerId)?.name ?? 'Select groomer'
+  const openBooking = visibleRows.find(b => b.id === openId)
+
+  function reloadReport() {
+    setRows([])
+    if (!branch?.id || !from || !to || !selectedGroomerId) return
+    setLoading(true); setErr('')
+    sbGet(
+      'bookings',
+      `branch_id=eq.${branch.id}` +
+      `&service=eq.grooming` +
+      `&status=eq.completed` +
+      `&grooming_details.service_date=gte.${from}` +
+      `&grooming_details.service_date=lte.${to}` +
+      `&grooming_details.groomer_id=eq.${selectedGroomerId}` +
+      `&order=created_at.desc&select=${REPORT_SELECT}`
+    )
+      .then(data => setRows(data ?? []))
+      .catch(e => setErr(e.message))
+      .finally(() => setLoading(false))
+  }
 
   return (
     <div className={styles.page}>
@@ -121,22 +150,32 @@ export default function ReportsPage({ branches, currentBranchIdx = 0, groomers =
       {visibleRows.length > 0 && (
         <div className={styles.tableWrap}>
           <div className={styles.table}>
-            {visibleRows.map(b => <ReportRow key={b.id} booking={b} />)}
+            {visibleRows.map(b => <ReportRow key={b.id} booking={b} onClick={() => setOpenId(b.id)} />)}
           </div>
         </div>
+      )}
+
+      {openBooking && (
+        <BookingDrawer
+          booking={openBooking}
+          rooms={rooms}
+          groomers={groomers}
+          onClose={() => setOpenId(null)}
+          onUpdated={() => { setOpenId(null); reloadReport() }}
+        />
       )}
     </div>
   )
 }
 
-function ReportRow({ booking: b }) {
+function ReportRow({ booking: b, onClick }) {
   const gd = first(b.grooming_details) ?? {}
   const pet = first(b.pets) ?? {}
   const addons = Array.isArray(b.booking_addons) ? b.booking_addons : []
   const hasExtraTime = hasDurationAddon(addons)
 
   return (
-    <div className={styles.row}>
+    <button className={styles.row} onClick={onClick}>
       <span className={styles.date}>{fmtDate(gd.service_date)}</span>
       <span className={styles.pet}>{pet.name ?? '-'}</span>
       <span className={styles.service}>
@@ -144,6 +183,6 @@ function ReportRow({ booking: b }) {
         {hasExtraTime && <span className={styles.addonMark}>Demat / Deshed</span>}
       </span>
       <span className={styles.amount}>PHP {(Number(b.subtotal) || 0).toLocaleString()}</span>
-    </div>
+    </button>
   )
 }
