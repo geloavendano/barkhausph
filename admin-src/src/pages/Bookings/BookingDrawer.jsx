@@ -9,6 +9,81 @@ import styles from './BookingDrawer.module.css'
 
 const INTERNAL_OTHER_ROOM_ID = '__internal_other_room__'
 
+function money(n) {
+  return `PHP ${(Number(n) || 0).toLocaleString()}`
+}
+
+function cleanFilePart(s) {
+  return String(s ?? '')
+    .replace(/[^a-zA-Z0-9]+/g, '_')
+    .replace(/^_|_$/g, '')
+}
+
+function printRow(label, value) {
+  if (value == null || value === '' || value === '-') return ''
+  return `<div class="row"><span>${esc(label)}</span><strong>${esc(value)}</strong></div>`
+}
+
+function printSection(title, rows) {
+  const body = rows.filter(Boolean).join('')
+  if (!body) return ''
+  return `<section><h2>${esc(title)}</h2>${body}</section>`
+}
+
+function getPrintBillRows(b, addons, charges) {
+  const totalAmt = b.total ?? b.subtotal ?? 0
+
+  if (charges && charges.length > 0) {
+    const sorted       = [...charges].sort((a, z) => (a.sort_order ?? 0) - (z.sort_order ?? 0))
+    const nightCharges = sorted.filter(c => c.type === 'hotel_weekday' || c.type === 'hotel_weekend')
+    const base         = sorted.find(c => c.type === 'base_service')
+    const late         = sorted.find(c => c.type === 'late_pickup')
+    const disc         = sorted.find(c => c.type === 'member_discount')
+    const convCharge   = sorted.find(c => c.type === 'convenience_fee')
+    const serviceAmt   = nightCharges.length > 0
+      ? nightCharges.reduce((s, c) => s + (c.amount ?? 0), 0)
+      : (base?.amount ?? 0)
+    const subtotalAmt  = serviceAmt
+      + addons.reduce((s, a) => s + (a.price ?? 0), 0)
+      + (late?.amount ?? 0)
+    const convAmt      = convCharge?.amount ?? Math.max(0, totalAmt - subtotalAmt + (disc?.amount ?? 0))
+    const rows = []
+
+    if (nightCharges.length > 0) {
+      nightCharges.forEach(c => rows.push([c.label, money(c.amount)]))
+    } else if (base && base.amount > 0) {
+      rows.push([base.label, money(base.amount)])
+    }
+    addons.forEach(a => rows.push([`Add-on - ${a.addon_name}`, money(a.price)]))
+    if (late && late.amount > 0) rows.push(['Late pickup fee', money(late.amount)])
+    if ((disc?.amount > 0) || convAmt > 0) rows.push(['Subtotal', money(subtotalAmt)])
+    if (disc && disc.amount > 0) rows.push(['Member discount', `-${money(disc.amount)}`])
+    if (convAmt > 0) rows.push(['Convenience fee', money(convAmt)])
+    rows.push(['Total', money(totalAmt)])
+    return rows
+  }
+
+  const isOnline    = b.booking_source === 'online'
+  const addonTotal  = addons.reduce((s, a) => s + (a.price ?? 0), 0)
+  const discAmt     = b.discount_amount ?? 0
+  const gap         = Math.max(0, (b.total ?? 0) + discAmt - (b.subtotal ?? 0))
+  const lateAmt     = isOnline ? 0 : gap
+  const convFee     = isOnline ? gap : 0
+  const subtotalAmt = (b.total ?? 0) + discAmt - convFee
+  const baseAmt     = Math.max(0, (b.subtotal ?? 0) - addonTotal)
+  const svcLabel    = { grooming: 'Grooming service', hotel: 'Hotel stay', daycare: 'Daycare', studio: 'Studio session' }[b.service] ?? 'Service'
+  const rows = []
+
+  if (baseAmt > 0) rows.push([svcLabel, money(baseAmt)])
+  addons.forEach(a => rows.push([`Add-on - ${a.addon_name}`, money(a.price)]))
+  if (lateAmt > 0) rows.push(['Late pickup fee', money(lateAmt)])
+  if (discAmt > 0 || convFee > 0) rows.push(['Subtotal', money(subtotalAmt)])
+  if (discAmt > 0) rows.push(['Member discount', `-${money(discAmt)}`])
+  if (convFee > 0) rows.push(['Convenience fee', money(convFee)])
+  rows.push(['Total', money(totalAmt)])
+  return rows
+}
+
 export default function BookingDrawer({ booking: b, rooms, groomers, onClose, onUpdated, onEdit }) {
   const [payments,    setPayments]    = useState(null)
   const [charges,     setCharges]     = useState([])
@@ -166,6 +241,159 @@ export default function BookingDrawer({ booking: b, rooms, groomers, onClose, on
     }
   }
 
+  function handlePrint() {
+    const ownerName = [owner.first_name, owner.last_name].filter(Boolean).join(' ')
+    const printedAt = new Date().toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' })
+    const serviceLabel = SVC_LABELS[b.service] ?? b.service ?? 'Booking'
+    const fileName = ['Barkhaus', serviceLabel, b.ref_number].map(cleanFilePart).filter(Boolean).join('_')
+    const statusText = String(b.status ?? '').replace(/_/g, ' ')
+    const payStatusText = String(b.payment_status ?? 'unpaid').replace(/_/g, ' ')
+    const serviceRows = []
+
+    if (gd) {
+      serviceRows.push(['Date', gd.service_date])
+      serviceRows.push(['Time', gd.timeslot])
+      serviceRows.push(['Service', gd.groom_service_name])
+      serviceRows.push(['Groomer', gd.preferred_stylist || assignedName])
+      if (addons.length > 0) serviceRows.push(['Add-ons', addons.map(a => a.addon_name).join(', ')])
+      serviceRows.push(['Notes', gd.special_requests])
+    } else if (hd) {
+      const rm      = rooms?.find(r => r.id === hd.room_id)
+      const cinStr  = fmtDate(hd.checkin_date) + (hd.dropoff_time ? ' · ' + fmtTime(hd.dropoff_time) : '')
+      const coutStr = fmtDate(hd.checkout_date) + (hd.pickup_time ? ' · ' + fmtTime(hd.pickup_time) : '')
+      serviceRows.push(['Room', hd.room_type === 'other' ? 'Other' : (rm?.name ?? hd.room_type ?? '-')])
+      serviceRows.push(['Check-in', cinStr])
+      serviceRows.push(['Check-out', coutStr])
+      serviceRows.push(['Play park', hd.playpark_consent ? 'Yes' : 'No'])
+      serviceRows.push(['Feeding', hd.feeding_instructions])
+      serviceRows.push(['Medications', hd.medications])
+    } else if (dd) {
+      serviceRows.push(['Date', dd.service_date])
+      serviceRows.push(['Drop-off', dd.dropoff_time])
+      serviceRows.push(['Pick-up', dd.open_time ? 'Open time' : dd.pickup_time])
+      serviceRows.push(['Duration', dd.hours_total ? `${dd.hours_total}h` : '-'])
+      serviceRows.push(['Notes', dd.notes])
+    } else if (sd) {
+      serviceRows.push(['Date', sd.service_date])
+      serviceRows.push(['Slot', sd.timeslot])
+    }
+
+    const vaccineText = vaccines.length > 0
+      ? vaccines.map(v => `${v.vaccine_name}: ${v.confirmed ? 'confirmed' : 'not confirmed'}`).join(', ')
+      : ''
+    const paymentRows = (payments ?? []).map(p => [
+      `${String(p.type ?? '').replace(/_/g, ' ')} - ${BANK_LABELS[p.method] ?? String(p.method ?? '').replace(/_/g, ' ')}`,
+      `${money(p.amount)}${p.reference_number ? ` (${p.reference_number})` : ''}`,
+    ])
+
+    const html = `<!doctype html>
+      <html>
+      <head>
+        <title>${esc(fileName)}</title>
+        <style>
+          @page { size: A4; margin: 11mm; }
+          * { box-sizing: border-box; }
+          body { margin: 0; font-family: Arial, sans-serif; color: #17212b; font-size: 11px; line-height: 1.35; }
+          .sheet { min-height: 100vh; display: flex; flex-direction: column; gap: 10px; }
+          header { display: flex; justify-content: space-between; gap: 18px; border-bottom: 2px solid #17212b; padding-bottom: 9px; }
+          .brand { font-size: 22px; letter-spacing: 0.06em; font-weight: 800; }
+          .title { text-align: right; }
+          .title h1 { margin: 0 0 4px; font-size: 18px; }
+          .title p, .muted { margin: 0; color: #617283; }
+          .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+          .box { border: 1px solid #cad3dc; border-radius: 6px; padding: 7px; min-height: 42px; }
+          .label { color: #617283; font-size: 8px; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 3px; }
+          .value { font-size: 13px; font-weight: 700; text-transform: capitalize; }
+          .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+          section { border: 1px solid #d7dfe7; border-radius: 6px; padding: 8px 10px; break-inside: avoid; }
+          h2 { margin: 0 0 6px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: #456273; }
+          .row { display: grid; grid-template-columns: 105px 1fr; gap: 8px; padding: 3px 0; border-bottom: 1px solid #edf1f5; }
+          .row:last-child { border-bottom: 0; }
+          .row span { color: #617283; }
+          .row strong { font-weight: 600; white-space: pre-wrap; }
+          .wide { grid-column: 1 / -1; }
+          .bill .row:last-child strong, .bill .row:last-child span { font-size: 13px; font-weight: 800; color: #17212b; }
+          footer { margin-top: auto; border-top: 1px solid #d7dfe7; padding-top: 7px; display: flex; justify-content: space-between; color: #617283; font-size: 9px; }
+        </style>
+      </head>
+      <body>
+        <main class="sheet">
+          <header>
+            <div>
+              <div class="brand">BARKHAUS</div>
+              <p class="muted">Admin booking details</p>
+            </div>
+            <div class="title">
+              <h1>${esc(b.ref_number ?? 'Booking')}</h1>
+              <p>Printed ${esc(printedAt)}</p>
+            </div>
+          </header>
+
+          <div class="summary">
+            <div class="box"><div class="label">Service</div><div class="value">${esc(serviceLabel)}</div></div>
+            <div class="box"><div class="label">Schedule</div><div class="value">${esc(timeStr || '-')}</div></div>
+            <div class="box"><div class="label">Booking Status</div><div class="value">${esc(statusText || '-')}</div></div>
+            <div class="box"><div class="label">Payment Status</div><div class="value">${esc(payStatusText || '-')}</div></div>
+          </div>
+
+          <div class="grid">
+            ${printSection('Pet', [
+              printRow('Name', pet.name ?? 'Pet'),
+              printRow('Animal', pet.animal_type),
+              printRow('Breed', pet.breed),
+              printRow('Size', pet.size ? SIZE_LABELS[pet.size] : ''),
+              printRow('Sex', pet.gender),
+              printRow('Age', pet.age_value ? `${pet.age_value} ${pet.age_unit ?? ''}`.trim() : ''),
+              printRow('Temperament', pet.temperament ? pet.temperament.replace(/_/g, ' ') : ''),
+              printRow('Medical notes', pet.medical_notes),
+            ])}
+            ${printSection('Owner', [
+              printRow('Name', ownerName),
+              printRow('Mobile', owner.mobile),
+              printRow('Email', owner.email),
+              printRow('Referral', owner.referral_source),
+            ])}
+            ${printSection(serviceLabel, serviceRows.map(([label, value]) => printRow(label, value)))}
+            ${printSection('Care & Documents', [
+              printRow('Vaccines', vaccineText),
+              printRow('Waiver', waiver ? 'Signed' : ''),
+              printRow('Vaccine documents', vaccDocs.length > 0 ? `${vaccDocs.length} uploaded` : ''),
+            ])}
+            ${hd ? printSection('Emergency', [
+              printRow('Contact', hd.emergency_name ? `${hd.emergency_name}${hd.emergency_phone ? ` / ${hd.emergency_phone}` : ''}` : ''),
+              printRow('Vet', hd.vet_clinic),
+              printRow('Vet contact', hd.vet_contact),
+              printRow('Vet address', hd.vet_address),
+            ]) : ''}
+            ${printSection('Bill', getPrintBillRows(b, addons, charges).map(([label, value]) => printRow(label, value))).replace('<section>', '<section class="bill">')}
+            ${paymentRows.length > 0 ? printSection('Payments', paymentRows.map(([label, value]) => printRow(label, value))) : ''}
+            ${b.notes ? `<div class="wide">${printSection('Admin Notes', [printRow('Notes', b.notes)])}</div>` : ''}
+          </div>
+
+          <footer>
+            <span>${esc(SRC_LABELS[b.booking_source] ?? b.booking_source ?? '')}</span>
+            <span>Generated from Barkhaus Admin</span>
+          </footer>
+        </main>
+        <script>
+          window.addEventListener('load', function() {
+            window.focus();
+            setTimeout(function() { window.print(); }, 100);
+          });
+        </script>
+      </body>
+      </html>`
+
+    const printWin = window.open('', '_blank', 'width=900,height=1200')
+    if (!printWin) {
+      setErr('Allow pop-ups for this site to print the booking details.')
+      return
+    }
+    printWin.document.open()
+    printWin.document.write(html)
+    printWin.document.close()
+  }
+
   return (
     <>
       <div className={styles.overlay} onClick={e => e.target === e.currentTarget && onClose()} />
@@ -176,9 +404,12 @@ export default function BookingDrawer({ booking: b, rooms, groomers, onClose, on
         <div className={styles.scrollBody}>
           <div className={styles.refRow}>
             <p className={styles.ref}>{b.ref_number ?? ''}</p>
-            {onEdit && (
-              <button className={styles.editBtn} onClick={() => onEdit(b)}>✏ Edit booking</button>
-            )}
+            <div className={styles.headerActions}>
+              <button type="button" className={styles.printBtn} onClick={handlePrint}>Print</button>
+              {onEdit && (
+                <button type="button" className={styles.editBtn} onClick={() => onEdit(b)}>✏ Edit booking</button>
+              )}
+            </div>
           </div>
           {bookedAt && <p className={styles.meta}>Booked {bookedAt}</p>}
           {b.booking_source && <p className={styles.meta}>{SRC_LABELS[b.booking_source] ?? b.booking_source}</p>}
