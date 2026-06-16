@@ -19,7 +19,7 @@ var EDGE_FN_URL       = SUPABASE_URL + '/functions/v1/submit-booking';
 // populates them from Supabase at runtime.
 
 var GROOM_SERVICES = [
-  { key:'bath_dry',  name:'Bath and Dry',   duration:'30 minutes', desc:'Bath, Blow Dry and Brush Out' },
+  { key:'bath_dry',  name:'Bath and Dry',   duration:'1 hour', desc:'Bath, Blow Dry and Brush Out' },
   { key:'basic',     name:'Basic Groom',     duration:'1 hour',     desc:'Shampoo, Blow Dry, Brush Out, Teeth Brushing, Sanitary Clean, Paw Pad Trim, Nail Trim and Filing, Ear Cleaning, Anal Gland Expression' },
   { key:'premium',   name:'Premium Groom',   duration:'2 hours',    desc:'Customized Haircut, Face Trim, Shampoo, Blow Dry, Brush Out, Teeth Brushing, Sanitary Clean, Paw Pad Trim, Nail Trim and Filing, Ear Cleaning, Anal Gland Expression' },
   { key:'ala_carte', name:'Ala Carte',       duration:'varies',     desc:'Choose individual services below' }
@@ -918,8 +918,18 @@ function selectStylist(el, val, groomerId) {
   autoScroll('groomSlotsSection');
 }
 
-// Duration in minutes per service key
-var GROOM_SLOT_MINS = { bath_dry:30, basic:60, premium:120, ala_carte:60 };
+// Duration in minutes per service key. Dematting or deshedding adds one
+// 30-minute buffer, so a Basic Groom with either/both blocks 90 minutes.
+var GROOM_SLOT_MINS = { bath_dry:60, basic:60, premium:120, ala_carte:60 };
+var GROOM_DURATION_ADDONS = { demat:true, deshed:true };
+
+function hasDurationAddonMap(addons) {
+  return Object.keys(addons || {}).some(function(k){ return GROOM_DURATION_ADDONS[k]; });
+}
+
+function groomDurationMins(serviceKey, addons) {
+  return (GROOM_SLOT_MINS[serviceKey || 'basic'] || 60) + (hasDurationAddonMap(addons) ? 30 : 0);
+}
 
 // Parse a slot string like "9:00 AM" into minutes since midnight
 function slotToMins(slot) {
@@ -960,7 +970,7 @@ async function renderGroomSlots() {
   var isAny      = !groomerId;
   var dateVal    = booking.groomDate;
   var serviceKey = booking.groomService || 'basic';
-  var myDuration = GROOM_SLOT_MINS[serviceKey] || 60;
+  var myDuration = groomDurationMins(serviceKey, booking.selectedAddons);
   var dow        = dateVal ? new Date(dateVal + 'T00:00:00').getDay() : -1;
   var ALL_SLOTS  = ['9:00 AM','10:00 AM','11:00 AM','12:00 PM','1:00 PM','2:00 PM','3:00 PM','4:00 PM','5:00 PM'];
 
@@ -993,11 +1003,27 @@ async function renderGroomSlots() {
     // 1. ALL grooming bookings for this date/branch (no groomer filter) so that
     //    unassigned bookings (groomer_id=null) are visible for any-groomer overflow math.
     //    rangesFor() does client-side groomer filtering, so this is still correct.
-    var bkQuery = 'select=timeslot,groom_service_key,groomer_id,bookings!inner(status,branch_id)' +
+    var bkQuery = 'select=booking_id,timeslot,groom_service_key,groomer_id,bookings!inner(status,branch_id)' +
       '&service_date=eq.'        + dateVal +
       '&bookings.branch_id=eq.'  + branchId +
       '&bookings.status=not.in.(cancelled,rejected)';
     bookingRows = (await sbFetchPublic('grooming_details', bkQuery)) || [];
+    var ids = bookingRows.map(function(r){ return r.booking_id; }).filter(Boolean);
+    if (ids.length) {
+      try {
+        var addonRows = (await sbFetchPublic('booking_addons',
+          'select=booking_id,addon_key&booking_id=in.(' + ids.join(',') + ')')) || [];
+        var durationAddonsByBooking = {};
+        addonRows.forEach(function(a) {
+          if (GROOM_DURATION_ADDONS[a.addon_key]) durationAddonsByBooking[a.booking_id] = true;
+        });
+        bookingRows.forEach(function(r) {
+          r._durationAddons = durationAddonsByBooking[r.booking_id] ? { demat:true } : null;
+        });
+      } catch(addonErr) {
+        console.warn('Could not read booking add-ons for duration checks:', addonErr);
+      }
+    }
 
     // 2. ALL one-off blocked_schedules for groomers on this date (no resource filter).
     //    rangesFor() does client-side resource filtering.
@@ -1021,7 +1047,7 @@ async function renderGroomSlots() {
     var ranges = [];
     // Active bookings
     bookingRows.filter(function(r){ return r.groomer_id === gId && r.timeslot; }).forEach(function(r) {
-      var dur = GROOM_SLOT_MINS[r.groom_service_key || 'basic'] || 60;
+      var dur = groomDurationMins(r.groom_service_key || 'basic', r._durationAddons);
       var st  = slotToMins(r.timeslot);
       if (st >= 0) ranges.push({ start: st, end: st + dur });
     });
@@ -1051,7 +1077,7 @@ async function renderGroomSlots() {
       var unassignedCount = bookingRows.filter(function(r) {
         if (r.groomer_id != null) return false;
         if (!r.timeslot) return false;
-        var dur = GROOM_SLOT_MINS[r.groom_service_key || 'basic'] || 60;
+        var dur = groomDurationMins(r.groom_service_key || 'basic', r._durationAddons);
         var st  = slotToMins(r.timeslot);
         return st >= 0 && candStart < st + dur && candEnd > st;
       }).length;
@@ -1068,7 +1094,7 @@ async function renderGroomSlots() {
       var unassignedAtSlot = bookingRows.filter(function(r) {
         if (r.groomer_id != null) return false;
         if (!r.timeslot) return false;
-        var dur = GROOM_SLOT_MINS[r.groom_service_key || 'basic'] || 60;
+        var dur = groomDurationMins(r.groom_service_key || 'basic', r._durationAddons);
         var st  = slotToMins(r.timeslot);
         return st >= 0 && candStart < st + dur && candEnd > st;
       }).length;
@@ -2986,25 +3012,41 @@ async function checkAvailabilityBeforePayment() {
       var groomerId  = booking.preferredStylistId;
       var isAny      = !groomerId;
       var serviceKey = booking.groomService || 'basic';
-      var myDuration = GROOM_SLOT_MINS[serviceKey] || 60;
+      var myDuration = groomDurationMins(serviceKey, booking.selectedAddons);
       var candStart  = slotToMins(slot);
       var candEnd    = candStart + myDuration;
       // Fetch ALL bookings for this date (no groomer filter) so unassigned ones are visible
-      var bkQuery = 'select=timeslot,groom_service_key,groomer_id,bookings!inner(status,branch_id)' +
+      var bkQuery = 'select=booking_id,timeslot,groom_service_key,groomer_id,bookings!inner(status,branch_id)' +
         '&service_date=eq.' + dateVal + '&bookings.branch_id=eq.' + branchId +
         '&bookings.status=not.in.(cancelled,rejected)';
       var bkRows = (await sbFetchPublic('grooming_details', bkQuery)) || [];
+      var ids = bkRows.map(function(r){ return r.booking_id; }).filter(Boolean);
+      if (ids.length) {
+        try {
+          var addonRows = (await sbFetchPublic('booking_addons',
+            'select=booking_id,addon_key&booking_id=in.(' + ids.join(',') + ')')) || [];
+          var durationAddonsByBooking = {};
+          addonRows.forEach(function(a) {
+            if (GROOM_DURATION_ADDONS[a.addon_key]) durationAddonsByBooking[a.booking_id] = true;
+          });
+          bkRows.forEach(function(r) {
+            r._durationAddons = durationAddonsByBooking[r.booking_id] ? { demat:true } : null;
+          });
+        } catch(addonErr) {
+          console.warn('Could not read booking add-ons for duration checks:', addonErr);
+        }
+      }
       function isGroomerFree(gId) {
         return !bkRows.filter(function(r){ return r.groomer_id === gId && r.timeslot; })
           .some(function(r) {
-            var dur = GROOM_SLOT_MINS[r.groom_service_key || 'basic'] || 60;
+            var dur = groomDurationMins(r.groom_service_key || 'basic', r._durationAddons);
             var st  = slotToMins(r.timeslot);
             return st >= 0 && candStart < (st + dur) && candEnd > st;
           });
       }
       var unassignedAtSlot = bkRows.filter(function(r) {
         if (r.groomer_id != null) return false;
-        var dur = GROOM_SLOT_MINS[r.groom_service_key || 'basic'] || 60;
+        var dur = groomDurationMins(r.groom_service_key || 'basic', r._durationAddons);
         var st = slotToMins(r.timeslot || '');
         return st >= 0 && candStart < st + dur && candEnd > st;
       }).length;

@@ -7,6 +7,8 @@ import {
 import PaymentPanel from './PaymentPanel'
 import styles from './BookingDrawer.module.css'
 
+const INTERNAL_OTHER_ROOM_ID = '__internal_other_room__'
+
 export default function BookingDrawer({ booking: b, rooms, groomers, onClose, onUpdated, onEdit }) {
   const [payments,    setPayments]    = useState(null)
   const [charges,     setCharges]     = useState([])
@@ -37,7 +39,7 @@ export default function BookingDrawer({ booking: b, rooms, groomers, onClose, on
   // Pre-select current assignment
   useEffect(() => {
     if (b.service === 'grooming') setInvVal(gd?.groomer_id ?? '')
-    else if (b.service === 'hotel') setInvVal(hd?.room_id ?? '')
+    else if (b.service === 'hotel') setInvVal(hd?.room_type === 'other' ? INTERNAL_OTHER_ROOM_ID : (hd?.room_id ?? ''))
   }, [b])
 
   useEffect(() => { loadPayments(); loadCharges(); loadVaccDocs() }, [b.id])
@@ -100,7 +102,7 @@ export default function BookingDrawer({ booking: b, rooms, groomers, onClose, on
       if (b.service === 'grooming' && (!gd?.groomer_id)) {
         setErr('Assign a specific groomer before checking in.'); return
       }
-      if (b.service === 'hotel' && (!hd?.room_id)) {
+      if (b.service === 'hotel' && (!hd?.room_id && hd?.room_type !== 'other')) {
         setErr('Assign a room before checking in.'); return
       }
     }
@@ -120,7 +122,12 @@ export default function BookingDrawer({ booking: b, rooms, groomers, onClose, on
         const groomerName = val ? (groomers.find(g => g.id === val)?.name ?? 'any') : 'any'
         await sbPatch('grooming_details', `booking_id=eq.${b.id}`, { groomer_id: val, preferred_stylist: groomerName })
       } else {
-        await sbPatch('hotel_details', `booking_id=eq.${b.id}`, { room_id: val })
+        if (val === INTERNAL_OTHER_ROOM_ID) {
+          await sbPatch('hotel_details', `booking_id=eq.${b.id}`, { room_id: null, room_type: 'other' })
+        } else {
+          const room = rooms?.find(r => r.id === val)
+          await sbPatch('hotel_details', `booking_id=eq.${b.id}`, { room_id: val, room_type: room?.room_type ?? hd?.room_type ?? null })
+        }
       }
       onUpdated()
       onClose()
@@ -151,7 +158,9 @@ export default function BookingDrawer({ booking: b, rooms, groomers, onClose, on
       assignedName = gr?.name ?? 'Unknown'; assignedColor = gr?.color ?? 'var(--mid)'; isUnassigned = false
     } else assignedName = 'Any available'
   } else if (b.service === 'hotel') {
-    if (hd?.room_id) {
+    if (hd?.room_type === 'other') {
+      assignedName = 'Other'; assignedColor = '#888780'; isUnassigned = false
+    } else if (hd?.room_id) {
       const rm = rooms?.find(x => x.id === hd.room_id)
       assignedName = rm?.name ?? 'Unknown'; assignedColor = rm?.color ?? 'var(--mid)'; isUnassigned = false
     }
@@ -437,7 +446,7 @@ function ServiceRows({ b, gd, hd, dd, sd, addons, rooms }) {
     const coutStr = fmtDate(hd.checkout_date) + (hd.pickup_time  ? ' · ' + fmtTime(hd.pickup_time) : '')
     return (
       <>
-        <DR label="Room"       value={rm?.name ?? hd.room_type ?? '-'} />
+        <DR label="Room"       value={hd.room_type === 'other' ? 'Other' : (rm?.name ?? hd.room_type ?? '-')} />
         <DR label="Check-in"  value={cinStr} />
         <DR label="Check-out" value={coutStr} />
         <DR label="Play park" value={hd.playpark_consent ? 'Yes' : 'No'} />

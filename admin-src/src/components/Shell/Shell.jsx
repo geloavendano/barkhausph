@@ -8,6 +8,7 @@ const NAV_ITEMS = [
   { key: 'checkin',   icon: '🐾', label: 'Check In'  },
   { key: 'members',   icon: '👤', label: 'Members'   },
   { key: 'resources', icon: '📦', label: 'Inventory' },
+  { key: 'reports',   icon: '📊', label: 'Reports'   },
 ]
 
 const GUIDE_LINK = { icon: '📖', label: 'Admin Guide', href: '/docs/admin-guide.html' }
@@ -15,6 +16,7 @@ const MOBILE_PRIMARY = ['calendar', 'bookings', 'checkin']
 const MORE_ITEMS = [
   { key: 'members',   icon: '👤', label: 'Members'   },
   { key: 'resources', icon: '📦', label: 'Inventory' },
+  { key: 'reports',   icon: '📊', label: 'Reports'   },
   GUIDE_LINK,
 ]
 

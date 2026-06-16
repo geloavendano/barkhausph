@@ -188,7 +188,7 @@
   }
   .moreSheet {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     position: fixed;
     bottom: 56px; /* sits just above the bottom nav */
     left: 0;

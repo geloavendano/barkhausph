@@ -149,6 +149,17 @@
 }
 .editBtn:hover { background: var(--raised); color: var(--cream); }
 
+.internalBadge {
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--yellow);
+  background: rgba(255,206,88,0.14);
+  border: 0.5px solid rgba(255,206,88,0.35);
+  border-radius: 20px;
+  padding: 3px 8px;
+  flex-shrink: 0;
+}
+
 /* ── Add button ── */
 .addBtn {
   margin-top: auto;

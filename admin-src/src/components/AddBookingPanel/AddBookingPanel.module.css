@@ -153,7 +153,7 @@
 }
 .slot:hover:not(:disabled) { background: var(--raised); }
 .slotOn { background: var(--raised); border-color: var(--blue); color: var(--blue); }
-.slotTaken { opacity: 0.35; cursor: not-allowed; text-decoration: line-through; }
+.slotTaken { border-color: rgba(239,159,39,0.55); color: var(--yellow); }
 
 /* ── Pills ── */
 .pills { display: flex; gap: 6px; flex-wrap: wrap; }

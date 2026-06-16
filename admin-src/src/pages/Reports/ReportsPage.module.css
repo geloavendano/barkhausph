@@ -1,0 +1,129 @@
+.page { padding: 0; }
+
+.topRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.title {
+  font-family: 'Fredoka One', cursive;
+  font-size: 20px;
+  color: var(--cream);
+  margin: 0;
+}
+
+.controls {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.field span {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--mid);
+  margin-bottom: 6px;
+}
+
+.field input,
+.field select {
+  width: 100%;
+  background: var(--surface);
+  border: 0.5px solid var(--border);
+  border-radius: 8px;
+  color: var(--cream);
+  padding: 9px 10px;
+  font-family: 'Nunito', sans-serif;
+  font-size: 13px;
+}
+
+.summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.summary > div {
+  background: var(--surface);
+  border: 0.5px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+}
+
+.metricLabel {
+  display: block;
+  font-size: 11px;
+  color: var(--mid);
+  margin-bottom: 4px;
+}
+
+.summary strong {
+  color: var(--yellow);
+  font-size: 18px;
+}
+
+.listHead {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--mid);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.tableWrap {
+  overflow-x: auto;
+  border-radius: 10px;
+  border: 0.5px solid var(--border);
+}
+
+.table {
+  min-width: 680px;
+  background: var(--surface);
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 150px 1.2fr 1.7fr 120px;
+  gap: 12px;
+  align-items: center;
+  padding: 11px 14px;
+  border-bottom: 0.5px solid var(--border);
+}
+.row:last-child { border-bottom: none; }
+
+.date,
+.service { color: var(--cream-m); font-size: 12px; }
+.pet { color: var(--cream); font-size: 13px; font-weight: 700; }
+.amount { color: var(--cream); font-size: 13px; font-weight: 800; text-align: right; }
+
+.addonMark {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 7px;
+  border-radius: 20px;
+  background: rgba(255,206,88,0.16);
+  color: var(--yellow);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.msg { color: var(--mid); padding: 8px 0; font-size: 13px; }
+.err { color: var(--error); font-size: 13px; }
+
+@media (max-width: 760px) {
+  .controls,
+  .summary { grid-template-columns: 1fr; }
+  .listHead { flex-direction: column; }
+}

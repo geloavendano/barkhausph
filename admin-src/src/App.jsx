@@ -7,6 +7,16 @@ import BookingsPage  from './pages/Bookings/BookingsPage'
 import CheckInPage   from './pages/CheckIn/CheckInPage'
 import CalendarPage  from './pages/Calendar/CalendarPage'
 import ResourcesPage from './pages/Resources/ResourcesPage'
+import ReportsPage   from './pages/Reports/ReportsPage'
+
+const INTERNAL_OTHER_ROOM = {
+  id: '__internal_other_room__',
+  name: 'Other',
+  color: '#888780',
+  active: true,
+  room_type: 'other',
+  internal_only: true,
+}
 
 export default function App() {
   const [session,      setSession]      = useState(undefined)
@@ -105,7 +115,7 @@ export default function App() {
         sbGet('rooms',    `branch_id=eq.${branchId}&active=eq.true&select=id,name,color,active,room_type&order=name`),
         sbGet('groomers', `branch_id=eq.${branchId}&active=eq.true&select=id,name,color,active&order=name`),
       ])
-      setRooms(r ?? [])
+      setRooms([...(r ?? []), { ...INTERNAL_OTHER_ROOM, branch_id: branchId }])
       setGroomers(g ?? [])
     } catch { /* non-fatal */ }
     try {
@@ -157,6 +167,7 @@ export default function App() {
       {page === 'bookings'  && <BookingsPage  {...pageProps} />}
       {page === 'checkin'   && <CheckInPage   {...pageProps} />}
       {page === 'members'   && <MembersPage   {...pageProps} />}
+      {page === 'reports'   && <ReportsPage   {...pageProps} />}
       {page === 'resources' && (
         <ResourcesPage
           branches={branches}

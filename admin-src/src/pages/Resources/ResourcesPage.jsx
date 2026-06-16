@@ -10,7 +10,17 @@ const ROOM_TYPE_OPTS = [
   { key:'small_cage',   label:'Small Cage' },
   { key:'single_cabin', label:'Cat Cabin' },
   { key:'villa',        label:'Cat Villa' },
+  { key:'other',        label:'Other' },
 ]
+
+const INTERNAL_OTHER_ROOM = {
+  id: '__internal_other_room__',
+  name: 'Other',
+  color: '#888780',
+  active: true,
+  room_type: 'other',
+  internal_only: true,
+}
 
 const PET_SIZES = [
   { key:'small_dog',  label:'Small Dog' },
@@ -48,7 +58,7 @@ export default function ResourcesPage({ branches, currentBranchIdx = 0, onChange
         sbGet('groomers', `branch_id=eq.${branch.id}&active=eq.true&select=*&order=sort_order`),
         sbGet('studios',  `branch_id=eq.${branch.id}&active=eq.true&select=*&order=sort_order`),
       ])
-      setRooms(r ?? [])
+      setRooms([...(r ?? []), { ...INTERNAL_OTHER_ROOM, branch_id: branch.id }])
       setGrms(g ?? [])
       setSdts(s ?? [])
     } catch { /* non-fatal */ }
@@ -139,7 +149,11 @@ function ResourceCard({ item, type, onEdit }) {
           </div>
         )}
       </div>
-      <button className={styles.editBtn} onClick={onEdit} title="Edit">✎</button>
+      {item.internal_only ? (
+        <span className={styles.internalBadge}>Internal</span>
+      ) : (
+        <button className={styles.editBtn} onClick={onEdit} title="Edit">✎</button>
+      )}
     </div>
   )
 }

@@ -2,11 +2,12 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { sbGet, sbPost, sbPatch, sbDelete, SUPABASE_URL, SUPABASE_ANON_KEY } from '../../lib/supabase'
 import { supabase } from '../../lib/supabase'
 import { parsePricing, emptyPricing, calcBase, calcLate, calcTotal, calcNights, calcHotelBreakdown, calcDaycare, hotelSizeKey, DEFAULT_ADDONS } from '../../lib/pricing'
+import { groomDurationMins } from '../../lib/grooming'
 import styles from './AddBookingPanel.module.css'
 
 // ── Constants ─────────────────────────────────────────────────────────────
 const GROOM_SVCS = [
-  { k:'bath_dry', n:'Bath and Dry',  d:'30 min' },
+  { k:'bath_dry', n:'Bath and Dry',  d:'1 hr' },
   { k:'basic',    n:'Basic Groom',   d:'1 hr'   },
   { k:'premium',  n:'Premium Groom', d:'2 hrs'  },
   { k:'ala_carte',n:'Ala Carte',     d:'varies' },
@@ -15,7 +16,7 @@ const ADDON_COMPAT = { bath_dry:null, basic:['face_trim','antitick','whitening',
 const BK_SIZES     = ['small_dog','medium_dog','large_dog','giant_dog','cat']
 const SIZE_LBL     = { small_dog:'Small dog', medium_dog:'Medium dog', large_dog:'Large dog', giant_dog:'Giant dog', cat:'Cat' }
 const ROOM_TYPES   = { small_cage:'Small Cage', medium_cage:'Medium Cage', large_cage:'Large Cage', single_cabin:'Cat Cabin', villa:'Cat Villa' }
-const GROOM_SLOTS  = ['9:00 AM','10:00 AM','11:00 AM','1:00 PM','2:00 PM','3:00 PM','4:00 PM','5:00 PM']
+const INTERNAL_OTHER_ROOM_ID = '__internal_other_room__'
 const STUDIO_SLOTS = ['10:00 AM','11:00 AM','12:00 PM','1:00 PM','2:00 PM','3:00 PM','4:00 PM','5:00 PM','6:00 PM','7:00 PM','8:00 PM','9:00 PM']
 const STEP_NAMES   = ['Service','Schedule','Pet','Owner','Details','Summary']
 // Drop-off: 7 AM – 10 PM. Values stored as bare hour string ("10") to match public page.
@@ -108,11 +109,29 @@ function getHotelHours(branchName, dateStr) {
 function toHHMM(t) {
   if (t == null || t === '') return ''
   const s = String(t).trim()
+  const ampm = s.match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)$/i)
+  if (ampm) {
+    let h = parseInt(ampm[1])
+    const m = parseInt(ampm[2] ?? '0')
+    const ap = ampm[3].toUpperCase()
+    if (ap === 'PM' && h !== 12) h += 12
+    if (ap === 'AM' && h === 12) h = 0
+    return `${String(h).padStart(2,'0')}:${String(isNaN(m) ? 0 : m).padStart(2,'0')}`
+  }
   const p = s.split(':')
   const h = parseInt(p[0])
   if (isNaN(h)) return ''
   const m = p.length >= 2 ? parseInt(p[1]) : 0
   return `${String(h).padStart(2,'0')}:${String(isNaN(m) ? 0 : m).padStart(2,'0')}`
+}
+
+function fmtTime12(t) {
+  const hhmm = toHHMM(t)
+  if (!hhmm) return ''
+  const [hRaw, mRaw] = hhmm.split(':').map(Number)
+  const ap = hRaw >= 12 ? 'PM' : 'AM'
+  const h = hRaw % 12 || 12
+  return `${h}:${String(mRaw || 0).padStart(2,'0')} ${ap}`
 }
 
 // ── Helper components defined OUTSIDE AddBookingPanel ─────────────────────
@@ -226,8 +245,8 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
       gdate: gd?.service_date ?? '', gslot: gd?.timeslot ?? '', gnotes: gd?.special_requests ?? '',
       addons: addonMap,
       hcin: hd?.checkin_date ?? '', hcout: hd?.checkout_date ?? '',
-      hroom: roomObj?.name ?? hd?.room_type ?? '',
-      hroom_id: hd?.room_id ?? null,
+      hroom: hd?.room_type === 'other' ? 'Other' : (roomObj?.name ?? hd?.room_type ?? ''),
+      hroom_id: hd?.room_type === 'other' ? INTERNAL_OTHER_ROOM_ID : (hd?.room_id ?? null),
       hroom_type: hd?.room_type ?? '',
       hdrop: hd?.dropoff_time ? String(parseInt(hd.dropoff_time)) : '',
       hpickHour: hd?.pickup_hour ?? (hd?.pickup_time ? parseInt(hd.pickup_time) : 14),
@@ -270,7 +289,7 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
       // Grooming date now lives in grooming_details.service_date. Query it directly,
       // scoped to this branch + active bookings via an inner embed of the parent.
       const gdRows = await sbGet('grooming_details',
-        `select=timeslot,groomer_id,bookings!inner(branch_id,status)` +
+        `select=booking_id,timeslot,groomer_id,groom_service_key,bookings!inner(branch_id,status)` +
         `&service_date=eq.${date}` +
         `&bookings.branch_id=eq.${branch.id}` +
         `&bookings.status=neq.cancelled&bookings.status=neq.rejected`)
@@ -413,7 +432,7 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
           const gsvc = GROOM_SVCS.find(x => x.k === bk.gsvc)
           await sbPatch('grooming_details', `booking_id=eq.${b.id}`, {
             service_date: bk.gdate||null,
-            timeslot: bk.gslot, preferred_stylist: bk.stylist||'any',
+            timeslot: fmtTime12(bk.gslot), preferred_stylist: bk.stylist||'any',
             groomer_id: bk.stylistId||null, groom_service_key: bk.gsvc||'basic',
             groom_service_name: gsvc?.n || '', special_requests: bk.gnotes||null,
           })
@@ -428,8 +447,8 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
         if (bk.svc==='hotel') await sbPatch('hotel_details', `booking_id=eq.${b.id}`, {
           checkin_date: bk.hcin, checkout_date: bk.hcout,
           dropoff_time: bk.hdrop||null, pickup_time: `${bk.hpickHour}:00`,
-          pickup_hour: parseInt(bk.hpickHour)||14, room_type: bk.hroom||null,
-          room_id: bk.hroom_id||null, playpark_consent: bk.hplay,
+          pickup_hour: parseInt(bk.hpickHour)||14, room_type: bk.hroom_type||bk.hroom||null,
+          room_id: bk.hroom_id === INTERNAL_OTHER_ROOM_ID ? null : (bk.hroom_id||null), playpark_consent: bk.hplay,
           feeding_instructions: bk.hfeed||null, medications: bk.hmeds||null,
           emergency_name: bk.hemerg||null, emergency_phone: bk.hemergp||null,
           vet_clinic: bk.hvet||null, vet_contact: bk.hvetc||null, vet_address: bk.hvetaddr||null,
@@ -482,10 +501,10 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
           petSize: bk.size, petMedical: bk.pmed, petTemperament: bk.ptemp,
           ownerFirst: bk.ofirst, ownerLast: bk.olast,
           ownerEmail: bk.oemail, ownerPhone: bk.ophone, ownerSource: bk.osource,
-          groomDate: bk.gdate, groomSlot: bk.gslot, groomService: bk.gsvc,
+          groomDate: bk.gdate, groomSlot: fmtTime12(bk.gslot), groomService: bk.gsvc,
           preferredStylist: bk.stylist,
           hotelCheckin: bk.hcin, hotelCheckout: bk.hcout,
-          hotelRoom: bk.hroom, hotelRoomId: bk.hroom_id,
+          hotelRoom: bk.hroom_type || bk.hroom, hotelRoomId: bk.hroom_id === INTERNAL_OTHER_ROOM_ID ? null : bk.hroom_id,
           hotelDropoff: bk.hdrop, hotelPickup: `${bk.hpickHour}:00`,
           hotelPickupHour: parseInt(bk.hpickHour)||14,
           playparkConsent: bk.hplay ? 'yes' : 'no',
@@ -640,14 +659,18 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
         </div>
 
         <FG label="Time slot" req>
+          <input type="time" className={styles.inp} value={toHHMM(bk.gslot)}
+            min="09:00" max="17:30" step="900"
+            onChange={e => upd('gslot', e.target.value)} />
+          <p className={styles.hint}>Admins can choose any exact time and may override occupied slots when needed.</p>
           {slotsLoading && <p className={styles.hint}>Loading slots…</p>}
-          {!slotsLoading && slots === null && <p className={styles.hint}>Select a date to see available slots.</p>}
+          {!slotsLoading && slots === null && <p className={styles.hint}>Select a date to see suggested slot status.</p>}
           {!slotsLoading && slots !== null && (
             <div className={styles.slotGrid}>
               {slots.map(({ s, taken }) => (
                 <button key={s}
                   className={`${styles.slot} ${bk.gslot === s ? styles.slotOn : ''} ${taken ? styles.slotTaken : ''}`}
-                  disabled={taken} onClick={() => upd('gslot', s)}>{s}</button>
+                  onClick={() => upd('gslot', toHHMM(s))}>{s}{taken ? ' · booked' : ''}</button>
               ))}
             </div>
           )}
@@ -963,7 +986,8 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
           <SRow k="Service type" v={gsvc?.n} />
           <SRow k="Size" v={SIZE_LBL[bk.size]} />
           <SRow k="Stylist" v={bk.stylist === 'any' ? 'Any available' : bk.stylist} />
-          <SRow k="Date & time" v={bk.gdate && bk.gslot ? `${bk.gdate} at ${bk.gslot}` : '—'} />
+          <SRow k="Date & time" v={bk.gdate && bk.gslot ? `${bk.gdate} at ${fmtTime12(bk.gslot)}` : '—'} />
+          <SRow k="Duration" v={`${groomDurationMins(bk.gsvc, bk.addons)} minutes`} />
           {Object.keys(bk.addons).length > 0 && <SRow k="Add-ons" v={Object.keys(bk.addons).map(k => DEFAULT_ADDONS.find(a=>a.key===k)?.name??k).join(', ')} />}
         </>}
         {bk.svc === 'hotel' && <>

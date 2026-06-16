@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { supabase, sbGet, sbPatch } from '../../lib/supabase'
 import { STATUS_COLORS, first, hexBg } from '../../lib/constants'
+import { groomDurationMins } from '../../lib/grooming'
 import BookingDrawer from '../Bookings/BookingDrawer'
 import FAB from '../../components/FAB/FAB'
 import AddBookingPanel from '../../components/AddBookingPanel/AddBookingPanel'
@@ -12,8 +13,8 @@ const DAY_START  = 9 * 60    // 540 min (9 AM)
 const DAY_END    = 20 * 60   // 1200 min (8 PM)
 const PX_PER_MIN = 1.5       // px per minute → 990px total height
 
-const GROOM_DURATIONS  = { bath_dry: 30, basic: 60, premium: 120, ala_carte: 60 }
-const ROOM_TYPE_LABELS = { small_cage: 'Small Cage', medium_cage: 'Medium Cage', large_cage: 'Large Cage', single_cabin: 'Cat Cabin', villa: 'Cat Villa' }
+const INTERNAL_OTHER_ROOM_ID = '__internal_other_room__'
+const ROOM_TYPE_LABELS = { small_cage: 'Small Cage', medium_cage: 'Medium Cage', large_cage: 'Large Cage', single_cabin: 'Cat Cabin', villa: 'Cat Villa', other: 'Other' }
 const SVCS = [
   { key: 'hotel',    label: 'Hotel',    color: '#EF9F27' },
   { key: 'grooming', label: 'Grooming', color: '#4D96B9' },
@@ -71,7 +72,7 @@ function getBookingTimes(b, dateStr) {
   const gd = first(b.grooming_details) ?? {}, hd = first(b.hotel_details) ?? {}
   const dd = first(b.daycare_details)  ?? {}, sd = first(b.studio_details)  ?? {}
   let st = null, en = null
-  if      (b.service === 'grooming') { st = parseMins(gd.timeslot); en = st != null ? st + (GROOM_DURATIONS[gd.groom_service_key ?? 'basic'] ?? 60) : null }
+  if      (b.service === 'grooming') { st = parseMins(gd.timeslot); en = st != null ? st + groomDurationMins(gd.groom_service_key ?? 'basic', b.booking_addons) : null }
   else if (b.service === 'hotel')    { const cin = hd.checkin_date, cout = hd.checkout_date; if (cin === dateStr) { st = parseMins(hd.dropoff_time) ?? DAY_START; en = DAY_END } else if (cout === dateStr) { st = DAY_START; en = parseMins(hd.pickup_time) ?? DAY_END } else { st = DAY_START; en = DAY_END } }
   else if (b.service === 'daycare')  { st = parseMins(dd.dropoff_time) ?? DAY_START; en = dd.open_time ? DAY_END : (parseMins(dd.pickup_time) ?? DAY_END) }
   else if (b.service === 'studio')   { st = parseMins(sd.timeslot); en = st != null ? st + 60 : null }
@@ -92,6 +93,7 @@ function layoutAll(items) {
 }
 function getCardColor(b, rooms, groomers) {
   const hd = first(b.hotel_details), gd = first(b.grooming_details)
+  if (b.service === 'hotel' && hd?.room_type === 'other') return '#888780'
   if (b.service === 'hotel' && hd?.room_id)    { const r = rooms.find(x => x.id === hd.room_id);       if (r) return r.color }
   if (b.service === 'hotel' && hd?.room_type)  { const rc = { large_cage:'#EF9F27', medium_cage:'#4D96B9', small_cage:'#1D9E75', single_cabin:'#D4537E', villa:'#9B95E8' }; return rc[hd.room_type] ?? '#6AAEC8' }
   if (b.service === 'grooming' && gd?.groomer_id) { const g = groomers.find(x => x.id === gd.groomer_id); if (g) return g.color }
@@ -302,7 +304,10 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
   const filtered = useMemo(() => bookings.filter(b => {
     if (currentSvc !== 'all' && b.service !== currentSvc) return false
     if (activeFilter) {
-      if (activeFilter.type === 'room')    { const hd = first(b.hotel_details)    ?? {}; return hd.room_id    === activeFilter.id }
+      if (activeFilter.type === 'room')    {
+        const hd = first(b.hotel_details) ?? {}
+        return activeFilter.id === INTERNAL_OTHER_ROOM_ID ? hd.room_type === 'other' : hd.room_id === activeFilter.id
+      }
       if (activeFilter.type === 'groomer') { const gd = first(b.grooming_details) ?? {}; return gd.groomer_id  === activeFilter.id }
       if (activeFilter.type === 'studio')  { const sd = first(b.studio_details)   ?? {}; return b.service === 'studio' && sd.studio_id === activeFilter.id }
     }
@@ -383,7 +388,10 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
             <SbSection label="Rooms">
               {rooms.map(r => (
                 <SbItem key={r.id} color={r.color} label={r.name}
-                  count={bookings.filter(b => b.service === 'hotel' && (first(b.hotel_details) ?? {}).room_id === r.id).length}
+                  count={bookings.filter(b => {
+                    const hd = first(b.hotel_details) ?? {}
+                    return b.service === 'hotel' && (r.id === INTERNAL_OTHER_ROOM_ID ? hd.room_type === 'other' : hd.room_id === r.id)
+                  }).length}
                   isOn={activeFilter?.type === 'room' && activeFilter?.id === r.id}
                   onToggle={() => toggleFilter('room', r.id)} />
               ))}
@@ -491,7 +499,7 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
                     const isCancelled = b.status === 'cancelled' || b.status === 'rejected'
                     const detail = gd
                       ? (gd.groom_service_name ?? 'Groom') + (gd.preferred_stylist && gd.preferred_stylist !== 'any' ? ` | ${gd.preferred_stylist}` : '')
-                      : hd ? (rooms.find(r => r.id === hd.room_id)?.name ?? ROOM_TYPE_LABELS[hd.room_type] ?? hd.room_type ?? 'Hotel')
+                      : hd ? (hd.room_type === 'other' ? 'Other' : (rooms.find(r => r.id === hd.room_id)?.name ?? ROOM_TYPE_LABELS[hd.room_type] ?? hd.room_type ?? 'Hotel'))
                       : first(b.daycare_details) ? 'Daycare' : first(b.studio_details) ? 'Studio' : ''
                     return (
                       <div key={b.id}
@@ -679,7 +687,10 @@ function MonthOverlay({ modalDate, selectedDate, monthDots, onClose, onShift, on
 
 function FilterDrawer({ rooms, groomers, studios, bookings, activeFilter, onSelect, onClear, onClose }) {
   const countFor = (type, id) => bookings.filter(b => {
-    if (type === 'room')    return b.service === 'hotel'    && (first(b.hotel_details)    ?? {}).room_id    === id
+    if (type === 'room') {
+      const hd = first(b.hotel_details) ?? {}
+      return b.service === 'hotel' && (id === INTERNAL_OTHER_ROOM_ID ? hd.room_type === 'other' : hd.room_id === id)
+    }
     if (type === 'groomer') return b.service === 'grooming' && (first(b.grooming_details) ?? {}).groomer_id === id
     if (type === 'studio')  return b.service === 'studio'   && (first(b.studio_details)   ?? {}).studio_id  === id
     return false
