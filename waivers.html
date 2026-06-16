@@ -24,8 +24,8 @@
   body { background: var(--bg); color: var(--cream); font-family: "Nunito", sans-serif; font-weight: 400; line-height: 1.7; min-height: 100svh; -webkit-font-smoothing: antialiased; }
 
   .wv-header { position: sticky; top: 0; z-index: 100; background: rgba(15,28,38,0.95); backdrop-filter: blur(12px); border-bottom: 0.5px solid var(--border); padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; }
-  .wv-logo { font-family: "Fredoka One", cursive; font-size: 20px; color: var(--cream); text-decoration: none; }
-  .wv-logo span { color: var(--yellow); }
+  .wv-logo { display: inline-flex; align-items: center; text-decoration: none; }
+  .wv-logo img { height: 34px; width: auto; display: block; }
   .wv-back { font-size: 12px; color: var(--mid); text-decoration: none; font-weight: 600; }
   .wv-back:hover { color: var(--cream); }
 
@@ -58,7 +58,7 @@
 </head>
 <body>
 <header class="wv-header">
-  <a class="wv-logo" href="index.html">Bark<span>haus</span></a>
+  <a class="wv-logo" href="index.html"><img src="images/Barkhaus Pet Hotel Logo.png" alt="Barkhaus Pet Services"></a>
   <a class="wv-back" href="booking.html">Book a visit →</a>
 </header>
 
