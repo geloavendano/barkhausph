@@ -1234,17 +1234,35 @@ function hotelTimeLabel(h) {
   return h < 12 ? h + ':00 AM' : (h === 12 ? '12:00 PM' : (h - 12) + ':00 PM');
 }
 
+var HOTEL_EARLY_DROPOFF_START = 7;   // members-only early drop-off opens at 7:00 AM
+
 function populateHotelDropoffTimes() {
   var checkin = document.getElementById('hotelCheckin').value;
   var sel     = document.getElementById('hotelDropoffTime');
-  if (!checkin) { sel.innerHTML = '<option value="">Select date first</option>'; return; }
+  if (!checkin) { sel.innerHTML = '<option value="">Select date first</option>'; sel.removeAttribute('data-mall-open'); return; }
   var hours = getHotelHours(checkin, booking.location);
+  // Allow early drop-off from 7:00 AM; hours before mall opening are members-only.
+  var earliest = Math.min(HOTEL_EARLY_DROPOFF_START, hours.start);
+  sel.setAttribute('data-mall-open', hours.start);
   var html = '<option value="">Select time</option>';
-  for (var h = hours.start; h <= hours.end; h++) {
-    html += '<option value="' + h + '">' + hotelTimeLabel(h) + '</option>';
+  for (var h = earliest; h <= hours.end; h++) {
+    var isEarly = h < hours.start;
+    html += '<option value="' + h + '">' + hotelTimeLabel(h) + (isEarly ? ' (Early — members only)' : '') + '</option>';
   }
   sel.innerHTML = html;
   if (booking.hotelDropoffTime) sel.value = booking.hotelDropoffTime;
+  onHotelDropoffChange();
+}
+
+// Show the members-only note whenever the chosen drop-off is before mall opening.
+function onHotelDropoffChange() {
+  var sel  = document.getElementById('hotelDropoffTime');
+  var note = document.getElementById('hotelEarlyDropoffNote');
+  if (!sel || !note) return;
+  var mallOpen = parseInt(sel.getAttribute('data-mall-open'), 10);
+  var val      = parseInt(sel.value, 10);
+  var isEarly  = !isNaN(val) && !isNaN(mallOpen) && val < mallOpen;
+  note.style.display = isEarly ? 'block' : 'none';
 }
 
 function onHotelCheckinChange() {
@@ -2848,6 +2866,7 @@ function populateDOMFromBooking(bk) {
   // Hotel times (dropoff = numeric hour value; pickup = numeric hour option value)
   setVal('hotelDropoffTime', bk.hotelDropoffTime);
   setVal('hotelPickupTime',  bk.hotelPickupHour != null ? bk.hotelPickupHour : 14);
+  if (typeof onHotelDropoffChange === 'function') onHotelDropoffChange();
   // Hotel care notes
   setVal('hotelFeeding',    bk.hotelFeeding);
   setVal('hotelMeds',       bk.hotelMeds);

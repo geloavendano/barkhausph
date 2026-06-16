@@ -728,9 +728,12 @@ async function checkGate() {
   <div id="hotelDetailsSection" style="display:none">
     <div class="form-group">
       <label class="form-label">Drop-off time <span class="required">*</span></label>
-      <select class="form-select" id="hotelDropoffTime" onchange="calcHotelTotal(); refreshContinueBtn();">
+      <select class="form-select" id="hotelDropoffTime" onchange="calcHotelTotal(); refreshContinueBtn(); onHotelDropoffChange();">
         <option value="">Select time</option>
       </select>
+      <div id="hotelEarlyDropoffNote" class="warn-box" style="display:none;margin-top:8px">
+        <strong>⏰ Early drop-off:</strong> Drop-off before mall opening hours is available to <strong>Barkhaus Members</strong> only. Please enter your valid membership ID in the next steps — otherwise we may not be able to accommodate an early drop-off.
+      </div>
     </div>
     <p class="section-label">Pick-up time</p>
     <div class="info-box" style="margin-bottom:10px">Standard checkout is <strong>2:00 PM</strong>. Late pick-up up to 8:00 PM is <strong id="hotelLateRateFee">+&#8369;?/hour</strong>. Holiday rates may apply on public holidays. Extension beyond <strong>6 hours</strong> past standard checkout counts as <strong>1 additional night</strong>. Failure to pick up by 8:00 PM will be charged as an additional night.</div>
