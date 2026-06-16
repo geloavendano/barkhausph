@@ -5,6 +5,8 @@ import { hasDurationAddon } from '../../lib/grooming'
 import BookingDrawer from '../Bookings/BookingDrawer'
 import styles from './ReportsPage.module.css'
 
+const COMMISSION_ADDON_KEYS = new Set(['demat', 'deshed'])
+
 function todayISO() {
   const d = new Date()
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
@@ -74,7 +76,11 @@ export default function ReportsPage({ branches, currentBranchIdx = 0, rooms = []
       const addons = Array.isArray(b.booking_addons) ? b.booking_addons : []
       return sum + addons.reduce((s, a) => s + (Number(a.price) || 0), 0)
     }, 0)
-    return { total, addonTotal, serviceTotal: Math.max(0, total - addonTotal) }
+    const commissionAddonTotal = visibleRows.reduce((sum, b) => {
+      const addons = Array.isArray(b.booking_addons) ? b.booking_addons : []
+      return sum + addons.reduce((s, a) => s + (COMMISSION_ADDON_KEYS.has(a.addon_key) ? (Number(a.price) || 0) : 0), 0)
+    }, 0)
+    return { total, addonTotal, commissionAddonTotal, serviceTotal: Math.max(0, total - addonTotal) }
   }, [visibleRows])
 
   const groomerName = groomers.find(g => g.id === selectedGroomerId)?.name ?? 'Select groomer'
@@ -135,6 +141,10 @@ export default function ReportsPage({ branches, currentBranchIdx = 0, rooms = []
         <div>
           <span className={styles.metricLabel}>Add-ons</span>
           <strong>PHP {summary.addonTotal.toLocaleString()}</strong>
+        </div>
+        <div>
+          <span className={styles.metricLabel}>Demat / deshed add-ons</span>
+          <strong>PHP {summary.commissionAddonTotal.toLocaleString()}</strong>
         </div>
       </div>
 

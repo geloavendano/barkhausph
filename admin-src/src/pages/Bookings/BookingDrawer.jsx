@@ -390,9 +390,10 @@ export default function BookingDrawer({ booking: b, rooms, groomers, onClose, on
 
       {payOpen && (
         <PaymentPanel
+          booking={b}
           bookingId={b.id}
           onClose={() => setPayOpen(false)}
-          onSaved={loadPayments}
+          onSaved={onUpdated}
         />
       )}
     </>

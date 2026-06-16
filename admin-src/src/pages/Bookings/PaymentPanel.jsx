@@ -1,10 +1,18 @@
 import { useState } from 'react'
-import { sbPost } from '../../lib/supabase'
+import { sbPatch, sbPost } from '../../lib/supabase'
 import styles from './PaymentPanel.module.css'
 
-export default function PaymentPanel({ bookingId, onClose, onSaved }) {
+const ADDON_CHARGE_OPTIONS = [
+  { key: 'demat', label: 'Dematting' },
+  { key: 'deshed', label: 'Deshedding' },
+  { key: 'special_instructions', label: 'Special instructions' },
+  { key: 'other', label: 'Others' },
+]
+
+export default function PaymentPanel({ booking, bookingId, onClose, onSaved }) {
   const [amt,      setAmt]      = useState('')
   const [type,     setType]     = useState('balance')
+  const [addonKey, setAddonKey] = useState('demat')
   const [method,   setMethod]   = useState('cash')
   const [ref,      setRef]      = useState('')
   const [notes,    setNotes]    = useState('')
@@ -17,6 +25,7 @@ export default function PaymentPanel({ bookingId, onClose, onSaved }) {
     if (!amount || isNaN(amount)) { setError('Please enter an amount.'); return }
     setSaving(true); setError('')
     try {
+      const addon = ADDON_CHARGE_OPTIONS.find(a => a.key === addonKey)
       await sbPost('payments', {
         booking_id:       bookingId,
         amount,
@@ -26,6 +35,19 @@ export default function PaymentPanel({ bookingId, onClose, onSaved }) {
         notes:            notes || null,
         recorded_by:      recorder || 'admin',
       })
+
+      if (type === 'addon') {
+        await sbPost('booking_addons', {
+          booking_id: bookingId,
+          addon_key:  addon?.key ?? addonKey,
+          addon_name: addon?.label ?? addonKey,
+          price:      amount,
+        })
+        await sbPatch('bookings', `id=eq.${bookingId}`, {
+          subtotal: (Number(booking?.subtotal) || 0) + amount,
+          total:    (Number(booking?.total)    || 0) + amount,
+        })
+      }
       onSaved()
       onClose()
     } catch (err) {
@@ -57,6 +79,16 @@ export default function PaymentPanel({ bookingId, onClose, onSaved }) {
               <option value="refund">Refund</option>
             </select>
           </div>
+          {type === 'addon' && (
+            <div className="fg">
+              <label className="fl">Add-on charge for</label>
+              <select className="fi" value={addonKey} onChange={e => setAddonKey(e.target.value)}>
+                {ADDON_CHARGE_OPTIONS.map(a => (
+                  <option key={a.key} value={a.key}>{a.label}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <div className="fg">
             <label className="fl">Method</label>
             <select className="fi" value={method} onChange={e => setMethod(e.target.value)}>
