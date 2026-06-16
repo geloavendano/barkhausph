@@ -33,7 +33,7 @@ export default function Shell({ page, onPageChange, greeting, branches = [], bra
       {/* ── Top bar ── */}
       <header className={styles.topbar}>
         <img src={logo} alt="Barkhaus" className={styles.logo} />
-        {branches.length > 1 && (
+        {branches.length > 0 && (
           <div className={styles.branchTabs}>
             {branches.map((br, i) => (
               <button
