@@ -1,43 +1,19 @@
 /* ═══════════════════════════════════════════════════════════
    Barkhaus — index.js  v1
    Public site JavaScript (extracted from index.html)
-   Includes dynamic images from Supabase Storage + blog from DB
+   Uses local site images + blog text from DB
    ═══════════════════════════════════════════════════════════ */
 
 /* ── CONFIG ─────────────────────────────────────────────── */
 var SB_URL      = 'https://dxttnbtfhpanyiyduevn.supabase.co';
 var SB_ANON     = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4dHRuYnRmaHBhbnlpeWR1ZXZuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY1MjkyNDcsImV4cCI6MjA5MjEwNTI0N30.jrMk8-_Ga01TydNPUwCzlymf1W44PjaXXIUjCLALb2s';
-var STORAGE_PUB = SB_URL + '/storage/v1/object/public/site-images';
-
-
-/* ── STORAGE ─────────────────────────────────────────────── */
-
-/* List one folder in the site-images bucket, return sorted public URLs */
-async function storageList(folder) {
-  try {
-    var r = await fetch(SB_URL + '/storage/v1/object/list/site-images', {
-      method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + SB_ANON, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prefix: folder + '/', limit: 100, sortBy: { column: 'name', order: 'asc' } }),
-    });
-    if (!r.ok) return [];
-    var files = await r.json();
-    return files
-      .filter(function(f) { return f.id && f.name; })
-      .map(function(f) { return STORAGE_PUB + '/' + folder + '/' + encodeURIComponent(f.name); });
-  } catch (e) { return []; }
-}
-
-/* Load all gallery folders from Storage in parallel */
-async function loadStorageImages() {
-  var folders = ['hero', 'estancia', 'eastwood', 'playpark', 'daycare', 'hotel', 'grooming', 'studio', 'events', 'store', 'cafe'];
-  var out = {};
-  await Promise.all(folders.map(async function(folder) {
-    var urls = await storageList(folder);
-    if (urls.length) out[folder] = urls;
-  }));
-  return out;
-}
+var LOCAL_BLOG_COVERS = {
+  'how-to-prepare-your-dog-for-daycare': 'images/blog-01 how to prepare your dog for daycare.JPG',
+  'what-to-pack-for-a-dog-hotel-stay': 'images/blog-02 what to pack for a dog hotel stay.JPG',
+  'dog-hotel-vs-dog-daycare-what-is-the-difference': 'images/blog-03 dog hotel vs dog daycare what is the difference.jpg',
+  'why-regular-grooming-supports-your-dogs-health': 'images/blog-04 why regular grooming supports your dogs health.JPG',
+  'benefits-of-indoor-play-for-dogs': 'images/blog-05 benefits of indoor play for dogs.jpg',
+};
 
 /* Build location thumbnail strip — exactly as many as fit in one viewport line */
 function buildLocThumbsHtml(key, imgs) {
@@ -121,6 +97,12 @@ async function loadBlogPosts() {
 
 var _ARROW_SVG = '<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
 
+function localBlogCover(post) {
+  if (LOCAL_BLOG_COVERS[post.slug]) return LOCAL_BLOG_COVERS[post.slug];
+  if (!post.cover_image_path) return '';
+  return 'images/' + post.cover_image_path.replace(/^blog\//, '');
+}
+
 function renderBlogCards(posts) {
   var track = document.getElementById('blogTrack');
   if (!track) return;
@@ -130,9 +112,7 @@ function renderBlogCards(posts) {
     return;
   }
   track.innerHTML = posts.map(function(p) {
-    var imgSrc = p.cover_image_path
-      ? STORAGE_PUB + '/blog/' + encodeURIComponent(p.cover_image_path)
-      : '';
+    var imgSrc = localBlogCover(p);
     return '<a class="blog-card" href="blog/' + p.slug + '.html">' +
       (imgSrc ? '<img class="blog-card-img" src="' + imgSrc + '" alt="' + p.title + '" style="display:none" onload="this.style.display=\'\'" onerror="this.remove()">' : '') +
       (p.tag ? '<span class="blog-card-tag">' + p.tag + '</span>' : '') +
@@ -327,7 +307,7 @@ var services = [
       { label: 'Pet-friendly seating',      detail: 'Bring your fur baby along' },
       { label: 'Eastwood only',             detail: 'Available at our Eastwood branch' },
     ],
-    pricing: '<div class="svc-price-row"><span class="svc-price-label">Cafe Menu</span><a class="svc-price-val svc-contact-link" href="#" onclick="lbOpen([\'https://dxttnbtfhpanyiyduevn.supabase.co/storage/v1/object/public/site-images/cafe-menu.png\'],0);return false;">View Menu</a></div>',
+    pricing: '<div class="svc-price-row"><span class="svc-price-label">Cafe Menu</span><a class="svc-price-val svc-contact-link" href="https://www.instagram.com/barkhausph/" target="_blank" rel="noopener">View Menu</a></div>',
   },
 ];
 
@@ -846,15 +826,8 @@ initImages();
 initSvcSlides();
 restartAuto();
 
-/* 2. Async: upgrade images from Storage + render blog posts */
+/* 2. Async: render blog posts from DB. Images stay local to avoid Supabase Storage egress. */
 (async function() {
-  var results     = await Promise.all([loadStorageImages(), loadBlogPosts()]);
-  var storageImgs = results[0];
-  var blogPosts   = results[1];
-
-  /* Upgrade gallery images if Storage has content */
-  if (Object.keys(storageImgs).length) upgradeImagesFromStorage(storageImgs);
-
-  /* Render blog cards from DB */
+  var blogPosts = await loadBlogPosts();
   renderBlogCards(blogPosts);
 })();
