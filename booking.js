@@ -115,6 +115,7 @@ var secondCatVisible = false;
 var onPaymentScreen     = false;
 var paymentReceiptFile  = null;   // the single uploaded receipt File
 var selectedPaymentBank = 'gcash';
+var ACCOUNT_NAME = 'Jayson E. Endicio';
 var PAYMENT_METHODS = {
   gcash: { label: 'GCash', account: '0917 1468032',  raw: '09171468032',  name: 'GCash account', qr: 'images/payment/gcash-qr.png' },
   bpi:   { label: 'BPI',   account: '3509 005841',   raw: '3509005841',   name: 'BPI account',   qr: 'images/payment/bpi-qr.png' },
@@ -371,12 +372,19 @@ function renderPaymentMethod(bank) {
   });
   var html = '';
   if (m.qr) html += '<img class="pay-qr" src="'+m.qr+'" alt="'+m.label+' QR code" onerror="this.style.display=\'none\'">';
-  html += '<div class="pay-acct-row">' +
-            '<span class="pay-acct-label">'+m.label+'</span>' +
-            '<span class="pay-acct-num">'+m.account+'</span>' +
-            '<button type="button" class="pay-copy-btn" onclick="copyAccount(\''+m.raw+'\', this)">Copy</button>' +
+  html += '<div class="pay-acct-list">' +
+            '<div class="pay-acct-row">' +
+              '<span class="pay-acct-label">Account no.</span>' +
+              '<span class="pay-acct-num">'+m.account+'</span>' +
+              '<button type="button" class="pay-copy-btn" onclick="copyAccount(\''+m.raw+'\', this)">Copy</button>' +
+            '</div>' +
+            '<div class="pay-acct-row">' +
+              '<span class="pay-acct-label">Account name</span>' +
+              '<span class="pay-acct-num" style="font-size:14px">'+ACCOUNT_NAME+'</span>' +
+              '<button type="button" class="pay-copy-btn" onclick="copyAccount(\''+ACCOUNT_NAME+'\', this)">Copy</button>' +
+            '</div>' +
           '</div>' +
-          '<p class="pay-acct-name">Scan the QR or send to the account number above.</p>';
+          '<p class="pay-acct-name">Scan the QR or send to the '+m.label+' account above.</p>';
   document.getElementById('payMethodDetail').innerHTML = html;
 }
 
