@@ -29,6 +29,7 @@ export default function App() {
   const [groomers,     setGroomers]     = useState([])
   const [studios,      setStudios]      = useState([])
   const [currentAdmin, setCurrentAdmin] = useState(null)
+  const [accessError,  setAccessError]  = useState('')
 
   /* ── Auth ── */
   useEffect(() => {
@@ -73,6 +74,7 @@ export default function App() {
     const adminRow = await verifyAdmin(sess)
     setAllowed(!!adminRow)
     if (adminRow) {
+      setAccessError('')
       const meta = sess.user.user_metadata ?? {}
       const name = meta.full_name ?? meta.name ?? sess.user.email ?? ''
       setCurrentAdmin({
@@ -85,6 +87,12 @@ export default function App() {
       // branch_ids restricts which branches this admin sees; null/empty = all.
       // (undefined when the column doesn't exist yet → treated as all.)
       await loadBranches(adminRow.branch_ids)
+    } else {
+      const email = sess.user.email ?? 'this Google account'
+      setGreeting('')
+      setCurrentAdmin(null)
+      setAccessError(`${email} is not authorized for the Barkhaus admin dashboard. Please contact an admin to request access.`)
+      await supabase.auth.signOut()
     }
   }
 
@@ -152,7 +160,7 @@ export default function App() {
     </div>
   )
 
-  if (!session || !allowed) return <Gate />
+  if (!session || !allowed) return <Gate accessError={accessError} onClearAccessError={() => setAccessError('')} />
 
   const pageProps = { branches, currentBranchIdx: branchIdx, rooms, groomers, studios, currentAdmin }
 

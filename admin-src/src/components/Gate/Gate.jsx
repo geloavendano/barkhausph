@@ -3,13 +3,15 @@ import { supabase } from '../../lib/supabase'
 import logo from '../../assets/barkhaus-logo.png'
 import styles from './Gate.module.css'
 
-export default function Gate() {
+export default function Gate({ accessError = '', onClearAccessError }) {
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState('')
+  const shownError = error || accessError
 
   async function handleSignIn() {
     setLoading(true)
     setError('')
+    onClearAccessError?.()
     try {
       const { error: err } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -49,7 +51,7 @@ export default function Gate() {
           <span>{loading ? 'Redirecting…' : 'Sign in with Google'}</span>
         </button>
 
-        {error && <p className={styles.error}>{error}</p>}
+        {shownError && <p className={styles.error}>{shownError}</p>}
       </div>
     </div>
   )
