@@ -1340,12 +1340,14 @@ async function loadRoomAvailability() {
         '&service=eq.hotel&status=not.in.(cancelled,rejected)');
       if (bookingRows && bookingRows.length) {
         var bookingIds = bookingRows.map(function(b){ return b.id; }).join(',');
-        // Step 2: get hotel_details overlapping our date range
+        // Step 2: get hotel_details overlapping our stay nights.
+        // Checkout dates are non-blocking: a room checking out on the new
+        // check-in date can be booked again that same date.
         var detailRows = await sbFetchPublic('hotel_details',
           'select=room_id,room_type,checkin_date,checkout_date' +
           '&booking_id=in.(' + bookingIds + ')' +
-          '&checkin_date=lte.' + cout +
-          '&checkout_date=gte.' + cin);
+          '&checkin_date=lt.' + cout +
+          '&checkout_date=gt.' + cin);
         (detailRows || []).forEach(function(r) {
           var key = r.room_id || r.room_type;
           if (key) bookedRoomIds[key] = (bookedRoomIds[key] || 0) + 1;
@@ -3038,7 +3040,7 @@ async function checkAvailabilityBeforePayment() {
         var ids = bkRows.map(function(b){return b.id;}).join(',');
         var dtRows = await sbFetchPublic('hotel_details',
           'select=room_id&booking_id=in.(' + ids + ')' +
-          '&checkin_date=lte.' + cout + '&checkout_date=gte.' + cin +
+          '&checkin_date=lt.' + cout + '&checkout_date=gt.' + cin +
           '&room_id=eq.' + booking.hotelRoomId);
         if (dtRows && dtRows.length) return { available: false, conflict: 'room' };
       }
