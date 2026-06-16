@@ -1,6 +1,15 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { sbGet, sbPost, sbPatch, sbDelete, SUPABASE_URL, SUPABASE_ANON_KEY } from '../../lib/supabase'
 import { supabase } from '../../lib/supabase'
+import {
+  adminDisplayName,
+  adminSnapshot,
+  bookingCreatedAudit,
+  bookingEditAudit,
+  paymentAudit,
+  sbPatchAudit,
+  sbPostAudit,
+} from '../../lib/adminAudit'
 import { parsePricing, emptyPricing, calcBase, calcLate, calcTotal, calcNights, calcHotelBreakdown, calcDaycare, hotelSizeKey, DEFAULT_ADDONS } from '../../lib/pricing'
 import { groomDurationMins } from '../../lib/grooming'
 import styles from './AddBookingPanel.module.css'
@@ -177,7 +186,7 @@ function SzPills({ filter, size, onSize }) {
   )
 }
 
-export default function AddBookingPanel({ branch, rooms, groomers, studios = [], editBooking = null, onClose, onSaved }) {
+export default function AddBookingPanel({ branch, rooms, groomers, studios = [], currentAdmin, editBooking = null, onClose, onSaved }) {
   const [step,   setStep]   = useState(0)
   const [bk,     setBk]     = useState(() => mkBk(branch?.id))
   const [pricing,setPricing]= useState(emptyPricing())
@@ -189,6 +198,7 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
   const [saving, setSaving] = useState(false)
   const [err,    setErr]    = useState('')
   const isEdit = !!editBooking
+  const auditName = adminDisplayName(currentAdmin)
 
   // Load pricing once
   useEffect(() => {
@@ -467,12 +477,13 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
         if (vaccRows.length) await sbPost('pet_vaccines', vaccRows)
 
         if (bk.paysts !== 'unpaid' && payMethodDb) {
-          await sbPost('payments', { booking_id: b.id, amount: total, type: 'balance',
-            method: payMethodDb, reference_number: bk.payref||null, recorded_by: bk.recby })
+          await sbPostAudit('payments', { booking_id: b.id, amount: total, type: 'balance',
+            method: payMethodDb, reference_number: bk.payref||null, ...paymentAudit(currentAdmin) })
         }
-        await sbPost('booking_edits', {
-          booking_id: b.id, edited_by_name: bk.recby,
-          field_changes: JSON.stringify({ admin_edit: true }),
+        await sbPostAudit('booking_edits', {
+          booking_id: b.id,
+          ...bookingEditAudit(currentAdmin),
+          field_changes: JSON.stringify({ admin_edit: true, edited_by: adminSnapshot(currentAdmin) }),
         })
         onSaved?.()
         onClose()
@@ -520,6 +531,7 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
           membershipId: bk.memvalid ? bk.memcode : null,
           subtotal: subtotal, discountAmount: disc, total,
           adminCreated: true, booking_source: bk.mode || 'admin',
+          createdBy: adminSnapshot(currentAdmin),
         }
         const { data: sess } = await supabase.auth.getSession()
         const token = sess?.session?.access_token ?? SUPABASE_ANON_KEY
@@ -531,11 +543,13 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
         const data = await res.json()
         if (data.error) throw new Error(data.error)
         if (data.booking_id) {
-          await sbPatch('bookings', `id=eq.${data.booking_id}`, {
-            status: bk.status, payment_status: bk.paysts, booking_source: bk.mode||'admin' })
+          await sbPatchAudit('bookings', `id=eq.${data.booking_id}`, {
+            status: bk.status, payment_status: bk.paysts, booking_source: bk.mode||'admin',
+            ...bookingCreatedAudit(currentAdmin),
+          })
           if (bk.paysts !== 'unpaid' && payMethodDb) {
-            await sbPost('payments', { booking_id: data.booking_id, amount: total, type: 'downpayment',
-              method: payMethodDb, reference_number: bk.payref||null, recorded_by: bk.recby })
+            await sbPostAudit('payments', { booking_id: data.booking_id, amount: total, type: 'downpayment',
+              method: payMethodDb, reference_number: bk.payref||null, ...paymentAudit(currentAdmin) })
           }
           try {
             const newCharges = buildAdminCharges(data.booking_id, bk, pricing, base, disc, late)
@@ -1097,7 +1111,7 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
           </div>
         )}
         <FG label={isEdit ? 'Edited by' : 'Recorded by'}>
-          <input className={styles.inp} value={bk.recby} onChange={e => upd('recby', e.target.value)} />
+          <input className={styles.inp} value={auditName} readOnly />
         </FG>
 
         {err && <p className={styles.errMsg}>{err}</p>}

@@ -6,11 +6,11 @@ import BookingDrawer from '../Bookings/BookingDrawer'
 import styles from './CheckInPage.module.css'
 
 const CI_COMMON = [
-  'id,ref_number,service,status,payment_status,booking_date,total,subtotal,discount_amount,created_at,booking_source,notes',
+  '*',
   'waivers(general_terms,health_declaration,media_consent,studio_agreement,senior_medical_waiver,signed_at)',
   'owners(id,first_name,last_name,mobile,email,referral_source)',
   'pets(id,name,animal_type,breed,size,gender,age_value,age_unit,temperament,medical_notes)',
-  'booking_addons(addon_name,price)',
+  'booking_addons(addon_key,addon_name,price)',
   'pet_vaccines(vaccine_name,confirmed)',
   'checkin_notes(*)',
 ].join(',')
@@ -47,7 +47,7 @@ function sortByTime(arr) {
   return [...arr].sort((a, b) => getBookingTime(a).localeCompare(getBookingTime(b)))
 }
 
-export default function CheckInPage({ branches, currentBranchIdx = 0, rooms, groomers }) {
+export default function CheckInPage({ branches, currentBranchIdx = 0, rooms, groomers, currentAdmin }) {
   const [bookings,  setBookings]  = useState([])
   const [loading,   setLoading]   = useState(true)
   const [error,     setError]     = useState('')
@@ -282,6 +282,7 @@ export default function CheckInPage({ branches, currentBranchIdx = 0, rooms, gro
           booking={openBooking}
           rooms={rooms}
           groomers={groomers}
+          currentAdmin={currentAdmin}
           onClose={() => setOpenId(null)}
           onUpdated={() => { setOpenId(null); load() }}
         />

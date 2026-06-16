@@ -26,7 +26,7 @@ const MONTHS = ['January','February','March','April','May','June','July','August
 
 // Common (non-service-detail) columns + embeds shared by every service query.
 const COMMON_SELECT = [
-  'id,ref_number,service,status,payment_status,booking_date,total,subtotal,discount_amount,member_code_used,created_at,booking_source,notes',
+  '*',
   'waivers(general_terms,health_declaration,media_consent,studio_agreement,senior_medical_waiver,signed_at)',
   'owners(id,first_name,last_name,mobile,email,referral_source)',
   'pets(id,name,animal_type,breed,size,gender,age_value,age_unit,temperament,medical_notes)',
@@ -103,7 +103,7 @@ function getCardColor(b, rooms, groomers) {
 }
 
 // ── Main component ─────────────────────────────────────────────────────────
-export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, groomers }) {
+export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, groomers, currentAdmin }) {
   const [currentDate,      setCurrentDate]      = useState(() => new Date())
   const [bookings,         setBookings]         = useState([])
   const [blockedSchedules, setBlockedSchedules] = useState([])
@@ -570,6 +570,7 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
       {openBooking && (
         <BookingDrawer
           booking={openBooking} rooms={rooms} groomers={groomers}
+          currentAdmin={currentAdmin}
           onClose={() => setOpenId(null)}
           onUpdated={() => { setOpenId(null); loadBookings(currentDate); loadBlocked() }}
           onEdit={b => { setOpenId(null); setEditBooking(b); setShowAddBooking(true) }}
@@ -588,6 +589,7 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
           rooms={rooms}
           groomers={groomers}
           studios={studios}
+          currentAdmin={currentAdmin}
           editBooking={editBooking}
           onClose={() => { setShowAddBooking(false); setEditBooking(null) }}
           onSaved={() => { loadBookings(currentDate); loadBlocked() }}

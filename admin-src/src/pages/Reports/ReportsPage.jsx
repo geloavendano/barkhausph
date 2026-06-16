@@ -13,7 +13,7 @@ function todayISO() {
 }
 
 const REPORT_SELECT = [
-  'id,ref_number,service,status,payment_status,booking_date,total,subtotal,discount_amount,member_code_used,created_at,booking_source,notes',
+  '*',
   'waivers(general_terms,health_declaration,media_consent,studio_agreement,senior_medical_waiver,signed_at)',
   'owners(id,first_name,last_name,mobile,email,referral_source)',
   'pets(id,name,animal_type,breed,size,gender,age_value,age_unit,temperament,medical_notes)',
@@ -26,7 +26,7 @@ const REPORT_SELECT = [
   'studio_details(timeslot,studio_id,service_date)',
 ].join(',')
 
-export default function ReportsPage({ branches, currentBranchIdx = 0, rooms = [], groomers = [] }) {
+export default function ReportsPage({ branches, currentBranchIdx = 0, rooms = [], groomers = [], currentAdmin }) {
   const branch = branches?.[currentBranchIdx]
   const [from, setFrom] = useState(todayISO())
   const [to, setTo] = useState(todayISO())
@@ -170,6 +170,7 @@ export default function ReportsPage({ branches, currentBranchIdx = 0, rooms = []
           booking={openBooking}
           rooms={rooms}
           groomers={groomers}
+          currentAdmin={currentAdmin}
           onClose={() => setOpenId(null)}
           onUpdated={() => { setOpenId(null); reloadReport() }}
         />

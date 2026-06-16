@@ -9,7 +9,7 @@ import { searchBookings } from '../../lib/search'
 import styles from './BookingsPage.module.css'
 
 const BOOKING_SELECT = [
-  'id,ref_number,service,status,payment_status,booking_date,total,subtotal,discount_amount,member_code_used,created_at,booking_source,notes',
+  '*',
   'waivers(general_terms,health_declaration,media_consent,studio_agreement,senior_medical_waiver,signed_at)',
   'owners(id,first_name,last_name,mobile,email,referral_source)',
   'pets(id,name,animal_type,breed,size,gender,age_value,age_unit,temperament,medical_notes)',
@@ -25,7 +25,7 @@ const BOOKING_SELECT = [
 const SVC_FILTERS = ['all', 'grooming', 'hotel', 'daycare', 'studio']
 const PAGE_SIZE   = 50   // rows per fetch (top-level bookings; embeds are nested)
 
-export default function BookingsPage({ branches, currentBranchIdx = 0, rooms, groomers, studios = [] }) {
+export default function BookingsPage({ branches, currentBranchIdx = 0, rooms, groomers, studios = [], currentAdmin }) {
   const [bookings,        setBookings]        = useState([])
   const [loading,         setLoading]         = useState(true)
   const [loadingMore,     setLoadingMore]     = useState(false)
@@ -285,6 +285,7 @@ export default function BookingsPage({ branches, currentBranchIdx = 0, rooms, gr
           booking={openBooking}
           rooms={rooms}
           groomers={groomers}
+          currentAdmin={currentAdmin}
           onClose={() => setOpenId(null)}
           onUpdated={() => { setOpenId(null); load('reset') }}
           onEdit={b => { setOpenId(null); setEditBooking(b); setShowAddBooking(true) }}
@@ -303,6 +304,7 @@ export default function BookingsPage({ branches, currentBranchIdx = 0, rooms, gr
           rooms={rooms}
           groomers={groomers}
           studios={studios}
+          currentAdmin={currentAdmin}
           editBooking={editBooking}
           onClose={() => { setShowAddBooking(false); setEditBooking(null) }}
           onSaved={() => load('reset')}

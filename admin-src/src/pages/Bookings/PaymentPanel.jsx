@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { sbPatch, sbPost } from '../../lib/supabase'
+import { adminDisplayName, adminSnapshot, bookingEditAudit, paymentAudit, sbPostAudit } from '../../lib/adminAudit'
 import styles from './PaymentPanel.module.css'
 
 const ADDON_CHARGE_OPTIONS = [
@@ -9,16 +10,16 @@ const ADDON_CHARGE_OPTIONS = [
   { key: 'other', label: 'Others' },
 ]
 
-export default function PaymentPanel({ booking, bookingId, onClose, onSaved }) {
+export default function PaymentPanel({ booking, bookingId, currentAdmin, onClose, onSaved }) {
   const [amt,      setAmt]      = useState('')
   const [type,     setType]     = useState('balance')
   const [addonKey, setAddonKey] = useState('demat')
   const [method,   setMethod]   = useState('cash')
   const [ref,      setRef]      = useState('')
   const [notes,    setNotes]    = useState('')
-  const [recorder, setRecorder] = useState('')
   const [saving,   setSaving]   = useState(false)
   const [error,    setError]    = useState('')
+  const recorder = adminDisplayName(currentAdmin)
 
   async function save() {
     const amount = parseInt(amt)
@@ -26,14 +27,14 @@ export default function PaymentPanel({ booking, bookingId, onClose, onSaved }) {
     setSaving(true); setError('')
     try {
       const addon = ADDON_CHARGE_OPTIONS.find(a => a.key === addonKey)
-      await sbPost('payments', {
+      await sbPostAudit('payments', {
         booking_id:       bookingId,
         amount,
         type,
         method,
         reference_number: ref  || null,
         notes:            notes || null,
-        recorded_by:      recorder || 'admin',
+        ...paymentAudit(currentAdmin),
       })
 
       if (type === 'addon') {
@@ -46,6 +47,16 @@ export default function PaymentPanel({ booking, bookingId, onClose, onSaved }) {
         await sbPatch('bookings', `id=eq.${bookingId}`, {
           subtotal: (Number(booking?.subtotal) || 0) + amount,
           total:    (Number(booking?.total)    || 0) + amount,
+        })
+        await sbPostAudit('booking_edits', {
+          booking_id: bookingId,
+          ...bookingEditAudit(currentAdmin),
+          field_changes: JSON.stringify({
+            payment_addon_charge: true,
+            addon_key: addon?.key ?? addonKey,
+            amount,
+            edited_by: adminSnapshot(currentAdmin),
+          }),
         })
       }
       onSaved()
@@ -111,7 +122,7 @@ export default function PaymentPanel({ booking, bookingId, onClose, onSaved }) {
           <div className="fg">
             <label className="fl">Recorded by</label>
             <input className="fi" placeholder="Your name"
-              value={recorder} onChange={e => setRecorder(e.target.value)} />
+              value={recorder} readOnly />
           </div>
 
           {error && <p className={styles.error}>{error}</p>}

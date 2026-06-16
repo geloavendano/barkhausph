@@ -4,6 +4,7 @@ import {
   STATUS_COLORS, PAY_COLORS, SVC_LABELS, SIZE_LABELS,
   SRC_LABELS, first, fmtDate, fmtTime, hexBg, esc,
 } from '../../lib/constants'
+import { adminSnapshot, bookingEditAudit, sbPostAudit } from '../../lib/adminAudit'
 import PaymentPanel from './PaymentPanel'
 import styles from './BookingDrawer.module.css'
 
@@ -84,7 +85,7 @@ function getPrintBillRows(b, addons, charges) {
   return rows
 }
 
-export default function BookingDrawer({ booking: b, rooms, groomers, onClose, onUpdated, onEdit }) {
+export default function BookingDrawer({ booking: b, rooms, groomers, currentAdmin, onClose, onUpdated, onEdit }) {
   const [payments,    setPayments]    = useState(null)
   const [charges,     setCharges]     = useState([])
   const [vaccDocs,    setVaccDocs]    = useState([])
@@ -184,6 +185,19 @@ export default function BookingDrawer({ booking: b, rooms, groomers, onClose, on
     setSaving(true); setErr('')
     try {
       await sbPatch('bookings', `id=eq.${b.id}`, { status, payment_status: payStatus })
+      if (status !== b.status || payStatus !== b.payment_status) {
+        await sbPostAudit('booking_edits', {
+          booking_id: b.id,
+          ...bookingEditAudit(currentAdmin),
+          field_changes: JSON.stringify({
+            status_from: b.status ?? null,
+            status_to: status,
+            payment_status_from: b.payment_status ?? null,
+            payment_status_to: payStatus,
+            edited_by: adminSnapshot(currentAdmin),
+          }),
+        })
+      }
       onUpdated()
       onClose()
     } catch (e) { setErr(e.message); setSaving(false) }
@@ -196,12 +210,37 @@ export default function BookingDrawer({ booking: b, rooms, groomers, onClose, on
       if (b.service === 'grooming') {
         const groomerName = val ? (groomers.find(g => g.id === val)?.name ?? 'any') : 'any'
         await sbPatch('grooming_details', `booking_id=eq.${b.id}`, { groomer_id: val, preferred_stylist: groomerName })
+        if (val !== (gd?.groomer_id ?? null)) {
+          await sbPostAudit('booking_edits', {
+            booking_id: b.id,
+            ...bookingEditAudit(currentAdmin),
+            field_changes: JSON.stringify({
+              assignment: 'groomer',
+              from: gd?.groomer_id ?? null,
+              to: val,
+              edited_by: adminSnapshot(currentAdmin),
+            }),
+          })
+        }
       } else {
+        const prevRoom = hd?.room_type === 'other' ? INTERNAL_OTHER_ROOM_ID : (hd?.room_id ?? null)
         if (val === INTERNAL_OTHER_ROOM_ID) {
           await sbPatch('hotel_details', `booking_id=eq.${b.id}`, { room_id: null, room_type: 'other' })
         } else {
           const room = rooms?.find(r => r.id === val)
           await sbPatch('hotel_details', `booking_id=eq.${b.id}`, { room_id: val, room_type: room?.room_type ?? hd?.room_type ?? null })
+        }
+        if (val !== prevRoom) {
+          await sbPostAudit('booking_edits', {
+            booking_id: b.id,
+            ...bookingEditAudit(currentAdmin),
+            field_changes: JSON.stringify({
+              assignment: 'room',
+              from: prevRoom,
+              to: val,
+              edited_by: adminSnapshot(currentAdmin),
+            }),
+          })
         }
       }
       onUpdated()
@@ -222,6 +261,7 @@ export default function BookingDrawer({ booking: b, rooms, groomers, onClose, on
     return d.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) + ' ' +
            d.toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit', hour12: true })
   })() : null
+  const createdBy = [b.created_by_admin_name, b.created_by_admin_email].filter(Boolean).join(' · ')
 
   // Inventory assignment display
   const hasInventory = b.service === 'grooming' || b.service === 'hotel'
@@ -282,7 +322,10 @@ export default function BookingDrawer({ booking: b, rooms, groomers, onClose, on
       ? vaccines.map(v => `${v.vaccine_name}: ${v.confirmed ? 'confirmed' : 'not confirmed'}`).join(', ')
       : ''
     const paymentRows = (payments ?? []).map(p => [
-      `${String(p.type ?? '').replace(/_/g, ' ')} - ${BANK_LABELS[p.method] ?? String(p.method ?? '').replace(/_/g, ' ')}`,
+      [
+        `${String(p.type ?? '').replace(/_/g, ' ')} - ${BANK_LABELS[p.method] ?? String(p.method ?? '').replace(/_/g, ' ')}`,
+        [p.recorded_by, p.recorded_by_email].filter(Boolean).join(' · '),
+      ].filter(Boolean).join(' / '),
       `${money(p.amount)}${p.reference_number ? ` (${p.reference_number})` : ''}`,
     ])
 
@@ -372,6 +415,7 @@ export default function BookingDrawer({ booking: b, rooms, groomers, onClose, on
 
           <footer>
             <span>${esc(SRC_LABELS[b.booking_source] ?? b.booking_source ?? '')}</span>
+            ${createdBy ? `<span>Added by ${esc(createdBy)}</span>` : ''}
             <span>Generated from Barkhaus Admin</span>
           </footer>
         </main>
@@ -413,6 +457,7 @@ export default function BookingDrawer({ booking: b, rooms, groomers, onClose, on
           </div>
           {bookedAt && <p className={styles.meta}>Booked {bookedAt}</p>}
           {b.booking_source && <p className={styles.meta}>{SRC_LABELS[b.booking_source] ?? b.booking_source}</p>}
+          {createdBy && <p className={styles.meta}>Added by {createdBy}</p>}
 
           <p className={styles.petName}>
             {pet.name ?? 'Pet'} {pet.animal_type === 'cat' ? '🐱' : '🐶'}
@@ -623,6 +668,7 @@ export default function BookingDrawer({ booking: b, rooms, groomers, onClose, on
         <PaymentPanel
           booking={b}
           bookingId={b.id}
+          currentAdmin={currentAdmin}
           onClose={() => setPayOpen(false)}
           onSaved={onUpdated}
         />
@@ -811,6 +857,7 @@ const BANK_LABELS = {
 function PayRow({ pay, receiptUrl }) {
   const isRefund = pay.type === 'refund'
   const methodLabel = BANK_LABELS[pay.method] ?? (pay.method ?? '').replace(/_/g, ' ')
+  const recordedBy = [pay.recorded_by, pay.recorded_by_email].filter(Boolean).join(' · ')
   return (
     <div className={styles.payRow} style={{ alignItems: 'flex-start' }}>
       <div style={{ flex: 1 }}>
@@ -819,6 +866,7 @@ function PayRow({ pay, receiptUrl }) {
           {pay.type.replace(/_/g, ' ')} · {methodLabel}
           {pay.reference_number ? ` · ${pay.reference_number}` : ''}
         </p>
+        {recordedBy && <p className={styles.payMeta}>Recorded by {recordedBy}</p>}
         {pay.notes && <p className={styles.payMeta}>{pay.notes}</p>}
         {pay.receipt_path && (
           receiptUrl

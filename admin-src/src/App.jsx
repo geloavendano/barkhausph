@@ -28,6 +28,7 @@ export default function App() {
   const [rooms,        setRooms]        = useState([])
   const [groomers,     setGroomers]     = useState([])
   const [studios,      setStudios]      = useState([])
+  const [currentAdmin, setCurrentAdmin] = useState(null)
 
   /* ── Auth ── */
   useEffect(() => {
@@ -62,6 +63,7 @@ export default function App() {
       } else {
         setAllowed(false)
         setGreeting('')
+        setCurrentAdmin(null)
       }
     })
     return () => subscription.unsubscribe()
@@ -73,6 +75,12 @@ export default function App() {
     if (adminRow) {
       const meta = sess.user.user_metadata ?? {}
       const name = meta.full_name ?? meta.name ?? sess.user.email ?? ''
+      setCurrentAdmin({
+        adminUserId: adminRow.id ?? null,
+        authUserId:  sess.user.id ?? null,
+        email:       sess.user.email ?? adminRow.email ?? null,
+        name,
+      })
       setGreeting('Hi, ' + (name.split(' ')[0] || 'Admin'))
       // branch_ids restricts which branches this admin sees; null/empty = all.
       // (undefined when the column doesn't exist yet → treated as all.)
@@ -146,7 +154,7 @@ export default function App() {
 
   if (!session || !allowed) return <Gate />
 
-  const pageProps = { branches, currentBranchIdx: branchIdx, rooms, groomers, studios }
+  const pageProps = { branches, currentBranchIdx: branchIdx, rooms, groomers, studios, currentAdmin }
 
   function handleSignOut() {
     supabase.auth.signOut()
