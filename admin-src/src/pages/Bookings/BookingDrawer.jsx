@@ -89,6 +89,8 @@ export default function BookingDrawer({ booking: b, rooms, groomers, currentAdmi
   const [payments,    setPayments]    = useState(null)
   const [charges,     setCharges]     = useState([])
   const [vaccDocs,    setVaccDocs]    = useState([])
+  const [groomRefs,   setGroomRefs]   = useState([])
+  const [groomRefUrls, setGroomRefUrls] = useState({})
   const [payOpen,     setPayOpen]     = useState(false)
   const [saving,      setSaving]      = useState(false)
   const [status,      setStatus]      = useState(b.status ?? 'pending')
@@ -118,7 +120,7 @@ export default function BookingDrawer({ booking: b, rooms, groomers, currentAdmi
     else if (b.service === 'hotel') setInvVal(hd?.room_type === 'other' ? INTERNAL_OTHER_ROOM_ID : (hd?.room_id ?? ''))
   }, [b])
 
-  useEffect(() => { loadPayments(); loadCharges(); loadVaccDocs() }, [b.id])
+  useEffect(() => { loadPayments(); loadCharges(); loadVaccDocs(); loadGroomRefs() }, [b.id])
 
   // Generate 1-hour signed read URLs for vaccine documents whenever they load
   useEffect(() => {
@@ -135,6 +137,21 @@ export default function BookingDrawer({ booking: b, rooms, groomers, currentAdmi
     loadDocUrls()
     return () => { cancelled = true }
   }, [vaccDocs])
+
+  // Sign grooming reference photos (same private bucket as vaccine docs)
+  useEffect(() => {
+    if (groomRefs.length === 0) return
+    let cancelled = false
+    ;(async () => {
+      const urls = {}
+      for (const ref of groomRefs) {
+        const signed = await sbSignedUrl('vaccine-docs', ref.file_path, 3600)
+        if (signed) urls[ref.file_path] = signed
+      }
+      if (!cancelled) setGroomRefUrls(urls)
+    })()
+    return () => { cancelled = true }
+  }, [groomRefs])
 
   // Sign payment-receipt images (stored in the same private bucket)
   useEffect(() => {
@@ -171,6 +188,14 @@ export default function BookingDrawer({ booking: b, rooms, groomers, currentAdmi
       const rows = await sbGet('vaccine_documents', `select=id,file_path,file_name&booking_id=eq.${b.id}`)
       setVaccDocs(rows ?? [])
     } catch { setVaccDocs([]) }
+  }
+
+  async function loadGroomRefs() {
+    if (b.service !== 'grooming') { setGroomRefs([]); return }
+    try {
+      const rows = await sbGet('grooming_reference_images', `select=id,file_path,file_name&booking_id=eq.${b.id}`)
+      setGroomRefs(rows ?? [])
+    } catch { setGroomRefs([]) }
   }
 
   async function saveStatus() {
@@ -401,6 +426,7 @@ export default function BookingDrawer({ booking: b, rooms, groomers, currentAdmi
               printRow('Vaccines', vaccineText),
               printRow('Waiver', waiver ? 'Signed' : ''),
               printRow('Vaccine documents', vaccDocs.length > 0 ? `${vaccDocs.length} uploaded` : ''),
+              printRow('Reference photos', groomRefs.length > 0 ? `${groomRefs.length} uploaded` : ''),
             ])}
             ${hd ? printSection('Emergency', [
               printRow('Contact', hd.emergency_name ? `${hd.emergency_name}${hd.emergency_phone ? ` / ${hd.emergency_phone}` : ''}` : ''),
@@ -603,6 +629,23 @@ export default function BookingDrawer({ booking: b, rooms, groomers, currentAdmi
                       }
                     </div>
                   )
+                })}
+              </div>
+            </Section>
+          )}
+
+          {/* Grooming reference photos ("pegs") */}
+          {groomRefs.length > 0 && (
+            <Section title="Reference photos">
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {groomRefs.map((ref, i) => {
+                  const url = groomRefUrls[ref.file_path]
+                  const name = ref.file_name || `Photo ${i + 1}`
+                  return url
+                    ? <a key={ref.id ?? i} href={url} target="_blank" rel="noreferrer" title={name} style={{ display: 'block' }}>
+                        <img src={url} alt={name} style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--border)' }} />
+                      </a>
+                    : <span key={ref.id ?? i} style={{ fontSize: 12, color: 'var(--mid)' }}>⏳ {name}</span>
                 })}
               </div>
             </Section>

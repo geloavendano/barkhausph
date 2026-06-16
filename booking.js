@@ -109,6 +109,7 @@ var booking = {
 var currentStep = 1;
 var saveDetails = false;
 var uploadedVaccineFiles = [];
+var uploadedGroomPegs = [];   // grooming reference photos ("pegs")
 var secondCatVisible = false;
 
 // ── Manual transfer payment (online flow; PayMongo archived) ──
@@ -1939,6 +1940,25 @@ function removeVaccineFile(el, name) {
   uploadedVaccineFiles = uploadedVaccineFiles.filter(function(f){return f.name!==name;});
   el.closest('.file-item').remove();
 }
+function handleGroomPegFiles(input) {
+  var list = document.getElementById('groomPegList');
+  for (var i = 0; i < input.files.length; i++) {
+    (function(file) {
+      if (!/^image\//.test(file.type)) { showToast('Please upload an image file (JPG, PNG or WEBP).', 5000); return; }
+      if (file.size > 5 * 1024 * 1024) { showToast('"' + file.name + '" is over 5MB. Please upload a smaller image.', 5000); return; }
+      uploadedGroomPegs.push(file);
+      var item = document.createElement('div');
+      item.className = 'file-item';
+      item.innerHTML = '&#128247; ' + file.name + '<span class="file-remove" onclick="removeGroomPeg(this,\'' + file.name + '\')">x</span>';
+      list.appendChild(item);
+    })(input.files[i]);
+  }
+  input.value = '';   // allow re-selecting the same file after a remove
+}
+function removeGroomPeg(el, name) {
+  uploadedGroomPegs = uploadedGroomPegs.filter(function(f){return f.name!==name;});
+  el.closest('.file-item').remove();
+}
 
 // ── MEMBERSHIP ──
 function onSourceChange() {
@@ -3170,6 +3190,40 @@ async function submitBooking() {
     }
   }
 
+  // ── Upload grooming reference photos ("pegs") ──
+  // Same pipeline as vaccine docs: signed PUT to the vaccine-docs bucket, paths
+  // passed to submit-booking which inserts grooming_reference_images rows.
+  var groomReferenceImages = {};
+  var groomReferenceFileNames = {};
+  if (booking.service === 'grooming' && uploadedGroomPegs && uploadedGroomPegs.length > 0) {
+    var pegUploadId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : 'pegs-' + Date.now() + '-' + Math.random().toString(36).slice(2, 9);
+    for (var _pi = 0; _pi < uploadedGroomPegs.length; _pi++) {
+      var _pf = uploadedGroomPegs[_pi];
+      var _pKey = 'peg_' + _pi;
+      try {
+        var _pUrlRes = await fetch(GET_UPLOAD_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type':  'application/json',
+            'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+            'apikey':        SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify({ uploadId: pegUploadId, fileName: _pf.name, contentType: _pf.type, vaccineKey: _pKey }),
+        });
+        var _pUrlData = await _pUrlRes.json();
+        if (_pUrlData.uploadUrl && _pUrlData.path) {
+          await fetch(_pUrlData.uploadUrl, { method: 'PUT', body: _pf, headers: { 'Content-Type': _pf.type } });
+          groomReferenceImages[_pKey] = _pUrlData.path;
+          groomReferenceFileNames[_pKey] = _pf.name;
+        }
+      } catch (_pe) {
+        console.warn('Grooming reference upload failed (non-fatal):', _pf.name, _pe);
+      }
+    }
+  }
+
   // ── Upload the manual-transfer receipt (online flow only) ──
   var paymentReceiptPath = null, paymentReceiptName = null;
   if (!IS_WALKIN && paymentReceiptFile) {
@@ -3247,6 +3301,8 @@ async function submitBooking() {
     groomServicePrice: booking.groomServicePrice || 0,
     vaccineDocuments:  vaccineDocuments,
     vaccineFileNames:  vaccineFileNames,
+    groomReferenceImages:    groomReferenceImages,
+    groomReferenceFileNames: groomReferenceFileNames,
     bringVaccines: (function(){ var el=document.getElementById('bringVaccines'); return !!(el && el.classList.contains('checked')); })(),
     // Walk-in bookings go through submit-booking (creates all child records,
     // no payment), so flag them as admin-created with a walkin source.

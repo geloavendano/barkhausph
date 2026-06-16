@@ -534,6 +534,17 @@ Deno.serve(async (req) => {
       if (error) console.error("Vaccine documents insert failed (non-fatal):", error.message);
     }
 
+    // 10c. Grooming reference photos ("pegs") — paths produced by get-upload-url
+    if (body.service === "grooming" && body.groomReferenceImages && Object.keys(body.groomReferenceImages).length > 0) {
+      const pegRows = Object.entries(body.groomReferenceImages).map(([key, path]) => ({
+        booking_id: bookingId,
+        file_path:  path as string,
+        file_name:  (body.groomReferenceFileNames && body.groomReferenceFileNames[key]) || (path as string).split("/").pop(),
+      }));
+      const { error } = await supabase.from("grooming_reference_images").insert(pegRows);
+      if (error) console.error("Grooming reference images insert failed (non-fatal):", error.message);
+    }
+
     // 11. Waivers
     const { error: waiverErr } = await supabase.from("waivers").insert({
       booking_id:            bookingId,

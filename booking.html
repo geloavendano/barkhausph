@@ -525,6 +525,15 @@ async function checkGate() {
         <div class="form-group">
           <textarea class="form-textarea" id="groomNotes" placeholder="e.g. keep the face fluffy, sensitive skin, scared of dryers..."></textarea>
         </div>
+        <div class="form-group" style="margin-top:4px">
+          <div class="file-upload" onclick="document.getElementById('groomPegFiles').click()">
+            <input type="file" id="groomPegFiles" multiple accept="image/*" onchange="handleGroomPegFiles(this)">
+            <div style="font-size:24px;margin-bottom:6px">&#128247;</div>
+            <div class="file-upload-text">Upload reference photos (optional)</div>
+            <div class="file-upload-sub">Share grooming pegs / inspiration &mdash; JPG, PNG or WEBP, max 5MB each</div>
+          </div>
+          <div class="file-list" id="groomPegList"></div>
+        </div>
       </div>
     </div>
   </div>
