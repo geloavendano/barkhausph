@@ -10,10 +10,12 @@ const NAV_ITEMS = [
   { key: 'resources', icon: '📦', label: 'Inventory' },
 ]
 
+const GUIDE_LINK = { icon: '📖', label: 'Admin Guide', href: '/docs/admin-guide.html' }
 const MOBILE_PRIMARY = ['calendar', 'bookings', 'checkin']
 const MORE_ITEMS = [
   { key: 'members',   icon: '👤', label: 'Members'   },
   { key: 'resources', icon: '📦', label: 'Inventory' },
+  GUIDE_LINK,
 ]
 
 export default function Shell({ page, onPageChange, greeting, branches = [], branchIdx = 0, onBranchChange, onSignOut, contentFill, children }) {
@@ -66,6 +68,10 @@ export default function Shell({ page, onPageChange, greeting, branches = [], bra
               <span>{item.label}</span>
             </button>
           ))}
+          <a className={`${styles.navBtn} ${styles.guideBtn}`} href={GUIDE_LINK.href}>
+            <span className={styles.navIcon}>{GUIDE_LINK.icon}</span>
+            <span>{GUIDE_LINK.label}</span>
+          </a>
         </nav>
 
         {/* Page content */}
@@ -105,14 +111,25 @@ export default function Shell({ page, onPageChange, greeting, branches = [], bra
           <div className={styles.moreBackdrop} onClick={() => setMoreOpen(false)} />
           <div className={styles.moreSheet}>
             {MORE_ITEMS.map(item => (
-              <button
-                key={item.key}
-                className={`${styles.moreSheetBtn} ${page === item.key ? styles.active : ''}`}
-                onClick={() => navigate(item.key)}
-              >
-                <span>{item.icon}</span>
-                <span>{item.label}</span>
-              </button>
+              item.href ? (
+                <a
+                  key={item.href}
+                  className={styles.moreSheetBtn}
+                  href={item.href}
+                >
+                  <span>{item.icon}</span>
+                  <span>{item.label}</span>
+                </a>
+              ) : (
+                <button
+                  key={item.key}
+                  className={`${styles.moreSheetBtn} ${page === item.key ? styles.active : ''}`}
+                  onClick={() => navigate(item.key)}
+                >
+                  <span>{item.icon}</span>
+                  <span>{item.label}</span>
+                </button>
+              )
             ))}
           </div>
         </>

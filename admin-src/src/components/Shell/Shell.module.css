@@ -112,6 +112,7 @@
   font-weight: 600;
   cursor: pointer;
   text-align: left;
+  text-decoration: none;
   width: 100%;
   transition: background 0.15s, color 0.15s;
 }
@@ -119,6 +120,11 @@
 .navBtn.active { background: var(--surface); color: var(--cream); }
 
 .navIcon { font-size: 15px; width: 20px; text-align: center; }
+
+.guideBtn {
+  margin-top: auto;
+  border: 0.5px solid var(--border);
+}
 
 /* ── Page content ── */
 .content {
@@ -182,7 +188,7 @@
   }
   .moreSheet {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(3, 1fr);
     position: fixed;
     bottom: 56px; /* sits just above the bottom nav */
     left: 0;
@@ -205,6 +211,7 @@
     font-family: 'Nunito', sans-serif;
     font-size: 10px;
     font-weight: 600;
+    text-decoration: none;
     cursor: pointer;
   }
   .moreSheetBtn span:first-child { font-size: 22px; }
