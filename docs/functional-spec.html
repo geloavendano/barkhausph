@@ -48,6 +48,12 @@
   th{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--mid);text-align:left;padding:7px 10px;border-bottom:1px solid var(--border);}
   td{padding:7px 10px;border-bottom:0.5px solid rgba(77,150,185,.15);color:var(--cream-m);vertical-align:top;}
   td:first-child{color:var(--cream);font-weight:600;}
+  .feature-tree{display:grid;gap:14px;margin:16px 0 24px;}
+  .feature-branch{border:1px solid var(--border);background:rgba(77,150,185,.06);border-radius:8px;padding:14px 16px;}
+  .feature-branch h3{margin:0 0 8px;font-size:14px;}
+  .feature-branch ul{columns:2;column-gap:26px;margin-bottom:0;}
+  .feature-branch li{break-inside:avoid;}
+  @media (max-width:720px){.feature-branch ul{columns:1;}}
   .rule{background:rgba(255,206,88,.06);border:1px solid rgba(255,206,88,.3);border-left-width:4px;border-radius:8px;padding:10px 14px;margin:12px 0;font-size:13px;}
   .rule::before{content:"📐 Rule — ";font-weight:700;color:var(--yellow);}
   .note{background:rgba(77,150,185,.08);border:1px solid rgba(77,150,185,.3);border-radius:8px;padding:10px 14px;margin:12px 0;font-size:13px;}
@@ -70,6 +76,7 @@
 
 <nav class="sidenav" aria-label="Sections">
   <div class="nav-label">Specification</div>
+  <a href="#feature-tree"><span class="n">0</span> Feature Map / Feature Tree</a>
   <a href="#s1"><span class="n">1</span> Platform overview &amp; actors</a>
   <a href="#s2"><span class="n">2</span> Public website</a>
   <a href="#s3"><span class="n">3</span> Online booking system</a>
@@ -84,6 +91,94 @@
 </nav>
 
 <div class="main">
+
+<!-- ════════ 0 ════════ -->
+<section id="feature-tree">
+  <div class="ch-head"><span class="ch-num">0</span><h2>Feature Map / Feature Tree</h2></div>
+  <p class="ch-intro">A top-level map of the Barkhaus platform functions covered by this specification.</p>
+
+  <div class="feature-tree">
+    <div class="feature-branch">
+      <h3>Landing Page</h3>
+      <ul>
+        <li>View branches and operating hours</li>
+        <li>View services and galleries</li>
+        <li>Read blog articles</li>
+        <li>Read FAQs</li>
+        <li>View membership marketing</li>
+        <li>Open booking call-to-action</li>
+        <li>Track analytics</li>
+        <li>Preserve SEO metadata, sitemap, and robots coverage</li>
+      </ul>
+    </div>
+
+    <div class="feature-branch">
+      <h3>Booking System</h3>
+      <ul>
+        <li>Create service booking</li>
+        <li>Select branch, service, and service-specific details</li>
+        <li>Pull available schedules and resources</li>
+        <li>Calculate live pricing</li>
+        <li>Apply membership discount</li>
+        <li>Upload vaccine records</li>
+        <li>Upload grooming reference photos</li>
+        <li>Declare vaccines, consents, and waivers</li>
+        <li>Review booking</li>
+        <li>Pay online through payment gateway</li>
+        <li>Show success or cancelled payment screens</li>
+        <li>Print booking recap</li>
+      </ul>
+    </div>
+
+    <div class="feature-branch">
+      <h3>Walk-In Mode</h3>
+      <ul>
+        <li>Mint one-time staff token</li>
+        <li>Unlock booking form on staff device</li>
+        <li>Skip online payment and convenience fee</li>
+        <li>Create confirmed unpaid booking</li>
+        <li>Print amount-to-collect recap</li>
+      </ul>
+    </div>
+
+    <div class="feature-branch">
+      <h3>Admin Dashboard</h3>
+      <ul>
+        <li>Sign in with Google</li>
+        <li>Switch branches</li>
+        <li>View calendar schedule</li>
+        <li>View and search bookings</li>
+        <li>Open booking details drawer</li>
+        <li>Print booking details</li>
+        <li>Check in guests</li>
+        <li>Add bookings</li>
+        <li>Edit bookings</li>
+        <li>Add payments, refunds, and add-on charges</li>
+        <li>Block schedules</li>
+        <li>Manage rooms, groomers, and studios</li>
+        <li>Validate and import members</li>
+        <li>View groomer reports</li>
+        <li>Open admin guide</li>
+      </ul>
+    </div>
+
+    <div class="feature-branch">
+      <h3>Database &amp; Backend</h3>
+      <ul>
+        <li>Store bookings and service detail rows</li>
+        <li>Store owners, pets, members, pricing, and resources</li>
+        <li>Enforce row-level security for admins</li>
+        <li>Process payment webhooks</li>
+        <li>Send confirmation emails</li>
+        <li>Generate signed upload URLs</li>
+        <li>Auto-cancel expired pending bookings</li>
+        <li>Preserve audit, payment, and edit logs</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="backtop"><a href="#top">top</a></div>
+</section>
 
 <!-- ════════ 1 ════════ -->
 <section id="s1">
@@ -111,15 +206,6 @@
     <tr><td>Pricing engine</td><td>DB-driven <code>pricing</code> table, shared logic</td><td>§9</td></tr>
   </table>
 
-  <h3>Feature map</h3>
-  <table>
-    <tr><th>Area</th><th>Functions</th></tr>
-    <tr><td>Landing page</td><td>View branches and hours · View services and galleries · Read blog articles · Read FAQs · View membership marketing · Open booking CTA · Track analytics · Preserve SEO metadata and sitemap/robots coverage</td></tr>
-    <tr><td>Booking system</td><td>Create service booking · Select branch/service/specs · Pull available schedules/resources · Calculate live pricing · Apply membership discount · Upload vaccine records · Upload grooming reference photos · Declare vaccines/consents/waivers · Review booking · Pay online through payment gateway · Show success/cancelled payment screens · Print booking recap</td></tr>
-    <tr><td>Walk-in mode</td><td>Mint one-time staff token · Unlock booking form on staff device · Skip online payment/convenience fee · Create confirmed unpaid booking · Print amount-to-collect recap</td></tr>
-    <tr><td>Admin dashboard</td><td>Sign in with Google · Switch branches · View calendar schedule · View/search bookings · Open booking drawer · Print booking details · Check in guests · Add bookings · Edit bookings · Add payments/refunds/add-on charges · Block schedules · Manage rooms/groomers/studios · Validate/import members · View groomer reports · Open admin guide</td></tr>
-    <tr><td>Database &amp; backend</td><td>Store bookings and service detail rows · Store owners/pets/members/pricing/resources · Enforce RLS for admins · Process payment webhooks · Send confirmation emails · Generate signed upload URLs · Auto-cancel expired pending bookings · Preserve audit/payment/edit logs</td></tr>
-  </table>
   <div class="backtop"><a href="#top">↑ top</a></div>
 </section>
 
