@@ -29,6 +29,11 @@ const ADDON_NAMES: Record<string, string> = {
   premium_shampoo: "Premium Shampoo",
 };
 
+// Temporarily pause confirmation emails for admin-created bookings while
+// historical data is being migrated. Keep the email path in place so this can
+// be restored by flipping the flag once the live data migration is complete.
+const SEND_ADMIN_CREATED_CONFIRMATION_EMAIL = false;
+
 // ── Email helper ──────────────────────────────────────────────
 
 async function sendBookingConfirmation(details: any) {
@@ -589,10 +594,12 @@ Deno.serve(async (req) => {
     });
     if (waiverErr) throw new Error(`Waiver insert failed: ${waiverErr.message}`);
 
-    // 12. Send confirmation email for admin-created OR manual-transfer-paid bookings.
-    // (Admin/walk-in bookings and online manual-transfer bookings both confirm here;
-    // the archived PayMongo path emailed from handle-payment-webhook instead.)
-    if ((body.adminCreated === true || manual) && body.ownerEmail) {
+    // 12. Send confirmation email for eligible bookings.
+    // Online manual-transfer bookings still confirm here. Admin-created booking
+    // emails are paused during data migration; flip the flag above to re-enable.
+    const shouldSendAdminCreatedEmail =
+      body.adminCreated === true && SEND_ADMIN_CREATED_CONFIRMATION_EMAIL;
+    if ((shouldSendAdminCreatedEmail || manual) && body.ownerEmail) {
       try {
         // Look up room name for hotel bookings
         let hotelRoomName = body.hotelRoom || null;
