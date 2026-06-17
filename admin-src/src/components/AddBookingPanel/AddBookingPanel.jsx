@@ -207,9 +207,18 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
       .catch(() => {})
   }, [])
 
+  // Reset create flow only when the target branch/mode changes. Keep this
+  // separate from edit hydration so refreshed room inventory cannot reset an
+  // in-progress admin booking back to the default Grooming service.
+  useEffect(() => {
+    if (editBooking) return
+    setStep(0)
+    setBk(mkBk(branch?.id))
+  }, [editBooking, branch?.id])
+
   // Pre-populate for edit
   useEffect(() => {
-    if (!editBooking) { setBk(mkBk(branch?.id)); return }
+    if (!editBooking) return
     const b   = editBooking
     const pet = Array.isArray(b.pets)   ? b.pets[0]   : b.pets   ?? {}
     const own = Array.isArray(b.owners) ? b.owners[0] : b.owners ?? {}
