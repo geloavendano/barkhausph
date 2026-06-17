@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { sbGet, sbPost, sbPatch, sbDelete, SUPABASE_URL, SUPABASE_ANON_KEY } from '../../lib/supabase'
+import { sbGet, sbPost, sbPostSelect, sbPatch, sbDelete, SUPABASE_URL, SUPABASE_ANON_KEY } from '../../lib/supabase'
 import { supabase } from '../../lib/supabase'
 import {
   adminDisplayName,
@@ -98,6 +98,27 @@ function mkBk(branchId) {
     wgen:true, wvacc:true, wmedia:true, anotes:'',
     recby:'Admin', mode:'admin',
   }
+}
+
+const normOwnerValue = v => String(v ?? '').trim()
+const normOwnerEmail = v => normOwnerValue(v).toLowerCase()
+
+function ownerPayloadFromBk(bk) {
+  return {
+    first_name: bk.ofirst.trim(),
+    last_name: bk.olast.trim(),
+    email: bk.oemail.trim().toLowerCase() || null,
+    mobile: bk.ophone.trim(),
+    referral_source: bk.osource || null,
+  }
+}
+
+function ownerChanged(original, next) {
+  return normOwnerValue(original.first_name) !== normOwnerValue(next.first_name) ||
+    normOwnerValue(original.last_name) !== normOwnerValue(next.last_name) ||
+    normOwnerEmail(original.email) !== normOwnerEmail(next.email) ||
+    normOwnerValue(original.mobile) !== normOwnerValue(next.mobile) ||
+    normOwnerValue(original.referral_source) !== normOwnerValue(next.referral_source)
 }
 
 function fmt(n) { return '₱' + Number(n).toLocaleString() }
@@ -299,6 +320,43 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
   const upd = (key, val) => setBk(prev => ({ ...prev, [key]: val }))
   const updMany = obj => setBk(prev => ({ ...prev, ...obj }))
 
+  async function saveEditedOwner({ bookingId, petId, originalOwner }) {
+    if (!originalOwner?.id) return null
+
+    const nextOwner = ownerPayloadFromBk(bk)
+    const selectedOwnerId = bk.owner_id
+
+    // If the admin intentionally selected a different existing owner from
+    // search, move only this pet/booking to that owner instead of mutating the
+    // previously linked owner.
+    if (selectedOwnerId && selectedOwnerId !== originalOwner.id) {
+      if (petId) await sbPatch('pets', `id=eq.${petId}`, { owner_id: selectedOwnerId })
+      await sbPatch('bookings', `id=eq.${bookingId}`, { owner_id: selectedOwnerId })
+      return selectedOwnerId
+    }
+
+    if (!ownerChanged(originalOwner, nextOwner)) return originalOwner.id
+
+    const [ownerPets, ownerBookings] = await Promise.all([
+      sbGet('pets', `owner_id=eq.${originalOwner.id}&select=id`),
+      sbGet('bookings', `owner_id=eq.${originalOwner.id}&select=id`),
+    ])
+    const sharedWithOtherPet = (ownerPets ?? []).some(p => p.id !== petId)
+    const sharedWithOtherBooking = (ownerBookings ?? []).some(row => row.id !== bookingId)
+
+    if (sharedWithOtherPet || sharedWithOtherBooking) {
+      const rows = await sbPostSelect('owners', nextOwner, 'id')
+      const newOwnerId = rows?.[0]?.id
+      if (!newOwnerId) throw new Error('Owner detach failed: new owner row was not returned.')
+      if (petId) await sbPatch('pets', `id=eq.${petId}`, { owner_id: newOwnerId })
+      await sbPatch('bookings', `id=eq.${bookingId}`, { owner_id: newOwnerId })
+      return newOwnerId
+    }
+
+    await sbPatch('owners', `id=eq.${originalOwner.id}`, nextOwner)
+    return originalOwner.id
+  }
+
   // ── Grooming slot loader ──────────────────────────────────────────────────
   const loadSlots = useCallback(async (date, groomerId) => {
     if (!date) { setSlots(null); return }
@@ -442,11 +500,7 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
           age_unit: bk.pageunit||'years', size: bk.size||null,
           medical_notes: bk.pmed||null, temperament: bk.ptemp||null,
         })
-        if (own.id) await sbPatch('owners', `id=eq.${own.id}`, {
-          first_name: bk.ofirst.trim(), last_name: bk.olast.trim(),
-          email: bk.oemail.trim()||null, mobile: bk.ophone.trim(),
-          referral_source: bk.osource||null,
-        })
+        await saveEditedOwner({ bookingId: b.id, petId: pet.id, originalOwner: own })
         if (bk.svc==='grooming') {
           const gsvc = GROOM_SVCS.find(x => x.k === bk.gsvc)
           await sbPatch('grooming_details', `booking_id=eq.${b.id}`, {

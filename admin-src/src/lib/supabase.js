@@ -53,6 +53,17 @@ export async function sbPost(table, body) {
   if (!res.ok) throw await restError(`POST ${table}`, res)
 }
 
+/** Insert rows and return selected columns */
+export async function sbPostSelect(table, body, select = '*') {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?select=${encodeURIComponent(select)}`, {
+    method: 'POST',
+    headers: { ...(await authHeaders()), Prefer: 'return=representation' },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) throw await restError(`POST ${table}`, res)
+  return res.json()
+}
+
 /** Patch rows matching a PostgREST filter string */
 export async function sbPatch(table, filter, body) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${filter}`, {
