@@ -27,7 +27,7 @@ export function setAuthToken(token) {
 export async function sbGet(table, params = '') {
   const url = `${SUPABASE_URL}/rest/v1/${table}${params ? '?' + params : ''}`
   const res = await fetch(url, { headers: await authHeaders() })
-  if (!res.ok) throw new Error(`GET ${table}: ${res.status} ${await res.text()}`)
+  if (!res.ok) throw await restError(`GET ${table}`, res)
   return res.json()
 }
 
@@ -40,7 +40,7 @@ export async function sbUpsert(table, body) {
     headers: hdrs,
     body: JSON.stringify(body),
   })
-  if (!res.ok) throw new Error(`UPSERT ${table}: ${res.status} ${await res.text()}`)
+  if (!res.ok) throw await restError(`UPSERT ${table}`, res)
 }
 
 /** Insert a single row */
@@ -50,7 +50,7 @@ export async function sbPost(table, body) {
     headers: { ...(await authHeaders()), Prefer: 'return=minimal' },
     body: JSON.stringify(body),
   })
-  if (!res.ok) throw new Error(`POST ${table}: ${res.status} ${await res.text()}`)
+  if (!res.ok) throw await restError(`POST ${table}`, res)
 }
 
 /** Patch rows matching a PostgREST filter string */
@@ -60,7 +60,7 @@ export async function sbPatch(table, filter, body) {
     headers: { ...(await authHeaders()), Prefer: 'return=minimal' },
     body: JSON.stringify(body),
   })
-  if (!res.ok) throw new Error(`PATCH ${table}: ${res.status} ${await res.text()}`)
+  if (!res.ok) throw await restError(`PATCH ${table}`, res)
 }
 
 /** Delete rows matching a PostgREST filter string */
@@ -69,7 +69,7 @@ export async function sbDelete(table, filter) {
     method: 'DELETE',
     headers: { ...(await authHeaders()), Prefer: 'return=minimal' },
   })
-  if (!res.ok) throw new Error(`DELETE ${table}: ${res.status} ${await res.text()}`)
+  if (!res.ok) throw await restError(`DELETE ${table}`, res)
 }
 
 /** Build auth headers using the cached access token (set via setAuthToken) */
@@ -79,6 +79,14 @@ function authHeaders() {
     Authorization: `Bearer ${_accessToken ?? SUPABASE_ANON_KEY}`,
     'Content-Type': 'application/json',
   }
+}
+
+async function restError(label, res) {
+  const body = await res.text()
+  if (res.status === 401 && /JWT expired|PGRST303/i.test(body)) {
+    window.dispatchEvent(new CustomEvent('barkhaus-admin-session-expired'))
+  }
+  return new Error(`${label}: ${res.status} ${body}`)
 }
 
 /**

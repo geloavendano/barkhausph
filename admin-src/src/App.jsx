@@ -67,7 +67,21 @@ export default function App() {
         setCurrentAdmin(null)
       }
     })
-    return () => subscription.unsubscribe()
+
+    const handleSessionExpired = async () => {
+      setAccessError('Your admin session expired. Please sign in again to continue.')
+      setAllowed(false)
+      setGreeting('')
+      setCurrentAdmin(null)
+      setAuthToken(null)
+      await supabase.auth.signOut()
+    }
+    window.addEventListener('barkhaus-admin-session-expired', handleSessionExpired)
+
+    return () => {
+      subscription.unsubscribe()
+      window.removeEventListener('barkhaus-admin-session-expired', handleSessionExpired)
+    }
   }, [])
 
   async function onSessionReady(sess) {
