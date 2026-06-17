@@ -238,6 +238,9 @@ function CsvUploadCard({ branches }) {
         <code>Membership ID</code>, <code>Pet Name</code>,{' '}
         <code>Valid Until Date</code>, <code>Branch</code>
       </p>
+      <p className={styles.csvNote}>
+        Use an exact branch name for Standard memberships. Leave Branch blank for Passport memberships valid at all branches.
+      </p>
 
       <input
         type="file"

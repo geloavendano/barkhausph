@@ -78,8 +78,19 @@
 .csvHint {
   font-size: 12px;
   color: var(--mid);
-  margin-bottom: 14px;
+  margin-bottom: 8px;
   line-height: 1.6;
+}
+
+.csvNote {
+  font-size: 12px;
+  color: var(--cream-m);
+  background: rgba(77, 150, 185, 0.08);
+  border: 0.5px solid rgba(77, 150, 185, 0.28);
+  border-radius: 8px;
+  padding: 9px 10px;
+  margin-bottom: 14px;
+  line-height: 1.45;
 }
 
 .csvActions {
