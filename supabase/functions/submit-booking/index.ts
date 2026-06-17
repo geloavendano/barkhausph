@@ -330,7 +330,8 @@ Deno.serve(async (req) => {
 
     // Validate required fields
     const required = ["location", "service", "petName", "petAnimal", "petGender",
-                      "ownerFirst", "ownerLast", "ownerEmail", "ownerPhone"];
+                      "ownerFirst", "ownerLast", "ownerPhone"];
+    if (!body.adminCreated) required.push("ownerEmail");
     for (const field of required) {
       if (!body[field]) {
         return new Response(
@@ -350,11 +351,14 @@ Deno.serve(async (req) => {
 
     // 2. Upsert owner
     let ownerId: string;
-    const { data: existingOwner } = await supabase
-      .from("owners")
-      .select("id")
-      .ilike("email", body.ownerEmail.trim())
-      .maybeSingle();
+    const ownerEmail = body.ownerEmail?.trim().toLowerCase() || "";
+    const { data: existingOwner } = ownerEmail
+      ? await supabase
+          .from("owners")
+          .select("id")
+          .ilike("email", ownerEmail)
+          .maybeSingle()
+      : { data: null };
 
     if (existingOwner) {
       ownerId = existingOwner.id;
@@ -364,7 +368,7 @@ Deno.serve(async (req) => {
         .insert({
           first_name:      body.ownerFirst.trim(),
           last_name:       body.ownerLast.trim(),
-          email:           body.ownerEmail.trim().toLowerCase(),
+          email:           ownerEmail || null,
           mobile:          body.ownerPhone.trim(),
           referral_source: body.ownerSource || null,
         })

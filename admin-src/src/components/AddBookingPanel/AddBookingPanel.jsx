@@ -345,7 +345,11 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
     const sharedWithOtherBooking = (ownerBookings ?? []).some(row => row.id !== bookingId)
 
     if (sharedWithOtherPet || sharedWithOtherBooking) {
-      const rows = await sbPostSelect('owners', nextOwner, 'id')
+      const detachedOwner = {
+        ...nextOwner,
+        email: normOwnerEmail(nextOwner.email) === normOwnerEmail(originalOwner.email) ? null : nextOwner.email,
+      }
+      const rows = await sbPostSelect('owners', detachedOwner, 'id')
       const newOwnerId = rows?.[0]?.id
       if (!newOwnerId) throw new Error('Owner detach failed: new owner row was not returned.')
       if (petId) await sbPatch('pets', `id=eq.${petId}`, { owner_id: newOwnerId })
