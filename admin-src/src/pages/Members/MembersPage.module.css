@@ -115,6 +115,95 @@
   border-color: var(--blue);
 }
 
+.filePreview {
+  border: 0.5px solid var(--border);
+  border-radius: 8px;
+  background: rgba(240, 237, 230, 0.04);
+  padding: 12px;
+  margin: 10px 0;
+}
+
+.previewName {
+  color: var(--cream);
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 3px;
+}
+
+.previewMeta {
+  color: var(--mid);
+  font-size: 12px;
+}
+
+.previewActions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.cancelBtn,
+.proceedBtn,
+.clearBtn {
+  height: 36px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.cancelBtn,
+.clearBtn {
+  border: 0.5px solid var(--border);
+  background: transparent;
+  color: var(--cream-m);
+}
+
+.proceedBtn {
+  border: 0;
+  background: var(--yellow);
+  color: var(--bg);
+}
+
+.importPanel {
+  border: 0.5px solid rgba(77, 150, 185, 0.28);
+  border-radius: 8px;
+  background: rgba(77, 150, 185, 0.08);
+  padding: 12px;
+  margin: 10px 0;
+}
+
+.importTop {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--cream);
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.progressTrack {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(240, 237, 230, 0.12);
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--success);
+  transition: width 0.2s ease;
+}
+
+.importMeta {
+  color: var(--mid);
+  font-size: 11px;
+  line-height: 1.45;
+  margin-top: 8px;
+}
+
 .reportBtn {
   width: 100%;
   height: 38px;
@@ -130,6 +219,11 @@
 
 .reportBtn:hover {
   border-color: var(--success);
+}
+
+.clearBtn {
+  width: 100%;
+  margin-top: 8px;
 }
 
 .csvResult {

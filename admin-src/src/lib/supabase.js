@@ -32,10 +32,11 @@ export async function sbGet(table, params = '') {
 }
 
 /** Upsert rows via POST with merge-duplicates */
-export async function sbUpsert(table, body) {
+export async function sbUpsert(table, body, onConflict = '') {
   const hdrs = await authHeaders()
   hdrs['Prefer'] = 'resolution=merge-duplicates,return=minimal'
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+  const qs = onConflict ? `?on_conflict=${encodeURIComponent(onConflict)}` : ''
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}${qs}`, {
     method: 'POST',
     headers: hdrs,
     body: JSON.stringify(body),
