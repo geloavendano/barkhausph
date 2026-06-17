@@ -35,7 +35,7 @@ function ValidateCard({ branches }) {
     try {
       const rows = await sbGet(
         'members',
-        `member_code=eq.${encodeURIComponent(c)}&select=member_code,tier,pet_name,valid_until,branch_id,active&limit=1`
+        `member_code=eq.${encodeURIComponent(c)}&select=*&limit=1`
       )
       if (!rows?.length) {
         setStatus({ ok: false, text: '✗ Member code not found.' }); return
@@ -68,7 +68,7 @@ function ValidateCard({ branches }) {
           })
         : 'No expiry set'
 
-      setStatus({ ok: true, tierLabel, branchName, validStr, petName: m.pet_name })
+      setStatus({ ok: true, tierLabel, branchName, validStr, petName: m.pet_name, petBreed: m.pet_breed })
     } catch (err) {
       setStatus({ ok: false, text: `Error: ${err.message}` })
     } finally {
@@ -116,6 +116,7 @@ function ValidateCard({ branches }) {
               <Row label="Coverage" value={status.branchName} />
               <Row label="Validity" value={status.validStr} />
               {status.petName && <Row label="Pet" value={status.petName} />}
+              {status.petBreed && <Row label="Breed" value={status.petBreed} />}
             </div>
           </div>
         ) : (
@@ -144,9 +145,9 @@ function CsvUploadCard({ branches }) {
   function downloadSampleCsv() {
     const sampleBranch = branches?.[0]?.name ?? 'Estancia'
     const rows = [
-      ['Membership ID', 'Pet Name', 'Valid Until Date', 'Branch'],
-      ['BH-M001', 'Max', '2026-12-31', sampleBranch],
-      ['BH-P001', 'Luna', '2026-12-31', ''],
+      ['Membership ID', 'Pet Name', 'Breed', 'Valid Until Date', 'Branch'],
+      ['BH-M001', 'Max', 'Golden Retriever', '2026-12-31', sampleBranch],
+      ['BH-P001', 'Luna', 'Persian', '2026-12-31', ''],
     ]
     const csv = rows
       .map(row => row.map(value => `"${String(value).replace(/"/g, '""')}"`).join(','))
@@ -176,6 +177,7 @@ function CsvUploadCard({ branches }) {
       const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''))
       const idIdx   = headers.findIndex(h => h.toLowerCase() === 'membership id')
       const petIdx  = headers.findIndex(h => h.toLowerCase() === 'pet name')
+      const breedIdx = headers.findIndex(h => h.toLowerCase() === 'breed')
       const dateIdx = headers.findIndex(h => h.toLowerCase() === 'valid until date')
       const brIdx   = headers.findIndex(h => h.toLowerCase() === 'branch')
 
@@ -196,6 +198,7 @@ function CsvUploadCard({ branches }) {
         rows.push({
           member_code: memberCode,
           pet_name:    (cols[petIdx] ?? '').trim() || null,
+          pet_breed:   (breedIdx >= 0 ? (cols[breedIdx] ?? '').trim() : '') || null,
           valid_until: (dateIdx >= 0 && cols[dateIdx]) ? cols[dateIdx] || null : null,
           branch_id:   brMatch ? brMatch.id : null,
           // Tier is derived from branch: a branch-bound member is Standard,
@@ -236,7 +239,7 @@ function CsvUploadCard({ branches }) {
       <p className={styles.csvHint}>
         Expected columns:{' '}
         <code>Membership ID</code>, <code>Pet Name</code>,{' '}
-        <code>Valid Until Date</code>, <code>Branch</code>
+        <code>Breed</code>, <code>Valid Until Date</code>, <code>Branch</code>
       </p>
       <p className={styles.csvNote}>
         Use an exact branch name for Standard memberships. Leave Branch blank for Passport memberships valid at all branches.
