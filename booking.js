@@ -19,7 +19,7 @@ var EDGE_FN_URL       = SUPABASE_URL + '/functions/v1/submit-booking';
 // populates them from Supabase at runtime.
 
 var GROOM_SERVICES = [
-  { key:'bath_dry',  name:'Bath and Dry',   duration:'1 hour', desc:'Bath, Blow Dry and Brush Out' },
+  { key:'bath_dry',  name:'Bath and Dry',   duration:'30 minutes', desc:'Bath, Blow Dry and Brush Out' },
   { key:'basic',     name:'Basic Groom',     duration:'1 hour',     desc:'Shampoo, Blow Dry, Brush Out, Teeth Brushing, Sanitary Clean, Paw Pad Trim, Nail Trim and Filing, Ear Cleaning, Anal Gland Expression' },
   { key:'premium',   name:'Premium Groom',   duration:'2 hours',    desc:'Customized Haircut, Face Trim, Shampoo, Blow Dry, Brush Out, Teeth Brushing, Sanitary Clean, Paw Pad Trim, Nail Trim and Filing, Ear Cleaning, Anal Gland Expression' },
   { key:'ala_carte', name:'Ala Carte',       duration:'varies',     desc:'Choose individual services below' }
@@ -920,8 +920,8 @@ function selectStylist(el, val, groomerId) {
 }
 
 // Duration in minutes per service key. Dematting or deshedding adds one
-// 30-minute buffer, so a Basic Groom with either/both blocks 90 minutes.
-var GROOM_SLOT_MINS = { bath_dry:60, basic:60, premium:120, ala_carte:60 };
+// 30-minute buffer, so Bath & Dry becomes 60 minutes and Basic becomes 90.
+var GROOM_SLOT_MINS = { bath_dry:30, basic:60, premium:120, ala_carte:60 };
 var GROOM_DURATION_ADDONS = { demat:true, deshed:true };
 
 function hasDurationAddonMap(addons) {

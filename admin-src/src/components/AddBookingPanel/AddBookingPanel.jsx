@@ -16,7 +16,7 @@ import styles from './AddBookingPanel.module.css'
 
 // ── Constants ─────────────────────────────────────────────────────────────
 const GROOM_SVCS = [
-  { k:'bath_dry', n:'Bath and Dry',  d:'1 hr' },
+  { k:'bath_dry', n:'Bath and Dry',  d:'30 min' },
   { k:'basic',    n:'Basic Groom',   d:'1 hr'   },
   { k:'premium',  n:'Premium Groom', d:'2 hrs'  },
   { k:'ala_carte',n:'Ala Carte',     d:'varies' },

@@ -1,4 +1,4 @@
-export const GROOM_DURATIONS = { bath_dry: 60, basic: 60, premium: 120, ala_carte: 60 }
+export const GROOM_DURATIONS = { bath_dry: 30, basic: 60, premium: 120, ala_carte: 60 }
 export const GROOM_DURATION_ADDONS = new Set(['demat', 'deshed'])
 
 export function hasDurationAddon(addons) {
