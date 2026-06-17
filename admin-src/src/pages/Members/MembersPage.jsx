@@ -141,6 +141,27 @@ function CsvUploadCard({ branches }) {
   const [resultOk, setResultOk] = useState(null)
   const fileRef = useRef(null)
 
+  function downloadSampleCsv() {
+    const sampleBranch = branches?.[0]?.name ?? 'Estancia'
+    const rows = [
+      ['Membership ID', 'Pet Name', 'Valid Until Date', 'Branch'],
+      ['BH-M001', 'Max', '2026-12-31', sampleBranch],
+      ['BH-P001', 'Luna', '2026-12-31', ''],
+    ]
+    const csv = rows
+      .map(row => row.map(value => `"${String(value).replace(/"/g, '""')}"`).join(','))
+      .join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'barkhaus-members-template.csv'
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+  }
+
   async function handleFile(e) {
     const file = e.target.files[0]
     if (!file) return
@@ -225,13 +246,20 @@ function CsvUploadCard({ branches }) {
         ref={fileRef}
         onChange={handleFile}
       />
-      <button
-        className="btn-primary"
-        style={{ width: '100%', marginBottom: 8 }}
-        onClick={() => fileRef.current?.click()}
-      >
-        Choose CSV File
-      </button>
+      <div className={styles.csvActions}>
+        <button
+          className="btn-primary"
+          onClick={() => fileRef.current?.click()}
+        >
+          Choose CSV File
+        </button>
+        <button
+          className={styles.templateBtn}
+          onClick={downloadSampleCsv}
+        >
+          Download Sample CSV
+        </button>
+      </div>
 
       {result && (
         <p className={styles.csvResult} style={{ color: resultOk ? 'var(--success)' : resultOk === false ? 'var(--error)' : 'var(--mid)' }}>
