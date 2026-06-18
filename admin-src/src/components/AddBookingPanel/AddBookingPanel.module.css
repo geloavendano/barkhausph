@@ -154,6 +154,9 @@
 .slot:hover:not(:disabled) { background: var(--raised); }
 .slotOn { background: var(--raised); border-color: var(--blue); color: var(--blue); }
 .slotTaken { border-color: rgba(239,159,39,0.55); color: var(--yellow); }
+.emptyAvail {
+  margin: 6px 0 0; color: var(--error); font-size: 11px; line-height: 1.4;
+}
 
 /* ── Pills ── */
 .pills { display: flex; gap: 6px; flex-wrap: wrap; }

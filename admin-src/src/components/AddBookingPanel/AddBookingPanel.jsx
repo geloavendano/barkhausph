@@ -12,6 +12,7 @@ import {
 } from '../../lib/adminAudit'
 import { parsePricing, emptyPricing, calcBase, calcLate, calcTotal, calcNights, calcHotelBreakdown, calcDaycare, hotelSizeKey, DEFAULT_ADDONS } from '../../lib/pricing'
 import { groomDurationMins } from '../../lib/grooming'
+import { availableGroomingSlots, availableHotelRooms, availableStudioSlots } from '../../lib/availability'
 import styles from './AddBookingPanel.module.css'
 
 // ── Constants ─────────────────────────────────────────────────────────────
@@ -26,7 +27,10 @@ const BK_SIZES     = ['small_dog','medium_dog','large_dog','giant_dog','cat']
 const SIZE_LBL     = { small_dog:'Small dog', medium_dog:'Medium dog', large_dog:'Large dog', giant_dog:'Giant dog', cat:'Cat' }
 const ROOM_TYPES   = { small_cage:'Small Cage', medium_cage:'Medium Cage', large_cage:'Large Cage', single_cabin:'Cat Cabin', villa:'Cat Villa' }
 const INTERNAL_OTHER_ROOM_ID = '__internal_other_room__'
-const STUDIO_SLOTS = ['10:00 AM','11:00 AM','12:00 PM','1:00 PM','2:00 PM','3:00 PM','4:00 PM','5:00 PM','6:00 PM','7:00 PM','8:00 PM','9:00 PM']
+const GROOM_SLOTS = ['9:00 AM','10:00 AM','11:00 AM','12:00 PM','1:00 PM','2:00 PM','3:00 PM','4:00 PM','5:00 PM']
+const STUDIO_SLOTS = ['10:00 AM','10:30 AM','11:00 AM','11:30 AM','12:00 PM','12:30 PM',
+  '1:00 PM','1:30 PM','2:00 PM','2:30 PM','3:00 PM','3:30 PM','4:00 PM','4:30 PM',
+  '5:00 PM','5:30 PM','6:00 PM','6:30 PM','7:00 PM','7:30 PM','8:00 PM','8:30 PM','9:00 PM']
 const STEP_NAMES   = ['Service','Schedule','Pet','Owner','Details','Summary']
 // Drop-off: 7 AM – 10 PM. Values stored as bare hour string ("10") to match public page.
 const DROP_OPTS = [
@@ -123,6 +127,11 @@ function ownerChanged(original, next) {
 
 function fmt(n) { return '₱' + Number(n).toLocaleString() }
 
+function localToday() {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+}
+
 /** Normalise any time value to HH:MM for <input type="time">.
  *  Handles: "11" → "11:00", "11:00" → "11:00", "11:00:00" → "11:00" */
 /** Branch operating hours for hotel drop-off / pick-up based on day of week */
@@ -213,6 +222,11 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
   const [pricing,setPricing]= useState(emptyPricing())
   const [slots,  setSlots]  = useState(null)       // null=show prompt, []loading, [...]=loaded
   const [slotsLoading, setSlotsLoading] = useState(false)
+  const [hotelRooms, setHotelRooms] = useState(null)
+  const [hotelRoomsLoading, setHotelRoomsLoading] = useState(false)
+  const [studioSlots, setStudioSlots] = useState(null)
+  const [studioSlotsLoading, setStudioSlotsLoading] = useState(false)
+  const [availabilityError, setAvailabilityError] = useState('')
   const [ownerResults, setOwnerResults] = useState([])
   const [ownerTimer,   setOwnerTimer]   = useState(null)
   const [memMsg, setMemMsg] = useState('')
@@ -361,38 +375,146 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
     return originalOwner.id
   }
 
-  // ── Grooming slot loader ──────────────────────────────────────────────────
-  const loadSlots = useCallback(async (date, groomerId) => {
-    if (!date) { setSlots(null); return }
-    setSlotsLoading(true)
-    const ALL = ['9:00 AM','10:00 AM','11:00 AM','12:00 PM','1:00 PM','2:00 PM','3:00 PM','4:00 PM','5:00 PM']
-    try {
-      // Grooming date now lives in grooming_details.service_date. Query it directly,
-      // scoped to this branch + active bookings via an inner embed of the parent.
-      const gdRows = await sbGet('grooming_details',
+  // ── Resource availability ─────────────────────────────────────────────────
+  const fetchGroomingSlots = useCallback(async (date, groomerId, serviceKey, addons) => {
+    if (!date || !branch?.id) return []
+    const selectedGroomerId = groomerId && groomerId !== 'any' ? groomerId : null
+    const dayOfWeek = new Date(`${date}T00:00:00`).getDay()
+    const activeGroomers = groomers.filter(g => !g.is_unavailable)
+    const groomerIds = activeGroomers.map(g => g.id)
+
+    const [bookingRows, recurringBlocks, oneOffBlocks] = await Promise.all([
+      sbGet('grooming_details',
         `select=booking_id,timeslot,groomer_id,groom_service_key,bookings!inner(branch_id,status)` +
-        `&service_date=eq.${date}` +
-        `&bookings.branch_id=eq.${branch.id}` +
-        `&bookings.status=neq.cancelled&bookings.status=neq.rejected`)
-      const takenByGroomer = {}
-      for (const r of (gdRows ?? [])) {
-        const gid = r.groomer_id ?? 'any'
-        if (!takenByGroomer[gid]) takenByGroomer[gid] = []
-        takenByGroomer[gid].push(r.timeslot)
-      }
-      const disabled = new Set()
-      for (const slot of ALL) {
-        if (groomerId && groomerId !== 'any') {
-          if ((takenByGroomer[groomerId] ?? []).includes(slot)) disabled.add(slot)
-        } else {
-          const free = groomers.filter(g => !(takenByGroomer[g.id] ?? []).includes(slot))
-          if (!free.length) disabled.add(slot)
-        }
-      }
-      setSlots(ALL.map(s => ({ s, taken: disabled.has(s) })))
-    } catch { setSlots(ALL.map(s => ({ s, taken: false }))) }
-    setSlotsLoading(false)
-  }, [branch?.id, groomers])
+        `&service_date=eq.${date}&bookings.branch_id=eq.${branch.id}` +
+        `&bookings.status=not.in.(cancelled,rejected)`),
+      groomerIds.length
+        ? sbGet('groomer_blocks', `select=groomer_id,start_time,end_time,days_of_week&active=eq.true&groomer_id=in.(${groomerIds.join(',')})`)
+        : Promise.resolve([]),
+      sbGet('blocked_schedules',
+        `select=resource_id,start_time,end_time&resource_type=eq.groomer&active=eq.true&dates=cs.{${date}}`),
+    ])
+
+    const bookingIds = (bookingRows ?? []).map(row => row.booking_id).filter(Boolean)
+    const addonRows = bookingIds.length
+      ? await sbGet('booking_addons', `select=booking_id,addon_key&booking_id=in.(${bookingIds.join(',')})&addon_key=in.(demat,deshed)`)
+      : []
+    const durationAddonBookingIds = new Set((addonRows ?? []).map(row => row.booking_id))
+
+    return availableGroomingSlots({
+      slots: GROOM_SLOTS,
+      groomers: activeGroomers,
+      bookings: bookingRows ?? [],
+      durationAddonBookingIds,
+      recurringBlocks: recurringBlocks ?? [],
+      oneOffBlocks: oneOffBlocks ?? [],
+      dayOfWeek,
+      selectedGroomerId,
+      serviceKey,
+      selectedAddons: addons,
+      excludeBookingId: editBooking?.id,
+    })
+  }, [branch?.id, groomers, editBooking?.id])
+
+  const loadSlots = useCallback(async (date, groomerId, serviceKey, addons) => {
+    if (!date) { setSlots(null); return [] }
+    setSlotsLoading(true); setAvailabilityError('')
+    try {
+      const available = await fetchGroomingSlots(date, groomerId, serviceKey, addons)
+      setSlots(available)
+      setBk(prev => available.includes(fmtTime12(prev.gslot)) ? prev : { ...prev, gslot: '' })
+      return available
+    } catch (error) {
+      console.error('Grooming availability failed:', error)
+      setSlots([]); setAvailabilityError('Could not load grooming availability. Please try again.')
+      return []
+    } finally { setSlotsLoading(false) }
+  }, [fetchGroomingSlots])
+
+  const fetchHotelRooms = useCallback(async (checkin, checkout, size) => {
+    if (!checkin || !checkout || !size || !branch?.id || checkout <= checkin) return []
+    const stays = await sbGet('hotel_details',
+      `select=booking_id,room_id,checkin_date,checkout_date,bookings!inner(branch_id,status)` +
+      `&checkin_date=lt.${checkout}&checkout_date=gt.${checkin}` +
+      `&bookings.branch_id=eq.${branch.id}&bookings.status=not.in.(cancelled,rejected)`)
+    return availableHotelRooms({
+      rooms,
+      stays: stays ?? [],
+      size,
+      excludeBookingId: editBooking?.id,
+      internalRoomId: INTERNAL_OTHER_ROOM_ID,
+    })
+  }, [branch?.id, rooms, editBooking?.id])
+
+  const loadHotelRooms = useCallback(async (checkin, checkout, size) => {
+    if (!checkin || !checkout || checkout <= checkin) { setHotelRooms(null); return [] }
+    setHotelRoomsLoading(true); setAvailabilityError('')
+    try {
+      const available = await fetchHotelRooms(checkin, checkout, size)
+      setHotelRooms(available)
+      setBk(prev => !prev.hroom_id || available.some(room => room.id === prev.hroom_id)
+        ? prev : { ...prev, hroom_id: null, hroom: '', hroom_type: '' })
+      return available
+    } catch (error) {
+      console.error('Hotel availability failed:', error)
+      setHotelRooms([]); setAvailabilityError('Could not load room availability. Please try again.')
+      return []
+    } finally { setHotelRoomsLoading(false) }
+  }, [fetchHotelRooms])
+
+  const fetchStudioSlots = useCallback(async date => {
+    if (!date || !branch?.id) return []
+    const dayOfWeek = new Date(`${date}T00:00:00`).getDay()
+    const activeStudios = studios.filter(studio => !studio.is_unavailable)
+    const studioIds = activeStudios.map(studio => studio.id)
+    const [bookingRows, recurringBlocks, oneOffBlocks] = await Promise.all([
+      sbGet('studio_details',
+        `select=booking_id,studio_id,timeslot,bookings!inner(branch_id,status)` +
+        `&service_date=eq.${date}&bookings.branch_id=eq.${branch.id}` +
+        `&bookings.status=not.in.(cancelled,rejected)`),
+      studioIds.length
+        ? sbGet('studio_blocks', `select=studio_id,start_time,end_time,days_of_week&active=eq.true&studio_id=in.(${studioIds.join(',')})`)
+        : Promise.resolve([]),
+      sbGet('blocked_schedules',
+        `select=resource_id,start_time,end_time&resource_type=eq.studio&active=eq.true&dates=cs.{${date}}`),
+    ])
+    return availableStudioSlots({
+      slots: STUDIO_SLOTS,
+      studios: activeStudios,
+      bookings: bookingRows ?? [],
+      recurringBlocks: recurringBlocks ?? [],
+      oneOffBlocks: oneOffBlocks ?? [],
+      dayOfWeek,
+      excludeBookingId: editBooking?.id,
+    })
+  }, [branch?.id, studios, editBooking?.id])
+
+  const loadStudioSlots = useCallback(async date => {
+    if (!date) { setStudioSlots(null); return [] }
+    setStudioSlotsLoading(true); setAvailabilityError('')
+    try {
+      const available = await fetchStudioSlots(date)
+      setStudioSlots(available)
+      setBk(prev => available.includes(prev.stslot) ? prev : { ...prev, stslot: '' })
+      return available
+    } catch (error) {
+      console.error('Studio availability failed:', error)
+      setStudioSlots([]); setAvailabilityError('Could not load studio availability. Please try again.')
+      return []
+    } finally { setStudioSlotsLoading(false) }
+  }, [fetchStudioSlots])
+
+  useEffect(() => {
+    if (bk.svc === 'grooming') loadSlots(bk.gdate, bk.stylistId ?? 'any', bk.gsvc, bk.addons)
+  }, [bk.svc, bk.gdate, bk.stylistId, bk.gsvc, bk.addons, loadSlots])
+
+  useEffect(() => {
+    if (bk.svc === 'hotel') loadHotelRooms(bk.hcin, bk.hcout, bk.size)
+  }, [bk.svc, bk.hcin, bk.hcout, bk.size, loadHotelRooms])
+
+  useEffect(() => {
+    if (bk.svc === 'studio') loadStudioSlots(bk.stdate)
+  }, [bk.svc, bk.stdate, loadStudioSlots])
 
   // ── Owner search ──────────────────────────────────────────────────────────
   function ownerSearch(q) {
@@ -444,15 +566,21 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
       if (bk.svc === 'grooming') {
         if (!bk.gdate) return alert('Enter a grooming date.'), false
         if (!bk.gslot) return alert('Select a time slot.'), false
+        if (slotsLoading || !slots?.includes(fmtTime12(bk.gslot))) return alert('Select an available grooming slot.'), false
         if (bk.gsvc === 'ala_carte' && !Object.keys(bk.addons).length)
           return alert('Select at least one add-on for Ala Carte.'), false
       }
       if (bk.svc === 'hotel') {
         if (!bk.hcin || !bk.hcout) return alert('Enter check-in and check-out dates.'), false
         if (calcNights(bk) < 1) return alert('Check-out must be after check-in.'), false
+        if (!bk.hroom_id) return alert('Select an available room.'), false
+        if (hotelRoomsLoading || !hotelRooms?.some(room => room.id === bk.hroom_id)) return alert('Select an available room.'), false
       }
       if (bk.svc === 'daycare' && !bk.dcdate) return alert('Enter a daycare date.'), false
-      if (bk.svc === 'studio'  && (!bk.stdate || !bk.stslot)) return alert('Enter a date and slot.'), false
+      if (bk.svc === 'studio') {
+        if (!bk.stdate || !bk.stslot) return alert('Enter a date and slot.'), false
+        if (studioSlotsLoading || !studioSlots?.includes(bk.stslot)) return alert('Select an available studio slot.'), false
+      }
     }
     if (s === 2 && !bk.pname.trim()) return alert('Enter the pet\'s name.'), false
     if (s === 3) {
@@ -465,6 +593,22 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
   function next() { if (validate(step)) setStep(s => Math.min(s + 1, STEP_NAMES.length - 1)) }
   function back() { setStep(s => Math.max(s - 1, 0)) }
 
+  async function assertResourceAvailable() {
+    if (['cancelled', 'rejected'].includes(bk.status)) return
+    if (bk.svc === 'grooming') {
+      const available = await loadSlots(bk.gdate, bk.stylistId ?? 'any', bk.gsvc, bk.addons)
+      if (!available.includes(fmtTime12(bk.gslot))) throw new Error('That grooming slot is no longer available. Select another time.')
+    }
+    if (bk.svc === 'hotel') {
+      const available = await loadHotelRooms(bk.hcin, bk.hcout, bk.size)
+      if (!available.some(room => room.id === bk.hroom_id)) throw new Error('That room is no longer available for the selected stay.')
+    }
+    if (bk.svc === 'studio') {
+      const available = await loadStudioSlots(bk.stdate)
+      if (!available.includes(bk.stslot)) throw new Error('That studio slot is no longer available. Select another time.')
+    }
+  }
+
   // ── Save ──────────────────────────────────────────────────────────────────
   async function save() {
     if (!pricing.loaded) return alert('Pricing not loaded yet. Please wait a moment.')
@@ -476,6 +620,7 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
     const payMethodDb = bk.paymethod ? bk.paymethod.toLowerCase().replace(/ \/ /g,'_').replace(/ /g,'_') : ''
 
     try {
+      await assertResourceAvailable()
       if (isEdit) {
         // ── EDIT: direct PATCH calls ──
         const b = editBooking
@@ -580,7 +725,7 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
           ownerFirst: bk.ofirst, ownerLast: bk.olast,
           ownerEmail: bk.oemail, ownerPhone: bk.ophone, ownerSource: bk.osource,
           groomDate: bk.gdate, groomSlot: fmtTime12(bk.gslot), groomService: bk.gsvc,
-          preferredStylist: bk.stylist,
+          preferredStylist: bk.stylist, preferredStylistId: bk.stylistId || null,
           hotelCheckin: bk.hcin, hotelCheckout: bk.hcout,
           hotelRoom: bk.hroom_type || bk.hroom, hotelRoomId: bk.hroom_id === INTERNAL_OTHER_ROOM_ID ? null : bk.hroom_id,
           hotelDropoff: bk.hdrop, hotelPickup: `${bk.hpickHour}:00`,
@@ -727,34 +872,31 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
               onChange={e => {
                 const g = groomers.find(x => x.id === e.target.value)
                 updMany({ stylistId: g?.id ?? null, stylist: g?.name ?? 'any' })
-                if (bk.gdate) loadSlots(bk.gdate, e.target.value)
               }}>
               <option value="any">Any available</option>
-              {groomers.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+              {groomers.filter(g => !g.is_unavailable).map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
             </select>
           </FG>
           <FG label="Date" req>
-            <input type="date" className={styles.inp} value={bk.gdate}
-              onChange={e => { upd('gdate', e.target.value); loadSlots(e.target.value, bk.stylistId ?? 'any') }} />
+            <input type="date" className={styles.inp} value={bk.gdate} min={isEdit ? undefined : localToday()}
+              onChange={e => upd('gdate', e.target.value)} />
           </FG>
         </div>
 
         <FG label="Time slot" req>
-          <input type="time" className={styles.inp} value={toHHMM(bk.gslot)}
-            min="09:00" max="17:30" step="900"
-            onChange={e => upd('gslot', e.target.value)} />
-          <p className={styles.hint}>Admins can choose any exact time and may override occupied slots when needed.</p>
           {slotsLoading && <p className={styles.hint}>Loading slots…</p>}
-          {!slotsLoading && slots === null && <p className={styles.hint}>Select a date to see suggested slot status.</p>}
-          {!slotsLoading && slots !== null && (
+          {!slotsLoading && slots === null && <p className={styles.hint}>Select a date to see available slots.</p>}
+          {!slotsLoading && slots?.length === 0 && <p className={styles.emptyAvail}>No grooming slots are available for this date.</p>}
+          {!slotsLoading && slots?.length > 0 && (
             <div className={styles.slotGrid}>
-              {slots.map(({ s, taken }) => (
-                <button key={s}
-                  className={`${styles.slot} ${bk.gslot === s ? styles.slotOn : ''} ${taken ? styles.slotTaken : ''}`}
-                  onClick={() => upd('gslot', toHHMM(s))}>{s}{taken ? ' · booked' : ''}</button>
+              {slots.map(s => (
+                <button key={s} type="button"
+                  className={`${styles.slot} ${fmtTime12(bk.gslot) === s ? styles.slotOn : ''}`}
+                  onClick={() => upd('gslot', toHHMM(s))}>{s}</button>
               ))}
             </div>
           )}
+          {availabilityError && bk.svc === 'grooming' && <p className={styles.emptyAvail}>{availabilityError}</p>}
         </FG>
 
         <FG label="Special requests">
@@ -776,7 +918,7 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
         </FG>
         <div className={styles.twoCol}>
           <FG label="Check-in" req>
-            <input type="date" className={styles.inp} value={bk.hcin}
+            <input type="date" className={styles.inp} value={bk.hcin} min={isEdit ? undefined : localToday()}
               onChange={e => updMany({ hcin: e.target.value })} />
           </FG>
           <FG label="Check-out" req>
@@ -804,14 +946,16 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
           )
         })()}
         <FG label="Room" req>
-          <select className={styles.sel} value={bk.hroom_id ?? ''}
+          <select className={styles.sel} value={bk.hroom_id ?? ''} disabled={hotelRoomsLoading || !hotelRooms}
             onChange={e => {
               const r = rooms.find(x => x.id === e.target.value)
               updMany({ hroom_id: r?.id ?? null, hroom: r?.name ?? '', hroom_type: r?.room_type ?? '' })
             }}>
-            <option value="">Select room…</option>
-            {rooms.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+            <option value="">{hotelRoomsLoading ? 'Checking availability…' : hotelRooms ? 'Select room…' : 'Select dates first'}</option>
+            {(hotelRooms ?? []).map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
           </select>
+          {!hotelRoomsLoading && hotelRooms?.length === 0 && <p className={styles.emptyAvail}>No rooms are available for these dates.</p>}
+          {availabilityError && bk.svc === 'hotel' && <p className={styles.emptyAvail}>{availabilityError}</p>}
         </FG>
         <div className={styles.twoCol}>
           <FG label="Drop-off time">
@@ -845,7 +989,7 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
           <SzPills filter={['small_dog','medium_dog','large_dog','cat']} size={bk.size} onSize={s => upd('size', s)} />
         </FG>
         <FG label="Date" req>
-          <input type="date" className={styles.inp} value={bk.dcdate}
+          <input type="date" className={styles.inp} value={bk.dcdate} min={isEdit ? undefined : localToday()}
             onChange={e => upd('dcdate', e.target.value)} />
         </FG>
         <div className={styles.twoCol}>
@@ -871,16 +1015,20 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
     return (
       <>
         <FG label="Date" req>
-          <input type="date" className={styles.inp} value={bk.stdate}
+          <input type="date" className={styles.inp} value={bk.stdate} min={isEdit ? undefined : localToday()}
             onChange={e => upd('stdate', e.target.value)} />
         </FG>
         <FG label="Time slot" req>
-          <div className={styles.slotGrid}>
-            {STUDIO_SLOTS.map(s => (
-              <button key={s} className={`${styles.slot} ${bk.stslot === s ? styles.slotOn : ''}`}
+          {studioSlotsLoading && <p className={styles.hint}>Loading slots…</p>}
+          {!studioSlotsLoading && studioSlots === null && <p className={styles.hint}>Select a date to see available slots.</p>}
+          {!studioSlotsLoading && studioSlots?.length === 0 && <p className={styles.emptyAvail}>No studio slots are available for this date.</p>}
+          {!studioSlotsLoading && studioSlots?.length > 0 && <div className={styles.slotGrid}>
+            {studioSlots.map(s => (
+              <button key={s} type="button" className={`${styles.slot} ${bk.stslot === s ? styles.slotOn : ''}`}
                 onClick={() => upd('stslot', s)}>{s}</button>
             ))}
-          </div>
+          </div>}
+          {availabilityError && bk.svc === 'studio' && <p className={styles.emptyAvail}>{availabilityError}</p>}
         </FG>
       </>
     )
