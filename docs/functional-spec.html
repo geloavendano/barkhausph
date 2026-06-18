@@ -321,13 +321,13 @@
   <h3>4.1 Checkout (online)</h3>
   <ol>
     <li>On Confirm, the system first <strong>re-checks availability</strong> (room still free for the date span / slot still free). If taken in the meantime: toast ("That room was just booked" / "That time slot was just taken") and the customer is returned to the relevant step with a refreshed grid and cleared selection.</li>
-    <li>A <strong>pending booking</strong> row is created (status <code>pending</code>, payment <code>unpaid</code>) with a generated reference number (<code>BH-XXXXXX</code>), and the customer is redirected to a hosted <strong>PayMongo checkout</strong> (cards, GCash, etc.). A <strong>convenience fee</strong> is added for online payment only.</li>
+    <li>When hosted checkout is enabled, a <strong>pending booking</strong> row is created (status <code>pending</code>, payment <code>unpaid</code>) with a generated reference number (<code>BH-XXXXXX</code>), and the customer is redirected to <strong>Maya Checkout</strong>. A <strong>convenience fee</strong> may be added for online payment only. During migration, manual transfer remains active; Maya and the retained PayMongo integration are hidden and disabled.</li>
     <li>The pending booking <strong>holds the slot/room for ~15 minutes</strong> (communicated on the payment loading screen). A scheduled job auto-cancels pending+unpaid bookings older than 15 minutes, freeing inventory.</li>
   </ol>
 
   <h3>4.2 Payment success</h3>
   <ul>
-    <li>PayMongo webhooks confirm payment; processing is <strong>idempotent</strong> (PayMongo fires two event shapes for one payment).</li>
+    <li>Hosted-payment webhooks confirm payment; processing is <strong>idempotent</strong>. Maya events are verified server-to-server against Maya's Payments API, including status, reference, currency, and amount. The dormant PayMongo path retains signature verification and duplicate-event handling.</li>
     <li>The booking flips to <code>confirmed / paid</code>; all detail rows are written (service details with appointment date, add-ons, itemized charges, vaccines, waiver record, uploaded vaccine documents).</li>
     <li>A <strong>confirmation email</strong> is sent (§7) and the customer returns to a success screen: full booking recap, price breakdown, "arrive 15 minutes early" note, and a print/PDF prompt.</li>
   </ul>

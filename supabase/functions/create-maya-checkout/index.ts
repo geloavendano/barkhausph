@@ -1,5 +1,5 @@
-// Barkhaus — create-payment edge function
-// Creates a pending booking row + PayMongo checkout session; returns checkout_url (hosted page).
+// Barkhaus — create-maya-checkout edge function
+// Creates a pending booking row + Maya Checkout session; returns checkout_url.
 // success_url and cancel_url handle redirect back to booking.html
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -9,8 +9,13 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const PAYMONGO_BASE = "https://api.paymongo.com/v1";
-const SITE_URL      = "https://geloavendano.github.io/barkhausph";
+const SITE_URL = Deno.env.get("SITE_URL") || "https://barkhaus.ph";
+
+function mayaBaseUrl(): string {
+  return (Deno.env.get("MAYA_ENVIRONMENT") || "sandbox").toLowerCase() === "production"
+    ? "https://pg.maya.ph"
+    : "https://pg-sandbox.paymaya.com";
+}
 
 const LOCATION_MAP: Record<string, string> = {
   estancia: "Estancia",
@@ -48,8 +53,8 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const secretKey = Deno.env.get("PAYMONGO_SECRET_KEY")!;
-    if (!secretKey) throw new Error("PAYMONGO_SECRET_KEY not configured");
+    const publicKey = Deno.env.get("MAYA_PUBLIC_KEY")!;
+    if (!publicKey) throw new Error("MAYA_PUBLIC_KEY not configured");
 
     const body = await req.json();
 
@@ -154,7 +159,7 @@ Deno.serve(async (req) => {
     // We generate a candidate ref, but the bookings table may have a DEFAULT or
     // trigger on ref_number that overrides it. We therefore read back the value
     // the database actually stored and treat THAT as authoritative for every
-    // downstream use (pending_bookings, PayMongo metadata, success/cancel URLs,
+    // downstream use (pending_bookings, Maya metadata, success/cancel URLs,
     // the email ref). Otherwise the customer-facing ref would diverge from the
     // ref persisted in the DB / shown in admin.
     let refNumber = "BH-" + Math.random().toString(36).substr(2, 6).toUpperCase();
@@ -243,78 +248,91 @@ Deno.serve(async (req) => {
     }
 
     // ── 5. Store full payload in pending_bookings (webhook uses this to create child records) ──
-    const expiresAt = new Date(Date.now() + 20 * 60 * 1000).toISOString(); // 20-min window
-    await supabase.from("pending_bookings").insert({
+    // Maya sessions remain valid for one hour, so the inventory hold matches.
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    const { error: pendingErr } = await supabase.from("pending_bookings").insert({
       ref_number: refNumber,
       payload:    body,
       amount:     total,
       expires_at: expiresAt,
-      payment_provider: "paymongo",
+      payment_provider: "maya",
     });
+    if (pendingErr) {
+      if (detailTable) await supabase.from(detailTable).delete().eq("booking_id", bookingId);
+      await supabase.from("bookings").delete().eq("id", bookingId);
+      throw new Error(`Failed to create pending checkout: ${pendingErr.message}`);
+    }
 
-    // ── 6. Build PayMongo line items ──
+    // ── 6. Build Maya line items ──
     const serviceAmount = subtotal - discountAmount;
     const lineItems: object[] = [{
-      currency:    "PHP",
-      amount:      serviceAmount * 100,
       name:        serviceLineName(body),
+      code:        String(body.service || "booking"),
       description: discountAmount > 0
         ? `${body.petName} — Member discount applied (−₱${discountAmount})`
         : String(body.petName),
-      quantity: 1,
+      quantity: "1",
+      amount: { value: serviceAmount },
+      totalAmount: { value: serviceAmount },
     }];
     if (convenienceFee > 0) {
       lineItems.push({
-        currency: "PHP", amount: convenienceFee * 100,
-        name: "Convenience Fee", description: "Online booking fee", quantity: 1,
+        name: "Convenience Fee", code: "convenience_fee",
+        description: "Online booking fee", quantity: "1",
+        amount: { value: convenienceFee }, totalAmount: { value: convenienceFee },
       });
     }
 
     const ownerName   = `${body.ownerFirst} ${body.ownerLast}`.trim();
-    const svcLabel    = { grooming:"Grooming", hotel:"Pet Hotel", daycare:"Daycare", studio:"Studio" }[body.service as string] ?? body.service;
-    const description = `Barkhaus ${svcLabel} — ${body.petName} (${ownerName}) — Ref: ${refNumber}`;
 
-    // ── 7. Create PayMongo checkout session ──
-    const pmRes = await fetch(`${PAYMONGO_BASE}/checkout_sessions`, {
+    // ── 7. Create Maya Checkout session ──
+    const mayaRes = await fetch(`${mayaBaseUrl()}/checkout/v1/checkouts`, {
       method: "POST",
       headers: {
         "Content-Type":  "application/json",
-        "Authorization": `Basic ${btoa(secretKey + ":")}`,
+        "Authorization": `Basic ${btoa(publicKey + ":")}`,
       },
-      body: JSON.stringify({ data: { attributes: {
-        line_items:           lineItems,
-        payment_method_types: ["qrph","card","dob","paymaya","gcash","grab_pay"],
-        success_url: `${SITE_URL}/booking.html?payment=success&ref=${refNumber}`,
-        cancel_url:  `${SITE_URL}/booking.html?payment=cancelled&ref=${refNumber}`,
-        reference_number: refNumber,
-        description,
-        billing: { name: ownerName, email: body.ownerEmail, phone: body.ownerPhone },
-        // metadata is read by handle-payment-webhook to reliably match the booking
-        metadata: { ref_number: refNumber, booking_id: bookingId, service: body.service },
-        statement_descriptor: "BARKHAUS",
-      }}}),
+      body: JSON.stringify({
+        totalAmount: { value: total, currency: "PHP" },
+        buyer: {
+          firstName: body.ownerFirst,
+          lastName: body.ownerLast,
+          contact: { email: body.ownerEmail, phone: body.ownerPhone },
+        },
+        items: lineItems,
+        redirectUrl: {
+          success: `${SITE_URL}/booking.html?payment=success&provider=maya&ref=${refNumber}`,
+          failure: `${SITE_URL}/booking.html?payment=failed&provider=maya&ref=${refNumber}`,
+          cancel:  `${SITE_URL}/booking.html?payment=cancelled&provider=maya&ref=${refNumber}`,
+        },
+        requestReferenceNumber: refNumber,
+        metadata: { bookingId, refNumber, service: body.service, ownerName },
+      }),
     });
 
-    const pmData = await pmRes.json();
+    const mayaData = await mayaRes.json();
 
-    if (!pmRes.ok) {
-      console.error("PayMongo error:", JSON.stringify(pmData));
+    if (!mayaRes.ok) {
+      console.error("Maya error:", JSON.stringify(mayaData));
       // Roll back — remove the detail row, booking, and pending record since
       // payment setup failed. Delete the detail row first in case the FK to
       // bookings isn't ON DELETE CASCADE.
       if (detailTable) await supabase.from(detailTable).delete().eq("booking_id", bookingId);
       await supabase.from("bookings").delete().eq("id", bookingId);
       await supabase.from("pending_bookings").delete().eq("ref_number", refNumber);
-      throw new Error(pmData?.errors?.[0]?.detail || "Failed to create checkout session");
+      throw new Error(mayaData?.message || mayaData?.error || "Failed to create Maya checkout");
     }
 
-    const sessionId   = pmData.data.id;
-    const checkoutUrl = pmData.data.attributes.checkout_url;
+    const sessionId   = mayaData.checkoutId || mayaData.id;
+    const checkoutUrl = mayaData.redirectUrl;
+    if (!sessionId || !checkoutUrl) throw new Error("Maya returned an incomplete checkout response");
 
-    // Store the PayMongo session ID so the webhook can match by paymongo_link_id
-    await supabase.from("pending_bookings")
-      .update({ paymongo_link_id: sessionId, gateway_checkout_id: sessionId })
+    // Store provider-neutral identifiers; legacy PayMongo data remains intact.
+    const { error: correlationErr } = await supabase.from("pending_bookings")
+      .update({ gateway_checkout_id: sessionId })
       .eq("ref_number", refNumber);
+    // The webhook also matches requestReferenceNumber, so this is recoverable.
+    if (correlationErr) console.error("Maya checkout correlation update failed:", correlationErr.message);
 
     console.log(`Booking ${bookingId} | Session ${sessionId} | Ref ${refNumber}`);
 
@@ -324,7 +342,7 @@ Deno.serve(async (req) => {
     );
 
   } catch (err) {
-    console.error("create-payment error:", err instanceof Error ? err.message : err);
+    console.error("create-maya-checkout error:", err instanceof Error ? err.message : err);
     return new Response(
       JSON.stringify({ error: err instanceof Error ? err.message : "Unexpected error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

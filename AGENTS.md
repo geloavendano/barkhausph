@@ -49,7 +49,8 @@ When a task needs Supabase action, leave a handoff note with:
 
 Two-branch pet-services platform (Estancia & Eastwood, PHT/UTC+8) at **barkhaus.ph**.
 Static frontend on GitHub Pages + Supabase (Postgres/RLS, Auth, Realtime, Storage, Edge
-Functions) + PayMongo (payments) + Resend (email) + GA4.
+Functions) + manual transfer payments, dormant Maya Checkout / PayMongo providers,
+Resend (email), and GA4.
 
 Surfaces: landing (`index.html`), booking wizard (`booking.html` + `booking.js`),
 admin SPA (`admin-src/` -> served at `/admin/`), edge functions (`supabase/functions/`).
@@ -125,5 +126,8 @@ avoid a follow-up bot commit.
 ## Secrets and keys
 
 Supabase anon key is public by design (hardcoded in clients). Real secrets
-(`PAYMONGO_SECRET_KEY`, `RESEND_API_KEY`) live only in Supabase function env. Nothing
+(`MAYA_PUBLIC_KEY`, `MAYA_SECRET_KEY`, `PAYMONGO_SECRET_KEY`,
+`PAYMONGO_WEBHOOK_SECRET`, `RESEND_API_KEY`) live only in Supabase function env.
+`MAYA_ENVIRONMENT` is `sandbox` or `production`; customer routing remains controlled
+by `PAYMENT_GATEWAY_PROVIDER` in `booking.js` (keep `manual` until launch). Nothing
 secret belongs in this repo.

@@ -8,9 +8,19 @@
 // ── CONFIG ──
 var SUPABASE_URL        = 'https://dxttnbtfhpanyiyduevn.supabase.co';
 var CREATE_PAYMENT_URL  = SUPABASE_URL + '/functions/v1/create-payment';
+var CREATE_MAYA_CHECKOUT_URL = SUPABASE_URL + '/functions/v1/create-maya-checkout';
+var PAYMENT_STATUS_URL  = SUPABASE_URL + '/functions/v1/get-payment-status';
 var GET_UPLOAD_URL      = SUPABASE_URL + '/functions/v1/get-upload-url';
 var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4dHRuYnRmaHBhbnlpeWR1ZXZuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY1MjkyNDcsImV4cCI6MjA5MjEwNTI0N30.jrMk8-_Ga01TydNPUwCzlymf1W44PjaXXIUjCLALb2s';
 var EDGE_FN_URL       = SUPABASE_URL + '/functions/v1/submit-booking';
+
+// Customer-facing payment provider. Keep "manual" active during migration.
+// Dormant alternatives: "maya" and "paymongo".
+var PAYMENT_GATEWAY_PROVIDER = 'manual';
+
+function hostedPaymentEndpoint() {
+  return PAYMENT_GATEWAY_PROVIDER === 'maya' ? CREATE_MAYA_CHECKOUT_URL : CREATE_PAYMENT_URL;
+}
 
 // ── PRICING TABLES ──
 // GROOM_PRICES, FACE_TRIM_PRICES, ADDONS, HOTEL_RATES, DAYCARE_RATES,
@@ -112,7 +122,7 @@ var uploadedVaccineFiles = [];
 var uploadedGroomPegs = [];   // grooming reference photos ("pegs")
 var secondCatVisible = false;
 
-// ── Manual transfer payment (online flow; PayMongo archived) ──
+// ── Manual transfer payment (active while hosted gateways remain dormant) ──
 var onPaymentScreen     = false;
 var paymentReceiptFile  = null;   // the single uploaded receipt File
 var selectedPaymentBank = 'gcash';
@@ -223,8 +233,9 @@ async function loadPricing() {
   try {
     var rows = await sbFetchPublic('pricing', 'select=category,service_key,size_key,day_type,price');
     loadPricingData(rows);
-    // PayMongo is archived; the manual-transfer flow charges no convenience fee.
-    CONVENIENCE_FEE = 0;
+    // Manual transfer charges no convenience fee. Hosted providers use the
+    // configured pricing-table fee when enabled later.
+    if (PAYMENT_GATEWAY_PROVIDER === 'manual') CONVENIENCE_FEE = 0;
   } catch(e) {
     console.warn('Pricing fetch failed:', e);
     // Show a persistent banner — pricing failure is not a recoverable state without a refresh
@@ -555,9 +566,12 @@ function updateBottomNavForSummary() {
     // Walk-in pays at the counter — no online transfer page.
     next.textContent = 'Confirm Booking';
     next.onclick = function() { submitBooking(); };
-  } else {
+  } else if (PAYMENT_GATEWAY_PROVIDER === 'manual') {
     next.textContent = 'Proceed to Payment';
     next.onclick = function() { showPaymentPage(); };
+  } else {
+    next.textContent = 'Proceed to Secure Checkout';
+    next.onclick = function() { submitBooking(); };
   }
   var total = getRunningTotal();
   var navEl = document.getElementById('navTotal');
@@ -2445,7 +2459,7 @@ function showToast(msg, duration) {
 
 // ── RENDER SUCCESS / PAY-RETURN DETAIL CARDS ──────────────────────────────────
 // Mirrors buildSummary() but reads from the bk_snapshot saved before the
-// PayMongo redirect. Renders all grouped sections + fully itemised pricing
+// Hosted-checkout redirect. Renders grouped sections + itemised pricing
 // so the customer has a complete record of every detail they submitted.
 function renderSuccessDetails(snap, detailsId, priceId) {
   if (!snap) return;
@@ -2643,8 +2657,8 @@ function printBooking() {
   setTimeout(function() { document.title = orig; }, 2000);
 }
 
-// ── HANDLE RETURN FROM PAYMONGO ──
-(function checkPaymentReturn() {
+// ── HANDLE RETURN FROM HOSTED PAYMENT PROVIDER ──
+(async function checkPaymentReturn() {
   var params = new URLSearchParams(window.location.search);
   var status = params.get('payment');
   var ref    = params.get('ref');
@@ -2652,6 +2666,14 @@ function printBooking() {
   // Clean URL
   window.history.replaceState({}, '', window.location.pathname);
   if (status === 'success' && ref) {
+    var confirmed = await waitForHostedPayment(ref);
+    if (!confirmed) {
+      var pendingSnap = null;
+      try { pendingSnap = JSON.parse(sessionStorage.getItem('bk_snapshot') || 'null'); } catch(e) {}
+      if (pendingSnap) showPayReturnScreen(pendingSnap, ref);
+      showToast('Payment is still being verified. Please keep your booking reference and check again shortly.', 8000);
+      return;
+    }
     // Hide ALL steps and the step UI, show only success screen
     document.querySelectorAll('.step-panel, #successScreen').forEach(function(el) {
       el.classList.remove('active');
@@ -2689,9 +2711,25 @@ function printBooking() {
   }
 })();
 
+async function waitForHostedPayment(ref) {
+  for (var attempt = 0; attempt < 10; attempt++) {
+    try {
+      var res = await fetch(PAYMENT_STATUS_URL + '?ref=' + encodeURIComponent(ref), {
+        headers: { 'Authorization': 'Bearer ' + SUPABASE_ANON_KEY, 'apikey': SUPABASE_ANON_KEY }
+      });
+      if (res.ok) {
+        var state = await res.json();
+        if (state.confirmed) return true;
+        if (state.status === 'cancelled') return false;
+      }
+    } catch(e) {}
+    await new Promise(function(resolve) { setTimeout(resolve, 2000); });
+  }
+  return false;
+}
+
 // ── POLL FOR PAYMENT if ref is in sessionStorage (QR fallback) ──
-// When customer is redirected to PayMongo, store ref so we can
-// detect a successful payment even if PayMongo redirect doesn't fire
+// Preserve the pending reference across any hosted-checkout redirect.
 setTimeout(checkStoredPaymentRef, 500);
 
 // ── SUCCESS SCREEN TIMESTAMP ──
@@ -2790,7 +2828,7 @@ async function retryPayment() {
       existing_booking_id: snap.bookingId || null,
       retry: true
     });
-    var res  = await fetch(CREATE_PAYMENT_URL, {
+    var res  = await fetch(hostedPaymentEndpoint(), {
       method: 'POST',
       headers: {
         'Content-Type':  'application/json',
@@ -3133,7 +3171,7 @@ async function handleBookingConflict(conflictType) {
   }
 }
 
-// ── SUBMIT (redirects to PayMongo) ──
+// ── SUBMIT (manual transfer or hosted-checkout redirect) ──
 var _submitting = false; // global lock - prevents double-submit on fast double-tap
 
 async function submitBooking() {
@@ -3245,9 +3283,9 @@ async function submitBooking() {
     }
   }
 
-  // ── Upload the manual-transfer receipt (online flow only) ──
+  // ── Upload the manual-transfer receipt (manual provider only) ──
   var paymentReceiptPath = null, paymentReceiptName = null;
-  if (!IS_WALKIN && paymentReceiptFile) {
+  if (!IS_WALKIN && PAYMENT_GATEWAY_PROVIDER === 'manual' && paymentReceiptFile) {
     try {
       var _rId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : 'receipt-' + Date.now();
       var _rRes = await fetch(GET_UPLOAD_URL, {
@@ -3329,10 +3367,9 @@ async function submitBooking() {
     // no payment), so flag them as admin-created with a walkin source.
     adminCreated:  IS_WALKIN,
     booking_source: IS_WALKIN ? 'walkin' : 'online',
-    // Online bookings now pay via manual bank/e-wallet transfer (PayMongo archived).
-    // submit-booking uses this to mark the booking confirmed + paid, record the
-    // payment with the receipt, and send the confirmation email.
-    manualPayment: (!IS_WALKIN && paymentReceiptPath) ? {
+    // The active manual provider marks the booking confirmed + paid, records the
+    // receipt, and sends email. Hosted providers ignore this null field.
+    manualPayment: (!IS_WALKIN && PAYMENT_GATEWAY_PROVIDER === 'manual' && paymentReceiptPath) ? {
       method:          selectedPaymentBank,
       receiptPath:     paymentReceiptPath,
       receiptFileName: paymentReceiptName,
@@ -3369,10 +3406,10 @@ async function submitBooking() {
     showToast('Request timed out. Please try again.', 5000);
   }, 30000);
 
-  // Both walk-in and online manual-transfer bookings go through submit-booking,
-  // which creates the full booking + all child records. (PayMongo's create-payment
-  // is archived for later re-enablement.)
-  fetch(EDGE_FN_URL, {
+  // Manual/walk-in submissions create the booking immediately. Hosted providers
+  // create a pending booking and redirect to their secure checkout page.
+  var paymentEndpoint = PAYMENT_GATEWAY_PROVIDER === 'manual' ? EDGE_FN_URL : hostedPaymentEndpoint();
+  fetch(paymentEndpoint, {
     method: 'POST',
     headers: {
       'Content-Type':  'application/json',
@@ -3450,6 +3487,12 @@ async function submitBooking() {
         rawPayload: payload
       }));
     } catch(e) {}
+    if (!IS_WALKIN && PAYMENT_GATEWAY_PROVIDER !== 'manual') {
+      if (!data.checkout_url) throw new Error('No checkout URL returned by payment provider');
+      _redirectingToPayment = true;
+      window.location.href = data.checkout_url;
+      return;
+    }
     if (IS_WALKIN) {
       // Skip payment gateway — show success screen directly
       var refNum = data.ref_number || data.booking_id || 'BK-' + Date.now();

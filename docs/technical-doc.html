@@ -109,10 +109,10 @@ flowchart LR
     AUTH["Auth (GoTrue)\nGoogle OAuth"]
     RT["Realtime\npostgres_changes"]
     ST["Storage\nvaccine docs · gallery"]
-    EF["Edge Functions (Deno)\nsubmit-booking · create-payment\nhandle-payment-webhook\ncancel-pending-booking · get-upload-url"]
+    EF["Edge Functions (Deno)\nsubmit-booking · create-maya-checkout · create-payment\nhandle-payment-webhook · get-payment-status\ncancel-pending-booking · get-upload-url"]
     CRON["pg_cron\nauto-cancel pendings (5 min)"]
   end
-  PM["PayMongo\nhosted checkout + webhooks"]
+  PM["Maya Checkout (prepared)\nPayMongo (retained)\nhosted checkout + webhooks"]
   RS["Resend\ntransactional email"]
   GA["Google Analytics 4"]
 
@@ -153,8 +153,8 @@ flowchart LR
     <tr><td>Realtime</td><td>Supabase Realtime</td><td><code>postgres_changes</code> on <code>bookings</code>; drives admin live refresh.</td></tr>
     <tr><td>Storage</td><td>Supabase Storage</td><td>Vaccine documents (signed upload URLs) + landing-page branch galleries (listed at runtime).</td></tr>
     <tr><td>Serverless</td><td>Supabase Edge Functions (Deno/TS)</td><td>5 functions, ≈ 2k lines total (§5).</td></tr>
-    <tr><td>Scheduled jobs</td><td>pg_cron</td><td>Auto-cancel pending+unpaid bookings &gt; 15 min old; runs every 5 min.</td></tr>
-    <tr><td>Payments</td><td>PayMongo</td><td>Hosted Checkout Sessions; webhook events <code>payment.paid</code> + <code>checkout_session.payment.paid</code>.</td></tr>
+    <tr><td>Scheduled jobs</td><td>pg_cron</td><td>Runs expiry-aware pending cleanup every 5 minutes; each checkout uses its own <code>expires_at</code>.</td></tr>
+    <tr><td>Payments</td><td>Manual transfer · Maya Checkout · PayMongo</td><td>Manual transfer is active. Maya hosted checkout is prepared but disabled; PayMongo is retained and disabled.</td></tr>
     <tr><td>Email</td><td>Resend</td><td>Inline-HTML branded transactional emails from edge functions.</td></tr>
     <tr><td>Analytics</td><td>Google Analytics 4</td><td><code>G-LBWQT2HSGQ</code> on all public pages.</td></tr>
     <tr><td>Fonts/UI</td><td>Google Fonts (Fredoka One, Nunito)</td><td>Shared dark navy/cream/yellow design language across site, admin, and docs.</td></tr>
@@ -221,17 +221,19 @@ flowchart LR
 <!-- ════════ 5 ════════ -->
 <section id="t5">
   <div class="ch-head"><span class="ch-num">5</span><h2>Backend — edge functions &amp; scheduled jobs</h2></div>
-  <p>All functions are Deno/TypeScript on Supabase, using the <strong>service-role key</strong> (RLS bypass) for writes. CORS open; secrets via function env (<code>PAYMONGO_SECRET_KEY</code>, <code>RESEND_API_KEY</code>).</p>
+  <p>All functions are Deno/TypeScript on Supabase, using the <strong>service-role key</strong> (RLS bypass) for writes. CORS open; secrets via function env (<code>MAYA_PUBLIC_KEY</code>, <code>MAYA_SECRET_KEY</code>, retained PayMongo keys, and <code>RESEND_API_KEY</code>).</p>
   <table>
     <tr><th>Function</th><th>Caller</th><th>Behavior</th></tr>
-    <tr><td>create-payment <span style="color:var(--mid)">(332 L)</span></td><td>booking.js (online checkout)</td><td>Validates required fields → resolves branch → upserts owner/pet → inserts <strong>pending</strong> booking (ref number, totals, charges payload retained) → creates PayMongo Checkout Session (line items incl. convenience fee; success/cancel URLs back to booking.html) → returns <code>checkout_url</code>. Carries the full booking payload + vaccine document paths in session metadata for the webhook.</td></tr>
-    <tr><td>handle-payment-webhook <span style="color:var(--mid)">(858 L)</span></td><td>PayMongo</td><td>Verifies webhook signature → accepts only paid events. Handles both <code>checkout_session.payment.paid</code> (primary; carries metadata) and <code>payment.paid</code> (acks/no-ops when identifiers are absent). <strong>Idempotent</strong>: a conditional update guards double-processing. Flips booking → confirmed/paid, inserts service-detail row (with <code>service_date</code>), addons, itemized <code>booking_charges</code>, vaccines, waiver record, <code>vaccine_documents</code> → sends the Resend confirmation email.</td></tr>
+    <tr><td>create-maya-checkout</td><td>booking.js (dormant Maya option)</td><td>Validates the payload → creates the pending booking and one-hour hold → calls Maya Checkout with the public API key → stores the provider checkout ID → returns Maya's hosted <code>checkout_url</code>.</td></tr>
+    <tr><td>create-payment</td><td>booking.js (retained PayMongo option)</td><td>Retained PayMongo Checkout Session creator. It is hidden while <code>PAYMENT_GATEWAY_PROVIDER='manual'</code>.</td></tr>
+    <tr><td>handle-payment-webhook</td><td>Maya / PayMongo</td><td>Maya events are re-fetched with the secret key and reconciled by ID, status, reference, currency, and amount. PayMongo retains signature verification. A shared <strong>idempotent</strong> finalizer confirms the booking, inserts service details/add-ons/charges/vaccines/waivers/documents/payment, and sends email. Maya failure/cancel/expiry releases the pending booking.</td></tr>
+    <tr><td>get-payment-status</td><td>booking.js (hosted return)</td><td>Returns only pending/confirmed payment state by booking reference so a browser success redirect cannot bypass webhook confirmation.</td></tr>
     <tr><td>submit-booking <span style="color:var(--mid)">(646 L)</span></td><td>Admin wizard · walk-in page</td><td>Direct full-booking creation without a gateway: owner upsert by email, pet insert, booking (status <code>pending</code>, source <code>admin</code>/<code>walkin</code>; admin then PATCHes status/payment), detail row per service, addons, charges, vaccines, waivers. Sends the confirmation email immediately when <code>adminCreated</code> + owner email.</td></tr>
     <tr><td>cancel-pending-booking <span style="color:var(--mid)">(58 L)</span></td><td>booking.js (edit-after-failed-payment)</td><td>Sets <code>status='cancelled'</code> with reason, <strong>only where status is still pending</strong> — can never cancel a confirmed booking.</td></tr>
     <tr><td>get-upload-url <span style="color:var(--mid)">(95 L)</span></td><td>booking.js (vaccine files)</td><td>Issues signed Supabase Storage upload URLs per file; resulting paths flow through create-payment metadata → webhook persists <code>vaccine_documents</code> rows.</td></tr>
   </table>
   <h3>Scheduled job</h3>
-  <p><strong>pg_cron</strong> (defined in the database): every 5 minutes, cancel bookings still <code>pending + unpaid</code> after 15 minutes, with a cron-tagged <code>cancellation_reason</code> — this is the inventory-hold release.</p>
+  <p><strong>pg_cron</strong> (defined in the database): every 5 minutes, call <code>expire_pending_bookings()</code> to cancel pending/unpaid bookings whose provider-specific <code>expires_at</code> has passed. Manual transfers do not create pending holds; Maya uses one hour.</p>
   <div class="backtop"><a href="#top">↑ top</a></div>
 </section>
 
@@ -337,12 +339,12 @@ erDiagram
     <tr><th>Concern</th><th>Mechanism</th></tr>
     <tr><td>Public (anon) access</td><td>The anon key is shipped in client JS <em>by design</em>; RLS limits it to the reads the booking flow needs (branches, pricing, resources, availability projections) and the narrow writes it performs (e.g. consuming a walk-in token). No anon access to other customers' personal data.</td></tr>
     <tr><td>Admin SSO</td><td>Google OAuth via Supabase Auth → JWT. App-level gate + RLS policies both check membership in <code>admin_users</code> by JWT email (e.g. <code>booking_charges</code>: FOR ALL TO authenticated USING/WITH CHECK admin-exists).</td></tr>
-    <tr><td>Privileged writes</td><td>Only edge functions hold the service-role key; booking confirmation, detail/charge writes, and emails happen server-side. The webhook verifies the PayMongo signature and rejects unsigned calls.</td></tr>
+    <tr><td>Privileged writes</td><td>Only edge functions hold the service-role key; booking confirmation, detail/charge writes, and emails happen server-side. Maya webhooks are verified against Maya's Payments API; PayMongo retains signature verification.</td></tr>
     <tr><td>Idempotency</td><td>Webhook double-fire (two event types per payment) is neutralized by conditional status transitions.</td></tr>
     <tr><td>Walk-in gating</td><td>Fee-free mode requires a single-use server-minted token; consumed atomically on entry.</td></tr>
     <tr><td>Pending-hold abuse</td><td>pg_cron auto-cancel caps inventory lockup from abandoned checkouts at ~15 minutes.</td></tr>
     <tr><td>Surface hygiene</td><td><code>robots.txt</code> disallows the legacy admin page and test suite; the React admin is unindexed and gate-protected; admin app sends <code>x-client-info</code> for traceability.</td></tr>
-    <tr><td>Secrets</td><td>PayMongo + Resend keys only in Supabase function env; nothing secret in the repo.</td></tr>
+    <tr><td>Secrets</td><td>Maya, retained PayMongo, and Resend keys live only in Supabase function secrets; nothing secret is committed.</td></tr>
   </table>
   <div class="backtop"><a href="#top">↑ top</a></div>
 </section>
@@ -357,8 +359,8 @@ sequenceDiagram
   autonumber
   actor C as Customer
   participant B as booking.html
-  participant CP as create-payment (EF)
-  participant PM as PayMongo
+  participant CP as create-maya-checkout (EF)
+  participant PM as Maya Checkout
   participant WH as webhook (EF)
   participant DB as Postgres
   participant RM as Resend
@@ -370,11 +372,12 @@ sequenceDiagram
   end
   B->>CP: payload (booking + vaccine doc paths)
   CP->>DB: upsert owner/pet · insert PENDING booking (BH-ref)
-  CP->>PM: create Checkout Session (metadata = payload)
+  CP->>PM: create Checkout (reference + line items)
   CP-->>B: checkout_url
   B->>PM: redirect (customer pays)
-  PM->>WH: checkout_session.payment.paid (signed)
-  WH->>WH: verify signature · idempotency guard
+  PM->>WH: PAYMENT_SUCCESS
+  WH->>PM: retrieve payment with secret key
+  WH->>WH: reconcile status/ref/currency/amount · idempotency guard
   WH->>DB: booking → confirmed/paid · insert details,<br/>addons, charges, vaccines, waivers, vaccine_documents
   WH->>RM: send confirmation email
   PM->>B: redirect ?payment=success
@@ -396,7 +399,7 @@ sequenceDiagram
   B-->>C: payment-return screen (recap from bk_snapshot)
   alt Retry Payment
     B->>CP: new checkout for same pending booking
-    B->>C: redirect to PayMongo again
+    B->>C: redirect to configured hosted checkout again
   else Edit booking details
     B->>CXL: cancel ref (only if still pending)
     CXL->>DB: status=cancelled (inventory freed)
@@ -517,7 +520,8 @@ sequenceDiagram
   <div class="ch-head"><span class="ch-num">9</span><h2>Third-party integrations</h2></div>
   <table>
     <tr><th>Service</th><th>Integration detail</th></tr>
-    <tr><td>PayMongo</td><td>Hosted Checkout Sessions created server-side with line items (service + convenience fee) and success/cancel redirect URLs. Webhook endpoint = <code>handle-payment-webhook</code>; signature verified; both paid-event shapes handled idempotently. No card data ever touches Barkhaus code.</td></tr>
+    <tr><td>Maya Checkout</td><td>Prepared hosted checkout using server-created line items and success/failure/cancel URLs. Webhooks are re-verified through Maya's Payments API before idempotent finalization. Disabled while manual transfer remains active.</td></tr>
+    <tr><td>PayMongo</td><td>Retained, hidden hosted-checkout implementation with signature verification and duplicate-event handling for possible future fallback.</td></tr>
     <tr><td>Resend</td><td>Single branded HTML template family rendered inline in the edge functions (booking details / pet / health / owner / price sections vary by service). Sender domain configured in Resend; fire-and-forget with errors logged, never blocking the booking.</td></tr>
     <tr><td>Google OAuth</td><td>Supabase Auth provider; redirect back to <code>/admin/</code>; no separate Google Cloud session handling in app code.</td></tr>
     <tr><td>Google Analytics 4</td><td>gtag.js snippet on all public pages (single property). Page-view based; no custom events wired yet — candidate enhancement: funnel events per booking step.</td></tr>

@@ -9,6 +9,16 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, paymongo-signature",
 };
 
+function mayaBaseUrl(): string {
+  return (Deno.env.get("MAYA_ENVIRONMENT") || "sandbox").toLowerCase() === "production"
+    ? "https://pg.maya.ph"
+    : "https://pg-sandbox.paymaya.com";
+}
+
+function mayaAmount(payload: Record<string, any>): number {
+  return Number(payload?.totalAmount?.value ?? payload?.totalAmount?.amount ?? payload?.amount ?? 0);
+}
+
 const ADDON_NAMES: Record<string, string> = {
   nail_trim:       "Nail Trim and Filing",
   ear_clean:       "Ear Cleaning",
@@ -317,9 +327,15 @@ Deno.serve(async (req) => {
   console.log("Webhook received, body length:", rawBody.length);
 
   try {
-    // ── Signature verification ──
+    const event = JSON.parse(rawBody);
+    const isMaya = typeof event?.paymentStatus === "string";
+    const provider = isMaya ? "maya" : "paymongo";
+
+    // PayMongo signs its webhook. Maya's documented security model uses source
+    // IP allowlisting; we additionally retrieve the payment server-to-server
+    // below and reconcile its status, reference, currency, and amount.
     const webhookSecret = Deno.env.get("PAYMONGO_WEBHOOK_SECRET");
-    if (webhookSecret) {
+    if (!isMaya && webhookSecret) {
       const sigHeader = req.headers.get("paymongo-signature");
       if (!sigHeader) {
         return new Response(JSON.stringify({ error: "Missing signature" }),
@@ -341,11 +357,14 @@ Deno.serve(async (req) => {
       }
     }
 
-    const event     = JSON.parse(rawBody);
-    const eventType = event?.data?.attributes?.type;
-    console.log("Event type:", eventType);
+    const eventType = isMaya ? event.paymentStatus : event?.data?.attributes?.type;
+    console.log("Provider:", provider, "event type:", eventType);
 
-    if (eventType !== "payment.paid" && eventType !== "checkout_session.payment.paid") {
+    const paidEvent = isMaya
+      ? eventType === "PAYMENT_SUCCESS"
+      : eventType === "payment.paid" || eventType === "checkout_session.payment.paid";
+
+    if (!paidEvent && !isMaya) {
       return new Response(JSON.stringify({ received: true, skipped: eventType }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
@@ -361,15 +380,46 @@ Deno.serve(async (req) => {
     // Both events will then share the same paymentId, so the payments-table idempotency
     // check stops the second event before it does any duplicate work.
 
-    const eventData  = event?.data?.attributes?.data;
-    const eventAttrs = eventData?.attributes;
+    const eventData  = isMaya ? event : event?.data?.attributes?.data;
+    const eventAttrs = isMaya ? event : eventData?.attributes;
 
     let paymentId:      string = "";
     let paidAmount:     number = 0;
     let description:    string = "";
     let bookingMeta:    Record<string, string> | null = null;
 
-    if (eventType === "checkout_session.payment.paid") {
+    if (isMaya) {
+      const mayaSecret = Deno.env.get("MAYA_SECRET_KEY");
+      if (!mayaSecret) throw new Error("MAYA_SECRET_KEY not configured");
+
+      const verifyRes = await fetch(`${mayaBaseUrl()}/payments/v1/payments/${encodeURIComponent(event.id)}`, {
+        headers: { "Authorization": `Basic ${btoa(mayaSecret + ":")}`, "Accept": "application/json" },
+      });
+      const verified = await verifyRes.json();
+      if (!verifyRes.ok) {
+        console.error("Maya payment verification failed:", verifyRes.status, JSON.stringify(verified));
+        return new Response(JSON.stringify({ error: "Unable to verify Maya payment" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      if (verified.id !== event.id || verified.paymentStatus !== event.paymentStatus ||
+          verified.requestReferenceNumber !== event.requestReferenceNumber) {
+        console.error("Maya webhook does not match retrieved payment");
+        return new Response(JSON.stringify({ error: "Maya payment verification mismatch" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      const verifiedCurrency = verified?.totalAmount?.currency || verified?.currency;
+      if (verifiedCurrency && verifiedCurrency !== "PHP") {
+        console.error("Unexpected Maya payment currency:", verifiedCurrency);
+        return new Response(JSON.stringify({ error: "Payment currency mismatch" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
+      paymentId   = verified.id || event.id || "";
+      paidAmount  = mayaAmount(verified);
+      bookingMeta = (verified.metadata || event.metadata || null) as Record<string, string> | null;
+      description = `Maya ${verified.paymentScheme || verified.fundSource?.type || "checkout"}`;
+      console.log("Maya event — payment:", paymentId, "amount:", paidAmount);
+    } else if (eventType === "checkout_session.payment.paid") {
       // eventData = checkout session; get the actual payment from its payments array
       const actualPayment = eventAttrs?.payments?.[0];
       paymentId   = actualPayment?.id || "";
@@ -390,10 +440,10 @@ Deno.serve(async (req) => {
     // ── Extract booking identity ─────────────────────────────────────────────────
     // Prefer metadata set by create-payment (reliable, no text-parsing required).
     // Fall back to parsing the description for backward compatibility.
-    const bookingIdFromMeta = bookingMeta?.booking_id || null;
-    const refFromMeta       = bookingMeta?.ref_number || null;
+    const bookingIdFromMeta = bookingMeta?.booking_id || bookingMeta?.bookingId || null;
+    const refFromMeta       = bookingMeta?.ref_number || bookingMeta?.refNumber || null;
     const refFromDesc       = description.match(/Ref:\s*(BH-[A-Z0-9]+)/i)?.[1] || null;
-    const refNumber         = refFromMeta || refFromDesc || null;
+    const refNumber         = isMaya ? event.requestReferenceNumber : (refFromMeta || refFromDesc || null);
 
     console.log("bookingId (meta):", bookingIdFromMeta, "ref:", refNumber);
 
@@ -409,10 +459,7 @@ Deno.serve(async (req) => {
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // ── Idempotency: bail if this PayMongo payment ID is already recorded ───────
-    // Since both payment.paid and checkout_session.payment.paid share the same
-    // underlying paymentId (after normalisation above), whichever event arrives
-    // second will find the payments row inserted by the first and exit cleanly.
+    // ── Idempotency: bail if this provider payment ID is already recorded ────────
     if (paymentId) {
       const { data: existingPay } = await supabase
         .from("payments")
@@ -429,11 +476,15 @@ Deno.serve(async (req) => {
     }
 
     // ── Find pending record ──────────────────────────────────────────────────────
-    // Priority: paymongo_link_id (checkout session ID stored by create-payment)
-    //        → ref_number match
+    // Priority: provider checkout ID → legacy PayMongo session ID → reference.
     let pending: any = null;
 
-    if (eventType === "checkout_session.payment.paid" && eventData?.id) {
+    if (isMaya && eventData?.id) {
+      const { data } = await supabase.from("pending_bookings")
+        .select("*").eq("gateway_checkout_id", eventData.id).maybeSingle();
+      pending = data;
+    }
+    if (!pending && eventType === "checkout_session.payment.paid" && eventData?.id) {
       const { data } = await supabase.from("pending_bookings")
         .select("*").eq("paymongo_link_id", eventData.id).maybeSingle();
       pending = data;
@@ -460,6 +511,23 @@ Deno.serve(async (req) => {
       console.log("Pending not found — already processed or expired");
       return new Response(JSON.stringify({ received: true, note: "Already processed or expired" }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    // Maya failure/cancel/expiry events release the pending booking and its slot.
+    if (isMaya && !paidEvent) {
+      if (["PAYMENT_FAILED", "PAYMENT_EXPIRED", "PAYMENT_CANCELLED"].includes(eventType)) {
+        await supabase.from("bookings").update({ status: "cancelled" })
+          .eq("ref_number", pending.ref_number).eq("status", "pending");
+        await supabase.from("pending_bookings").delete().eq("id", pending.id);
+      }
+      return new Response(JSON.stringify({ received: true, status: eventType }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    if (paidAmount !== Number(pending.amount)) {
+      console.error("Payment amount mismatch:", paidAmount, "expected:", pending.amount);
+      return new Response(JSON.stringify({ error: "Payment amount mismatch" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     const body = pending.payload;
@@ -749,12 +817,15 @@ Deno.serve(async (req) => {
     });
 
     // ── 7. Payment record ──
+    const paymentChannel = isMaya
+      ? (event.paymentScheme || event.fundSource?.type || "checkout")
+      : (eventAttrs?.source?.type || "qrph");
     await supabase.from("payments").insert({
       booking_id:       bookingId!, amount: paidAmount,
       type:             "downpayment", method: "online",
       reference_number: paymentId || null,
-      notes:            `PayMongo ${eventAttrs?.source?.type || "qrph"} — ${paymentId}`,
-      recorded_by:      "paymongo_webhook",
+      notes:            `${isMaya ? "Maya" : "PayMongo"} ${paymentChannel} — ${paymentId}`,
+      recorded_by:      `${provider}_webhook`,
     });
 
     // ── 8. Delete pending ──

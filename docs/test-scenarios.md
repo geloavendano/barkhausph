@@ -8,7 +8,7 @@
 
 | Dimension | Values |
 |---|---|
-| **Source** | Public booking page (`booking.js` → `create-payment` → PayMongo → `handle-payment-webhook`); Admin **Add Booking** (`AddBookingPanel` mode `admin` → `submit-booking`); Admin **Walk-in** (`AddBookingPanel` mode `walkin` → `submit-booking`) |
+| **Source** | Public booking page (currently `booking.js` → manual transfer → `submit-booking`; dormant Maya: `create-maya-checkout` → Maya → `handle-payment-webhook`; retained PayMongo: `create-payment`); Admin **Add Booking** (`AddBookingPanel` mode `admin` → `submit-booking`); Admin **Walk-in** (`AddBookingPanel` mode `walkin` → `submit-booking`) |
 | **Service** | grooming, hotel, daycare, **studio** (studio: include in tests but **not** as a complete/paid booking flow — partial coverage only) |
 | **Branch** | Estancia, Eastwood (hours differ: Estancia Mon–Thu 11:00–21:00, Fri–Sun 10:00–22:00; Eastwood 10:00–22:00) |
 | **Pet type** | dog, cat |
@@ -71,7 +71,7 @@ For each **source** × **service** combination, a full happy-path create:
 - Admin and public store names in different formats ⚠️ — edit pre-population must normalise (verified fixed).
 
 ### 1F. Vaccine upload
-- Public: file upload → `get-upload-url` → storage → path passed to `create-payment` → webhook inserts `vaccine_documents`. Scenarios: no file, 1 file, multiple files, "will bring later".
+- Public hosted checkout: file upload → `get-upload-url` → storage → path passed through `create-maya-checkout` (or retained `create-payment`) → webhook inserts `vaccine_documents`. The active manual flow passes the same paths to `submit-booking`. Scenarios: no file, 1 file, multiple files, "will bring later".
 - Admin ⚠️: **no file upload** — only Yes/No declarations. (Gap to note for parity testing.)
 
 ### 1G. Notes
@@ -96,12 +96,13 @@ For each **source** × **service** combination, a full happy-path create:
 - Scenarios: email content correctness per service (grooming/hotel/daycare/studio), membership line, addons, branch footer.
 
 ### 1K. Payment scenarios
-- **Public – success**: PayMongo checkout paid → webhook → booking confirmed + paid, detail rows inserted, email sent.
-- **Public – failure/cancel**: booking stays `pending`; no detail rows; customer can retry or edit (`cancel-pending-booking` cancels the pending row).
+- **Public – manual success (active)**: receipt uploaded → `submit-booking` → booking confirmed + paid, detail rows inserted, email sent.
+- **Public – Maya success (dormant)**: checkout paid → verified `PAYMENT_SUCCESS` webhook → booking confirmed + paid, detail rows inserted, email sent; redirect waits for backend confirmation.
+- **Public – Maya failure/cancel/expiry**: webhook cancels the pending booking and releases inventory; customer can restart checkout.
 - **Public – abandoned**: pg_cron auto-cancels `pending` after 15 min ⚠️.
-- **Public – duplicate webhook**: both `payment.paid` and `checkout_session.payment.paid` fire — idempotency must prevent double-processing ⚠️.
-- **Admin create**: status/payment set by admin (default confirmed/unpaid); no PayMongo. Optional manual payment recorded at creation if not unpaid.
-- **convenience_fee**: online only (PayMongo); not added for admin/walk-in.
+- **Public – duplicate webhook**: Maya retries/replays and PayMongo's two retained event shapes must not double-process ⚠️.
+- **Admin create**: status/payment set by admin (default confirmed/unpaid); no hosted gateway. Optional manual payment recorded at creation if not unpaid.
+- **convenience_fee**: hosted online checkout only; not added to the active manual, admin, or walk-in paths.
 - `booking_charges` insert: requires admin RLS policy ⚠️ — currently soft-fails (booking still created). DB policy fix pending.
 
 ---
@@ -152,7 +153,7 @@ For each **source** × **service** combination, a full happy-path create:
 - ⚠️ No dedicated "cancel + refund" combined action.
 
 ### 2H. Refund customer
-- ⚠️ No automated PayMongo refund. Refund = manual `payments` row, type `refund`; set payment_status → refunded manually.
+- ⚠️ No automated gateway refund. Refund = manual `payments` row, type `refund`; set payment_status → refunded manually.
 - Scenarios: full refund, partial refund, refund after partial payment.
 
 ---
