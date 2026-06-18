@@ -61,6 +61,9 @@
   .gap{background:rgba(239,159,39,.08);border:1px solid rgba(239,159,39,.35);border-radius:8px;padding:10px 14px;margin:12px 0;font-size:13px;}
   .gap::before{content:"🚧 Not built — ";font-weight:700;color:var(--warn);}
   .pill{display:inline-block;border-radius:20px;font-size:11px;font-weight:700;padding:2px 10px;margin-right:4px;}
+  .status{display:inline-block;border-radius:4px;font-size:10px;font-weight:800;letter-spacing:.05em;padding:2px 7px;text-transform:uppercase;white-space:nowrap;}
+  .status-live{background:rgba(107,203,119,.14);color:var(--success);border:1px solid rgba(107,203,119,.35);}
+  .status-next{background:rgba(239,159,39,.14);color:var(--warn);border:1px solid rgba(239,159,39,.35);}
   .backtop{display:block;text-align:right;margin-top:14px;}
   .backtop a{color:var(--mid);font-size:11px;text-decoration:none;}
   @media print{body{background:#fff;color:#1a2530;} p,li,td{color:#33424e;} h3{color:#8a6d00;} .ch-head h2,td:first-child{color:#16222b;}}
@@ -70,7 +73,7 @@
 
 <header id="top">
   <h1>Bark<span>haus</span> — Functional Specifications</h1>
-  <span class="badge">v1.1</span>
+  <span class="badge">v1.2</span>
   <span class="meta">June 18, 2026 · barkhaus.ph · companion: technical-doc.html</span>
 </header>
 
@@ -87,7 +90,8 @@
   <a href="#s8"><span class="n">8</span> Memberships</a>
   <a href="#s9"><span class="n">9</span> Pricing &amp; business rules</a>
   <a href="#s10"><span class="n">10</span> SEO, analytics &amp; content</a>
-  <a href="#s11"><span class="n">11</span> Known gaps / out of scope</a>
+  <a href="#s11"><span class="n">11</span> Cost &amp; backend initiatives</a>
+  <a href="#s12"><span class="n">12</span> Known gaps / out of scope</a>
 </nav>
 
 <div class="main">
@@ -173,6 +177,8 @@
         <li>Generate signed upload URLs</li>
         <li>Auto-cancel expired pending bookings</li>
         <li>Preserve audit, payment, and edit logs</li>
+        <li>Control Storage and database egress</li>
+        <li>Keep payment finalization idempotent</li>
       </ul>
     </div>
   </div>
@@ -516,7 +522,47 @@
 
 <!-- ════════ 11 ════════ -->
 <section id="s11">
-  <div class="ch-head"><span class="ch-num">11</span><h2>Known gaps / out of scope</h2></div>
+  <div class="ch-head"><span class="ch-num">11</span><h2>Cost-saving optimizations &amp; backend design initiatives</h2></div>
+  <p class="ch-intro">Operational safeguards that control Supabase usage, reduce unnecessary data transfer, and keep booking and payment writes reliable. “Implemented” describes the current codebase; “Recommended” identifies the next practical cost-control work.</p>
+
+  <h3>11.1 Implemented cost controls</h3>
+  <table>
+    <tr><th>Status</th><th>Initiative</th><th>Design and impact</th></tr>
+    <tr><td><span class="status status-live">Implemented</span></td><td>Homepage Storage egress reduction</td><td>Public galleries and blog covers use files deployed with the website instead of listing and downloading the same assets from Supabase Storage on every visit. This removes the landing page's largest recurring source of Supabase cached egress. The blog text remains database-driven.</td></tr>
+    <tr><td><span class="status status-live">Implemented</span></td><td>Scoped admin queries</td><td>Operational views filter by branch, service, status, and date where applicable; list pages use explicit selects and booking pagination. This avoids repeatedly transferring the full booking dataset and related records to every admin screen.</td></tr>
+    <tr><td><span class="status status-live">Implemented</span></td><td>On-demand private media</td><td>Vaccine files, grooming references, and payment receipts remain in a private bucket. The admin requests short-lived signed read URLs only when a booking drawer needs those files, rather than loading all media with booking lists.</td></tr>
+    <tr><td><span class="status status-live">Implemented</span></td><td>Direct signed uploads</td><td>The upload Edge Function validates the request and issues a five-minute signed upload URL; the browser then sends the file directly to Storage. Large file bodies do not pass through the booking Edge Function, reducing function bandwidth and execution work.</td></tr>
+    <tr><td><span class="status status-live">Implemented</span></td><td>Minimal mutation responses</td><td>Admin inserts, updates, upserts, and deletes normally request <code>return=minimal</code>, preventing Supabase from returning full rows when the UI does not need them.</td></tr>
+    <tr><td><span class="status status-live">Implemented</span></td><td>Cached admin auth token</td><td>The admin client keeps the current access token in memory and refreshes it from auth-state events instead of calling <code>getSession()</code> before every REST request. This removes redundant auth work and prevents requests from stalling behind token refresh.</td></tr>
+  </table>
+  <div class="note"><strong>Cached egress is a metered usage counter, not a removable cache allocation.</strong> Moving public assets off Supabase stops those assets from adding future usage, but usage already recorded in the current billing cycle cannot be manually cleared; it resets with the plan's usage cycle.</div>
+
+  <h3>11.2 Backend architecture and reliability</h3>
+  <table>
+    <tr><th>Status</th><th>Initiative</th><th>Design and impact</th></tr>
+    <tr><td><span class="status status-live">Implemented</span></td><td>Browser RLS + privileged Edge Functions</td><td>Public/admin browser access uses the anon key and database row-level security. Service-role credentials stay inside Edge Functions for controlled operations such as booking submission, payment completion, signed uploads, and pending-booking cancellation.</td></tr>
+    <tr><td><span class="status status-live">Implemented</span></td><td>Idempotent payment finalization</td><td>The payment webhook finds the pending payload and atomically claims a pending booking before creating final child records. Duplicate webhook deliveries therefore do not create duplicate confirmed bookings or payments.</td></tr>
+    <tr><td><span class="status status-live">Implemented</span></td><td>Pending inventory cleanup</td><td>Unpaid bookings hold inventory temporarily, expire through scheduled cleanup, and can be cancelled immediately when a customer abandons or restarts checkout. This prevents stale reservations from consuming capacity.</td></tr>
+    <tr><td><span class="status status-live">Implemented</span></td><td>Failure cleanup</td><td>Booking/payment functions remove partially created parent and detail rows when a downstream operation fails, limiting orphaned records and manual reconciliation.</td></tr>
+    <tr><td><span class="status status-live">Implemented</span></td><td>Normalized operational records</td><td>Core bookings are separated from service details, itemized charges, add-ons, payments, uploads, waivers, owners, pets, and resources. Pricing and resources are database-driven, so routine rate and inventory changes do not require a website deployment.</td></tr>
+    <tr><td><span class="status status-live">Implemented</span></td><td>Auditability and soft deletion</td><td>Admin-created bookings, edits, and payments record the logged-in user. Operational records are cancelled or marked inactive instead of being destructively deleted, preserving history for support and reporting.</td></tr>
+  </table>
+
+  <h3>11.3 Recommended next optimizations</h3>
+  <table>
+    <tr><th>Status</th><th>Initiative</th><th>Expected benefit</th></tr>
+    <tr><td><span class="status status-next">Recommended</span></td><td>Image resizing and compression</td><td>Create web-sized variants for uploaded photos and show thumbnails in admin lists/drawers, reserving originals for explicit viewing. This is the strongest remaining lever for Storage egress as upload volume grows.</td></tr>
+    <tr><td><span class="status status-next">Recommended</span></td><td>Storage retention policy</td><td>Define how long abandoned upload folders, superseded vaccine files, and old reference images must be retained, then schedule deletion for data that has no booking or has exceeded the business retention period.</td></tr>
+    <tr><td><span class="status status-next">Recommended</span></td><td>Usage monitoring by surface</td><td>Track Storage egress, database egress, function invocations, and largest objects by week. Add thresholds so unexpected growth is investigated before the plan limit is reached.</td></tr>
+    <tr><td><span class="status status-next">Recommended</span></td><td>Query and index review</td><td>Use Supabase query performance reports to add or verify indexes for the most common branch/date/status, owner lookup, member-code, and service-detail filters as production data grows.</td></tr>
+    <tr><td><span class="status status-next">Recommended</span></td><td>Server-side report aggregation</td><td>If reports become large, replace broad booking/detail downloads with a database view or RPC that returns only grouped totals and the requested rows for the selected groomer/date range.</td></tr>
+  </table>
+  <div class="backtop"><a href="#top">↑ top</a></div>
+</section>
+
+<!-- ════════ 12 ════════ -->
+<section id="s12">
+  <div class="ch-head"><span class="ch-num">12</span><h2>Known gaps / out of scope</h2></div>
   <div class="gap">Editing a blocked schedule in place (delete &amp; recreate is the accepted flow).</div>
   <div class="gap">Per-member create/edit UI — memberships are CSV-managed by design.</div>
   <div class="gap">Automated payment-gateway refunds — refunds are recorded manually after money moves outside the system.</div>
