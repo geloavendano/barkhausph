@@ -32,6 +32,7 @@ export default function App() {
   const [accessError,  setAccessError]  = useState('')
   const [coverageRefreshKey, setCoverageRefreshKey] = useState(0)
   const [inventoryTab, setInventoryTab] = useState('rooms')
+  const [resourcesBranchId, setResourcesBranchId] = useState(null)
 
   /* ── Auth ── */
   useEffect(() => {
@@ -67,6 +68,7 @@ export default function App() {
         setAllowed(false)
         setGreeting('')
         setCurrentAdmin(null)
+        setResourcesBranchId(null)
       }
     })
 
@@ -141,6 +143,7 @@ export default function App() {
   }
 
   async function loadResources(branchId) {
+    setResourcesBranchId(null)
     // Load rooms + groomers together; studios separately so a missing table can't block the others
     try {
       const [r, g] = await Promise.all([
@@ -154,6 +157,7 @@ export default function App() {
       const s = await sbGet('studios', `branch_id=eq.${branchId}&active=eq.true&select=id,name,color,is_unavailable&order=sort_order`)
       setStudios(s ?? [])
     } catch { setStudios([]) }
+    setResourcesBranchId(branchId)
   }
 
   // Load resources when branch changes
@@ -197,6 +201,7 @@ export default function App() {
       coverageBranch={branches[branchIdx]}
       groomers={groomers}
       coverageRefreshKey={coverageRefreshKey}
+      coverageReady={resourcesBranchId === branches[branchIdx]?.id}
       onOpenGroomerInventory={() => { setInventoryTab('groomers'); setPage('resources') }}
     >
       {page === 'calendar'  && <CalendarPage  {...pageProps} />}

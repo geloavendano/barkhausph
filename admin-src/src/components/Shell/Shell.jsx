@@ -25,11 +25,11 @@ function localDateString(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 }
 
-function GroomingCoverageBanner({ branch, groomers, refreshKey, onOpenInventory }) {
+function GroomingCoverageBanner({ branch, groomers, refreshKey, ready, onOpenInventory }) {
   const [missingDates, setMissingDates] = useState([])
 
   useEffect(() => {
-    if (!branch?.id) return
+    if (!branch?.id || !ready) return
     let cancelled = false
     async function loadCoverage() {
       const dates = Array.from({ length: 14 }, (_, index) => {
@@ -51,7 +51,7 @@ function GroomingCoverageBanner({ branch, groomers, refreshKey, onOpenInventory 
     }
     loadCoverage()
     return () => { cancelled = true }
-  }, [branch?.id, groomers, refreshKey])
+  }, [branch?.id, groomers, refreshKey, ready])
 
   if (!missingDates.length) return null
   const labels = missingDates.map(date => new Date(`${date}T00:00:00`).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' }))
@@ -63,7 +63,7 @@ function GroomingCoverageBanner({ branch, groomers, refreshKey, onOpenInventory 
   )
 }
 
-export default function Shell({ page, onPageChange, greeting, branches = [], branchIdx = 0, onBranchChange, onSignOut, contentFill, coverageBranch, groomers = [], coverageRefreshKey = 0, onOpenGroomerInventory, children }) {
+export default function Shell({ page, onPageChange, greeting, branches = [], branchIdx = 0, onBranchChange, onSignOut, contentFill, coverageBranch, groomers = [], coverageRefreshKey = 0, coverageReady = false, onOpenGroomerInventory, children }) {
   const [moreOpen, setMoreOpen] = useState(false)
 
   const inMore = MORE_ITEMS.some(i => i.key === page)
@@ -100,9 +100,11 @@ export default function Shell({ page, onPageChange, greeting, branches = [], bra
       </header>
 
       <GroomingCoverageBanner
+        key={coverageBranch?.id ?? 'no-branch'}
         branch={coverageBranch}
         groomers={groomers}
         refreshKey={coverageRefreshKey}
+        ready={coverageReady}
         onOpenInventory={() => onOpenGroomerInventory?.()}
       />
 
