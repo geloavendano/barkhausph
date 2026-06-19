@@ -66,6 +66,94 @@ function fmtDate(d?: string) {
   } catch { return d; }
 }
 
+function timeToMinutes(value: unknown): number {
+  const text = String(value ?? "").trim();
+  const display = text.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (display) {
+    let hour = Number(display[1]);
+    const minute = Number(display[2]);
+    const period = display[3].toUpperCase();
+    if (period === "PM" && hour !== 12) hour += 12;
+    if (period === "AM" && hour === 12) hour = 0;
+    return hour * 60 + minute;
+  }
+  const database = text.match(/^(\d{1,2}):(\d{2})/);
+  return database ? Number(database[1]) * 60 + Number(database[2]) : -1;
+}
+
+function groomingDuration(body: Record<string, any>): number {
+  const base: Record<string, number> = { bath_dry: 30, basic: 60, premium: 120, ala_carte: 60 };
+  const hasBuffer = Object.keys(body.addons ?? {}).some((key) => key === "demat" || key === "deshed");
+  return (base[body.groomService] ?? 60) + (hasBuffer ? 30 : 0);
+}
+
+async function assertGroomingAvailable(supabase: any, branchId: string, body: Record<string, any>) {
+  if (body.service !== "grooming") return;
+  if (!body.groomDate || !body.groomSlot) throw new Error("Grooming date and slot are required.");
+
+  const [{ data: groomers, error: groomerError }, { data: hours, error: hoursError }, { data: blocks, error: blockError }] = await Promise.all([
+    supabase.from("groomers").select("id").eq("branch_id", branchId).eq("active", true).eq("is_unavailable", false),
+    supabase.from("resource_service_hours").select("resource_id,start_time,end_time,last_service_time")
+      .eq("branch_id", branchId).eq("resource_type", "groomer").eq("service_date", body.groomDate).eq("active", true),
+    supabase.from("blocked_schedules").select("resource_id,start_time,end_time")
+      .eq("resource_type", "groomer").eq("active", true).contains("dates", [body.groomDate]),
+  ]);
+  if (groomerError) throw new Error(`Could not validate groomers: ${groomerError.message}`);
+  if (hoursError) throw new Error(`Could not validate service hours: ${hoursError.message}`);
+  if (blockError) throw new Error(`Could not validate blocked schedules: ${blockError.message}`);
+
+  const { data: bookingRows, error: bookingError } = await supabase
+    .from("grooming_details")
+    .select("booking_id,groomer_id,timeslot,groom_service_key,bookings!inner(branch_id,status)")
+    .eq("service_date", body.groomDate)
+    .eq("bookings.branch_id", branchId)
+    .not("bookings.status", "in", "(cancelled,rejected)");
+  if (bookingError) throw new Error(`Could not validate existing grooming bookings: ${bookingError.message}`);
+
+  const bookingIds = (bookingRows ?? []).map((row: any) => row.booking_id).filter(Boolean);
+  const durationAddonIds = new Set<string>();
+  if (bookingIds.length) {
+    const { data: addOns, error: addOnError } = await supabase.from("booking_addons")
+      .select("booking_id,addon_key").in("booking_id", bookingIds).in("addon_key", ["demat", "deshed"]);
+    if (addOnError) throw new Error(`Could not validate grooming add-ons: ${addOnError.message}`);
+    (addOns ?? []).forEach((row: any) => durationAddonIds.add(row.booking_id));
+  }
+
+  const start = timeToMinutes(body.groomSlot);
+  const end = start + groomingDuration(body);
+  const durationFor = (row: any) => {
+    const base: Record<string, number> = { bath_dry: 30, basic: 60, premium: 120, ala_carte: 60 };
+    return (base[row.groom_service_key] ?? 60) + (durationAddonIds.has(row.booking_id) ? 30 : 0);
+  };
+  const overlaps = (rangeStart: number, rangeEnd: number) => start < rangeEnd && end > rangeStart;
+  const canServe = (groomerId: string) => {
+    const window = (hours ?? []).find((row: any) => row.resource_id === groomerId);
+    if (!window) return false;
+    const windowStart = timeToMinutes(window.start_time);
+    const windowEnd = timeToMinutes(window.end_time);
+    const lastService = timeToMinutes(window.last_service_time);
+    if (start < windowStart || start > lastService || end > windowEnd) return false;
+    if ((blocks ?? []).some((row: any) => row.resource_id === groomerId && overlaps(timeToMinutes(row.start_time), timeToMinutes(row.end_time)))) return false;
+    return !(bookingRows ?? []).some((row: any) => {
+      if (row.groomer_id !== groomerId || !row.timeslot) return false;
+      const bookedStart = timeToMinutes(row.timeslot);
+      return overlaps(bookedStart, bookedStart + durationFor(row));
+    });
+  };
+
+  const unassigned = (bookingRows ?? []).filter((row: any) => {
+    if (row.groomer_id != null || !row.timeslot) return false;
+    const bookedStart = timeToMinutes(row.timeslot);
+    return overlaps(bookedStart, bookedStart + durationFor(row));
+  }).length;
+  const pool = groomers ?? [];
+  const selectedId = body.preferredStylistId || null;
+  const available = selectedId
+    ? canServe(selectedId) && unassigned <= pool.filter((row: any) => row.id !== selectedId && canServe(row.id)).length
+    : pool.filter((row: any) => canServe(row.id)).length > unassigned;
+  if (!available) throw new Error("That grooming slot is no longer available. Please select another time.");
+}
+
 // Derive the itemised charge list from the payload (mirrors handle-payment-webhook).
 type ChargeItem = { type: string; label: string; amount: number };
 function chargesFromPayload(body: Record<string, unknown>, subtotal: number, discountAmt: number): ChargeItem[] {
@@ -348,6 +436,10 @@ Deno.serve(async (req) => {
       .ilike("name", body.location === "estancia" ? "%Estancia%" : "%Eastwood%")
       .single();
     if (branchErr || !branch) throw new Error(`Branch not found: ${body.location}`);
+
+    // Validate against the same service-hours, cutoff, block, booking, and duration
+    // rules used by both booking UIs before creating owner/pet/booking records.
+    await assertGroomingAvailable(supabase, branch.id, body);
 
     // 2. Upsert owner
     let ownerId: string;

@@ -12,7 +12,7 @@ import {
 } from '../../lib/adminAudit'
 import { parsePricing, emptyPricing, calcBase, calcLate, calcTotal, calcNights, calcHotelBreakdown, calcDaycare, hotelSizeKey, DEFAULT_ADDONS } from '../../lib/pricing'
 import { groomDurationMins } from '../../lib/grooming'
-import { availableGroomingSlots, availableHotelRooms, availableStudioSlots } from '../../lib/availability'
+import { availableGroomingSlots, availableHotelRooms, availableStudioSlots, buildGroomingSlots } from '../../lib/availability'
 import styles from './AddBookingPanel.module.css'
 
 // ── Constants ─────────────────────────────────────────────────────────────
@@ -379,18 +379,24 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
   const fetchGroomingSlots = useCallback(async (date, groomerId, serviceKey, addons) => {
     if (!date || !branch?.id) return []
     const selectedGroomerId = groomerId && groomerId !== 'any' ? groomerId : null
-    const dayOfWeek = new Date(`${date}T00:00:00`).getDay()
     const activeGroomers = groomers.filter(g => !g.is_unavailable)
     const groomerIds = activeGroomers.map(g => g.id)
 
-    const [bookingRows, recurringBlocks, oneOffBlocks] = await Promise.all([
+    const serviceHoursPromise = sbGet('resource_service_hours',
+      `select=resource_id,start_time,end_time,last_service_time,active&branch_id=eq.${branch.id}` +
+      `&resource_type=eq.groomer&service_date=eq.${date}&active=eq.true` +
+      (groomerIds.length ? `&resource_id=in.(${groomerIds.join(',')})` : ''))
+      .catch(error => {
+        if (/PGRST205|42P01|404/.test(error.message)) return null
+        throw error
+      })
+
+    const [bookingRows, serviceHours, oneOffBlocks] = await Promise.all([
       sbGet('grooming_details',
         `select=booking_id,timeslot,groomer_id,groom_service_key,bookings!inner(branch_id,status)` +
         `&service_date=eq.${date}&bookings.branch_id=eq.${branch.id}` +
         `&bookings.status=not.in.(cancelled,rejected)`),
-      groomerIds.length
-        ? sbGet('groomer_blocks', `select=groomer_id,start_time,end_time,days_of_week&active=eq.true&groomer_id=in.(${groomerIds.join(',')})`)
-        : Promise.resolve([]),
+      serviceHoursPromise,
       sbGet('blocked_schedules',
         `select=resource_id,start_time,end_time&resource_type=eq.groomer&active=eq.true&dates=cs.{${date}}`),
     ])
@@ -402,13 +408,12 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
     const durationAddonBookingIds = new Set((addonRows ?? []).map(row => row.booking_id))
 
     return availableGroomingSlots({
-      slots: GROOM_SLOTS,
+      slots: buildGroomingSlots(serviceHours, GROOM_SLOTS),
       groomers: activeGroomers,
       bookings: bookingRows ?? [],
       durationAddonBookingIds,
-      recurringBlocks: recurringBlocks ?? [],
+      serviceHours,
       oneOffBlocks: oneOffBlocks ?? [],
-      dayOfWeek,
       selectedGroomerId,
       serviceKey,
       selectedAddons: addons,
@@ -710,7 +715,7 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
         })()
         const addonsPayload = Object.keys(bk.addons).reduce((acc, k) => {
           const a = DEFAULT_ADDONS.find(x => x.key === k)
-          if (a && !a.assessment) acc[k] = a.sizeDependent ? (pricing.faceTrim[bk.size]??0) : a.price
+          if (a) acc[k] = a.assessment ? 0 : a.sizeDependent ? (pricing.faceTrim[bk.size]??0) : a.price
           return acc
         }, {})
         const vaccPayload = Object.keys(bk.vacc).reduce((acc, i) => {

@@ -182,6 +182,10 @@ For each **source** × **service** combination, a full happy-path create:
 - Room: is_locked + lock_reason. Groomer/Studio: is_unavailable + unavailable_reason.
 - Soft delete: `active=false` (PATCH) — removed from lists/dropdowns; existing bookings keep reference.
 - ⚠️ Inactive resources excluded from all booking dropdowns (verified) — test that historical bookings still render the name.
+- Groomer drawer defaults to the current month with today selected; saved availability dates are marked.
+- Add/update/remove one date's service hours and last-service cutoff.
+- Bulk-select dates and verify existing hours are overwritten for every selected date.
+- Dashboard warning lists dates in today + 13 days that have zero available groomers and clears after coverage is added.
 
 ### 3E. Block schedule (`BlockSchedulePanel`)
 - Resource types: Hotel Room, Groomer, Studio.
@@ -190,12 +194,18 @@ For each **source** × **service** combination, a full happy-path create:
 - Reflected on calendar (hatched block, side-by-side with bookings) and removes affected slots from public + admin availability.
 - Scenarios: single date, multi-date, full-day vs partial, block before branch open (clipped to visible range ⚠️).
 
-### 3F. Edit blocked schedule ⚠️
-- **Not implemented.** BlockDrawer has only Delete + Done. To change a block you delete and recreate.
-- (Candidate feature / test gap.)
+### 3F. Edit blocked schedule
+- Groomer Inventory drawer lists active blocks for that resource.
+- Select a block and edit dates, start/end, and reason; verify public and admin availability update.
 
 ### 3G. Cancel blocked schedule
 - BlockDrawer → Delete Block → `active=false` (soft delete); confirm dialog.
+
+### 3H. Grooming service-hour boundaries
+- No service-hours row for the date: no slot is shown for that groomer.
+- Slot is at/after opening, starts no later than last service, and its full duration ends by closing.
+- Example 11:00–21:00 with last service 19:00: Bath & Dry may start at 19:00 but not 19:30.
+- Explicit blocks and assigned/unassigned bookings subtract from otherwise valid service-hour slots.
 - Slot/time freed on calendar + availability.
 
 ### 3H. Filter bookings (Calendar)

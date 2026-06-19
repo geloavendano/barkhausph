@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import logo from '../../assets/barkhaus-logo.png'
+import { sbGet } from '../../lib/supabase'
 import styles from './Shell.module.css'
 
 const NAV_ITEMS = [
@@ -20,7 +21,49 @@ const MORE_ITEMS = [
   GUIDE_LINK,
 ]
 
-export default function Shell({ page, onPageChange, greeting, branches = [], branchIdx = 0, onBranchChange, onSignOut, contentFill, children }) {
+function localDateString(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+function GroomingCoverageBanner({ branch, groomers, refreshKey, onOpenInventory }) {
+  const [missingDates, setMissingDates] = useState([])
+
+  useEffect(() => {
+    if (!branch?.id) return
+    let cancelled = false
+    async function loadCoverage() {
+      const dates = Array.from({ length: 14 }, (_, index) => {
+        const date = new Date(); date.setDate(date.getDate() + index); return localDateString(date)
+      })
+      const activeIds = groomers.filter(groomer => !groomer.is_unavailable).map(groomer => groomer.id)
+      try {
+        const rows = activeIds.length ? await sbGet('resource_service_hours',
+          `branch_id=eq.${branch.id}&resource_type=eq.groomer&active=eq.true` +
+          `&service_date=gte.${dates[0]}&service_date=lte.${dates[dates.length - 1]}` +
+          `&resource_id=in.(${activeIds.join(',')})&select=service_date,resource_id`) : []
+        const covered = new Set((rows ?? []).map(row => row.service_date))
+        if (!cancelled) setMissingDates(dates.filter(date => !covered.has(date)))
+      } catch (error) {
+        // Hide until the resource_service_hours migration is applied.
+        if (!/PGRST205|42P01|404/.test(error.message)) console.error('Grooming coverage check failed:', error)
+        if (!cancelled) setMissingDates([])
+      }
+    }
+    loadCoverage()
+    return () => { cancelled = true }
+  }, [branch?.id, groomers, refreshKey])
+
+  if (!missingDates.length) return null
+  const labels = missingDates.map(date => new Date(`${date}T00:00:00`).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' }))
+  return (
+    <div className={styles.coverageBanner} role="alert">
+      <div><strong>Grooming availability needs attention</strong><span>No groomer service hours are assigned for: {labels.join(', ')}.</span></div>
+      <button onClick={onOpenInventory}>Fix in Inventory</button>
+    </div>
+  )
+}
+
+export default function Shell({ page, onPageChange, greeting, branches = [], branchIdx = 0, onBranchChange, onSignOut, contentFill, coverageBranch, groomers = [], coverageRefreshKey = 0, onOpenGroomerInventory, children }) {
   const [moreOpen, setMoreOpen] = useState(false)
 
   const inMore = MORE_ITEMS.some(i => i.key === page)
@@ -55,6 +98,13 @@ export default function Shell({ page, onPageChange, greeting, branches = [], bra
           </button>
         </div>
       </header>
+
+      <GroomingCoverageBanner
+        branch={coverageBranch}
+        groomers={groomers}
+        refreshKey={coverageRefreshKey}
+        onOpenInventory={() => onOpenGroomerInventory?.()}
+      />
 
       {/* ── Body ── */}
       <div className={styles.body}>

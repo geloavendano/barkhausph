@@ -4,6 +4,7 @@ import {
   availableGroomingSlots,
   availableHotelRooms,
   availableStudioSlots,
+  buildGroomingSlots,
   overlaps,
   timeToMinutes,
 } from './availability.js'
@@ -20,6 +21,13 @@ test('parses supported database and display time formats', () => {
 test('treats adjacent ranges as non-overlapping', () => {
   assert.equal(overlaps([{ start: 540, end: 600 }], 600, 660), false)
   assert.equal(overlaps([{ start: 540, end: 600 }], 599, 660), true)
+})
+
+test('builds half-hour candidates from configured service windows', () => {
+  assert.deepEqual(buildGroomingSlots([
+    { start_time: '11:15', last_service_time: '12:30' },
+  ]), ['11:30 AM', '12:00 PM', '12:30 PM'])
+  assert.deepEqual(buildGroomingSlots(null, ['9:00 AM']), ['9:00 AM'])
 })
 
 test('grooming blocks slots for the full service duration', () => {
@@ -54,17 +62,53 @@ test('grooming accounts for unassigned bookings and duration add-ons', () => {
   assert.deepEqual(slots, ['10:00 AM'])
 })
 
-test('grooming respects recurring and one-off resource blocks', () => {
+test('grooming respects explicit resource blocks', () => {
   const slots = availableGroomingSlots({
     slots: ['9:00 AM', '10:00 AM', '11:00 AM'],
     groomers: [{ id: 'g1' }],
     bookings: [],
-    recurringBlocks: [{ groomer_id: 'g1', start_time: '09:00', end_time: '10:00', days_of_week: [1] }],
-    oneOffBlocks: [{ resource_id: 'g1', start_time: '10:30', end_time: '12:00' }],
+    oneOffBlocks: [
+      { resource_id: 'g1', start_time: '09:00', end_time: '10:00' },
+      { resource_id: 'g1', start_time: '10:30', end_time: '12:00' },
+    ],
     dayOfWeek: 1,
     selectedGroomerId: 'g1',
     serviceKey: 'basic',
     selectedAddons: {},
+  })
+
+  assert.deepEqual(slots, [])
+})
+
+test('grooming requires date-specific service hours when configured', () => {
+  const slots = availableGroomingSlots({
+    slots: ['9:00 AM', '11:00 AM', '7:00 PM', '8:00 PM'],
+    groomers: [{ id: 'g1' }, { id: 'g2' }],
+    bookings: [],
+    serviceHours: [{
+      resource_id: 'g1', start_time: '11:00:00', end_time: '21:00:00', last_service_time: '19:00:00', active: true,
+    }],
+    dayOfWeek: 1,
+    selectedGroomerId: null,
+    serviceKey: 'bath_dry',
+    selectedAddons: {},
+  })
+
+  assert.deepEqual(slots, ['11:00 AM', '7:00 PM'])
+})
+
+test('grooming service must finish within service hours', () => {
+  const slots = availableGroomingSlots({
+    slots: ['7:00 PM'],
+    groomers: [{ id: 'g1' }],
+    bookings: [],
+    serviceHours: [{
+      resource_id: 'g1', start_time: '11:00', end_time: '21:00', last_service_time: '19:00', active: true,
+    }],
+    dayOfWeek: 1,
+    selectedGroomerId: 'g1',
+    serviceKey: 'premium',
+    selectedAddons: { demat: true },
   })
 
   assert.deepEqual(slots, [])

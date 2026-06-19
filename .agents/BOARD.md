@@ -13,6 +13,10 @@ teammates. Keep entries short and current.
 
 ## Handoffs
 
+- 2026-06-19 - Codex: date-specific groomer hours are implemented across public/admin
+  slot selection and submit rechecks. Static code safely retains legacy hours only while
+  the new table is absent. Authenticated drawer visual QA remains after the migration is
+  applied; production build, public/gate smoke checks, and 11 helper tests pass.
 - 2026-06-16 - Codex: live checks showed `barkhaus.ph/booking.js` and the admin
   bundle already include manual-payment receipt code, and `get-upload-url` can create a
   signed upload URL. Live PostgREST still reports `payments.receipt_path` missing, so the
@@ -34,7 +38,13 @@ teammates. Keep entries short and current.
 Record any edge function deploys, table/schema changes, RLS policy changes, or schema-cache
 reloads the human needs to apply manually.
 
-- None.
+- Apply `supabase/migrations/2026-06-19_resource_service_hours.sql` to production. It
+  creates/RLS-enables the table, seeds 90 days at 09:00-19:00 with a 17:00 cutoff,
+  converts matching legacy weekday blocks to explicit dates, retires legacy rows, and
+  includes `NOTIFY pgrst, 'reload schema';`.
+- After the migration succeeds, deploy the updated function with
+  `supabase functions deploy submit-booking`. Verify a grooming submit outside service
+  hours returns the availability error before creating any records.
 
 ## Done
 

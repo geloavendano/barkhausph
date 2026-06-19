@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { sbGet, sbPost, sbPatch } from '../../lib/supabase'
+import GroomerResourceDrawer from '../../components/GroomerResourceDrawer/GroomerResourceDrawer'
 import styles from './ResourcesPage.module.css'
 
 const COLORS = ['#4D96B9','#EF9F27','#1D9E75','#D4537E','#9B95E8','#D85A30','#639922','#888780']
@@ -37,8 +38,8 @@ const TABS = [
 ]
 
 // ── Main page ───────────────────────────────────────────────────────────────
-export default function ResourcesPage({ branches, currentBranchIdx = 0, onChanged }) {
-  const [tab,     setTab]    = useState('rooms')
+export default function ResourcesPage({ branches, currentBranchIdx = 0, requestedTab = 'rooms', onChanged }) {
+  const [tab,     setTab]    = useState(requestedTab)
   const [rooms,   setRooms]  = useState([])
   const [groomers,setGrms]   = useState([])
   const [studios, setSdts]   = useState([])
@@ -116,7 +117,14 @@ export default function ResourcesPage({ branches, currentBranchIdx = 0, onChange
       </div>
 
       {/* ── Add / Edit panel ── */}
-      {panel && (
+      {panel?.type === 'groomer' && panel.item ? (
+        <GroomerResourceDrawer
+          branch={branch}
+          groomer={panel.item}
+          onClose={() => setPanel(null)}
+          onSaved={async () => { await loadAll(); onChanged?.() }}
+        />
+      ) : panel && (
         <ResourcePanel
           type={panel.type}
           item={panel.item}

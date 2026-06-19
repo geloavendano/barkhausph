@@ -17,6 +17,24 @@ export function overlaps(ranges, start, end) {
   return ranges.some(range => start < range.end && end > range.start)
 }
 
+export function buildGroomingSlots(serviceHours, fallback = []) {
+  if (serviceHours == null) return fallback
+  const valid = serviceHours
+    .map(row => ({ start: timeToMinutes(row.start_time), last: timeToMinutes(row.last_service_time) }))
+    .filter(row => row.start >= 0 && row.last >= row.start)
+  if (!valid.length) return []
+  const first = Math.min(...valid.map(row => row.start))
+  const last = Math.max(...valid.map(row => row.last))
+  const slots = []
+  for (let mins = Math.ceil(first / 30) * 30; mins <= last; mins += 30) {
+    const hour24 = Math.floor(mins / 60)
+    const minute = mins % 60
+    const period = hour24 >= 12 ? 'PM' : 'AM'
+    slots.push(`${hour24 % 12 || 12}:${String(minute).padStart(2, '0')} ${period}`)
+  }
+  return slots
+}
+
 function dayApplies(block, dayOfWeek) {
   const days = block.days_of_week ?? []
   return days.length === 0 || days.includes(dayOfWeek)
@@ -26,14 +44,24 @@ function blockRange(block) {
   return { start: timeToMinutes(block.start_time), end: timeToMinutes(block.end_time) }
 }
 
+function serviceWindowFor(serviceHours, groomerId) {
+  if (serviceHours == null) return null
+  const row = serviceHours.find(hours => hours.resource_id === groomerId && hours.active !== false)
+  if (!row) return false
+  const start = timeToMinutes(row.start_time)
+  const end = timeToMinutes(row.end_time)
+  const last = timeToMinutes(row.last_service_time)
+  if (start < 0 || end <= start || last < start || last > end) return false
+  return { start, end, last }
+}
+
 export function availableGroomingSlots({
   slots,
   groomers,
   bookings,
   durationAddonBookingIds = new Set(),
-  recurringBlocks = [],
   oneOffBlocks = [],
-  dayOfWeek,
+  serviceHours = null,
   selectedGroomerId,
   serviceKey,
   selectedAddons,
@@ -55,12 +83,6 @@ export function availableGroomingSlots({
       })
       .filter(range => range.start >= 0)
 
-    recurringBlocks
-      .filter(block => block.groomer_id === groomerId && dayApplies(block, dayOfWeek))
-      .map(blockRange)
-      .filter(range => range.start >= 0 && range.end > range.start)
-      .forEach(range => ranges.push(range))
-
     oneOffBlocks
       .filter(block => block.resource_id === groomerId)
       .map(blockRange)
@@ -79,15 +101,21 @@ export function availableGroomingSlots({
       return bookedStart >= 0 && start < bookedStart + durationFor(row) && end > bookedStart
     }).length
 
+    const canServe = groomer => {
+      const window = serviceWindowFor(serviceHours, groomer.id)
+      if (window === false) return false
+      if (window && (start < window.start || start > window.last || end > window.end)) return false
+      return !overlaps(rangesFor(groomer.id), start, end)
+    }
+
     if (!selectedGroomerId) {
-      const free = activeGroomers.filter(g => !overlaps(rangesFor(g.id), start, end)).length
+      const free = activeGroomers.filter(canServe).length
       return free > unassigned
     }
 
-    if (overlaps(rangesFor(selectedGroomerId), start, end)) return false
-    const otherFree = activeGroomers.filter(g =>
-      g.id !== selectedGroomerId && !overlaps(rangesFor(g.id), start, end)
-    ).length
+    const selected = activeGroomers.find(g => g.id === selectedGroomerId)
+    if (!selected || !canServe(selected)) return false
+    const otherFree = activeGroomers.filter(g => g.id !== selectedGroomerId && canServe(g)).length
     return unassigned <= otherFree
   })
 }

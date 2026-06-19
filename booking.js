@@ -86,7 +86,6 @@ if (IS_WALKIN) {
 // Live data from DB (populated on init)
 var liveRooms    = [];   // rooms[] from Supabase for current branch
 var liveGroomers = [];   // groomers[] from Supabase for current branch
-var liveGroomerBlocks = []; // groomer_blocks[] for current branch groomers
 var liveStudios      = [];   // studios[] from Supabase for current branch
 var liveStudioBlocks = [];   // studio_blocks[] for current branch studios
 
@@ -615,7 +614,7 @@ function selectLocation(el, val) {
   el.classList.add('selected');
   booking.location = val;
   // Reset live data for new branch
-  liveRooms = []; liveGroomers = []; liveGroomerBlocks = []; liveStudios = []; liveStudioBlocks = [];
+  liveRooms = []; liveGroomers = []; liveStudios = []; liveStudioBlocks = [];
   window._branchIds = null;
   // Membership validity is branch-dependent (Standard memberships are branch-bound) —
   // force re-verification after a branch change so a discount can't carry across branches.
@@ -956,6 +955,46 @@ function slotToMins(slot) {
   return h * 60 + min;
 }
 
+function timeValueToMins(value) {
+  var display = slotToMins(String(value || ''));
+  if (display >= 0) return display;
+  var parts = String(value || '').split(':');
+  if (parts.length < 2) return -1;
+  var hour = parseInt(parts[0]), minute = parseInt(parts[1]);
+  if (isNaN(hour) || isNaN(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) return -1;
+  return hour * 60 + minute;
+}
+
+function groomingSlotsForServiceHours(serviceHours, fallback) {
+  if (serviceHours == null) return fallback;
+  var valid = serviceHours.map(function(row) {
+    return { start: timeValueToMins(row.start_time), last: timeValueToMins(row.last_service_time) };
+  }).filter(function(row) { return row.start >= 0 && row.last >= row.start; });
+  if (!valid.length) return [];
+  var first = Math.min.apply(null, valid.map(function(row){ return row.start; }));
+  var last  = Math.max.apply(null, valid.map(function(row){ return row.last; }));
+  var slots = [];
+  for (var mins = Math.ceil(first / 30) * 30; mins <= last; mins += 30) {
+    var hour24 = Math.floor(mins / 60), minute = mins % 60;
+    var ap = hour24 >= 12 ? 'PM' : 'AM';
+    slots.push((hour24 % 12 || 12) + ':' + String(minute).padStart(2, '0') + ' ' + ap);
+  }
+  return slots;
+}
+
+function serviceWindowForGroomer(serviceHours, groomerId) {
+  if (serviceHours == null) return null;
+  var row = serviceHours.find(function(hours) {
+    return hours.resource_id === groomerId && hours.active !== false;
+  });
+  if (!row) return false;
+  var start = timeValueToMins(row.start_time);
+  var end = timeValueToMins(row.end_time);
+  var last = timeValueToMins(row.last_service_time);
+  if (start < 0 || end <= start || last < start || last > end) return false;
+  return { start:start, end:end, last:last };
+}
+
 // Return all slot strings that a booking occupies based on its start slot + duration
 function occupiedSlots(startSlot, durationMins, allSlots) {
   var startMins = slotToMins(startSlot);
@@ -986,8 +1025,7 @@ async function renderGroomSlots() {
   var dateVal    = booking.groomDate;
   var serviceKey = booking.groomService || 'basic';
   var myDuration = groomDurationMins(serviceKey, booking.selectedAddons);
-  var dow        = dateVal ? new Date(dateVal + 'T00:00:00').getDay() : -1;
-  var ALL_SLOTS  = ['9:00 AM','10:00 AM','11:00 AM','12:00 PM','1:00 PM','2:00 PM','3:00 PM','4:00 PM','5:00 PM'];
+  var FALLBACK_SLOTS = ['9:00 AM','10:00 AM','11:00 AM','12:00 PM','1:00 PM','2:00 PM','3:00 PM','4:00 PM','5:00 PM'];
 
   // Which groomers to consider
   var groomerPool = isAny
@@ -995,6 +1033,10 @@ async function renderGroomSlots() {
     : liveGroomers.filter(function(g){ return g.id === groomerId; });
 
   grid.innerHTML = '<p style="font-size:12px;color:var(--mid);padding:8px 0">Checking availability...</p>';
+  if (!groomerPool.length) {
+    grid.innerHTML = '<p style="font-size:12px;color:var(--error);padding:8px 0">No groomer is available for this selection.</p>';
+    return;
+  }
 
   // Helper: parse "HH:MM" or "HH:MM:SS" → minutes since midnight
   function parseTMins(t) {
@@ -1007,13 +1049,14 @@ async function renderGroomSlots() {
     return ranges.some(function(r){ return candStart < r.end && candEnd > r.start; });
   }
 
-  // All booking rows and blocked_schedule rows fetched once for the whole pool
+  // All booking rows, service hours, and blocks fetched once for the whole pool.
   var bookingRows = [];
   var blockRows   = [];
+  var serviceHours = null;
 
   try {
     var branchId = await getSelectedBranchId();
-    if (!branchId || !dateVal || !groomerPool.length) throw new Error('missing_context');
+    if (!branchId || !dateVal) throw new Error('missing_context');
 
     // 1. ALL grooming bookings for this date/branch (no groomer filter) so that
     //    unassigned bookings (groomer_id=null) are visible for any-groomer overflow math.
@@ -1045,17 +1088,26 @@ async function renderGroomSlots() {
     var bsQuery = 'select=resource_id,start_time,end_time' +
       '&resource_type=eq.groomer&active=eq.true' +
       '&dates=cs.{' + dateVal + '}';
-    try { blockRows = (await sbFetchPublic('blocked_schedules', bsQuery)) || []; }
-    catch(e) { blockRows = []; } // table may not exist yet — degrade gracefully
+    blockRows = (await sbFetchPublic('blocked_schedules', bsQuery)) || [];
+
+    try {
+      var serviceHoursQuery = 'select=resource_id,start_time,end_time,last_service_time,active' +
+        '&branch_id=eq.' + branchId + '&resource_type=eq.groomer' +
+        '&service_date=eq.' + dateVal + '&active=eq.true' +
+        '&resource_id=in.(' + liveGroomers.map(function(g){ return g.id; }).join(',') + ')';
+      serviceHours = (await sbFetchPublic('resource_service_hours', serviceHoursQuery)) || [];
+    } catch(hoursErr) {
+      console.warn('Service-hours migration not available yet; using legacy grooming hours.', hoursErr);
+      serviceHours = null;
+    }
 
   } catch(e) {
-    console.warn('Slot availability check failed, showing all slots:', e);
-    // Degrade gracefully: show all slots
-    grid.innerHTML = ALL_SLOTS.map(function(s){
-      return '<div class="timeslot" onclick="selectSlot(this)">'+s+'</div>';
-    }).join('');
+    console.warn('Slot availability check failed:', e);
+    grid.innerHTML = '<p style="font-size:12px;color:var(--error);padding:8px 0">Could not verify grooming availability. Please try again.</p>';
     return;
   }
+
+  var ALL_SLOTS = groomingSlotsForServiceHours(serviceHours, FALLBACK_SLOTS);
 
   // Build the full blocked-ranges list for a given groomer
   function rangesFor(gId) {
@@ -1066,12 +1118,6 @@ async function renderGroomSlots() {
       var st  = slotToMins(r.timeslot);
       if (st >= 0) ranges.push({ start: st, end: st + dur });
     });
-    // Recurring groomer breaks (groomer_blocks)
-    if (dow >= 0) {
-      getGroomerBlocksForDay(gId, dow).forEach(function(bl) {
-        ranges.push({ start: parseTMins(bl.start_time), end: parseTMins(bl.end_time) });
-      });
-    }
     // One-off blocked schedules
     blockRows.filter(function(b){ return b.resource_id === gId; }).forEach(function(b) {
       ranges.push({ start: parseTMins(b.start_time), end: parseTMins(b.end_time) });
@@ -1082,11 +1128,15 @@ async function renderGroomSlots() {
   var availableSlots = ALL_SLOTS.filter(function(slot) {
     var candStart = slotToMins(slot);
     var candEnd   = candStart + myDuration;
+    function canServe(groomer) {
+      var window = serviceWindowForGroomer(serviceHours, groomer.id);
+      if (window === false) return false;
+      if (window && (candStart < window.start || candStart > window.last || candEnd > window.end)) return false;
+      return !overlaps(rangesFor(groomer.id), candStart, candEnd);
+    }
     if (isAny) {
       // Count how many groomers in the pool are actually free at this slot
-      var freeCount = groomerPool.filter(function(g) {
-        return !overlaps(rangesFor(g.id), candStart, candEnd);
-      }).length;
+      var freeCount = groomerPool.filter(canServe).length;
       // Also count unassigned (groomer_id = null) bookings that overlap this slot —
       // each one consumes one of the free groomers, so it must be deducted.
       var unassignedCount = bookingRows.filter(function(r) {
@@ -1099,12 +1149,13 @@ async function renderGroomSlots() {
       // Available only if more free groomers remain after accounting for unassigned bookings
       return freeCount > unassignedCount;
     } else {
-      // Is this specific groomer directly blocked/booked?
-      if (overlaps(rangesFor(groomerId), candStart, candEnd)) return false;
+      // Is this specific groomer scheduled and free?
+      var selectedGroomer = groomerPool.find(function(g){ return g.id === groomerId; });
+      if (!selectedGroomer || !canServe(selectedGroomer)) return false;
       // Would unassigned bookings overflow into this groomer?
       // Count other groomers (not this one) who are free at this slot.
       var otherFreeCount = liveGroomers.filter(function(g) {
-        return g.id !== groomerId && !overlaps(rangesFor(g.id), candStart, candEnd);
+        return g.id !== groomerId && canServe(g);
       }).length;
       var unassignedAtSlot = bookingRows.filter(function(r) {
         if (r.groomer_id != null) return false;
@@ -1455,16 +1506,6 @@ async function loadLiveRoomsAndGroomers() {
       '&branch_id=eq.' + branchId +
       '&active=eq.true&is_unavailable=eq.false&order=sort_order');
   } catch(e) { liveGroomers = []; }
-  if (liveGroomers.length) {
-    var gids = liveGroomers.map(function(g){return g.id;}).join(',');
-    try {
-      liveGroomerBlocks = await sbFetchPublic('groomer_blocks',
-        'select=groomer_id,label,start_time,end_time,days_of_week' +
-        '&groomer_id=in.(' + gids + ')&active=eq.true');
-    } catch(e) { liveGroomerBlocks = []; }
-  } else {
-    liveGroomerBlocks = [];
-  }
   try {
     liveStudios = await sbFetchPublic('studios',
       'select=id,name,color,schedule_restrictions,is_unavailable' +
@@ -1483,36 +1524,10 @@ async function loadLiveRoomsAndGroomers() {
   }
 }
 
-function getGroomerBlocksForDay(groomerId, dow) {
-  return liveGroomerBlocks.filter(function(bl) {
-    return bl.groomer_id === groomerId &&
-      (bl.days_of_week.length === 0 || bl.days_of_week.indexOf(dow) !== -1);
-  });
-}
-
 function getStudioBlocksForDay(studioId, dow) {
   return liveStudioBlocks.filter(function(bl) {
     return bl.studio_id === studioId &&
       (bl.days_of_week.length === 0 || bl.days_of_week.indexOf(dow) !== -1);
-  });
-}
-
-function isSlotBlocked(slotTime, groomerId, dow) {
-  var blocks = getGroomerBlocksForDay(groomerId, dow);
-  if (!blocks.length) return false;
-  // Parse slot to minutes
-  var sm = slotTime.match(/(\d+):(\d+)\s*(AM|PM)/i);
-  if (!sm) return false;
-  var h = parseInt(sm[1]), min = parseInt(sm[2]), ap = sm[3].toUpperCase();
-  if (ap === 'PM' && h !== 12) h += 12;
-  if (ap === 'AM' && h === 12) h = 0;
-  var slotMins = h * 60 + min;
-  return blocks.some(function(bl) {
-    var startParts = bl.start_time.split(':');
-    var endParts   = bl.end_time.split(':');
-    var blStart = parseInt(startParts[0])*60 + parseInt(startParts[1]);
-    var blEnd   = parseInt(endParts[0])*60   + parseInt(endParts[1]);
-    return slotMins >= blStart && slotMins < blEnd;
   });
 }
 
@@ -3115,13 +3130,39 @@ async function checkAvailabilityBeforePayment() {
           console.warn('Could not read booking add-ons for duration checks:', addonErr);
         }
       }
+      var serviceHours = null;
+      try {
+        serviceHours = (await sbFetchPublic('resource_service_hours',
+          'select=resource_id,start_time,end_time,last_service_time,active' +
+          '&branch_id=eq.' + branchId + '&resource_type=eq.groomer' +
+          '&service_date=eq.' + dateVal + '&active=eq.true')) || [];
+      } catch(hoursErr) {
+        console.warn('Service-hours migration not available during submit recheck.', hoursErr);
+      }
+      var blockRows = [];
+      try {
+        blockRows = (await sbFetchPublic('blocked_schedules',
+          'select=resource_id,start_time,end_time&resource_type=eq.groomer&active=eq.true' +
+          '&dates=cs.{' + dateVal + '}')) || [];
+      } catch(blockErr) {
+        console.warn('Could not load grooming blocks during submit recheck.', blockErr);
+      }
       function isGroomerFree(gId) {
-        return !bkRows.filter(function(r){ return r.groomer_id === gId && r.timeslot; })
+        var window = serviceWindowForGroomer(serviceHours, gId);
+        if (window === false) return false;
+        if (window && (candStart < window.start || candStart > window.last || candEnd > window.end)) return false;
+        var booked = bkRows.filter(function(r){ return r.groomer_id === gId && r.timeslot; })
           .some(function(r) {
             var dur = groomDurationMins(r.groom_service_key || 'basic', r._durationAddons);
             var st  = slotToMins(r.timeslot);
             return st >= 0 && candStart < (st + dur) && candEnd > st;
           });
+        if (booked) return false;
+        return !blockRows.some(function(block) {
+          if (block.resource_id !== gId) return false;
+          var start = timeValueToMins(block.start_time), end = timeValueToMins(block.end_time);
+          return start >= 0 && candStart < end && candEnd > start;
+        });
       }
       var unassignedAtSlot = bkRows.filter(function(r) {
         if (r.groomer_id != null) return false;
@@ -3145,7 +3186,8 @@ async function checkAvailabilityBeforePayment() {
       return { available: true };
     }
   } catch(e) {
-    console.warn('Pre-payment availability check error (fail-open):', e);
+    console.warn('Pre-payment availability check error:', e);
+    if (svc === 'grooming') return { available: false, conflict: 'slot' };
   }
   return { available: true };
 }

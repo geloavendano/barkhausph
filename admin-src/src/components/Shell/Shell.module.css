@@ -53,6 +53,30 @@
   gap: 10px;
 }
 
+.coverageBanner {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 9px 16px;
+  background: rgba(239,159,39,0.14);
+  border-bottom: 1px solid rgba(239,159,39,0.4);
+  color: var(--cream);
+}
+.coverageBanner div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.coverageBanner strong { color: var(--yellow); font-size: 12px; }
+.coverageBanner span { color: var(--cream-m); font-size: 11px; line-height: 1.35; }
+.coverageBanner button {
+  flex-shrink: 0; border: 1px solid var(--yellow); border-radius: 30px;
+  background: transparent; color: var(--yellow); padding: 6px 12px;
+  font: 700 11px 'Nunito', sans-serif; cursor: pointer;
+}
+@media (max-width: 640px) {
+  .coverageBanner { align-items: flex-start; padding: 8px 10px; }
+  .coverageBanner span { max-height: 32px; overflow: hidden; }
+}
+
 .greeting {
   font-size: 12px;
   color: var(--mid);

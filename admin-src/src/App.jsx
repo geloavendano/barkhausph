@@ -30,6 +30,8 @@ export default function App() {
   const [studios,      setStudios]      = useState([])
   const [currentAdmin, setCurrentAdmin] = useState(null)
   const [accessError,  setAccessError]  = useState('')
+  const [coverageRefreshKey, setCoverageRefreshKey] = useState(0)
+  const [inventoryTab, setInventoryTab] = useState('rooms')
 
   /* ── Auth ── */
   useEffect(() => {
@@ -192,6 +194,10 @@ export default function App() {
       onBranchChange={setBranchIdx}
       onSignOut={handleSignOut}
       contentFill={page === 'calendar'}
+      coverageBranch={branches[branchIdx]}
+      groomers={groomers}
+      coverageRefreshKey={coverageRefreshKey}
+      onOpenGroomerInventory={() => { setInventoryTab('groomers'); setPage('resources') }}
     >
       {page === 'calendar'  && <CalendarPage  {...pageProps} />}
       {page === 'bookings'  && <BookingsPage  {...pageProps} />}
@@ -200,9 +206,14 @@ export default function App() {
       {page === 'reports'   && <ReportsPage   {...pageProps} />}
       {page === 'resources' && (
         <ResourcesPage
+          key={`${branches[branchIdx]?.id ?? 'branch'}:${inventoryTab}`}
           branches={branches}
           currentBranchIdx={branchIdx}
-          onChanged={() => { if (branches[branchIdx]?.id) loadResources(branches[branchIdx].id) }}
+          requestedTab={inventoryTab}
+          onChanged={() => {
+            if (branches[branchIdx]?.id) loadResources(branches[branchIdx].id)
+            setCoverageRefreshKey(key => key + 1)
+          }}
         />
       )}
     </Shell>

@@ -1,0 +1,58 @@
+.overlay { position: fixed; inset: 0; z-index: 260; background: rgba(0,0,0,.6); display: flex; justify-content: flex-end; }
+.drawer { width: min(620px,100%); height: 100%; background: var(--surface); border-left: 1px solid var(--border); display: flex; flex-direction: column; }
+.header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+.header div { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 2px 9px; }
+.header strong { color: var(--cream); font-size: 17px; }
+.header small { grid-column: 2; color: var(--mid); }
+.header button,.nestedPanel header button { border: 0; background: transparent; color: var(--mid); font-size: 18px; cursor: pointer; }
+.dot { width: 13px; height: 13px; border-radius: 4px; grid-row: 1 / 3; }
+.body { overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 16px; }
+.body section { border: 1px solid var(--border); background: var(--bg); border-radius: 12px; padding: 14px; }
+.body h3 { color: var(--cream); font-size: 14px; margin: 0 0 10px; }
+.body p { margin: 0; }
+.field { display: flex; flex-direction: column; gap: 5px; color: var(--mid); font-size: 11px; font-weight: 700; text-transform: uppercase; margin-bottom: 10px; }
+.field input,.hoursGrid input { background: var(--surface); border: 1px solid var(--border); border-radius: 7px; color: var(--cream); padding: 8px; font: inherit; }
+.swatches { display: flex; gap: 7px; margin: 10px 0; }
+.swatches button { width: 25px; height: 25px; border: 2px solid transparent; border-radius: 6px; cursor: pointer; }
+.swatches .swatchOn { border-color: white; transform: scale(1.08); }
+.check { display: flex; gap: 7px; align-items: center; color: var(--cream-m); font-size: 12px; margin: 10px 0; }
+.sectionHead { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 10px; }
+.sectionHead h3 { margin-bottom: 2px; }
+.sectionHead p,.help { color: var(--mid); font-size: 11px; }
+.calendar { border: 1px solid var(--border); border-radius: 10px; padding: 10px; background: var(--surface); }
+.calNav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.calNav button { border: 0; background: transparent; color: var(--mid); padding: 5px 10px; cursor: pointer; }
+.calNav strong { color: var(--cream); font-size: 13px; }
+.calGrid { display: grid; grid-template-columns: repeat(7,1fr); gap: 4px; }
+.dow { text-align: center; color: var(--mid); font-size: 10px; padding: 3px; }
+.day { min-height: 34px; border: 1px solid transparent; border-radius: 7px; background: transparent; color: var(--cream-m); cursor: pointer; }
+.day:hover { background: var(--raised); }
+.availableDay { background: rgba(29,158,117,.2); color: #62d5ae; }
+.selectedDay { border-color: var(--yellow); }
+.toggledDay { background: var(--yellow); color: #3d2e00; font-weight: 800; }
+.today { box-shadow: inset 0 0 0 1px var(--blue); }
+.selectedHours { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+.availableLabel,.unavailableLabel { margin-left: 8px; font-size: 10px; padding: 2px 7px; border-radius: 20px; }
+.availableLabel { color: #62d5ae; background: rgba(29,158,117,.18); }
+.unavailableLabel { color: var(--error); background: rgba(255,80,80,.1); }
+.hoursGrid { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; margin-top: 10px; }
+.hoursGrid label { display: flex; flex-direction: column; gap: 4px; color: var(--mid); font-size: 10px; text-transform: uppercase; }
+.actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+.primary,.secondary,.danger { border-radius: 30px; padding: 8px 13px; font: 700 11px 'Nunito',sans-serif; cursor: pointer; }
+.primary { border: 0; background: var(--yellow); color: #3d2e00; }
+.secondary { border: 1px solid var(--border); background: transparent; color: var(--cream-m); }
+.danger { border: 1px solid var(--error); background: transparent; color: var(--error); }
+.primary:disabled,.secondary:disabled,.danger:disabled { opacity: .5; }
+.blockList { display: flex; flex-direction: column; gap: 6px; }
+.blockList button { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; text-align: left; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--cream); cursor: pointer; }
+.blockList span,.blockList small { color: var(--mid); }
+.empty { color: var(--mid); font-size: 12px; padding: 10px 0; }
+.error { color: var(--error); background: rgba(255,80,80,.08); border-radius: 7px; padding: 8px; font-size: 11px; }
+.count { color: var(--mid); font-size: 11px; margin: 6px 0 12px !important; }
+.nestedOverlay { position: fixed; inset: 0; z-index: 280; background: rgba(0,0,0,.65); display: flex; align-items: center; justify-content: center; padding: 12px; }
+.nestedPanel { width: min(470px,100%); max-height: 92vh; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; display: flex; flex-direction: column; }
+.nestedPanel header { display: flex; justify-content: space-between; padding: 14px 17px; border-bottom: 1px solid var(--border); color: var(--cream); }
+.nestedBody { overflow-y: auto; padding: 15px; }
+.nestedPanel footer { border-top: 1px solid var(--border); padding: 12px 15px; display: flex; gap: 8px; align-items: center; }
+.nestedPanel footer span { flex: 1; }
+@media (max-width: 520px) { .hoursGrid { grid-template-columns: 1fr; } .drawer { border-left: 0; } .body { padding: 10px; } }
