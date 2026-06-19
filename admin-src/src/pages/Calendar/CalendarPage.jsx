@@ -188,7 +188,7 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
 
   const loadStudios = useCallback(async () => {
     if (!branch?.id) return
-    try { setStudios((await sbGet('studios', `branch_id=eq.${branch.id}&active=eq.true&order=sort_order&select=id,name,color,is_unavailable,unavailable_reason`)) ?? []) }
+    try { setStudios((await sbGet('studios', `branch_id=eq.${branch.id}&active=eq.true&order=sort_order.asc.nullslast,name.asc&select=id,name,color,is_unavailable,unavailable_reason,sort_order`)) ?? []) }
     catch { setStudios([]) }
   }, [branch?.id])
 

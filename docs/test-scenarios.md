@@ -186,6 +186,8 @@ For each **source** × **service** combination, a full happy-path create:
 - Add/update/remove one date's service hours and last-service cutoff.
 - Bulk-select dates and verify existing hours are overwritten for every selected date.
 - Dashboard warning lists dates in today + 13 days that have zero available groomers and clears after coverage is added.
+- Move each resource type up/down and verify the order matches Inventory, public booking choices, admin Add Booking, and Calendar filters after reload.
+- Add a new resource and verify it appends to the end of its type list.
 
 ### 3E. Block schedule (`BlockSchedulePanel`)
 - Resource types: Hotel Room, Groomer, Studio.

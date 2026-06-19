@@ -421,6 +421,7 @@
   <ul>
     <li>Tabs: Rooms / Groomers / Studios, branch-scoped, with counts. Create &amp; edit: name + <strong>calendar color</strong> (16-color palette); rooms add cage type, pet type, allowed sizes; rooms support <strong>lock</strong> (+reason), groomers/studios support <strong>unavailable</strong> (+reason). <strong>Remove = soft delete</strong>: disappears from all pickers and public availability; historical bookings keep the name.</li>
     <li>Selecting a groomer opens a scheduling drawer with a month calendar. Available days are marked; each date stores service start/end and a last-service cutoff. Admins can edit one day or bulk-overwrite multiple selected dates, and can view/add/edit/remove that groomer's blocked schedules.</li>
+    <li>Rooms, groomers, and studios can be moved up/down in Inventory. The persisted order is shared by the public booking flow, admin Add Booking, and Calendar resource filters; new resources append to the end.</li>
     <li>A branch-scoped warning appears across the dashboard when any date from today through the next 13 days has no active groomer with assigned service hours.</li>
   </ul>
 

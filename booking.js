@@ -1498,19 +1498,19 @@ async function loadLiveRoomsAndGroomers() {
     liveRooms = await sbFetchPublic('rooms',
       'select=id,name,color,room_type,pet_type,allowed_sizes,is_locked,schedule_restrictions' +
       '&branch_id=eq.' + branchId +
-      '&active=eq.true&order=sort_order');
+      '&active=eq.true&order=sort_order.asc.nullslast,name.asc');
   } catch(e) { liveRooms = []; }
   try {
     liveGroomers = await sbFetchPublic('groomers',
       'select=id,name,color,schedule_restrictions,is_unavailable' +
       '&branch_id=eq.' + branchId +
-      '&active=eq.true&is_unavailable=eq.false&order=sort_order');
+      '&active=eq.true&is_unavailable=eq.false&order=sort_order.asc.nullslast,name.asc');
   } catch(e) { liveGroomers = []; }
   try {
     liveStudios = await sbFetchPublic('studios',
       'select=id,name,color,schedule_restrictions,is_unavailable' +
       '&branch_id=eq.' + branchId +
-      '&active=eq.true&order=sort_order');
+      '&active=eq.true&order=sort_order.asc.nullslast,name.asc');
   } catch(e) { liveStudios = []; }
   if (liveStudios.length) {
     var sids = liveStudios.map(function(s){return s.id;}).join(',');

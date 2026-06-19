@@ -44,6 +44,8 @@ export default function ResourcesPage({ branches, currentBranchIdx = 0, requeste
   const [studios, setSdts]   = useState([])
   const [loading, setLoading]= useState(true)
   const [panel,   setPanel]  = useState(null) // { type, item }
+  const [reordering, setReordering] = useState(false)
+  const [reorderError, setReorderError] = useState('')
 
   const branch = branches?.[currentBranchIdx]
 
@@ -54,9 +56,9 @@ export default function ResourcesPage({ branches, currentBranchIdx = 0, requeste
     setLoading(true)
     try {
       const [r, g, s] = await Promise.all([
-        sbGet('rooms',    `branch_id=eq.${branch.id}&active=eq.true&select=*&order=sort_order`),
-        sbGet('groomers', `branch_id=eq.${branch.id}&active=eq.true&select=*&order=sort_order`),
-        sbGet('studios',  `branch_id=eq.${branch.id}&active=eq.true&select=*&order=sort_order`),
+        sbGet('rooms',    `branch_id=eq.${branch.id}&active=eq.true&select=*&order=sort_order.asc.nullslast,name.asc`),
+        sbGet('groomers', `branch_id=eq.${branch.id}&active=eq.true&select=*&order=sort_order.asc.nullslast,name.asc`),
+        sbGet('studios',  `branch_id=eq.${branch.id}&active=eq.true&select=*&order=sort_order.asc.nullslast,name.asc`),
       ])
       setRooms([...(r ?? []), { ...INTERNAL_OTHER_ROOM, branch_id: branch.id }])
       setGrms(g ?? [])
@@ -74,6 +76,31 @@ export default function ResourcesPage({ branches, currentBranchIdx = 0, requeste
   const curTab  = TABS.find(t => t.key === tab)
   const curList = tab === 'rooms' ? rooms : tab === 'groomers' ? groomers : studios
   const counts  = { rooms: rooms.length, groomers: groomers.length, studios: studios.length }
+  const reorderableList = curList.filter(item => !item.internal_only)
+  const nextSortOrder = Math.max(
+    reorderableList.length - 1,
+    ...reorderableList.map(item => Number(item.sort_order)).filter(Number.isFinite),
+  ) + 1
+
+  async function moveResource(item, direction) {
+    const from = reorderableList.findIndex(resource => resource.id === item.id)
+    const to = from + direction
+    if (from < 0 || to < 0 || to >= reorderableList.length || reordering) return
+    const reordered = [...reorderableList]
+    ;[reordered[from], reordered[to]] = [reordered[to], reordered[from]]
+    const withOrder = reordered.map((resource, index) => ({ ...resource, sort_order: index }))
+    const table = tab === 'rooms' ? 'rooms' : tab === 'groomers' ? 'groomers' : 'studios'
+    const applyLocal = tab === 'rooms' ? setRooms : tab === 'groomers' ? setGrms : setSdts
+    applyLocal(tab === 'rooms' ? [...withOrder, curList.find(resource => resource.internal_only)].filter(Boolean) : withOrder)
+    setReordering(true); setReorderError('')
+    try {
+      await Promise.all(withOrder.map(resource => sbPatch(table, `id=eq.${resource.id}`, { sort_order: resource.sort_order })))
+      onChanged?.()
+    } catch (error) {
+      setReorderError(`Could not save order: ${error.message}`)
+      await loadAll()
+    } finally { setReordering(false) }
+  }
 
   return (
     <div className={styles.page}>
@@ -102,12 +129,22 @@ export default function ResourcesPage({ branches, currentBranchIdx = 0, requeste
           </div>
         ) : (
           <div className={styles.list}>
-            {curList.map(item => (
+            {curList.map(item => {
+              const orderIndex = reorderableList.findIndex(resource => resource.id === item.id)
+              return (
               <ResourceCard key={item.id} item={item} type={curTab.singular}
-                onEdit={() => setPanel({ type: curTab.singular, item })} />
-            ))}
+                onEdit={() => setPanel({ type: curTab.singular, item })}
+                onMoveUp={() => moveResource(item, -1)}
+                onMoveDown={() => moveResource(item, 1)}
+                canMoveUp={!item.internal_only && orderIndex > 0}
+                canMoveDown={!item.internal_only && orderIndex >= 0 && orderIndex < reorderableList.length - 1}
+                reordering={reordering} />
+              )
+            })}
           </div>
         )}
+
+        {reorderError && <div className={styles.reorderError}>{reorderError}</div>}
 
         <button className={styles.addBtn}
           onClick={() => setPanel({ type: curTab.singular, item: null })}>
@@ -128,6 +165,7 @@ export default function ResourcesPage({ branches, currentBranchIdx = 0, requeste
           type={panel.type}
           item={panel.item}
           branch={branch}
+          nextSortOrder={nextSortOrder}
           onClose={() => setPanel(null)}
           onSaved={handleSaved}
         />
@@ -137,7 +175,7 @@ export default function ResourcesPage({ branches, currentBranchIdx = 0, requeste
 }
 
 // ── Resource card ───────────────────────────────────────────────────────────
-function ResourceCard({ item, type, onEdit }) {
+function ResourceCard({ item, type, onEdit, onMoveUp, onMoveDown, canMoveUp, canMoveDown, reordering }) {
   const unavailable = item.is_locked || item.is_unavailable
   const reason      = item.lock_reason || item.unavailable_reason
   const sub = type === 'room'
@@ -159,14 +197,20 @@ function ResourceCard({ item, type, onEdit }) {
       {item.internal_only ? (
         <span className={styles.internalBadge}>Internal</span>
       ) : (
-        <button className={styles.editBtn} onClick={onEdit} title="Edit">✎</button>
+        <div className={styles.cardActions}>
+          <div className={styles.orderBtns}>
+            <button type="button" onClick={onMoveUp} disabled={!canMoveUp || reordering} title="Move up" aria-label={`Move ${item.name} up`}>↑</button>
+            <button type="button" onClick={onMoveDown} disabled={!canMoveDown || reordering} title="Move down" aria-label={`Move ${item.name} down`}>↓</button>
+          </div>
+          <button className={styles.editBtn} onClick={onEdit} title="Edit">✎</button>
+        </div>
       )}
     </div>
   )
 }
 
 // ── Add/Edit panel ──────────────────────────────────────────────────────────
-function ResourcePanel({ type, item, branch, onClose, onSaved }) {
+function ResourcePanel({ type, item, branch, nextSortOrder, onClose, onSaved }) {
   const isEdit = !!item
   const table  = type === 'room' ? 'rooms' : type === 'groomer' ? 'groomers' : 'studios'
   const label  = type === 'room' ? 'Room'  : type === 'groomer' ? 'Groomer'  : 'Studio'
@@ -194,6 +238,7 @@ function ResourcePanel({ type, item, branch, onClose, onSaved }) {
     try {
       const sr = notes.trim() ? { notes: notes.trim() } : {}
       const payload = { name: name.trim(), color, branch_id: branch.id, schedule_restrictions: sr }
+      if (!isEdit) payload.sort_order = nextSortOrder
 
       if (type === 'room') {
         Object.assign(payload, { room_type: roomType, pet_type: petType, allowed_sizes: sizes })

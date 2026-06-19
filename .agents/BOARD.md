@@ -48,6 +48,8 @@ reloads the human needs to apply manually.
 - Apply `supabase/migrations/2026-06-20_resource_color_hex.sql` before saving one of
   the new resource colors. It replaces the legacy fixed palette checks with generic
   six-digit hex validation and reloads the PostgREST schema cache.
+- Apply `supabase/migrations/2026-06-20_resource_sort_order.sql` to backfill NULL
+  resource orders and automatically append resources inserted outside the admin UI.
 
 ## Done
 

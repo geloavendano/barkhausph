@@ -147,14 +147,14 @@ export default function App() {
     // Load rooms + groomers together; studios separately so a missing table can't block the others
     try {
       const [r, g] = await Promise.all([
-        sbGet('rooms',    `branch_id=eq.${branchId}&active=eq.true&select=id,name,color,active,room_type,allowed_sizes,is_locked&order=name`),
-        sbGet('groomers', `branch_id=eq.${branchId}&active=eq.true&select=id,name,color,active,is_unavailable&order=name`),
+        sbGet('rooms',    `branch_id=eq.${branchId}&active=eq.true&select=id,name,color,active,room_type,allowed_sizes,is_locked,sort_order&order=sort_order.asc.nullslast,name.asc`),
+        sbGet('groomers', `branch_id=eq.${branchId}&active=eq.true&select=id,name,color,active,is_unavailable,sort_order&order=sort_order.asc.nullslast,name.asc`),
       ])
       setRooms([...(r ?? []), { ...INTERNAL_OTHER_ROOM, branch_id: branchId }])
       setGroomers(g ?? [])
     } catch { /* non-fatal */ }
     try {
-      const s = await sbGet('studios', `branch_id=eq.${branchId}&active=eq.true&select=id,name,color,is_unavailable&order=sort_order`)
+      const s = await sbGet('studios', `branch_id=eq.${branchId}&active=eq.true&select=id,name,color,is_unavailable,sort_order&order=sort_order.asc.nullslast,name.asc`)
       setStudios(s ?? [])
     } catch { setStudios([]) }
     setResourcesBranchId(branchId)

@@ -149,6 +149,20 @@
 }
 .editBtn:hover { background: var(--raised); color: var(--cream); }
 
+.cardActions { display: flex; align-items: center; gap: 7px; flex-shrink: 0; }
+.orderBtns { display: flex; gap: 3px; }
+.orderBtns button {
+  width: 27px; height: 27px; padding: 0; border: 0.5px solid var(--border);
+  border-radius: 6px; background: transparent; color: var(--mid);
+  font: 700 14px 'Nunito', sans-serif; cursor: pointer;
+}
+.orderBtns button:hover:not(:disabled) { background: var(--raised); color: var(--yellow); }
+.orderBtns button:disabled { opacity: .25; cursor: default; }
+.reorderError {
+  margin-bottom: 12px; padding: 8px 11px; border-radius: 8px;
+  color: var(--error); background: rgba(255,80,80,.08); font-size: 11px;
+}
+
 .internalBadge {
   font-size: 10px;
   font-weight: 800;
