@@ -157,8 +157,32 @@
 }
 .tlLbl:first-child { border-top: none; }
 .tlCol { flex: 1; position: relative; }
-.tlInner { position: relative; height: 990px; }
+.tlInner { position: relative; }
 .tlLine { position: absolute; left: 0; right: 0; height: 0.5px; background: var(--border); pointer-events: none; }
+
+/* Groomer service-hour markers sit behind bookings and only render in grooming views. */
+.scheduleBoundary,
+.lastServiceLine {
+  position: absolute; left: 0; right: 0; z-index: 1; pointer-events: none;
+}
+.scheduleBoundary { height: 7px; }
+.scheduleBoundary::before,
+.scheduleBoundary::after {
+  content: ''; position: absolute; left: 0; right: 0; background: currentColor;
+}
+.scheduleStart::before { top: 0; height: 3px; }
+.scheduleStart::after { top: 5px; height: 1px; opacity: .8; }
+.scheduleEnd::before { top: 0; height: 1px; opacity: .8; }
+.scheduleEnd::after { top: 3px; height: 3px; }
+.scheduleBoundary span,
+.lastServiceLine span {
+  position: absolute; right: 5px; bottom: 5px; padding: 1px 5px;
+  border-radius: 4px; background: var(--bg); color: currentColor;
+  font-size: 9px; font-weight: 800; line-height: 1.2;
+}
+.scheduleEnd span { bottom: 7px; }
+.lastServiceLine { height: 0; border-top: 2px dashed currentColor; }
+.lastServiceLine span { bottom: 3px; }
 
 /* ── Booking cards ── */
 .bk {

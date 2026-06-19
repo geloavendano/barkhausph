@@ -10,8 +10,10 @@ import styles from './CalendarPage.module.css'
 
 // ── Constants ──────────────────────────────────────────────────────────────
 const DAY_START  = 9 * 60    // 540 min (9 AM)
-const DAY_END    = 20 * 60   // 1200 min (8 PM)
-const PX_PER_MIN = 1.5       // px per minute → 990px total height
+const DAY_END    = 22 * 60   // 1320 min (10 PM)
+const PX_PER_MIN = 1.5
+const HOUR_COUNT = (DAY_END - DAY_START) / 60
+const TIMELINE_HEIGHT = (DAY_END - DAY_START) * PX_PER_MIN
 
 const INTERNAL_OTHER_ROOM_ID = '__internal_other_room__'
 const ROOM_TYPE_LABELS = { small_cage: 'Small Cage', medium_cage: 'Medium Cage', large_cage: 'Large Cage', single_cabin: 'Cat Cabin', villa: 'Cat Villa', other: 'Other' }
@@ -107,6 +109,7 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
   const [currentDate,      setCurrentDate]      = useState(() => new Date())
   const [bookings,         setBookings]         = useState([])
   const [blockedSchedules, setBlockedSchedules] = useState([])
+  const [groomerHours,      setGroomerHours]      = useState([])
   const [studios,          setStudios]          = useState([])
   const [loading,          setLoading]          = useState(true)
   const [loadError,        setLoadError]        = useState('')
@@ -159,13 +162,23 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
       setBookings([])
     }
     finally { setLoading(false) }
-  }, [branch?.id])
+  }, [branch])
 
   const loadBlocked = useCallback(async () => {
     if (!branch?.id) return
     try { setBlockedSchedules((await sbGet('blocked_schedules', `branch_id=eq.${branch.id}&active=eq.true&order=created_at.desc&select=*`)) ?? []) }
     catch { setBlockedSchedules([]) }
   }, [branch?.id])
+
+  const loadGroomerHours = useCallback(async date => {
+    if (!branch?.id) return
+    const ds = dateToISO(date)
+    try {
+      setGroomerHours((await sbGet('resource_service_hours',
+        `branch_id=eq.${branch.id}&resource_type=eq.groomer&service_date=eq.${ds}&active=eq.true` +
+        `&select=resource_id,start_time,end_time,last_service_time`)) ?? [])
+    } catch { setGroomerHours([]) }
+  }, [branch])
 
   const loadStudios = useCallback(async () => {
     if (!branch?.id) return
@@ -201,7 +214,7 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
     setCalModalDate(d)
     setCurrentSvc('all')
     setActiveFilter(null)
-    Promise.all([loadBookings(d), loadBlocked(), loadStudios(), loadMonthDots(d.getFullYear(), d.getMonth())])
+    Promise.all([loadBookings(d), loadBlocked(), loadGroomerHours(d), loadStudios(), loadMonthDots(d.getFullYear(), d.getMonth())])
   }, [branch?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Live updates: Realtime + 60-second poll + visibility change ───────────
@@ -268,19 +281,19 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
     const d = new Date(currentDate); d.setDate(d.getDate() + delta)
     const prevM = currentDate.getMonth()
     setCurrentDate(d); setActiveFilter(null)
-    loadBookings(d)
+    loadBookings(d); loadGroomerHours(d)
     if (d.getMonth() !== prevM) loadMonthDots(d.getFullYear(), d.getMonth())
   }
   const goToday = () => {
     const d = new Date(); const prevM = currentDate.getMonth()
     setCurrentDate(d); setActiveFilter(null)
-    loadBookings(d)
+    loadBookings(d); loadGroomerHours(d)
     if (d.getMonth() !== prevM) loadMonthDots(d.getFullYear(), d.getMonth())
   }
   const jumpToDate = (y, m, day) => {
     const d = new Date(y, m, day); const prevM = calModalDate.getMonth()
     setCurrentDate(d); setCalOpen(false); setActiveFilter(null)
-    loadBookings(d)
+    loadBookings(d); loadGroomerHours(d)
     if (d.getMonth() !== prevM) loadMonthDots(y, m)
   }
   const openCalOverlay = () => {
@@ -344,6 +357,19 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
   const dateLbl = `${DAYS[currentDate.getDay()]}, ${MONTHS[currentDate.getMonth()]} ${currentDate.getDate()}${yrSfx}`
   const openBooking = bookings.find(b => b.id === openId)
   const openBlock   = blockedSchedules.find(b => b.id === openBlockId)
+  const showGroomerMarkers = currentSvc === 'grooming' || activeFilter?.type === 'groomer'
+  const visibleGroomerHours = showGroomerMarkers
+    ? groomerHours.flatMap(hours => {
+        const groomer = groomers.find(item => item.id === hours.resource_id)
+        if (!groomer || groomer.is_unavailable) return []
+        if (activeFilter?.type === 'groomer' && activeFilter.id !== groomer.id) return []
+        const start = parseMins(hours.start_time)
+        const end = parseMins(hours.end_time)
+        const last = parseMins(hours.last_service_time)
+        if (start == null || end == null || last == null) return []
+        return [{ ...hours, groomer, start, end, last }]
+      })
+    : []
 
   return (
     <div className={styles.page}>
@@ -455,7 +481,7 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
             <div className={styles.tlBody}>
               {/* Hour labels */}
               <div className={styles.tlTimes}>
-                {Array.from({ length: 12 }, (_, i) => {
+                {Array.from({ length: HOUR_COUNT }, (_, i) => {
                   const h = 9 + i
                   return <div className={styles.tlLbl} key={h}>{h < 12 ? `${h}AM` : h === 12 ? '12PM' : `${h-12}PM`}</div>
                 })}
@@ -463,12 +489,36 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
 
               {/* Cards area */}
               <div className={styles.tlCol}>
-                <div className={styles.tlInner}>
+                <div className={styles.tlInner} style={{ height: TIMELINE_HEIGHT }}>
                   {/* Hour grid lines */}
-                  {Array.from({ length: 12 }, (_, i) => <div key={i} className={styles.tlLine} style={{ top: i * 90 }} />)}
+                  {Array.from({ length: HOUR_COUNT }, (_, i) => <div key={i} className={styles.tlLine} style={{ top: i * 90 }} />)}
+
+                  {/* Grooming-only service-hour boundaries. Never shown in All. */}
+                  {visibleGroomerHours.map((hours, index) => {
+                    const offset = visibleGroomerHours.length > 1 ? index * 4 : 0
+                    const color = hours.groomer.color ?? '#4D96B9'
+                    const markers = [
+                      { key: 'start', minute: hours.start, kind: 'start', label: `${hours.groomer.name} starts` },
+                      { key: 'end', minute: hours.end, kind: 'end', label: `${hours.groomer.name} ends` },
+                    ]
+                    return <div key={hours.resource_id}>
+                      {markers.map(marker => marker.minute >= DAY_START && marker.minute <= DAY_END && (
+                        <div key={marker.key} className={`${styles.scheduleBoundary} ${marker.kind === 'start' ? styles.scheduleStart : styles.scheduleEnd}`}
+                          style={{ top: (marker.minute - DAY_START) * PX_PER_MIN + (marker.kind === 'start' ? offset : -offset - 6), color }}>
+                          <span>{marker.label}</span>
+                        </div>
+                      ))}
+                      {hours.last >= DAY_START && hours.last <= DAY_END && (
+                        <div className={styles.lastServiceLine}
+                          style={{ top: (hours.last - DAY_START) * PX_PER_MIN + offset, color, borderTopColor: color }}>
+                          <span>{hours.groomer.name} last service</span>
+                        </div>
+                      )}
+                    </div>
+                  })}
 
                   {/* Unified column layout: blocked schedules + bookings side-by-side */}
-                  {positioned.map((item, idx) => {
+                  {positioned.map(item => {
                     const top = (item.st - DAY_START) * PX_PER_MIN
                     const ht  = item.kind === 'block'
                       ? Math.max(22, (item.en - item.st) * PX_PER_MIN)
