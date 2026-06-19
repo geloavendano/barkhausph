@@ -70,6 +70,12 @@ function parseMins(s) {
   if (ap === 'AM' && h === 12) h = 0
   return h * 60 + min
 }
+function formatMins(mins) {
+  const hour24 = Math.floor(mins / 60)
+  const minute = mins % 60
+  const period = hour24 >= 12 ? 'PM' : 'AM'
+  return `${hour24 % 12 || 12}${minute ? `:${String(minute).padStart(2, '0')}` : ''} ${period}`
+}
 function getBookingTimes(b, dateStr) {
   const gd = first(b.grooming_details) ?? {}, hd = first(b.hotel_details) ?? {}
   const dd = first(b.daycare_details)  ?? {}, sd = first(b.studio_details)  ?? {}
@@ -466,6 +472,19 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
             ))}
           </div>
 
+          {showGroomerMarkers && visibleGroomerHours.length > 0 && (
+            <div className={styles.groomerHoursStrip}>
+              {visibleGroomerHours.map(hours => (
+                <div className={styles.groomerHoursChip} key={hours.resource_id}>
+                  <span className={styles.groomerHoursDot} style={{ background: hours.groomer.color }} />
+                  <strong>{hours.groomer.name}</strong>
+                  <span>{formatMins(hours.start)}-{formatMins(hours.end)}</span>
+                  <span className={styles.groomerHoursLast}>last {formatMins(hours.last)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* Empty state */}
           {!loading && !loadError && filtered.length === 0 && (
             <div className={styles.emptyState}>
@@ -498,20 +517,18 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
                     const offset = visibleGroomerHours.length > 1 ? index * 4 : 0
                     const color = hours.groomer.color ?? '#4D96B9'
                     const markers = [
-                      { key: 'start', minute: hours.start, kind: 'start', label: `${hours.groomer.name} starts` },
-                      { key: 'end', minute: hours.end, kind: 'end', label: `${hours.groomer.name} ends` },
+                      { key: 'start', minute: hours.start, kind: 'start' },
+                      { key: 'end', minute: hours.end, kind: 'end' },
                     ]
                     return <div key={hours.resource_id}>
                       {markers.map(marker => marker.minute >= DAY_START && marker.minute <= DAY_END && (
                         <div key={marker.key} className={`${styles.scheduleBoundary} ${marker.kind === 'start' ? styles.scheduleStart : styles.scheduleEnd}`}
                           style={{ top: (marker.minute - DAY_START) * PX_PER_MIN + (marker.kind === 'start' ? offset : -offset - 6), color }}>
-                          <span>{marker.label}</span>
                         </div>
                       ))}
                       {hours.last >= DAY_START && hours.last <= DAY_END && (
                         <div className={styles.lastServiceLine}
                           style={{ top: (hours.last - DAY_START) * PX_PER_MIN + offset, color, borderTopColor: color }}>
-                          <span>{hours.groomer.name} last service</span>
                         </div>
                       )}
                     </div>
