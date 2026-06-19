@@ -77,8 +77,8 @@ SELECT
   'groomer',
   gb.groomer_id,
   array_agg(rsh.service_date ORDER BY rsh.service_date),
-  gb.start_time,
-  gb.end_time,
+  gb.start_time::time,
+  gb.end_time::time,
   nullif(gb.label, ''),
   true
 FROM public.groomer_blocks gb
