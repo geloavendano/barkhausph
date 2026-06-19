@@ -328,7 +328,7 @@ erDiagram
     <li><strong><code>booking_date</code> = creation date</strong> (matches <code>created_at::date</code>); the appointment date is <code>service_date</code> in the service-detail table (hotel: <code>checkin_date/checkout_date</code>). Every availability/check-in query keys on the latter.</li>
     <li>Soft deletes via <code>active</code> flags (resources, blocks) and <code>cancelled</code> status (bookings); no operational hard deletes.</li>
     <li>Detail-table embeds are promoted to <code>!inner</code> when the parent must be filtered by child columns (PostgREST).</li>
-    <li>Resource colors constrained to an 8-value CHECK list; they drive calendar rendering.</li>
+    <li>Resource colors use a curated 16-color admin palette and are database-validated as six-digit hex values; they drive calendar rendering.</li>
     <li>Grooming availability is the intersection of date-specific service hours, the last-service cutoff, full service duration, explicit blocked schedules, and existing assigned/unassigned bookings. No service-hours row means unavailable.</li>
   </ul>
   <div class="backtop"><a href="#top">↑ top</a></div>

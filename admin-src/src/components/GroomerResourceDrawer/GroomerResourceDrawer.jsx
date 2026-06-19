@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { sbGet, sbPatch, sbPost, sbUpsert } from '../../lib/supabase'
+import { RESOURCE_COLORS } from '../../lib/constants'
 import styles from './GroomerResourceDrawer.module.css'
 
-const COLORS = ['#4D96B9','#EF9F27','#1D9E75','#D4537E','#9B95E8','#D85A30','#639922','#888780']
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
 
 function dateStr(date = new Date()) {
@@ -196,7 +196,7 @@ export default function GroomerResourceDrawer({ branch, groomer, onClose, onSave
   const [end, setEnd] = useState('19:00')
   const [last, setLast] = useState('17:00')
   const [name, setName] = useState(groomer.name)
-  const [color, setColor] = useState(groomer.color ?? COLORS[0])
+  const [color, setColor] = useState(groomer.color ?? RESOURCE_COLORS[0].value)
   const [unavailable, setUnavailable] = useState(!!groomer.is_unavailable)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -284,7 +284,7 @@ export default function GroomerResourceDrawer({ branch, groomer, onClose, onSave
           <section>
             <h3>Resource details</h3>
             <label className={styles.field}>Name<input value={name} onChange={event => setName(event.target.value)} /></label>
-            <div className={styles.swatches}>{COLORS.map(value => <button key={value} type="button" className={color === value ? styles.swatchOn : ''} style={{ background: value }} onClick={() => setColor(value)} />)}</div>
+            <div className={styles.swatches}>{RESOURCE_COLORS.map(option => <button key={option.value} type="button" title={option.label} aria-label={option.label} className={color === option.value ? styles.swatchOn : ''} style={{ background: option.value }} onClick={() => setColor(option.value)} />)}</div>
             <label className={styles.check}><input type="checkbox" checked={unavailable} onChange={event => setUnavailable(event.target.checked)} /> Mark resource unavailable</label>
             <button className={styles.secondary} onClick={saveDetails} disabled={saving}>Save resource details</button>
           </section>

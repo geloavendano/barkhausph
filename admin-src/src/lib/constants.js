@@ -5,6 +5,25 @@ export const SVC_LABELS = {
   studio:   'Studio',
 }
 
+export const RESOURCE_COLORS = [
+  { value: '#4D96B9', label: 'Ocean blue' },
+  { value: '#2F80ED', label: 'Royal blue' },
+  { value: '#6D9DC5', label: 'Steel blue' },
+  { value: '#00A6A6', label: 'Teal' },
+  { value: '#1D9E75', label: 'Emerald' },
+  { value: '#639922', label: 'Leaf green' },
+  { value: '#A3B18A', label: 'Sage' },
+  { value: '#EF9F27', label: 'Amber' },
+  { value: '#F4A261', label: 'Apricot' },
+  { value: '#D85A30', label: 'Burnt orange' },
+  { value: '#E76F51', label: 'Coral' },
+  { value: '#D4537E', label: 'Rose' },
+  { value: '#C65D9E', label: 'Mauve' },
+  { value: '#9B95E8', label: 'Lavender' },
+  { value: '#8E5BD9', label: 'Violet' },
+  { value: '#888780', label: 'Slate' },
+]
+
 export const SVC_COLORS = {
   grooming: '#4D96B9',
   hotel:    '#EF9F27',

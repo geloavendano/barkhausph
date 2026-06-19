@@ -45,6 +45,9 @@ reloads the human needs to apply manually.
 - After the migration succeeds, deploy the updated function with
   `supabase functions deploy submit-booking`. Verify a grooming submit outside service
   hours returns the availability error before creating any records.
+- Apply `supabase/migrations/2026-06-20_resource_color_hex.sql` before saving one of
+  the new resource colors. It replaces the legacy fixed palette checks with generic
+  six-digit hex validation and reloads the PostgREST schema cache.
 
 ## Done
 

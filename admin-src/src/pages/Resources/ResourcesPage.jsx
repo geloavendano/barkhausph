@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react'
 import { sbGet, sbPost, sbPatch } from '../../lib/supabase'
+import { RESOURCE_COLORS } from '../../lib/constants'
 import GroomerResourceDrawer from '../../components/GroomerResourceDrawer/GroomerResourceDrawer'
 import styles from './ResourcesPage.module.css'
-
-const COLORS = ['#4D96B9','#EF9F27','#1D9E75','#D4537E','#9B95E8','#D85A30','#639922','#888780']
 
 const ROOM_TYPE_OPTS = [
   { key:'large_cage',   label:'Large Cage' },
@@ -173,7 +172,7 @@ function ResourcePanel({ type, item, branch, onClose, onSaved }) {
   const label  = type === 'room' ? 'Room'  : type === 'groomer' ? 'Groomer'  : 'Studio'
 
   const [name,      setName]     = useState(item?.name ?? '')
-  const [color,     setColor]    = useState(item?.color ?? (type === 'studio' ? '#D4537E' : COLORS[0]))
+  const [color,     setColor]    = useState(item?.color ?? (type === 'studio' ? '#D4537E' : RESOURCE_COLORS[0].value))
   const [roomType,  setRmType]   = useState(item?.room_type ?? 'large_cage')
   const [petType,   setPetType]  = useState(item?.pet_type  ?? 'dog')
   const [sizes,     setSizes]    = useState(item?.allowed_sizes ?? [])
@@ -239,11 +238,11 @@ function ResourcePanel({ type, item, branch, onClose, onSaved }) {
           <div className={styles.fg}>
             <label className={styles.fl}>Color</label>
             <div className={styles.colorRow}>
-              {COLORS.map(c => (
-                <div key={c}
-                  className={`${styles.swatch} ${color === c ? styles.swatchOn : ''}`}
-                  style={{ background: c }}
-                  onClick={() => setColor(c)} />
+              {RESOURCE_COLORS.map(option => (
+                <button key={option.value} type="button" title={option.label} aria-label={option.label}
+                  className={`${styles.swatch} ${color === option.value ? styles.swatchOn : ''}`}
+                  style={{ background: option.value }}
+                  onClick={() => setColor(option.value)} />
               ))}
             </div>
           </div>
