@@ -18,6 +18,16 @@ const INTERNAL_OTHER_ROOM = {
   internal_only: true,
 }
 
+const SESSION_RESTORE_TIMEOUT_MS = 10000
+
+function withTimeout(promise, timeoutMs) {
+  let timeoutId
+  const timeout = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error('SESSION_RESTORE_TIMEOUT')), timeoutMs)
+  })
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timeoutId))
+}
+
 export default function App() {
   const [session,      setSession]      = useState(undefined)
   const [allowed,      setAllowed]      = useState(false)
@@ -36,26 +46,26 @@ export default function App() {
 
   /* ── Auth ── */
   useEffect(() => {
-    // Safety net: if getSession() hangs (e.g. stuck token-refresh request),
-    // fall through to the Gate login page after 6 s instead of spinning forever.
-    const giveUp = setTimeout(() => {
-      console.warn('getSession timed out — falling back to login')
-      setSession(s => s === undefined ? null : s)
-    }, 6000)
+    let active = true
 
-    supabase.auth.getSession()
+    withTimeout(supabase.auth.getSession(), SESSION_RESTORE_TIMEOUT_MS)
       .then(async ({ data }) => {
-        clearTimeout(giveUp)
+        if (!active) return
         const sess = data?.session ?? null
         setAuthToken(sess?.access_token ?? null)
         setSession(sess)
+        // Function declarations are hoisted; this callback runs after render.
+        // eslint-disable-next-line react-hooks/immutability
         if (sess) await onSessionReady(sess)
       })
       .catch(err => {
-        clearTimeout(giveUp)
+        if (!active) return
         console.error('getSession failed:', err)
         setAuthToken(null)
         setSession(null)
+        setAccessError(err?.message === 'SESSION_RESTORE_TIMEOUT'
+          ? 'Your saved admin session could not be restored. Please sign in again.'
+          : 'We could not check your admin session. Please sign in again.')
       })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, sess) => {
@@ -63,7 +73,11 @@ export default function App() {
       setSession(sess)
       if (sess) {
         try { await onSessionReady(sess) }
-        catch (err) { console.error('onSessionReady failed:', err) }
+        catch (err) {
+          console.error('onSessionReady failed:', err)
+          setAllowed(false)
+          setAccessError('We could not verify your admin access. Please check your connection and try again.')
+        }
       } else {
         setAllowed(false)
         setGreeting('')
@@ -83,6 +97,7 @@ export default function App() {
     window.addEventListener('barkhaus-admin-session-expired', handleSessionExpired)
 
     return () => {
+      active = false
       subscription.unsubscribe()
       window.removeEventListener('barkhaus-admin-session-expired', handleSessionExpired)
     }
@@ -115,19 +130,18 @@ export default function App() {
   }
 
   async function verifyAdmin(sess) {
-    try {
-      // select=* so this keeps working before the branch_ids column is added
-      // (a named select on a missing column would 400 and lock everyone out).
-      const url = `${SUPABASE_URL}/rest/v1/admin_users?select=*&email=eq.${encodeURIComponent(sess.user.email)}&limit=1`
-      const res = await fetch(url, {
-        headers: {
-          apikey:         SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${sess.access_token}`,
-        },
-      })
-      const rows = await res.json()
-      return (Array.isArray(rows) && rows.length > 0) ? rows[0] : null
-    } catch { return null }
+    // select=* so this keeps working before the branch_ids column is added
+    // (a named select on a missing column would 400 and lock everyone out).
+    const url = `${SUPABASE_URL}/rest/v1/admin_users?select=*&email=eq.${encodeURIComponent(sess.user.email)}&limit=1`
+    const res = await fetch(url, {
+      headers: {
+        apikey:         SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${sess.access_token}`,
+      },
+    })
+    if (!res.ok) throw new Error(`Admin verification failed (${res.status})`)
+    const rows = await res.json()
+    return (Array.isArray(rows) && rows.length > 0) ? rows[0] : null
   }
 
   async function loadBranches(allowedIds) {
