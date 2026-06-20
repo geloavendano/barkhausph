@@ -104,10 +104,31 @@
   background: var(--surface);
   border: 0.5px solid var(--border);
   border-radius: 10px;
-  transition: background 0.12s;
+  transition: background 0.12s, border-color 0.12s, opacity 0.12s, transform 0.12s;
 }
 .card:hover { background: var(--raised); }
+.cardClickable { cursor: pointer; }
+.cardClickable:focus-visible { outline: 2px solid var(--yellow); outline-offset: 2px; }
+.cardDragging { opacity: 0.38; transform: scale(0.99); }
+.cardDragOver { border-color: var(--yellow); background: rgba(255,206,88,0.08); }
 .cardOff { opacity: 0.55; }
+.cardOff.cardDragging { opacity: 0.3; }
+
+.dragHandle {
+  width: 22px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  color: var(--mid);
+  cursor: grab;
+  flex-shrink: 0;
+  border-radius: 5px;
+  touch-action: none;
+  user-select: none;
+}
+.dragHandle:hover { color: var(--yellow); background: var(--raised); }
+.dragHandle:active { cursor: grabbing; }
+.dragHandle svg { width: 12px; height: 18px; fill: currentColor; pointer-events: none; }
 
 .cardDot {
   width: 12px;
@@ -150,14 +171,6 @@
 .editBtn:hover { background: var(--raised); color: var(--cream); }
 
 .cardActions { display: flex; align-items: center; gap: 7px; flex-shrink: 0; }
-.orderBtns { display: flex; gap: 3px; }
-.orderBtns button {
-  width: 27px; height: 27px; padding: 0; border: 0.5px solid var(--border);
-  border-radius: 6px; background: transparent; color: var(--mid);
-  font: 700 14px 'Nunito', sans-serif; cursor: pointer;
-}
-.orderBtns button:hover:not(:disabled) { background: var(--raised); color: var(--yellow); }
-.orderBtns button:disabled { opacity: .25; cursor: default; }
 .reorderError {
   margin-bottom: 12px; padding: 8px 11px; border-radius: 8px;
   color: var(--error); background: rgba(255,80,80,.08); font-size: 11px;

@@ -46,6 +46,8 @@ export default function ResourcesPage({ branches, currentBranchIdx = 0, requeste
   const [panel,   setPanel]  = useState(null) // { type, item }
   const [reordering, setReordering] = useState(false)
   const [reorderError, setReorderError] = useState('')
+  const [draggingId, setDraggingId] = useState(null)
+  const [dragOverId, setDragOverId] = useState(null)
 
   const branch = branches?.[currentBranchIdx]
 
@@ -82,12 +84,13 @@ export default function ResourcesPage({ branches, currentBranchIdx = 0, requeste
     ...reorderableList.map(item => Number(item.sort_order)).filter(Number.isFinite),
   ) + 1
 
-  async function moveResource(item, direction) {
-    const from = reorderableList.findIndex(resource => resource.id === item.id)
-    const to = from + direction
-    if (from < 0 || to < 0 || to >= reorderableList.length || reordering) return
+  async function reorderResource(fromId, toId) {
+    const from = reorderableList.findIndex(resource => resource.id === fromId)
+    const to = reorderableList.findIndex(resource => resource.id === toId)
+    if (from < 0 || to < 0 || from === to || reordering) return
     const reordered = [...reorderableList]
-    ;[reordered[from], reordered[to]] = [reordered[to], reordered[from]]
+    const [moved] = reordered.splice(from, 1)
+    reordered.splice(to, 0, moved)
     const withOrder = reordered.map((resource, index) => ({ ...resource, sort_order: index }))
     const table = tab === 'rooms' ? 'rooms' : tab === 'groomers' ? 'groomers' : 'studios'
     const applyLocal = tab === 'rooms' ? setRooms : tab === 'groomers' ? setGrms : setSdts
@@ -100,6 +103,46 @@ export default function ResourcesPage({ branches, currentBranchIdx = 0, requeste
       setReorderError(`Could not save order: ${error.message}`)
       await loadAll()
     } finally { setReordering(false) }
+  }
+
+  function startDrag(event, item) {
+    if (item.internal_only || reordering) { event.preventDefault(); return }
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', item.id)
+    setDraggingId(item.id)
+    setReorderError('')
+  }
+
+  function dropResource(event, item) {
+    event.preventDefault()
+    const fromId = event.dataTransfer.getData('text/plain') || draggingId
+    setDraggingId(null)
+    setDragOverId(null)
+    if (fromId && !item.internal_only) reorderResource(fromId, item.id)
+  }
+
+  function touchDragStart(event, item) {
+    if (event.pointerType === 'mouse' || item.internal_only || reordering) return
+    event.preventDefault()
+    event.currentTarget.setPointerCapture(event.pointerId)
+    setDraggingId(item.id)
+    setReorderError('')
+  }
+
+  function touchDragMove(event, item) {
+    if (event.pointerType === 'mouse' || draggingId !== item.id) return
+    const targetId = document.elementFromPoint(event.clientX, event.clientY)
+      ?.closest('[data-resource-id]')?.dataset.resourceId
+    setDragOverId(targetId && targetId !== item.id ? targetId : null)
+  }
+
+  function touchDragEnd(event, item, cancelled = false) {
+    if (event.pointerType === 'mouse' || draggingId !== item.id) return
+    const targetId = !cancelled && document.elementFromPoint(event.clientX, event.clientY)
+      ?.closest('[data-resource-id]')?.dataset.resourceId
+    setDraggingId(null)
+    setDragOverId(null)
+    if (targetId && targetId !== item.id) reorderResource(item.id, targetId)
   }
 
   return (
@@ -130,14 +173,26 @@ export default function ResourcesPage({ branches, currentBranchIdx = 0, requeste
         ) : (
           <div className={styles.list}>
             {curList.map(item => {
-              const orderIndex = reorderableList.findIndex(resource => resource.id === item.id)
               return (
               <ResourceCard key={item.id} item={item} type={curTab.singular}
                 onEdit={() => setPanel({ type: curTab.singular, item })}
-                onMoveUp={() => moveResource(item, -1)}
-                onMoveDown={() => moveResource(item, 1)}
-                canMoveUp={!item.internal_only && orderIndex > 0}
-                canMoveDown={!item.internal_only && orderIndex >= 0 && orderIndex < reorderableList.length - 1}
+                onDragStart={event => startDrag(event, item)}
+                onDragEnd={() => { setDraggingId(null); setDragOverId(null) }}
+                onDragOver={event => {
+                  if (!item.internal_only && draggingId && draggingId !== item.id) {
+                    event.preventDefault()
+                    event.dataTransfer.dropEffect = 'move'
+                    setDragOverId(item.id)
+                  }
+                }}
+                onDragLeave={() => setDragOverId(id => id === item.id ? null : id)}
+                onDrop={event => dropResource(event, item)}
+                onPointerDown={event => touchDragStart(event, item)}
+                onPointerMove={event => touchDragMove(event, item)}
+                onPointerUp={event => touchDragEnd(event, item)}
+                onPointerCancel={event => touchDragEnd(event, item, true)}
+                dragging={draggingId === item.id}
+                dragOver={dragOverId === item.id}
                 reordering={reordering} />
               )
             })}
@@ -175,7 +230,7 @@ export default function ResourcesPage({ branches, currentBranchIdx = 0, requeste
 }
 
 // ── Resource card ───────────────────────────────────────────────────────────
-function ResourceCard({ item, type, onEdit, onMoveUp, onMoveDown, canMoveUp, canMoveDown, reordering }) {
+function ResourceCard({ item, type, onEdit, onDragStart, onDragEnd, onDragOver, onDragLeave, onDrop, onPointerDown, onPointerMove, onPointerUp, onPointerCancel, dragging, dragOver, reordering }) {
   const unavailable = item.is_locked || item.is_unavailable
   const reason      = item.lock_reason || item.unavailable_reason
   const sub = type === 'room'
@@ -183,7 +238,41 @@ function ResourceCard({ item, type, onEdit, onMoveUp, onMoveDown, canMoveUp, can
     : (unavailable ? (reason ?? 'Unavailable') : 'Active')
 
   return (
-    <div className={`${styles.card} ${unavailable ? styles.cardOff : ''}`}>
+    <div
+      className={`${styles.card} ${unavailable ? styles.cardOff : ''} ${dragging ? styles.cardDragging : ''} ${dragOver ? styles.cardDragOver : ''} ${!item.internal_only ? styles.cardClickable : ''}`}
+      onClick={() => !item.internal_only && onEdit()}
+      onKeyDown={event => {
+        if (!item.internal_only && (event.key === 'Enter' || event.key === ' ')) {
+          event.preventDefault()
+          onEdit()
+        }
+      }}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+      data-resource-id={!item.internal_only ? item.id : undefined}
+      role={!item.internal_only ? 'button' : undefined}
+      tabIndex={!item.internal_only ? 0 : undefined}>
+      {!item.internal_only && (
+        <span
+          className={styles.dragHandle}
+          draggable={!reordering}
+          onClick={event => event.stopPropagation()}
+          onDragStart={onDragStart}
+          onDragEnd={onDragEnd}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerCancel}
+          title="Drag to reorder"
+          aria-label={`Drag ${item.name} to reorder`}>
+          <svg viewBox="0 0 12 18" aria-hidden="true">
+            <circle cx="3" cy="3" r="1.5"/><circle cx="9" cy="3" r="1.5"/>
+            <circle cx="3" cy="9" r="1.5"/><circle cx="9" cy="9" r="1.5"/>
+            <circle cx="3" cy="15" r="1.5"/><circle cx="9" cy="15" r="1.5"/>
+          </svg>
+        </span>
+      )}
       <span className={styles.cardDot} style={{ background: item.color }} />
       <div className={styles.cardMeta}>
         <div className={styles.cardName}>{item.name}</div>
@@ -198,11 +287,7 @@ function ResourceCard({ item, type, onEdit, onMoveUp, onMoveDown, canMoveUp, can
         <span className={styles.internalBadge}>Internal</span>
       ) : (
         <div className={styles.cardActions}>
-          <div className={styles.orderBtns}>
-            <button type="button" onClick={onMoveUp} disabled={!canMoveUp || reordering} title="Move up" aria-label={`Move ${item.name} up`}>↑</button>
-            <button type="button" onClick={onMoveDown} disabled={!canMoveDown || reordering} title="Move down" aria-label={`Move ${item.name} down`}>↓</button>
-          </div>
-          <button className={styles.editBtn} onClick={onEdit} title="Edit">✎</button>
+          <button className={styles.editBtn} onClick={event => { event.stopPropagation(); onEdit() }} title="Edit">✎</button>
         </div>
       )}
     </div>
