@@ -109,22 +109,31 @@ export default function BookingsPage({ branches, currentBranchIdx = 0, rooms, gr
     return () => clearTimeout(t)
   }, [searchQ, searchActive, branch?.id])
 
-  // ── Live updates: Realtime + 60-second poll + visibility change ───────────
+  // ── Live updates: Realtime + disconnected fallback + visibility change ────
   useEffect(() => {
     if (!branch?.id) return
 
     let debounce = null
+    let fallbackPoll = null
     const refresh = () => {
       clearTimeout(debounce)
       debounce = setTimeout(() => load('reset'), 1200)
+    }
+    const stopFallback = () => {
+      if (fallbackPoll) clearInterval(fallbackPoll)
+      fallbackPoll = null
+    }
+    const startFallback = () => {
+      if (!fallbackPoll) fallbackPoll = setInterval(() => load('reset'), 5 * 60_000)
     }
 
     const channel = supabase
       .channel(`bk-${branch.id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, refresh)
-      .subscribe()
-
-    const poll = setInterval(() => load('reset'), 60_000)
+      .subscribe(status => {
+        if (status === 'SUBSCRIBED') stopFallback()
+        else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') startFallback()
+      })
 
     const onVisible = () => { if (!document.hidden) load('reset') }
     document.addEventListener('visibilitychange', onVisible)
@@ -132,7 +141,7 @@ export default function BookingsPage({ branches, currentBranchIdx = 0, rooms, gr
     return () => {
       clearTimeout(debounce)
       supabase.removeChannel(channel)
-      clearInterval(poll)
+      stopFallback()
       document.removeEventListener('visibilitychange', onVisible)
     }
   }, [branch?.id, load]) // eslint-disable-line react-hooks/exhaustive-deps

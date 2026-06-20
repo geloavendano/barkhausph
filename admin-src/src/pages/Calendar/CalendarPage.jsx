@@ -147,21 +147,15 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
     try {
       // Exclude cancelled/rejected; keep pending (unpaid online holds) visible.
       const base = `branch_id=eq.${branch.id}&status=not.in.(cancelled,rejected)`
-      // Each non-hotel service is filtered server-side by its detail table's
-      // service_date (via !inner). Hotel is fetched whole and filtered client-side
-      // against its checkin/checkout range (a stay spans multiple days).
-      const [groomRows, dayRows, studioRows, hotelAll] = await Promise.all([
+      // Filter every service server-side. Hotel stays intersect the selected day
+      // when check-in is on/before it and checkout is on/after it.
+      const [groomRows, dayRows, studioRows, hotelRows] = await Promise.all([
         sbGet('bookings', `${base}&service=eq.grooming&grooming_details.service_date=eq.${ds}&order=created_at&select=${selectForService('grooming')}`),
         sbGet('bookings', `${base}&service=eq.daycare&daycare_details.service_date=eq.${ds}&order=created_at&select=${selectForService('daycare')}`),
         sbGet('bookings', `${base}&service=eq.studio&studio_details.service_date=eq.${ds}&order=created_at&select=${selectForService('studio')}`),
-        sbGet('bookings', `${base}&service=eq.hotel&order=created_at&select=${selectForService('hotel')}`),
+        sbGet('bookings', `${base}&service=eq.hotel&hotel_details.checkin_date=lte.${ds}&hotel_details.checkout_date=gte.${ds}&order=created_at&select=${selectForService('hotel')}`),
       ])
-      const d = new Date(ds + 'T00:00:00')
-      const hf = (hotelAll ?? []).filter(b => {
-        const hd = first(b.hotel_details); if (!hd) return false
-        return new Date(hd.checkin_date + 'T00:00:00') <= d && d <= new Date(hd.checkout_date + 'T00:00:00')
-      })
-      setBookings([...(groomRows ?? []), ...(dayRows ?? []), ...(studioRows ?? []), ...hf])
+      setBookings([...(groomRows ?? []), ...(dayRows ?? []), ...(studioRows ?? []), ...(hotelRows ?? [])])
     } catch (err) {
       console.error('Calendar load error:', err)
       setLoadError(err.message)
@@ -223,25 +217,33 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
     Promise.all([loadBookings(d), loadBlocked(), loadGroomerHours(d), loadStudios(), loadMonthDots(d.getFullYear(), d.getMonth())])
   }, [branch?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Live updates: Realtime + 60-second poll + visibility change ───────────
+  // ── Live updates: Realtime + disconnected fallback + visibility change ────
   useEffect(() => {
     if (!branch?.id) return
 
     let debounce = null
+    let fallbackPoll = null
     const refresh = () => {
       // Debounce rapid-fire events (e.g. bulk inserts) to a single reload
       clearTimeout(debounce)
       debounce = setTimeout(() => loadBookings(currentDateRef.current), 1200)
+    }
+    const stopFallback = () => {
+      if (fallbackPoll) clearInterval(fallbackPoll)
+      fallbackPoll = null
+    }
+    const startFallback = () => {
+      if (!fallbackPoll) fallbackPoll = setInterval(() => loadBookings(currentDateRef.current), 5 * 60_000)
     }
 
     // Supabase Realtime — instant update on any booking change for this branch
     const channel = supabase
       .channel(`cal-${branch.id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, refresh)
-      .subscribe()
-
-    // 60-second polling fallback in case the WebSocket drops
-    const poll = setInterval(() => loadBookings(currentDateRef.current), 60_000)
+      .subscribe(status => {
+        if (status === 'SUBSCRIBED') stopFallback()
+        else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') startFallback()
+      })
 
     // Refresh immediately when the user returns to this tab
     const onVisible = () => { if (!document.hidden) loadBookings(currentDateRef.current) }
@@ -250,7 +252,7 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
     return () => {
       clearTimeout(debounce)
       supabase.removeChannel(channel)
-      clearInterval(poll)
+      stopFallback()
       document.removeEventListener('visibilitychange', onVisible)
     }
   }, [branch?.id, loadBookings]) // eslint-disable-line react-hooks/exhaustive-deps
