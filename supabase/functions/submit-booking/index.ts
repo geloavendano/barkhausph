@@ -149,9 +149,45 @@ async function assertGroomingAvailable(supabase: any, branchId: string, body: Re
   const pool = groomers ?? [];
   const selectedId = body.preferredStylistId || null;
   const available = selectedId
-    ? canServe(selectedId) && unassigned <= pool.filter((row: any) => row.id !== selectedId && canServe(row.id)).length
+    ? pool.some((row: any) => row.id === selectedId) && canServe(selectedId) &&
+      unassigned <= pool.filter((row: any) => row.id !== selectedId && canServe(row.id)).length
     : pool.filter((row: any) => canServe(row.id)).length > unassigned;
   if (!available) throw new Error("That grooming slot is no longer available. Please select another time.");
+}
+
+async function assertHotelAvailable(supabase: any, branchId: string, body: Record<string, any>) {
+  if (body.service !== "hotel") return;
+  if (!body.hotelCheckin || !body.hotelCheckout || !body.hotelRoomId) {
+    throw new Error("Hotel dates and room selection are required.");
+  }
+  if (body.hotelCheckout <= body.hotelCheckin) throw new Error("Hotel checkout must be after check-in.");
+
+  const { data: room, error: roomError } = await supabase.from("rooms")
+    .select("id,room_type,allowed_sizes")
+    .eq("id", body.hotelRoomId)
+    .eq("branch_id", branchId)
+    .eq("active", true)
+    .eq("is_locked", false)
+    .maybeSingle();
+  if (roomError) throw new Error(`Could not validate room: ${roomError.message}`);
+  if (!room) throw new Error("That room is no longer available.");
+  if (body.hotelRoom && body.hotelRoom !== room.room_type) {
+    throw new Error("That room does not match the selected room type.");
+  }
+  if (body.petSize && (!Array.isArray(room.allowed_sizes) || !room.allowed_sizes.includes(body.petSize))) {
+    throw new Error("That room is not available for this pet size.");
+  }
+
+  const { data: overlaps, error: overlapError } = await supabase.from("hotel_details")
+    .select("booking_id,bookings!inner(branch_id,status)")
+    .eq("room_id", body.hotelRoomId)
+    .lt("checkin_date", body.hotelCheckout)
+    .gt("checkout_date", body.hotelCheckin)
+    .eq("bookings.branch_id", branchId)
+    .not("bookings.status", "in", "(cancelled,rejected)")
+    .limit(1);
+  if (overlapError) throw new Error(`Could not validate room occupancy: ${overlapError.message}`);
+  if (overlaps?.length) throw new Error("That room is no longer available. Please select another room.");
 }
 
 // Derive the itemised charge list from the payload (mirrors handle-payment-webhook).
@@ -440,6 +476,7 @@ Deno.serve(async (req) => {
     // Validate against the same service-hours, cutoff, block, booking, and duration
     // rules used by both booking UIs before creating owner/pet/booking records.
     await assertGroomingAvailable(supabase, branch.id, body);
+    await assertHotelAvailable(supabase, branch.id, body);
 
     // 2. Upsert owner
     let ownerId: string;

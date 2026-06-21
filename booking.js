@@ -1058,15 +1058,27 @@ async function renderGroomSlots() {
     var branchId = await getSelectedBranchId();
     if (!branchId || !dateVal) throw new Error('missing_context');
 
-    // 1. ALL grooming bookings for this date/branch (no groomer filter) so that
-    //    unassigned bookings (groomer_id=null) are visible for any-groomer overflow math.
-    //    rangesFor() does client-side groomer filtering, so this is still correct.
-    var bkQuery = 'select=booking_id,timeslot,groom_service_key,groomer_id,bookings!inner(status,branch_id)' +
-      '&service_date=eq.'        + dateVal +
-      '&bookings.branch_id=eq.'  + branchId +
-      '&bookings.status=not.in.(cancelled,rejected)';
-    bookingRows = (await sbFetchPublic('grooming_details', bkQuery)) || [];
-    var ids = bookingRows.map(function(r){ return r.booking_id; }).filter(Boolean);
+    // The RPC exposes only occupancy fields and filters inactive booking statuses
+    // without making private parent booking rows readable to anonymous visitors.
+    try {
+      bookingRows = (await sbRpcPublic('get_grooming_occupancy', {
+        p_branch_id: branchId,
+        p_service_date: dateVal,
+      })) || [];
+      bookingRows.forEach(function(r) {
+        r._durationAddons = r.has_duration_addon ? { demat:true } : null;
+      });
+    } catch(occupancyErr) {
+      // Temporary fail-safe until the occupancy RPC migration is applied. Do
+      // not fail open: treating all detail rows as occupied is safer than
+      // offering an already-booked slot.
+      console.warn('Grooming occupancy RPC unavailable; using conservative fallback.', occupancyErr);
+      bookingRows = (await sbFetchPublic('grooming_details',
+        'select=booking_id,timeslot,groom_service_key,groomer_id' +
+        '&service_date=eq.' + dateVal)) || [];
+    }
+    var ids = bookingRows.filter(function(r){ return !r.has_duration_addon; })
+      .map(function(r){ return r.booking_id; }).filter(Boolean);
     if (ids.length) {
       try {
         var addonRows = (await sbFetchPublic('booking_addons',
@@ -1076,6 +1088,7 @@ async function renderGroomSlots() {
           if (GROOM_DURATION_ADDONS[a.addon_key]) durationAddonsByBooking[a.booking_id] = true;
         });
         bookingRows.forEach(function(r) {
+          if (r.has_duration_addon) return;
           r._durationAddons = durationAddonsByBooking[r.booking_id] ? { demat:true } : null;
         });
       } catch(addonErr) {
@@ -1395,45 +1408,42 @@ async function loadRoomAvailability() {
     return r.allowed_sizes.indexOf(size) !== -1;
   });
 
-    var bookedRoomIds = {};
+  var bookedRoomIds = {};
   try {
     var branch = await getSelectedBranchId();
     if (branch) {
-      // Step 1: get all confirmed hotel booking IDs for this branch
-      var bookingRows = await sbFetchPublic('bookings',
-        'select=id&branch_id=eq.' + branch +
-        '&service=eq.hotel&status=not.in.(cancelled,rejected)');
-      if (bookingRows && bookingRows.length) {
-        var bookingIds = bookingRows.map(function(b){ return b.id; }).join(',');
-        // Step 2: get hotel_details overlapping our stay nights.
-        // Checkout dates are non-blocking: a room checking out on the new
-        // check-in date can be booked again that same date.
-        var detailRows = await sbFetchPublic('hotel_details',
-          'select=room_id,room_type,checkin_date,checkout_date' +
-          '&booking_id=in.(' + bookingIds + ')' +
+      var detailRows;
+      try {
+        detailRows = await sbRpcPublic('get_hotel_occupancy', {
+          p_branch_id: branch,
+          p_checkin: cin,
+          p_checkout: cout,
+        });
+      } catch(occupancyErr) {
+        console.warn('Hotel occupancy RPC unavailable; using REST fallback.', occupancyErr);
+        detailRows = await sbFetchPublic('hotel_details',
+          'select=room_id,room_type,checkin_date,checkout_date,bookings!inner(branch_id,status)' +
+          '&bookings.branch_id=eq.' + branch +
+          '&bookings.status=not.in.(cancelled,rejected)' +
           '&checkin_date=lt.' + cout +
           '&checkout_date=gt.' + cin);
-        (detailRows || []).forEach(function(r) {
-          var key = r.room_id || r.room_type;
-          if (key) bookedRoomIds[key] = (bookedRoomIds[key] || 0) + 1;
-        });
       }
+      (detailRows || []).forEach(function(r) {
+        var key = r.room_id || r.room_type;
+        if (key) bookedRoomIds[key] = (bookedRoomIds[key] || 0) + 1;
+      });
     }
-  } catch(e) { console.error('Hotel availability check failed:', e); }
+  } catch(e) {
+    console.error('Hotel availability check failed:', e);
+    loading.style.display = 'none';
+    grid.innerHTML = '<p style="font-size:12px;color:var(--error);padding:8px 0">Could not verify room availability. Please try again.</p>';
+    return;
+  }
 
   loading.style.display = 'none';
 
   if (!eligibleRooms.length) {
-    var roomKeys = ROOMS_FOR_SIZE[size] || [];
-    grid.innerHTML = roomKeys.map(function(key) {
-      var label = ROOM_LABELS[key] || key;
-      var fbOnclick = "selectRoomFromAvail(this,'" + key + "',null)";
-      return '<div class="svc-card" onclick="' + fbOnclick + '">' +
-        '<div class="svc-card-radio"></div>' +
-        '<div class="svc-card-info"><div class="svc-card-name">' + label + '</div>' +
-        '<div class="svc-card-duration"><span style="font-size:10px;color:var(--mid)">Loading room data...</span></div></div></div>';
-    }).join('');
-    calcNights();
+    grid.innerHTML = '<p style="font-size:12px;color:var(--error);padding:8px 0">No eligible rooms are available for this pet size.</p>';
     return;
   }
 
