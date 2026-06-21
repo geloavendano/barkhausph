@@ -15,10 +15,16 @@ var LOCAL_BLOG_COVERS = {
   'benefits-of-indoor-play-for-dogs': 'images/blog-05 benefits of indoor play for dogs.jpg',
 };
 
-/* Build location thumbnail strip — exactly as many as fit in one viewport line */
+function galleryThumb(src) {
+  return src.replace('images/', 'images/thumbs/');
+}
+
+/* Build location thumbnail strip — exactly as many as fit in its branch card */
 function buildLocThumbsHtml(key, imgs) {
   /* Each thumb: 56px wide, 8px gap, container has 24px padding each side */
-  var fit = Math.floor((window.innerWidth - 48 + 8) / (56 + 8));
+  var container = document.getElementById(key + '-thumbs');
+  var available = container ? container.clientWidth : window.innerWidth;
+  var fit = Math.floor((available - 48 + 8) / (56 + 8));
   fit = Math.max(2, fit);
   var visible = imgs.length > fit ? imgs.slice(0, fit) : imgs;
   var extra   = imgs.length > fit ? imgs.length - fit : 0;
@@ -29,7 +35,7 @@ function buildLocThumbsHtml(key, imgs) {
       : 'switchThumb(\'' + key + '\',' + i + ',this)';
     return '<div class="loc-thumb' + (i === 0 ? ' active' : '') + (isMore ? ' loc-thumb-more' : '') +
       '" onclick="' + onclick + '">' +
-      '<img src="' + src + '" style="width:100%;height:100%;object-fit:cover;border-radius:6px;" loading="lazy">' +
+      '<img src="' + galleryThumb(src) + '" style="width:100%;height:100%;object-fit:cover;border-radius:6px;" loading="lazy">' +
       (isMore ? '<div class="loc-thumb-more-label">+' + extra + '</div>' : '') +
       '</div>';
   }).join('');
@@ -386,7 +392,7 @@ function buildSvcThumbnailsHtml(imgs, slideIdx, svcName) {
   var items = visible.map(function(src, i) {
     var isMore = extra > 0 && i === visible.length - 1;
     return '<div class="svc-thumb' + (isMore ? ' svc-thumb-more' : '') + '" onclick="lbOpenSet(\'' + key + '\',' + i + ')">' +
-      '<img src="' + src + '" alt="' + (svcName || 'Barkhaus') + ' – pet care service at Barkhaus Pet Services Philippines" loading="lazy">' +
+      '<img src="' + galleryThumb(src) + '" alt="' + (svcName || 'Barkhaus') + ' – pet care service at Barkhaus Pet Services Philippines" loading="lazy">' +
       (isMore ? '<div class="svc-thumb-more-label">+' + extra + '</div>' : '') +
       '</div>';
   }).join('');
@@ -651,10 +657,8 @@ function initImages() {
       var mainImg = mainCont.querySelector('img');
       if (mainImg && imgs[0]) { mainImg.src = imgs[0]; if (!mainImg.alt) mainImg.alt = branchName + ' – Pet Services, Grooming and Daycare'; }
     }
-    imgs.forEach(function(src, i) {
-      var el = document.querySelector('[data-img="' + key + '-' + i + '"]');
-      if (el) { el.src = src; if (!el.alt) el.alt = branchName + ' – branch photo ' + (i + 1); }
-    });
+    var thumbsCont = document.getElementById(key + '-thumbs');
+    if (thumbsCont) thumbsCont.innerHTML = buildLocThumbsHtml(key, imgs);
   });
 }
 
