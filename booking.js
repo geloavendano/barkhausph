@@ -974,7 +974,9 @@ function groomingSlotsForServiceHours(serviceHours, fallback) {
   var first = Math.min.apply(null, valid.map(function(row){ return row.start; }));
   var last  = Math.max.apply(null, valid.map(function(row){ return row.last; }));
   var slots = [];
-  for (var mins = Math.ceil(first / 30) * 30; mins <= last; mins += 30) {
+  // Customer-facing starts are intentionally hourly. Admins retain half-hour
+  // precision for operational scheduling and can use the gaps as buffers.
+  for (var mins = Math.ceil(first / 60) * 60; mins <= last; mins += 60) {
     var hour24 = Math.floor(mins / 60), minute = mins % 60;
     var ap = hour24 >= 12 ? 'PM' : 'AM';
     slots.push((hour24 % 12 || 12) + ':' + String(minute).padStart(2, '0') + ' ' + ap);
@@ -1797,10 +1799,8 @@ async function loadStudioSlots() {
   if (!grid) return;
 
   var STUDIO_DURATION = 60; // 1-hour session
-  var ALL_SLOTS = ['10:00 AM','10:30 AM','11:00 AM','11:30 AM','12:00 PM','12:30 PM',
-    '1:00 PM','1:30 PM','2:00 PM','2:30 PM','3:00 PM','3:30 PM',
-    '4:00 PM','4:30 PM','5:00 PM','5:30 PM','6:00 PM','6:30 PM',
-    '7:00 PM','7:30 PM','8:00 PM','8:30 PM','9:00 PM'];
+  var ALL_SLOTS = ['10:00 AM','11:00 AM','12:00 PM','1:00 PM','2:00 PM','3:00 PM',
+    '4:00 PM','5:00 PM','6:00 PM','7:00 PM','8:00 PM','9:00 PM'];
   var dow = new Date(dateVal + 'T00:00:00').getDay();
 
   // Show loading state
