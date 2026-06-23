@@ -208,6 +208,7 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
   const [editBooking,      setEditBooking]      = useState(null)
   const [filterOpen,       setFilterOpen]       = useState(false)
   const [view,             setView]             = useState(() => { try { return localStorage.getItem('cal_view') || 'day' } catch { return 'day' } })
+  const [peekDate,         setPeekDate]         = useState(null)   // month "+N more" day overlay
 
   const branch  = branches?.[currentBranchIdx]
   const dateStr = useMemo(() => dateToISO(currentDate), [currentDate])
@@ -366,6 +367,7 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
         if (filterOpen)      { setFilterOpen(false);     return }
         if (openId)          { setOpenId(null);           return }
         if (openBlockId)     { setOpenBlockId(null);      return }
+        if (peekDate)        { setPeekDate(null);         return }
         if (calOpen)         { setCalOpen(false);         return }
         return
       }
@@ -381,7 +383,7 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
     }
     document.addEventListener('keydown', handleKey)
     return () => document.removeEventListener('keydown', handleKey)
-  }, [showAddBooking, showBlockPanel, filterOpen, openId, openBlockId, calOpen, reloadBookings, loadBlocked]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [showAddBooking, showBlockPanel, filterOpen, openId, openBlockId, peekDate, calOpen, reloadBookings, loadBlocked]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Date navigation ───────────────────────────────────────────────────────
   // Handlers only move the focused date / view; the range effect reloads data.
@@ -736,12 +738,21 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
               monthAnchor={currentDate} filtered={filtered}
               rooms={rooms} groomers={groomers} today={now}
               onPickDay={pickDay} onOpenBooking={setOpenId}
+              onMore={setPeekDate}
             />
           )}
         </div>
       </div>
 
       {/* ── Overlays ── */}
+      {peekDate && (
+        <DayPeek
+          date={peekDate} filtered={filtered} rooms={rooms} groomers={groomers}
+          onOpenBooking={id => { setPeekDate(null); setOpenId(id) }}
+          onClose={() => setPeekDate(null)}
+        />
+      )}
+
       {calOpen && (
         <MonthOverlay
           modalDate={calModalDate}
@@ -919,7 +930,7 @@ function WeekView({ weekStart, filtered, rooms, groomers, today, onOpenBooking, 
 }
 
 // ── Month view: 6 week-rows with lane-packed spanning bars ──────────────────
-function MonthView({ monthAnchor, filtered, rooms, groomers, today, onPickDay, onOpenBooking }) {
+function MonthView({ monthAnchor, filtered, rooms, groomers, today, onPickDay, onOpenBooking, onMore }) {
   const y = monthAnchor.getFullYear(), mon = monthAnchor.getMonth()
   const todayISO = dateToISO(today)
   const first0 = new Date(y, mon, 1)
@@ -980,7 +991,7 @@ function MonthView({ monthAnchor, filtered, rooms, groomers, today, onPickDay, o
                   <div className={styles.monthMoreRow}>
                     {moreByCol.map((n, ci) => (
                       <div key={ci} className={styles.monthMoreCell} style={{ gridColumn: ci + 1 }}>
-                        {n > 0 && <span className={styles.monthMore}>+{n} more</span>}
+                        {n > 0 && <span className={styles.monthMore} onClick={e => { e.stopPropagation(); onMore(days[ci]) }}>+{n} more</span>}
                       </div>
                     ))}
                   </div>
@@ -989,6 +1000,53 @@ function MonthView({ monthAnchor, filtered, rooms, groomers, today, onPickDay, o
             </div>
           )
         })}
+      </div>
+    </div>
+  )
+}
+
+// ── Day peek: full booking list for one day (month "+N more") ───────────────
+function DayPeek({ date, filtered, rooms, groomers, onOpenBooking, onClose }) {
+  const ds = dateToISO(date)
+  const dayBk = filtered.filter(b => bookingOnDay(b, ds))
+  const hotels = dayBk.filter(b => b.service === 'hotel')
+  const timed  = dayBk.filter(b => b.service !== 'hotel')
+    .map(b => ({ b, st: getBookingTimes(b, ds).st }))
+    .sort((a, c) => a.st - c.st)
+  return (
+    <div className={styles.peekOverlay} onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className={styles.peekCard}>
+        <div className={styles.peekHead}>
+          <div className={styles.peekDateBox}>
+            <span className={styles.peekDow}>{DAYS[date.getDay()]}</span>
+            <span className={styles.peekDate}>{date.getDate()}</span>
+          </div>
+          <button className={styles.peekClose} onClick={onClose}>✕</button>
+        </div>
+        <div className={styles.peekBody}>
+          {hotels.map(b => {
+            const color = getCardColor(b, rooms, groomers)
+            const cancelled = b.status === 'cancelled' || b.status === 'rejected'
+            return (
+              <div key={b.id} className={`${styles.peekBar} ${cancelled ? styles.weekChipCancelled : ''}`}
+                style={{ background: hexBg(color), borderLeftColor: color }}
+                onClick={() => onOpenBooking(b.id)}>
+                🏨 {first(b.pets)?.name ?? 'Pet'}
+              </div>
+            )
+          })}
+          {timed.map(({ b, st }) => {
+            const cancelled = b.status === 'cancelled' || b.status === 'rejected'
+            return (
+              <div key={b.id} className={`${styles.peekRow} ${cancelled ? styles.weekChipCancelled : ''}`} onClick={() => onOpenBooking(b.id)}>
+                <span className={styles.peekTime}>{formatMins(st)}</span>
+                <span className={styles.sdot} style={{ background: STATUS_COLORS[b.status] ?? '#888' }} />
+                <span className={styles.peekName}>{petEmoji(b)} {first(b.pets)?.name ?? 'Pet'}</span>
+              </div>
+            )
+          })}
+          {dayBk.length === 0 && <div className={styles.weekEmpty}>No bookings</div>}
+        </div>
       </div>
     </div>
   )

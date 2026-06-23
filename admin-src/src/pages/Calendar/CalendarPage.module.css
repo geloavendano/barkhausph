@@ -498,6 +498,7 @@
   display: flex; align-items: center; gap: 4px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+.weekEmpty { font-size: 12px; color: var(--mid); opacity: 0.6; text-align: center; padding: 14px 0; }
 
 /* ── Month view ── */
 .monthScroll { flex: 1; overflow: auto; background: var(--bg); display: flex; flex-direction: column; }
@@ -534,7 +535,11 @@
 
 .monthMoreRow { display: grid; grid-template-columns: repeat(7, 1fr); }
 .monthMoreCell { padding: 0 5px; min-height: 12px; }
-.monthMore { font-size: 9px; font-weight: 700; color: var(--mid); pointer-events: none; }
+.monthMore {
+  font-size: 9px; font-weight: 700; color: var(--mid);
+  pointer-events: auto; cursor: pointer; border-radius: 4px; padding: 0 3px;
+}
+.monthMore:hover { color: var(--cream); background: var(--raised); }
 
 @media (max-width: 640px) {
   .monthWeek { min-height: 70px; }
@@ -542,3 +547,40 @@
   .monthBar { font-size: 9px; padding: 1px 3px; }
   .spanBar { font-size: 9px; padding: 1px 4px; }
 }
+
+/* ── Day peek (month "+N more" → bottom sheet / modal) ── */
+.peekOverlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+  z-index: 250; display: flex; align-items: flex-end; justify-content: center;
+}
+@media (min-width: 560px) { .peekOverlay { align-items: center; } }
+.peekCard {
+  background: var(--surface); border: 0.5px solid var(--border);
+  border-radius: 16px 16px 0 0; width: 100%; max-width: 400px; max-height: 78svh;
+  display: flex; flex-direction: column;
+}
+@media (min-width: 560px) { .peekCard { border-radius: 16px; } }
+.peekHead { display: flex; align-items: flex-start; justify-content: space-between; padding: 16px 18px 10px; }
+.peekDateBox { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; }
+.peekDow { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--mid); }
+.peekDate { font-size: 30px; line-height: 1.05; color: var(--cream); font-family: 'Fredoka One', cursive; }
+.peekClose {
+  font-size: 13px; color: var(--mid); background: var(--bg);
+  border: 0.5px solid var(--border); width: 30px; height: 30px; border-radius: 50%;
+  cursor: pointer; flex-shrink: 0; font-family: 'Nunito', sans-serif;
+}
+.peekClose:hover { background: var(--raised); color: var(--cream); }
+.peekBody { padding: 2px 14px 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; }
+.peekBar {
+  border-left: 3px solid; border-radius: 6px; padding: 8px 11px;
+  font-size: 13px; font-weight: 700; color: var(--cream); cursor: pointer;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: filter 0.12s;
+}
+.peekBar:hover { filter: brightness(1.12); }
+.peekRow {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 11px; border-radius: 6px; cursor: pointer; transition: background 0.12s;
+}
+.peekRow:hover { background: var(--raised); }
+.peekTime { font-size: 12px; font-weight: 700; color: var(--mid); min-width: 54px; }
+.peekName { font-size: 13px; color: var(--cream); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
