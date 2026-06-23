@@ -287,6 +287,8 @@ function renderProgress() {
 }
 
 var _redirectingToPayment = false; // set true before payment redirect to suppress beforeunload warning
+var _handlingHostedPaymentReturn = false;
+var _checkingStoredPaymentRef = false;
 
 // ── NAVIGATION ──
 function nextStep() {
@@ -2833,37 +2835,42 @@ function showHostedPaymentSuccess(ref) {
   var status = params.get('payment');
   var ref    = params.get('ref');
   if (!status) return;
-  // Clean URL
-  window.history.replaceState({}, '', window.location.pathname);
+  _handlingHostedPaymentReturn = true;
+  try {
+    // Clean URL
+    window.history.replaceState({}, '', window.location.pathname);
 
-  // Maya may return through failure/cancel URLs even after a wallet screen shows
-  // success. Always reconcile by booking ref before deciding which screen to show.
-  if (ref && (status === 'success' || status === 'cancelled' || status === 'failed')) {
-    var confirmed = await waitForHostedPayment(ref);
-    if (confirmed) {
-      showHostedPaymentSuccess(ref);
-      return;
+    // Maya may return through failure/cancel URLs even after a wallet screen shows
+    // success. Always reconcile by booking ref before deciding which screen to show.
+    if (ref && (status === 'success' || status === 'cancelled' || status === 'failed')) {
+      var confirmed = await waitForHostedPayment(ref);
+      if (confirmed) {
+        showHostedPaymentSuccess(ref);
+        return;
+      }
     }
-  }
 
-  if (status === 'success' && ref) {
-    if (!confirmed) {
-      var pendingSnap = null;
-      try { pendingSnap = JSON.parse(sessionStorage.getItem('bk_snapshot') || 'null'); } catch(e) {}
-      if (pendingSnap) showPayReturnScreen(pendingSnap, ref);
-      showToast('Payment is still being verified. Please keep your booking reference and check again shortly.', 8000);
-      return;
+    if (status === 'success' && ref) {
+      if (!confirmed) {
+        var pendingSnap = null;
+        try { pendingSnap = JSON.parse(sessionStorage.getItem('bk_snapshot') || 'null'); } catch(e) {}
+        if (pendingSnap) showPayReturnScreen(pendingSnap, ref);
+        showToast('Payment is still being verified. Please keep your booking reference and check again shortly.', 8000);
+        return;
+      }
+    } else if (status === 'cancelled' || status === 'failed') {
+      var _retSnap = null;
+      try { _retSnap = JSON.parse(sessionStorage.getItem('bk_snapshot') || 'null'); } catch(e) {}
+      if (_retSnap) {
+        showPayReturnScreen(_retSnap, ref || _retSnap.refNumber);
+      } else {
+        setTimeout(function() {
+          showToast('Payment was not completed. Please try again.', 5000);
+        }, 800);
+      }
     }
-  } else if (status === 'cancelled' || status === 'failed') {
-    var _retSnap = null;
-    try { _retSnap = JSON.parse(sessionStorage.getItem('bk_snapshot') || 'null'); } catch(e) {}
-    if (_retSnap) {
-      showPayReturnScreen(_retSnap, ref || _retSnap.refNumber);
-    } else {
-      setTimeout(function() {
-        showToast('Payment was not completed. Please try again.', 5000);
-      }, 800);
-    }
+  } finally {
+    _handlingHostedPaymentReturn = false;
   }
 })();
 
@@ -2887,6 +2894,9 @@ async function waitForHostedPayment(ref) {
 // ── POLL FOR PAYMENT if ref is in sessionStorage (QR fallback) ──
 // Preserve the pending reference across any hosted-checkout redirect.
 setTimeout(checkStoredPaymentRef, 500);
+window.addEventListener('pageshow', function() {
+  setTimeout(checkStoredPaymentRef, 100);
+});
 
 // ── SUCCESS SCREEN TIMESTAMP ──
 // Call this every time the success screen ref number is set.
@@ -2909,19 +2919,46 @@ function setSuccessTimestamp(ref) {
 function storePaymentRef(ref) {
   try { sessionStorage.setItem('bk_pending_ref', ref); } catch(e) {}
 }
-function checkStoredPaymentRef() {
+async function checkStoredPaymentRef() {
   try {
+    if (_handlingHostedPaymentReturn) return;
+    if (_checkingStoredPaymentRef) return;
     var ref = sessionStorage.getItem('bk_pending_ref');
     if (!ref) return;
+    _checkingStoredPaymentRef = true;
     // Already on success screen - clear and stop
     if (document.getElementById('successScreen') && document.getElementById('successScreen').classList.contains('active')) {
       sessionStorage.removeItem('bk_pending_ref');
+      _checkingStoredPaymentRef = false;
       return;
     }
-    // Show a "Did you pay?" recovery banner
-    var banner = document.getElementById('payReturnBanner');
-    if (banner) { banner.style.display = ''; banner.querySelector('.bk-ref').textContent = ref; }
-  } catch(e) {}
+    var snap = null;
+    try { snap = JSON.parse(sessionStorage.getItem('bk_snapshot') || 'null'); } catch(e) {}
+    if (!snap) {
+      _checkingStoredPaymentRef = false;
+      return;
+    }
+
+    var pr = document.getElementById('payReturnScreen');
+    if (pr && pr.classList.contains('active')) {
+      _checkingStoredPaymentRef = false;
+      return;
+    }
+
+    showPayReturnScreen(snap, ref || snap.refNumber);
+    var statusEl = document.getElementById('payReturnStatus');
+    if (statusEl) statusEl.textContent = 'Checking whether your payment went through...';
+
+    if (await waitForHostedPayment(ref)) {
+      showHostedPaymentSuccess(ref);
+      _checkingStoredPaymentRef = false;
+      return;
+    }
+    if (statusEl) statusEl.textContent = '';
+  } catch(e) {
+  } finally {
+    _checkingStoredPaymentRef = false;
+  }
 }
 function confirmPaymentReturn(ref) {
   try { sessionStorage.removeItem('bk_pending_ref'); } catch(e) {}
