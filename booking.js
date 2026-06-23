@@ -3193,15 +3193,11 @@ async function editAfterCancelledPayment() {
 
 // ── PRE-PAYMENT AVAILABILITY CHECK ──
 // ----------------------------------------------------------------
-// pg_cron job to auto-cancel pending/unpaid bookings after 15 min:
+// pg_cron should call expire_pending_bookings() so each pending checkout releases
+// according to pending_bookings.expires_at (15 minutes for Maya):
 //   SELECT cron.schedule(
 //     'cancel-pending-bookings', '*/5 * * * *',
-//     $$ UPDATE bookings
-//        SET status = 'cancelled', updated_at = NOW(),
-//            cancellation_reason = 'Payment timeout (15 min)'
-//        WHERE status = 'pending'
-//          AND (payment_status IS NULL OR payment_status = 'unpaid')
-//          AND created_at < NOW() - INTERVAL '15 minutes'; $$
+//     $$ SELECT public.expire_pending_bookings(); $$
 //   );
 // ----------------------------------------------------------------
 async function checkAvailabilityBeforePayment() {

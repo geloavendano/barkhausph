@@ -248,8 +248,8 @@ Deno.serve(async (req) => {
     }
 
     // ── 5. Store full payload in pending_bookings (webhook uses this to create child records) ──
-    // Maya sessions remain valid for one hour, so the inventory hold matches.
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    // Keep the inventory hold short; expired pending bookings are released by expire_pending_bookings().
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
     const { error: pendingErr } = await supabase.from("pending_bookings").insert({
       ref_number: refNumber,
       payload:    body,

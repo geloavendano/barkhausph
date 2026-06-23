@@ -61,8 +61,8 @@ Keep the public provider set to `manual` while testing the Maya function
 directly. Before launch, verify:
 
 - the pending-booking cron runs `select public.expire_pending_bookings();` from
-  the migration; Maya holds are written with a one-hour expiry, so disable the
-  older fixed 15-minute age job before Maya is enabled;
+  the migration; Maya holds are written with a 15-minute expiry through
+  `pending_bookings.expires_at`;
 
 - successful card payment confirms one booking and creates one payment row;
 - duplicate/replayed success webhooks remain idempotent;
