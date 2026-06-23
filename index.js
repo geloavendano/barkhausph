@@ -10,6 +10,7 @@ var SB_ANON     = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIs
 var LOCAL_BLOG_COVERS = {
   'how-to-prepare-your-dog-for-daycare': 'images/blog-01 how to prepare your dog for daycare.JPG',
   'what-to-pack-for-a-dog-hotel-stay': 'images/blog-02 what to pack for a dog hotel stay.JPG',
+  'dog-hotel-vs-dog-daycare': 'images/blog-03 dog hotel vs dog daycare what is the difference.jpg',
   'dog-hotel-vs-dog-daycare-what-is-the-difference': 'images/blog-03 dog hotel vs dog daycare what is the difference.jpg',
   'why-regular-grooming-supports-your-dogs-health': 'images/blog-04 why regular grooming supports your dogs health.JPG',
   'benefits-of-indoor-play-for-dogs': 'images/blog-05 benefits of indoor play for dogs.jpg',
