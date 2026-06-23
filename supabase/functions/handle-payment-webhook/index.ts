@@ -63,18 +63,35 @@ function chargesFromPayload(body: Record<string, unknown>, subtotal: number, dis
 
 // ── Email helpers ─────────────────────────────────────────────
 
+const BRANCH_BOOKING_EMAILS: Record<string, string> = {
+  estancia: "booking.barkhausestancia@gmail.com",
+  eastwood: "booking.barkhauseastwood@gmail.com",
+};
+
+function branchBookingEmail(branch?: { name?: string } | null): string | null {
+  const name = (branch?.name || "").toLowerCase();
+  if (name.includes("estancia")) return BRANCH_BOOKING_EMAILS.estancia;
+  if (name.includes("eastwood")) return BRANCH_BOOKING_EMAILS.eastwood;
+  return null;
+}
+
 async function sendBookingConfirmation(details: any) {
   const apiKey = Deno.env.get("RESEND_API_KEY");
   if (!apiKey) { console.error("RESEND_API_KEY not set — skipping email"); return; }
+  const cc = branchBookingEmail(details.branch);
+  const payload: Record<string, unknown> = {
+    from: "Barkhaus Pet Services <hello@barkhaus.ph>",
+    to:   details.ownerEmail,
+    subject: `Booking Confirmed — ${details.refNumber}`,
+    html: buildEmailHtml(details),
+  };
+  if (cc && cc.toLowerCase() !== String(details.ownerEmail || "").toLowerCase()) {
+    payload.cc = cc;
+  }
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      from: "Barkhaus Pet Services <hello@barkhaus.ph>",
-      to:   details.ownerEmail,
-      subject: `Booking Confirmed — ${details.refNumber}`,
-      html: buildEmailHtml(details),
-    }),
+    body: JSON.stringify(payload),
   });
   if (!res.ok) console.error("Resend error:", await res.text());
 }
