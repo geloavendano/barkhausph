@@ -2801,6 +2801,33 @@ function printBooking() {
 }
 
 // ── HANDLE RETURN FROM HOSTED PAYMENT PROVIDER ──
+function showHostedPaymentSuccess(ref) {
+  // Hide ALL steps and the step UI, show only success screen
+  document.querySelectorAll('.step-panel, #successScreen').forEach(function(el) {
+    el.classList.remove('active');
+  });
+  var pw = document.getElementById('progressWrap');
+  var bn = document.getElementById('bottomNav');
+  var ss = document.getElementById('successScreen');
+  var hd = document.querySelector('header.booking-header, .booking-header');
+  if (pw) pw.style.display = 'none';
+  if (bn) bn.style.display = 'none';
+  if (hd) hd.style.display = 'none';
+  if (ss) {
+    ss.style.display = '';
+    ss.classList.add('active');
+  }
+  setSuccessTimestamp(ref);
+  try {
+    var snap = JSON.parse(sessionStorage.getItem('bk_snapshot') || 'null');
+    if (snap) {
+      renderSuccessDetails(snap, 'successDetails', 'successPriceBreakdown');
+      sessionStorage.removeItem('bk_snapshot');
+    }
+  } catch(e) {}
+  try { sessionStorage.removeItem('bk_pending_ref'); } catch(e) {}
+}
+
 (async function checkPaymentReturn() {
   var params = new URLSearchParams(window.location.search);
   var status = params.get('payment');
@@ -2808,8 +2835,18 @@ function printBooking() {
   if (!status) return;
   // Clean URL
   window.history.replaceState({}, '', window.location.pathname);
-  if (status === 'success' && ref) {
+
+  // Maya may return through failure/cancel URLs even after a wallet screen shows
+  // success. Always reconcile by booking ref before deciding which screen to show.
+  if (ref && (status === 'success' || status === 'cancelled' || status === 'failed')) {
     var confirmed = await waitForHostedPayment(ref);
+    if (confirmed) {
+      showHostedPaymentSuccess(ref);
+      return;
+    }
+  }
+
+  if (status === 'success' && ref) {
     if (!confirmed) {
       var pendingSnap = null;
       try { pendingSnap = JSON.parse(sessionStorage.getItem('bk_snapshot') || 'null'); } catch(e) {}
@@ -2817,30 +2854,6 @@ function printBooking() {
       showToast('Payment is still being verified. Please keep your booking reference and check again shortly.', 8000);
       return;
     }
-    // Hide ALL steps and the step UI, show only success screen
-    document.querySelectorAll('.step-panel, #successScreen').forEach(function(el) {
-      el.classList.remove('active');
-    });
-    var pw = document.getElementById('progressWrap');
-    var bn = document.getElementById('bottomNav');
-    var ss = document.getElementById('successScreen');
-    var hd = document.querySelector('header.booking-header, .booking-header');
-    if (pw) pw.style.display = 'none';
-    if (bn) bn.style.display = 'none';
-    if (hd) hd.style.display = 'none';
-    if (ss) {
-      ss.style.display = '';
-      ss.classList.add('active');
-    }
-    setSuccessTimestamp(ref);
-    try {
-      var snap = JSON.parse(sessionStorage.getItem('bk_snapshot') || 'null');
-      if (snap) {
-        renderSuccessDetails(snap, 'successDetails', 'successPriceBreakdown');
-        sessionStorage.removeItem('bk_snapshot');
-      }
-    } catch(e) {}
-    try { sessionStorage.removeItem('bk_pending_ref'); } catch(e) {}
   } else if (status === 'cancelled' || status === 'failed') {
     var _retSnap = null;
     try { _retSnap = JSON.parse(sessionStorage.getItem('bk_snapshot') || 'null'); } catch(e) {}

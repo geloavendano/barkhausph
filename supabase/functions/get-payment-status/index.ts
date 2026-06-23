@@ -67,11 +67,16 @@ async function nudgeMayaFinalizer(ref: string): Promise<void> {
 
   const payment = await lookupMayaPayment(ref);
   if (!payment) return;
+  const normalizedPayment = {
+    ...payment,
+    paymentStatus: mayaStatus(payment),
+    requestReferenceNumber: payment.requestReferenceNumber || payment.rrn || payment.referenceNumber || ref,
+  };
 
   const webhookRes = await fetch(`${supabaseUrl}/functions/v1/handle-payment-webhook`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...payment, paymentStatus: mayaStatus(payment) }),
+    body: JSON.stringify(normalizedPayment),
   });
   if (!webhookRes.ok) {
     console.warn("Maya fallback finalizer failed:", webhookRes.status, await webhookRes.text());

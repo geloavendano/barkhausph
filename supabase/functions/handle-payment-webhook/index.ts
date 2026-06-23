@@ -19,6 +19,18 @@ function mayaAmount(payload: Record<string, any>): number {
   return Number(payload?.totalAmount?.value ?? payload?.totalAmount?.amount ?? payload?.amount ?? 0);
 }
 
+function mayaStatus(payload?: Record<string, any> | null): string | null {
+  return payload?.paymentStatus || payload?.status || payload?.state || payload?.transactionStatus || null;
+}
+
+function mayaReference(payload?: Record<string, any> | null): string | null {
+  return payload?.requestReferenceNumber || payload?.rrn || payload?.referenceNumber || null;
+}
+
+function isSuccessfulMayaStatus(status?: string | null): boolean {
+  return status === "PAYMENT_SUCCESS" || status === "SUCCESS";
+}
+
 const ADDON_NAMES: Record<string, string> = {
   nail_trim:       "Nail Trim and Filing",
   ear_clean:       "Ear Cleaning",
@@ -345,7 +357,7 @@ Deno.serve(async (req) => {
 
   try {
     const event = JSON.parse(rawBody);
-    const isMaya = typeof event?.paymentStatus === "string";
+    const isMaya = !!(event?.id && mayaStatus(event));
     const provider = isMaya ? "maya" : "paymongo";
 
     // PayMongo signs its webhook. Maya's documented security model uses source
@@ -374,11 +386,11 @@ Deno.serve(async (req) => {
       }
     }
 
-    const eventType = isMaya ? event.paymentStatus : event?.data?.attributes?.type;
+    const eventType = isMaya ? mayaStatus(event) : event?.data?.attributes?.type;
     console.log("Provider:", provider, "event type:", eventType);
 
     const paidEvent = isMaya
-      ? eventType === "PAYMENT_SUCCESS"
+      ? isSuccessfulMayaStatus(eventType)
       : eventType === "payment.paid" || eventType === "checkout_session.payment.paid";
 
     if (!paidEvent && !isMaya) {
@@ -418,8 +430,12 @@ Deno.serve(async (req) => {
         return new Response(JSON.stringify({ error: "Unable to verify Maya payment" }),
           { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
-      if (verified.id !== event.id || verified.paymentStatus !== event.paymentStatus ||
-          verified.requestReferenceNumber !== event.requestReferenceNumber) {
+      const verifiedStatus = mayaStatus(verified);
+      const verifiedRef = mayaReference(verified);
+      const eventRef = mayaReference(event);
+      const statusesMatch = verifiedStatus === eventType ||
+        (isSuccessfulMayaStatus(verifiedStatus) && isSuccessfulMayaStatus(eventType));
+      if (verified.id !== event.id || !statusesMatch || (verifiedRef && eventRef && verifiedRef !== eventRef)) {
         console.error("Maya webhook does not match retrieved payment");
         return new Response(JSON.stringify({ error: "Maya payment verification mismatch" }),
           { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -460,7 +476,7 @@ Deno.serve(async (req) => {
     const bookingIdFromMeta = bookingMeta?.booking_id || bookingMeta?.bookingId || null;
     const refFromMeta       = bookingMeta?.ref_number || bookingMeta?.refNumber || null;
     const refFromDesc       = description.match(/Ref:\s*(BH-[A-Z0-9]+)/i)?.[1] || null;
-    const refNumber         = isMaya ? event.requestReferenceNumber : (refFromMeta || refFromDesc || null);
+      const refNumber         = isMaya ? mayaReference(event) : (refFromMeta || refFromDesc || null);
 
     console.log("bookingId (meta):", bookingIdFromMeta, "ref:", refNumber);
 
