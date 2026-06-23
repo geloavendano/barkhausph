@@ -2803,9 +2803,33 @@ function printBooking() {
 }
 
 // ── HANDLE RETURN FROM HOSTED PAYMENT PROVIDER ──
+function showHostedPaymentChecking(ref) {
+  document.querySelectorAll('.step-panel, #successScreen, #payReturnScreen').forEach(function(el) {
+    el.classList.remove('active');
+  });
+  var pw = document.getElementById('progressWrap');
+  var bn = document.getElementById('bottomNav');
+  var ss = document.getElementById('stepSummary');
+  var pr = document.getElementById('payReturnScreen');
+  if (pw) pw.style.display = 'none';
+  if (bn) bn.style.display = 'none';
+  if (pr) pr.style.display = 'none';
+  if (ss) {
+    var displayRef = ref ? String(ref).replace(/[^A-Za-z0-9_-]/g, '') : '';
+    ss.innerHTML =
+      '<div class="pay-loading">' +
+      '<div class="bh-spinner"></div>' +
+      '<p class="pay-loading-text">Checking your payment...</p>' +
+      '<p style="font-size:12px;color:var(--mid);margin-top:14px;line-height:1.7;max-width:300px;margin-left:auto;margin-right:auto">' +
+      'Please wait while we confirm your booking' + (displayRef ? ' <strong style="color:var(--cream)">' + displayRef + '</strong>' : '') + '.</p>' +
+      '</div>';
+    ss.classList.add('active');
+  }
+}
+
 function showHostedPaymentSuccess(ref) {
   // Hide ALL steps and the step UI, show only success screen
-  document.querySelectorAll('.step-panel, #successScreen').forEach(function(el) {
+  document.querySelectorAll('.step-panel, #successScreen, #payReturnScreen').forEach(function(el) {
     el.classList.remove('active');
   });
   var pw = document.getElementById('progressWrap');
@@ -2843,6 +2867,7 @@ function showHostedPaymentSuccess(ref) {
     // Maya may return through failure/cancel URLs even after a wallet screen shows
     // success. Always reconcile by booking ref before deciding which screen to show.
     if (ref && (status === 'success' || status === 'cancelled' || status === 'failed')) {
+      showHostedPaymentChecking(ref);
       var confirmed = await waitForHostedPayment(ref);
       if (confirmed) {
         showHostedPaymentSuccess(ref);
