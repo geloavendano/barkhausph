@@ -110,6 +110,37 @@ function getCardColor(b, rooms, groomers) {
   return '#6AAEC8'
 }
 
+// ── View helpers (day / week / month) ───────────────────────────────────────
+const VIEW_OPTS = [{ k: 'day', label: 'Day' }, { k: 'week', label: 'Week' }, { k: 'month', label: 'Month' }]
+
+function addDays(d, n) { const x = new Date(d.getFullYear(), d.getMonth(), d.getDate()); x.setDate(x.getDate() + n); return x }
+function startOfWeek(d) { return addDays(d, -d.getDay()) }   // Sunday
+
+// Inclusive [from, to] window covering the visible cells for the given view.
+function viewRange(view, date) {
+  if (view === 'week')  { const f = startOfWeek(date); return { from: f, to: addDays(f, 6) } }
+  if (view === 'month') { const first = new Date(date.getFullYear(), date.getMonth(), 1); const f = addDays(first, -first.getDay()); return { from: f, to: addDays(f, 41) } }
+  const day = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+  return { from: day, to: day }
+}
+
+// Does a booking appear on the given ISO day? (hotel stays span checkin..checkout)
+function bookingOnDay(b, ds) {
+  if (b.service === 'grooming') return (first(b.grooming_details) ?? {}).service_date === ds
+  if (b.service === 'daycare')  return (first(b.daycare_details)  ?? {}).service_date === ds
+  if (b.service === 'studio')   return (first(b.studio_details)   ?? {}).service_date === ds
+  if (b.service === 'hotel')    { const hd = first(b.hotel_details) ?? {}; return !!hd.checkin_date && !!hd.checkout_date && hd.checkin_date <= ds && hd.checkout_date >= ds }
+  return false
+}
+function petEmoji(b) { return (first(b.pets)?.animal_type === 'cat') ? '🐱' : '🐶' }
+
+function weekLabel(from, to) {
+  const nowYr = new Date().getFullYear()
+  const yr = (from.getFullYear() !== nowYr || to.getFullYear() !== nowYr) ? ` ${to.getFullYear()}` : ''
+  if (from.getMonth() === to.getMonth()) return `${MONTHS[from.getMonth()].slice(0, 3)} ${from.getDate()}–${to.getDate()}${yr}`
+  return `${MONTHS[from.getMonth()].slice(0, 3)} ${from.getDate()} – ${MONTHS[to.getMonth()].slice(0, 3)} ${to.getDate()}${yr}`
+}
+
 // ── Main component ─────────────────────────────────────────────────────────
 export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, groomers, currentAdmin }) {
   const [currentDate,      setCurrentDate]      = useState(() => new Date())
@@ -130,30 +161,37 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
   const [showBlockPanel,   setShowBlockPanel]   = useState(false)
   const [editBooking,      setEditBooking]      = useState(null)
   const [filterOpen,       setFilterOpen]       = useState(false)
+  const [view,             setView]             = useState(() => { try { return localStorage.getItem('cal_view') || 'day' } catch { return 'day' } })
 
   const branch  = branches?.[currentBranchIdx]
   const dateStr = useMemo(() => dateToISO(currentDate), [currentDate])
+  const range   = useMemo(() => viewRange(view, currentDate), [view, currentDate])
+  // String key so range-change effects fire once per (branch, view, window) without Date-identity churn.
+  const rangeKey = `${branch?.id ?? ''}|${view}|${dateToISO(range.from)}|${dateToISO(range.to)}`
 
-  // Keep a ref so realtime/polling closures always see the latest currentDate
-  // without needing to re-subscribe every time the user navigates a day.
-  const currentDateRef = useRef(currentDate)
-  useEffect(() => { currentDateRef.current = currentDate }, [currentDate])
+  // Keep a ref so realtime/polling closures always reload the active view window
+  // without needing to re-subscribe every time the user navigates.
+  const rangeRef = useRef(range)
+  useEffect(() => { rangeRef.current = range }, [range])
 
   // ── Loaders ───────────────────────────────────────────────────────────────
-  const loadBookings = useCallback(async (date) => {
+  // Loads every booking whose service date (or hotel stay) intersects [from, to].
+  // Day view passes from === to; week/month pass the window covering the grid.
+  const loadBookings = useCallback(async (fromDate, toDate) => {
     if (!branch?.id) { setBookings([]); setLoading(false); return }
     setLoading(true); setLoadError('')
-    const ds = dateToISO(date)
+    const f = dateToISO(fromDate), t = dateToISO(toDate)
     try {
       // Exclude cancelled/rejected; keep pending (unpaid online holds) visible.
       const base = `branch_id=eq.${branch.id}&status=not.in.(cancelled,rejected)`
-      // Filter every service server-side. Hotel stays intersect the selected day
-      // when check-in is on/before it and checkout is on/after it.
+      // Filter every service server-side. Non-hotel services match on service_date
+      // within the window; hotel stays intersect the window when check-in is on/
+      // before its end and checkout is on/after its start.
       const [groomRows, dayRows, studioRows, hotelRows] = await Promise.all([
-        sbGet('bookings', `${base}&service=eq.grooming&grooming_details.service_date=eq.${ds}&order=created_at&select=${selectForService('grooming')}`),
-        sbGet('bookings', `${base}&service=eq.daycare&daycare_details.service_date=eq.${ds}&order=created_at&select=${selectForService('daycare')}`),
-        sbGet('bookings', `${base}&service=eq.studio&studio_details.service_date=eq.${ds}&order=created_at&select=${selectForService('studio')}`),
-        sbGet('bookings', `${base}&service=eq.hotel&hotel_details.checkin_date=lte.${ds}&hotel_details.checkout_date=gte.${ds}&order=created_at&select=${selectForService('hotel')}`),
+        sbGet('bookings', `${base}&service=eq.grooming&grooming_details.service_date=gte.${f}&grooming_details.service_date=lte.${t}&order=created_at&select=${selectForService('grooming')}`),
+        sbGet('bookings', `${base}&service=eq.daycare&daycare_details.service_date=gte.${f}&daycare_details.service_date=lte.${t}&order=created_at&select=${selectForService('daycare')}`),
+        sbGet('bookings', `${base}&service=eq.studio&studio_details.service_date=gte.${f}&studio_details.service_date=lte.${t}&order=created_at&select=${selectForService('studio')}`),
+        sbGet('bookings', `${base}&service=eq.hotel&hotel_details.checkin_date=lte.${t}&hotel_details.checkout_date=gte.${f}&order=created_at&select=${selectForService('hotel')}`),
       ])
       setBookings([...(groomRows ?? []), ...(dayRows ?? []), ...(studioRows ?? []), ...(hotelRows ?? [])])
     } catch (err) {
@@ -163,6 +201,9 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
     }
     finally { setLoading(false) }
   }, [branch])
+
+  // Reload the window currently in view (used by realtime, polling, after edits).
+  const reloadBookings = useCallback(() => loadBookings(rangeRef.current.from, rangeRef.current.to), [loadBookings])
 
   const loadBlocked = useCallback(async () => {
     if (!branch?.id) return
@@ -207,6 +248,8 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
     } catch { setMonthDots({}) }
   }, [branch?.id])
 
+  // On branch change: reset to today + default filters, reload branch-scoped data.
+  // (Bookings + groomer hours are reloaded by the range effect below.)
   useEffect(() => {
     if (!branch?.id) return
     const d = new Date()
@@ -214,8 +257,18 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
     setCalModalDate(d)
     setCurrentSvc('all')
     setActiveFilter(null)
-    Promise.all([loadBookings(d), loadBlocked(), loadGroomerHours(d), loadStudios(), loadMonthDots(d.getFullYear(), d.getMonth())])
+    loadBlocked()
+    loadStudios()
   }, [branch?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Load bookings whenever the active window (branch / view / focused date) changes.
+  // Groomer-hour markers are a day-view-only concern.
+  useEffect(() => {
+    if (!branch?.id) return
+    loadBookings(range.from, range.to)
+    if (view === 'day') loadGroomerHours(currentDate)
+    else setGroomerHours([])
+  }, [rangeKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Live updates: Realtime + disconnected fallback + visibility change ────
   useEffect(() => {
@@ -226,14 +279,14 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
     const refresh = () => {
       // Debounce rapid-fire events (e.g. bulk inserts) to a single reload
       clearTimeout(debounce)
-      debounce = setTimeout(() => loadBookings(currentDateRef.current), 1200)
+      debounce = setTimeout(() => reloadBookings(), 1200)
     }
     const stopFallback = () => {
       if (fallbackPoll) clearInterval(fallbackPoll)
       fallbackPoll = null
     }
     const startFallback = () => {
-      if (!fallbackPoll) fallbackPoll = setInterval(() => loadBookings(currentDateRef.current), 5 * 60_000)
+      if (!fallbackPoll) fallbackPoll = setInterval(() => reloadBookings(), 5 * 60_000)
     }
 
     // Supabase Realtime — instant update on any booking change for this branch
@@ -246,7 +299,7 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
       })
 
     // Refresh immediately when the user returns to this tab
-    const onVisible = () => { if (!document.hidden) loadBookings(currentDateRef.current) }
+    const onVisible = () => { if (!document.hidden) reloadBookings() }
     document.addEventListener('visibilitychange', onVisible)
 
     return () => {
@@ -255,7 +308,7 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
       stopFallback()
       document.removeEventListener('visibilitychange', onVisible)
     }
-  }, [branch?.id, loadBookings]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [branch?.id, reloadBookings]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Keyboard shortcuts ────────────────────────────────────────────────────
   useEffect(() => {
@@ -276,34 +329,31 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
         if (tag === 'input' || tag === 'textarea' || tag === 'select') return
         if (document.activeElement?.isContentEditable) return
         if (showAddBooking || showBlockPanel || filterOpen || openId || openBlockId || calOpen) return
-        loadBookings(currentDateRef.current)
+        reloadBookings()
         loadBlocked()
       }
     }
     document.addEventListener('keydown', handleKey)
     return () => document.removeEventListener('keydown', handleKey)
-  }, [showAddBooking, showBlockPanel, filterOpen, openId, openBlockId, calOpen, loadBookings, loadBlocked]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [showAddBooking, showBlockPanel, filterOpen, openId, openBlockId, calOpen, reloadBookings, loadBlocked]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Date navigation ───────────────────────────────────────────────────────
+  // Handlers only move the focused date / view; the range effect reloads data.
+  const changeView = (v) => { setView(v); try { localStorage.setItem('cal_view', v) } catch { /* ignore */ } }
   const shiftDate = (delta) => {
-    const d = new Date(currentDate); d.setDate(d.getDate() + delta)
-    const prevM = currentDate.getMonth()
-    setCurrentDate(d); setActiveFilter(null)
-    loadBookings(d); loadGroomerHours(d)
-    if (d.getMonth() !== prevM) loadMonthDots(d.getFullYear(), d.getMonth())
+    setActiveFilter(null)
+    setCurrentDate(d => {
+      const x = new Date(d)
+      if (view === 'week')       x.setDate(x.getDate() + delta * 7)
+      else if (view === 'month') x.setMonth(x.getMonth() + delta)
+      else                       x.setDate(x.getDate() + delta)
+      return x
+    })
   }
-  const goToday = () => {
-    const d = new Date(); const prevM = currentDate.getMonth()
-    setCurrentDate(d); setActiveFilter(null)
-    loadBookings(d); loadGroomerHours(d)
-    if (d.getMonth() !== prevM) loadMonthDots(d.getFullYear(), d.getMonth())
-  }
-  const jumpToDate = (y, m, day) => {
-    const d = new Date(y, m, day); const prevM = calModalDate.getMonth()
-    setCurrentDate(d); setCalOpen(false); setActiveFilter(null)
-    loadBookings(d); loadGroomerHours(d)
-    if (d.getMonth() !== prevM) loadMonthDots(y, m)
-  }
+  const goToday    = () => { setActiveFilter(null); setCurrentDate(new Date()) }
+  const jumpToDate = (y, m, day) => { setActiveFilter(null); setCalOpen(false); setCurrentDate(new Date(y, m, day)) }
+  // Click a day in week/month → drill into Day view for that date.
+  const pickDay    = (d) => { setActiveFilter(null); changeView('day'); setCurrentDate(new Date(d.getFullYear(), d.getMonth(), d.getDate())) }
   const openCalOverlay = () => {
     setCalModalDate(new Date(currentDate))
     loadMonthDots(currentDate.getFullYear(), currentDate.getMonth())
@@ -338,6 +388,7 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
   // Merge bookings + relevant blocked-schedule segments into one column-layout pass
   // so they sit side-by-side instead of overlapping.
   const positioned = useMemo(() => {
+    if (view !== 'day') return []   // day view only; week/month group per-day instead
     const bookingItems = filtered.map(b => {
       const t = getBookingTimes(b, dateStr)
       return { kind: 'booking', b, st: t.st, en: t.en, col: 0, total: 1 }
@@ -357,12 +408,18 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
       return [{ kind: 'block', bl, st: visStart, en: visEnd, col: 0, total: 1 }]
     })
     return layoutAll([...bookingItems, ...blockItems])
-  }, [filtered, blockedSchedules, dateStr, currentSvc, activeFilter])
+  }, [view, filtered, blockedSchedules, dateStr, currentSvc, activeFilter])
 
   const now     = new Date()
   const isToday = now.getFullYear() === currentDate.getFullYear() && now.getMonth() === currentDate.getMonth() && now.getDate() === currentDate.getDate()
   const yrSfx   = currentDate.getFullYear() !== now.getFullYear() ? ` ${currentDate.getFullYear()}` : ''
   const dateLbl = `${DAYS[currentDate.getDay()]}, ${MONTHS[currentDate.getMonth()]} ${currentDate.getDate()}${yrSfx}`
+  // Nav label + "Today" visibility adapt to the active view.
+  const navLabel = view === 'day' ? dateLbl
+    : view === 'week' ? weekLabel(range.from, range.to)
+    : `${MONTHS[currentDate.getMonth()]} ${currentDate.getFullYear()}`
+  const todayISO    = dateToISO(now)
+  const todayInView = dateToISO(range.from) <= todayISO && todayISO <= dateToISO(range.to)
   const openBooking = bookings.find(b => b.id === openId)
   const openBlock   = blockedSchedules.find(b => b.id === openBlockId)
   const showGroomerMarkers = currentSvc === 'grooming' || activeFilter?.type === 'groomer'
@@ -384,10 +441,20 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
       {/* ── Date nav bar ── */}
       <div className={styles.dateNav}>
         <button className={styles.navArrow} onClick={() => shiftDate(-1)}>‹</button>
-        <button className={styles.dateLabelBtn} onClick={openCalOverlay}>{dateLbl}</button>
+        <button className={styles.dateLabelBtn} onClick={openCalOverlay}>{navLabel}</button>
         <button className={styles.navArrow} onClick={() => shiftDate(1)}>›</button>
-        {!isToday && <button className={styles.todayBtn} onClick={goToday}>Today</button>}
+        {!todayInView && <button className={styles.todayBtn} onClick={goToday}>Today</button>}
         {loading && <span className={styles.loadDot} />}
+        {/* View toggle (Day / Week / Month) */}
+        <div className={styles.viewToggle}>
+          {VIEW_OPTS.map(v => (
+            <button key={v.k}
+              className={`${styles.viewBtn} ${view === v.k ? styles.viewBtnOn : ''}`}
+              onClick={() => changeView(v.k)}>
+              {v.label}
+            </button>
+          ))}
+        </div>
         {/* Mobile-only filter button — sidebar is hidden on small screens */}
         {(rooms.length > 0 || groomers.length > 0 || studios.length > 0) && (() => {
           const res = activeFilter
@@ -474,6 +541,7 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
             ))}
           </div>
 
+          {view === 'day' && (<>
           {showGroomerMarkers && visibleGroomerHours.length > 0 && (
             <div className={styles.groomerHoursStrip}>
               {visibleGroomerHours.map(hours => (
@@ -607,6 +675,23 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
               </div>
             </div>
           </div>
+          </>)}
+
+          {view === 'week' && (
+            <WeekView
+              weekStart={range.from} filtered={filtered}
+              rooms={rooms} groomers={groomers} today={now}
+              onOpenBooking={setOpenId} onPickDay={pickDay}
+            />
+          )}
+
+          {view === 'month' && (
+            <MonthView
+              monthAnchor={currentDate} filtered={filtered}
+              rooms={rooms} groomers={groomers} today={now}
+              onPickDay={pickDay}
+            />
+          )}
         </div>
       </div>
 
@@ -641,7 +726,7 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
           booking={openBooking} rooms={rooms} groomers={groomers}
           currentAdmin={currentAdmin}
           onClose={() => setOpenId(null)}
-          onUpdated={() => { setOpenId(null); loadBookings(currentDate); loadBlocked() }}
+          onUpdated={() => { setOpenId(null); reloadBookings(); loadBlocked() }}
           onEdit={b => { setOpenId(null); setEditBooking(b); setShowAddBooking(true) }}
         />
       )}
@@ -661,7 +746,7 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
           currentAdmin={currentAdmin}
           editBooking={editBooking}
           onClose={() => { setShowAddBooking(false); setEditBooking(null) }}
-          onSaved={() => { loadBookings(currentDate); loadBlocked() }}
+          onSaved={() => { reloadBookings(); loadBlocked() }}
         />
       )}
 
@@ -707,6 +792,108 @@ function SbItem({ color, label, count, isOn, isRound, onToggle }) {
       <span className={`${styles.sbDot} ${isRound ? styles.sbDotRound : ''}`} style={{ background: color }} />
       <span className={styles.sbLbl}>{label}</span>
       <span className={styles.sbCt}>{count}</span>
+    </div>
+  )
+}
+
+// ── Week view: 7 compact day-columns with time-labeled chips ────────────────
+function WeekView({ weekStart, filtered, rooms, groomers, today, onOpenBooking, onPickDay }) {
+  const todayISO = dateToISO(today)
+  const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
+  return (
+    <div className={styles.weekScroll}>
+      <div className={styles.weekGrid}>
+        {days.map(d => {
+          const ds = dateToISO(d)
+          const isToday = ds === todayISO
+          const dayBk = filtered.filter(b => bookingOnDay(b, ds))
+          const hotels = dayBk.filter(b => b.service === 'hotel')
+          const timed  = dayBk.filter(b => b.service !== 'hotel')
+            .map(b => ({ b, st: getBookingTimes(b, ds).st }))
+            .sort((a, c) => a.st - c.st)
+          return (
+            <div key={ds} className={styles.weekCol}>
+              <button className={`${styles.weekColHead} ${isToday ? styles.weekColHeadToday : ''}`} onClick={() => onPickDay(d)}>
+                <span className={styles.weekDow}>{DAYS[d.getDay()]}</span>
+                <span className={styles.weekDate}>{d.getDate()}</span>
+              </button>
+              <div className={styles.weekColBody}>
+                {hotels.map(b => {
+                  const color = getCardColor(b, rooms, groomers)
+                  return (
+                    <div key={b.id} className={styles.weekAllDay}
+                      style={{ background: hexBg(color), borderLeftColor: color }}
+                      onClick={() => onOpenBooking(b.id)}>
+                      🏨 {first(b.pets)?.name ?? 'Pet'}
+                    </div>
+                  )
+                })}
+                {timed.map(({ b, st }) => {
+                  const color = getCardColor(b, rooms, groomers)
+                  const cancelled = b.status === 'cancelled' || b.status === 'rejected'
+                  return (
+                    <div key={b.id} className={`${styles.weekChip} ${cancelled ? styles.weekChipCancelled : ''}`}
+                      style={{ background: hexBg(color), borderLeftColor: color }}
+                      onClick={() => onOpenBooking(b.id)}>
+                      <span className={styles.weekChipTime}>{formatMins(st)}</span>
+                      <span className={styles.weekChipName}>
+                        <span className={styles.sdot} style={{ background: STATUS_COLORS[b.status] ?? '#888' }} />
+                        {petEmoji(b)} {first(b.pets)?.name ?? 'Pet'}
+                      </span>
+                    </div>
+                  )
+                })}
+                {dayBk.length === 0 && <div className={styles.weekEmpty}>—</div>}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ── Month view: classic grid with event chips, click a day to drill in ──────
+function MonthView({ monthAnchor, filtered, rooms, groomers, today, onPickDay }) {
+  const y = monthAnchor.getFullYear(), mon = monthAnchor.getMonth()
+  const todayISO = dateToISO(today)
+  const first0 = new Date(y, mon, 1)
+  const gridStart = addDays(first0, -first0.getDay())
+  const cells = Array.from({ length: 42 }, (_, i) => addDays(gridStart, i))
+  const MAX = 3
+  return (
+    <div className={styles.monthScroll}>
+      <div className={styles.monthDows}>
+        {DAYS.map(d => <div key={d} className={styles.monthDow}>{d}</div>)}
+      </div>
+      <div className={styles.monthGrid}>
+        {cells.map(d => {
+          const ds = dateToISO(d)
+          const inMonth = d.getMonth() === mon
+          const isToday = ds === todayISO
+          const dayBk = filtered.filter(b => bookingOnDay(b, ds))
+            .map(b => ({ b, st: b.service === 'hotel' ? -1 : getBookingTimes(b, ds).st }))
+            .sort((a, c) => a.st - c.st)
+          return (
+            <div key={ds}
+              className={`${styles.monthCell} ${inMonth ? '' : styles.monthCellOther} ${isToday ? styles.monthCellToday : ''}`}
+              onClick={() => onPickDay(d)}>
+              <div className={styles.monthNum}>{d.getDate()}</div>
+              <div className={styles.monthEvents}>
+                {dayBk.slice(0, MAX).map(({ b }) => {
+                  const color = getCardColor(b, rooms, groomers)
+                  return (
+                    <div key={b.id} className={styles.monthEv} style={{ background: hexBg(color), borderLeftColor: color }}>
+                      {b.service === 'hotel' ? '🏨 ' : ''}{first(b.pets)?.name ?? 'Pet'}
+                    </div>
+                  )
+                })}
+                {dayBk.length > MAX && <div className={styles.monthMore}>+{dayBk.length - MAX} more</div>}
+              </div>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
