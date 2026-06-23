@@ -21,10 +21,13 @@
   flex-shrink: 0;
   min-height: 44px;
 }
+/* Date cluster: label on top, arrows beneath (saves horizontal space) */
+.dateCluster { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; }
+.dateArrows { display: flex; align-items: center; gap: 4px; }
 .navArrow {
   font-size: 20px; line-height: 1; color: var(--mid);
   background: transparent; border: none; cursor: pointer;
-  padding: 2px 6px; border-radius: 6px;
+  padding: 0 6px; border-radius: 6px;
   font-family: 'Nunito', sans-serif;
 }
 .navArrow:hover { background: var(--raised); color: var(--cream); }
@@ -33,7 +36,13 @@
   background: transparent; border: none; cursor: pointer;
   font-family: 'Fredoka One', cursive;
   text-decoration: underline dotted rgba(184,212,224,0.4);
-  padding: 2px 4px;
+  padding: 1px 4px; white-space: nowrap;
+}
+.lblShort { display: none; }
+@media (max-width: 640px) {
+  .lblFull  { display: none; }
+  .lblShort { display: inline; }
+  .dateNav  { gap: 8px; padding: 6px 10px; }
 }
 .todayBtn {
   font-size: 11px; color: var(--mid);
@@ -318,27 +327,20 @@
   cursor: pointer; font-family: 'Nunito', sans-serif;
 }
 
-/* ── Mobile filter button (hidden on desktop — sidebar handles it there) ── */
+/* ── Mobile filter button (icon-only; hidden on desktop — sidebar handles it) ── */
 .filterBtn {
   display: none; /* shown via media query below */
-  margin-left: auto;
   align-items: center;
-  gap: 5px;
-  padding: 5px 11px;
+  gap: 4px;
+  padding: 5px 8px;
   border-radius: 20px;
   border: 0.5px solid var(--border);
   background: transparent;
   color: var(--mid);
-  font-size: 11px;
-  font-weight: 700;
-  font-family: 'Nunito', sans-serif;
   cursor: pointer;
-  white-space: nowrap;
-  max-width: 110px;
-  overflow: hidden;
-  text-overflow: ellipsis;
   flex-shrink: 0;
 }
+.filterIcon { font-size: 14px; line-height: 1; }
 .filterBtn:hover { background: var(--raised); color: var(--cream); }
 .filterBtnOn {
   border-color: var(--blue);
@@ -435,9 +437,20 @@
 }
 .viewBtn:hover { color: var(--cream); }
 .viewBtnOn { background: var(--raised); color: var(--cream); }
+
+/* Mobile: replace the segmented toggle with a compact dropdown */
+.viewSelect {
+  display: none;
+  margin-left: auto;
+  font-size: 12px; font-weight: 700;
+  color: var(--cream); background: var(--bg);
+  border: 0.5px solid var(--border); border-radius: 20px;
+  padding: 5px 9px; cursor: pointer;
+  font-family: 'Nunito', sans-serif;
+}
 @media (max-width: 640px) {
-  .viewToggle { margin-left: 6px; }
-  .viewBtn { padding: 4px 8px; font-size: 10px; }
+  .viewToggle { display: none; }
+  .viewSelect { display: inline-block; }
 }
 
 /* ── Shared spanning bar (week all-day band + month) ── */
@@ -585,3 +598,28 @@
 .peekRow:hover { background: var(--raised); }
 .peekTime { font-size: 12px; font-weight: 700; color: var(--mid); min-width: 54px; }
 .peekName { font-size: 13px; color: var(--cream); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ── List / agenda view ── */
+.listScroll { flex: 1; overflow-y: auto; background: var(--bg); padding: 6px 0 24px; }
+.listDay { border-bottom: 0.5px solid var(--border); }
+.listDayHead {
+  display: flex; align-items: baseline; gap: 8px;
+  padding: 10px 16px 6px; position: sticky; top: 0;
+  background: var(--bg); z-index: 1;
+}
+.listDow { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--mid); }
+.listDateNum { font-size: 18px; font-weight: 700; color: var(--cream); font-family: 'Fredoka One', cursive; }
+.listMon { font-size: 11px; font-weight: 700; color: var(--mid); }
+.listCount { margin-left: auto; font-size: 11px; font-weight: 700; color: var(--mid); }
+.listDayToday .listDateNum { color: var(--yellow); }
+.listItems { display: flex; flex-direction: column; padding: 2px 10px 10px; gap: 3px; }
+.listRow {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 8px; border-radius: 8px; cursor: pointer;
+  transition: background 0.12s;
+}
+.listRow:hover { background: var(--raised); }
+.listTime { font-size: 12px; font-weight: 700; color: var(--mid); min-width: 56px; flex-shrink: 0; }
+.listDot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.listName { font-size: 13px; font-weight: 600; color: var(--cream); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.listSvc { font-size: 11px; font-weight: 700; color: var(--mid); flex-shrink: 0; text-transform: uppercase; letter-spacing: 0.04em; }

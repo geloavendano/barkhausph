@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { supabase, sbGet, sbPatch } from '../../lib/supabase'
-import { STATUS_COLORS, first, hexBg } from '../../lib/constants'
+import { STATUS_COLORS, SVC_LABELS, first, hexBg } from '../../lib/constants'
 import { groomDurationMins } from '../../lib/grooming'
 import BookingDrawer from '../Bookings/BookingDrawer'
 import FAB from '../../components/FAB/FAB'
@@ -111,7 +111,7 @@ function getCardColor(b, rooms, groomers) {
 }
 
 // ── View helpers (day / week / month) ───────────────────────────────────────
-const VIEW_OPTS = [{ k: 'day', label: 'Day' }, { k: 'week', label: 'Week' }, { k: 'month', label: 'Month' }]
+const VIEW_OPTS = [{ k: 'day', label: 'Day' }, { k: 'week', label: 'Week' }, { k: 'month', label: 'Month' }, { k: 'list', label: 'List' }]
 
 function addDays(d, n) { const x = new Date(d.getFullYear(), d.getMonth(), d.getDate()); x.setDate(x.getDate() + n); return x }
 function startOfWeek(d) { return addDays(d, -d.getDay()) }   // Sunday
@@ -120,6 +120,7 @@ function startOfWeek(d) { return addDays(d, -d.getDay()) }   // Sunday
 function viewRange(view, date) {
   if (view === 'week')  { const f = startOfWeek(date); return { from: f, to: addDays(f, 6) } }
   if (view === 'month') { const first = new Date(date.getFullYear(), date.getMonth(), 1); const f = addDays(first, -first.getDay()); return { from: f, to: addDays(f, 41) } }
+  if (view === 'list')  { return { from: new Date(date.getFullYear(), date.getMonth(), 1), to: new Date(date.getFullYear(), date.getMonth() + 1, 0) } }
   const day = new Date(date.getFullYear(), date.getMonth(), date.getDate())
   return { from: day, to: day }
 }
@@ -392,9 +393,9 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
     setActiveFilter(null)
     setCurrentDate(d => {
       const x = new Date(d)
-      if (view === 'week')       x.setDate(x.getDate() + delta * 7)
-      else if (view === 'month') x.setMonth(x.getMonth() + delta)
-      else                       x.setDate(x.getDate() + delta)
+      if (view === 'week')                          x.setDate(x.getDate() + delta * 7)
+      else if (view === 'month' || view === 'list') x.setMonth(x.getMonth() + delta)
+      else                                          x.setDate(x.getDate() + delta)
       return x
     })
   }
@@ -466,6 +467,14 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
   const navLabel = view === 'day' ? dateLbl
     : view === 'week' ? weekLabel(range.from, range.to)
     : `${MONTHS[currentDate.getMonth()]} ${currentDate.getFullYear()}`
+  // Compact numeric label for mobile (e.g. 6/26, 6/21–27, Jun 2026).
+  const navLabelShort = view === 'day'
+      ? `${currentDate.getMonth() + 1}/${currentDate.getDate()}${yrSfx}`
+    : view === 'week'
+      ? (range.from.getMonth() === range.to.getMonth()
+          ? `${range.from.getMonth() + 1}/${range.from.getDate()}–${range.to.getDate()}`
+          : `${range.from.getMonth() + 1}/${range.from.getDate()}–${range.to.getMonth() + 1}/${range.to.getDate()}`)
+      : `${MONTHS[currentDate.getMonth()].slice(0, 3)} ${currentDate.getFullYear()}`
   const todayISO    = dateToISO(now)
   const todayInView = dateToISO(range.from) <= todayISO && todayISO <= dateToISO(range.to)
   const openBooking = bookings.find(b => b.id === openId)
@@ -492,12 +501,21 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
     <div className={styles.page}>
       {/* ── Date nav bar ── */}
       <div className={styles.dateNav}>
-        <button className={styles.navArrow} onClick={() => shiftDate(-1)}>‹</button>
-        <button className={styles.dateLabelBtn} onClick={openCalOverlay}>{navLabel}</button>
-        <button className={styles.navArrow} onClick={() => shiftDate(1)}>›</button>
-        {!todayInView && <button className={styles.todayBtn} onClick={goToday}>Today</button>}
+        {/* Date cluster: label on top, ‹ › beneath (compact horizontally) */}
+        <div className={styles.dateCluster}>
+          <button className={styles.dateLabelBtn} onClick={openCalOverlay}>
+            <span className={styles.lblFull}>{navLabel}</span>
+            <span className={styles.lblShort}>{navLabelShort}</span>
+          </button>
+          <div className={styles.dateArrows}>
+            <button className={styles.navArrow} onClick={() => shiftDate(-1)}>‹</button>
+            {!todayInView && <button className={styles.todayBtn} onClick={goToday}>Today</button>}
+            <button className={styles.navArrow} onClick={() => shiftDate(1)}>›</button>
+          </div>
+        </div>
         {loading && <span className={styles.loadDot} />}
-        {/* View toggle (Day / Week / Month) */}
+
+        {/* View switch — segmented on desktop, dropdown on mobile */}
         <div className={styles.viewToggle}>
           {VIEW_OPTS.map(v => (
             <button key={v.k}
@@ -507,7 +525,11 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
             </button>
           ))}
         </div>
-        {/* Mobile-only filter button — sidebar is hidden on small screens */}
+        <select className={styles.viewSelect} value={view} onChange={e => changeView(e.target.value)} aria-label="Calendar view">
+          {VIEW_OPTS.map(v => <option key={v.k} value={v.k}>{v.label}</option>)}
+        </select>
+
+        {/* Mobile-only filter button (icon) — sidebar is hidden on small screens */}
         {(rooms.length > 0 || groomers.length > 0 || studios.length > 0) && (() => {
           const res = activeFilter
             ? (activeFilter.type === 'room'    ? rooms.find(r => r.id === activeFilter.id)
@@ -518,9 +540,10 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
             <button
               className={`${styles.filterBtn} ${activeFilter ? styles.filterBtnOn : ''}`}
               onClick={() => setFilterOpen(true)}
+              title={res ? `Filter: ${res.name}` : 'Filter'}
             >
+              <span className={styles.filterIcon}>⊟</span>
               {res && <span className={styles.filterBtnDot} style={{ background: res.color }} />}
-              {res ? res.name : '⊟ Filter'}
             </button>
           )
         })()}
@@ -746,6 +769,14 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
               rooms={rooms} groomers={groomers} today={now}
               onPickDay={pickDay} onOpenBooking={setOpenId}
               onMore={setPeekDate}
+            />
+          )}
+
+          {view === 'list' && (
+            <ListView
+              rangeFrom={range.from} rangeTo={range.to} filtered={filtered}
+              rooms={rooms} groomers={groomers} today={now}
+              onOpenBooking={setOpenId}
             />
           )}
         </div>
@@ -1008,6 +1039,66 @@ function MonthView({ monthAnchor, filtered, rooms, groomers, today, onPickDay, o
           )
         })}
       </div>
+    </div>
+  )
+}
+
+// ── List/agenda view: bookings grouped by day (empty days skipped) ──────────
+function ListView({ rangeFrom, rangeTo, filtered, rooms, groomers, today, onOpenBooking }) {
+  const todayISO = dateToISO(today)
+  const days = []
+  for (let d = new Date(rangeFrom); d <= rangeTo; d = addDays(d, 1)) days.push(new Date(d))
+  const groups = days.map(d => {
+    const ds = dateToISO(d)
+    const dayBk = filtered.filter(b => bookingOnDay(b, ds))
+    const hotels = dayBk.filter(b => b.service === 'hotel')
+    const timed  = dayBk.filter(b => b.service !== 'hotel')
+      .map(b => ({ b, st: getBookingTimes(b, ds).st }))
+      .sort((a, c) => a.st - c.st)
+    return { d, ds, hotels, timed, count: dayBk.length }
+  }).filter(g => g.count > 0)
+
+  if (groups.length === 0) {
+    return <div className={styles.listScroll}><div className={styles.weekEmpty}>No bookings this month</div></div>
+  }
+  return (
+    <div className={styles.listScroll}>
+      {groups.map(g => (
+        <div key={g.ds} className={styles.listDay}>
+          <div className={`${styles.listDayHead} ${g.ds === todayISO ? styles.listDayToday : ''}`}>
+            <span className={styles.listDow}>{DAYS[g.d.getDay()]}</span>
+            <span className={styles.listDateNum}>{g.d.getDate()}</span>
+            <span className={styles.listMon}>{MONTHS[g.d.getMonth()].slice(0, 3)}</span>
+            <span className={styles.listCount}>{g.count} booking{g.count > 1 ? 's' : ''}</span>
+          </div>
+          <div className={styles.listItems}>
+            {g.hotels.map(b => {
+              const color = getCardColor(b, rooms, groomers)
+              const cancelled = b.status === 'cancelled' || b.status === 'rejected'
+              return (
+                <div key={b.id} className={`${styles.listRow} ${cancelled ? styles.weekChipCancelled : ''}`} onClick={() => onOpenBooking(b.id)}>
+                  <span className={styles.listTime}>🏨</span>
+                  <span className={styles.listDot} style={{ background: color }} />
+                  <span className={styles.listName}>{petEmoji(b)} {first(b.pets)?.name ?? 'Pet'}</span>
+                  <span className={styles.listSvc}>Hotel</span>
+                </div>
+              )
+            })}
+            {g.timed.map(({ b, st }) => {
+              const color = getCardColor(b, rooms, groomers)
+              const cancelled = b.status === 'cancelled' || b.status === 'rejected'
+              return (
+                <div key={b.id} className={`${styles.listRow} ${cancelled ? styles.weekChipCancelled : ''}`} onClick={() => onOpenBooking(b.id)}>
+                  <span className={styles.listTime}>{formatMins(st)}</span>
+                  <span className={styles.listDot} style={{ background: color }} />
+                  <span className={styles.listName}>{petEmoji(b)} {first(b.pets)?.name ?? 'Pet'}</span>
+                  <span className={styles.listSvc}>{SVC_LABELS[b.service] ?? b.service}</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      ))}
     </div>
   )
 }

@@ -66,6 +66,13 @@ function GroomingCoverageBanner({ branch, groomers, refreshKey, ready, onOpenInv
 export default function Shell({ page, onPageChange, greeting, branches = [], branchIdx = 0, onBranchChange, onSignOut, contentFill, coverageBranch, groomers = [], coverageRefreshKey = 0, coverageReady = false, onOpenGroomerInventory, children }) {
   const [moreOpen, setMoreOpen] = useState(false)
 
+  // Signal the open "More" sheet to fixed-position siblings (e.g. the FAB),
+  // which lift above the sheet so they don't cover its items on mobile.
+  useEffect(() => {
+    document.body.classList.toggle('bh-more-open', moreOpen)
+    return () => document.body.classList.remove('bh-more-open')
+  }, [moreOpen])
+
   const inMore = MORE_ITEMS.some(i => i.key === page)
 
   function navigate(key) {

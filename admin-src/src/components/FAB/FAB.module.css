@@ -7,10 +7,14 @@
   flex-direction: column;
   align-items: flex-end;
   gap: 8px;
+  transition: bottom 0.2s ease;
 }
 
 @media (max-width: 640px) {
   .group { bottom: 72px; right: 16px; }
+  /* When the mobile "More" sheet is open, lift the FAB above it so it
+     doesn't cover the sheet's items (the sheet sits just above the nav). */
+  :global(body.bh-more-open) .group { bottom: 200px; }
 }
 
 .backdrop {
