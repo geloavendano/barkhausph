@@ -21,6 +21,10 @@ function hostedPaymentEndpoint() {
   return PAYMENT_GATEWAY_PROVIDER === 'maya' ? CREATE_MAYA_CHECKOUT_URL : CREATE_PAYMENT_URL;
 }
 
+function currentConvenienceFee() {
+  return booking && booking.simulatePayment ? 0 : CONVENIENCE_FEE;
+}
+
 // ── PRICING TABLES ──
 // GROOM_PRICES, FACE_TRIM_PRICES, ADDONS, HOTEL_RATES, DAYCARE_RATES,
 // DAYCARE_EXTRA_RATES, HOTEL_LATE_RATE, MEMBER_DISCOUNT, CONVENIENCE_FEE
@@ -53,8 +57,10 @@ var PET_SIZE_LABELS = {
   giant_dog:'Giant Dog', cat:'Cat'
 };
 // VALID_MEMBER_IDS removed — membership validated via Supabase
-var IS_WALKIN = (new URLSearchParams(window.location.search)).get('walkin') === '1';
-var WALKIN_TOKEN = (new URLSearchParams(window.location.search)).get('token') || '';
+var BOOKING_PARAMS = new URLSearchParams(window.location.search);
+var IS_WALKIN = BOOKING_PARAMS.get('walkin') === '1';
+var WALKIN_TOKEN = BOOKING_PARAMS.get('token') || '';
+var TEST_PAYMENT_MODE = BOOKING_PARAMS.get('testPayment') === '1';
 var _walkinGatePromise = null; // resolves to true (allowed) or false (blocked)
 
 if (IS_WALKIN) {
@@ -113,6 +119,8 @@ var booking = {
   ownerFirst:'', ownerLast:'', ownerEmail:'', ownerPhone:'', ownerSource:'',
   // Membership
   isMember:null, membershipId:null, memberValid:false,
+  // Test-only checkout shortcut
+  simulatePayment:false,
 };
 var currentStep = 1;
 var saveDetails = false;
@@ -209,6 +217,10 @@ function localDateStr(d) {
   await loadPricing();
   buildPickupTimeOptions();
   renderProgress();
+  if (TEST_PAYMENT_MODE) {
+    var simCard = document.getElementById('simulatePaymentCard');
+    if (simCard) simCard.style.display = '';
+  }
   if (IS_WALKIN) {
     var banner = document.createElement('div');
     banner.style.cssText = 'background:rgba(107,203,119,0.15);border-bottom:0.5px solid rgba(107,203,119,0.3);padding:8px 16px;font-size:12px;color:#6BCB77;font-weight:600;text-align:center;';
@@ -574,7 +586,7 @@ function updateBottomNavForSummary() {
   var total = getRunningTotal();
   var navEl = document.getElementById('navTotal');
   if (total > 0) {
-    document.getElementById('navTotalVal').textContent = '₱' + (total + CONVENIENCE_FEE).toLocaleString();
+    document.getElementById('navTotalVal').textContent = '₱' + (total + currentConvenienceFee()).toLocaleString();
     navEl.style.display = 'flex';
   }
 }
@@ -637,6 +649,112 @@ function selectLocation(el, val) {
     if (studioCard) { studioCard.classList.remove('disabled'); if (studioBadge) studioBadge.textContent = 'Contact to book'; }
   }
   nextStep();
+}
+
+function setValue(id, value) {
+  var el = document.getElementById(id);
+  if (el) el.value = value;
+}
+
+function setChecked(id, checked) {
+  var el = document.getElementById(id);
+  if (el) el.classList.toggle('checked', !!checked);
+}
+
+function clearActivePanels() {
+  document.querySelectorAll('.step-panel').forEach(function(panel) {
+    panel.classList.remove('active');
+  });
+}
+
+function startSimulatedPaymentFlow() {
+  if (!TEST_PAYMENT_MODE) return;
+  var today = localDateStr();
+
+  booking.location = 'eastwood';
+  booking.service = 'daycare';
+  booking.simulatePayment = true;
+  booking.petSize = 'small_dog';
+  booking.daycareBaseRate = 1;
+  booking.daycareTotal = 1;
+  booking.daycareDate = today;
+  booking.daycareOpenTime = false;
+  booking.daycareDropoffHour = 10;
+  booking.daycarePickupHour = 13;
+  booking.daycareDropoffText = '10:00 AM';
+  booking.daycarePickupText = '1:00 PM';
+  booking.daycareNotes = 'Simulated Maya payment test booking.';
+  booking.petName = 'Maya Test';
+  booking.petAnimal = 'dog';
+  booking.petGender = 'male';
+  booking.petBreed = 'Mixed';
+  booking.petAge = '2';
+  booking.petAgeUnit = 'years';
+  booking.petMedical = '';
+  booking.petTemperament = 'friendly_all';
+  booking.isMember = false;
+  booking.membershipId = null;
+  booking.memberValid = false;
+  booking.ownerFirst = 'Maya';
+  booking.ownerLast = 'Tester';
+  booking.ownerEmail = 'maya-test@barkhaus.ph';
+  booking.ownerPhone = '09171234567';
+  booking.ownerSource = 'Website';
+
+  uploadedVaccineFiles = [];
+  paymentReceiptFile = null;
+
+  setValue('daycareDate', today);
+  onDaycareDateChange();
+  setValue('daycareDropoff', '10');
+  setValue('daycarePickup', '13');
+  setValue('daycareNotes', booking.daycareNotes);
+  booking.daycareBaseRate = 1;
+  booking.daycareTotal = 1;
+
+  setValue('petName', booking.petName);
+  setValue('petBreed', booking.petBreed);
+  setValue('petAgeNum', booking.petAge);
+  setValue('petAgeUnit', booking.petAgeUnit);
+  setValue('petMedical', '');
+  setValue('ownerFirst', booking.ownerFirst);
+  setValue('ownerLast', booking.ownerLast);
+  setValue('ownerEmail', booking.ownerEmail);
+  setValue('ownerPhone', booking.ownerPhone);
+  setValue('ownerSource', booking.ownerSource);
+  setValue('ownerSourceOther', '');
+
+  document.querySelectorAll('#step1 .option-card').forEach(function(card) { card.classList.remove('selected'); });
+  var simCard = document.getElementById('simulatePaymentCard');
+  if (simCard) simCard.classList.add('selected');
+  document.querySelectorAll('#serviceGrid .option-card').forEach(function(card) { card.classList.remove('selected'); });
+  document.querySelectorAll('#daycareSizeGrid .pet-type-btn').forEach(function(btn) { btn.classList.remove('selected'); });
+  var smallBtn = document.querySelector('#daycareSizeGrid .pet-type-btn[onclick*="small_dog"]');
+  if (smallBtn) smallBtn.classList.add('selected');
+  document.querySelectorAll('#petTypeGroup .gender-btn').forEach(function(btn) { btn.classList.remove('selected'); });
+  var dogBtn = document.getElementById('petTypeDog');
+  if (dogBtn) dogBtn.classList.add('selected');
+  document.querySelectorAll('#petGenderGrid .gender-btn').forEach(function(btn) { btn.classList.remove('selected'); });
+  var maleBtn = document.querySelector('#petGenderGrid .gender-btn[onclick*="male"]');
+  if (maleBtn) maleBtn.classList.add('selected');
+  document.querySelectorAll('.temp-btn').forEach(function(btn) { btn.classList.remove('selected'); });
+  var friendlyBtn = document.querySelector('.temp-btn[onclick*="friendly_all"]');
+  if (friendlyBtn) friendlyBtn.classList.add('selected');
+
+  renderVaccines();
+  setChecked('bringVaccines', true);
+  setChecked('vaccineWaiver', true);
+  setChecked('waiverGeneralDaycare', true);
+  setChecked('waiverVaccineDecl', true);
+  setChecked('waiverMedia', true);
+  checkSeniorWaiver();
+
+  currentStep = 7;
+  onPaymentScreen = false;
+  onSummaryScreen = false;
+  clearActivePanels();
+  document.getElementById('progressWrap').style.display = 'none';
+  showSummary();
 }
 
 // ── SERVICE ──
@@ -2445,14 +2563,15 @@ function buildSummary() {
   if (subtotal > 0) {
     var discRate = booking.memberValid ? (MEMBER_DISCOUNT[svc]||0) : 0;
     var discAmt  = Math.round(subtotal * discRate);
-    var total    = subtotal - discAmt + CONVENIENCE_FEE;
+    var fee      = currentConvenienceFee();
+    var total    = subtotal - discAmt + fee;
     // Always show subtotal when there are components so the hierarchy is clear
     html += '<div class="price-line subtotal-line"><span class="price-line-label">Subtotal</span><span class="price-line-val">\u20b1'+subtotal.toLocaleString()+'</span></div>';
     if (discAmt > 0) {
       var discPct = Math.round(discRate * 100);
       html += '<div class="price-line"><span class="price-line-label">Member discount ('+discPct+'%)</span><span class="price-line-val discount">-\u20b1'+discAmt.toLocaleString()+'</span></div>';
     }
-    if (CONVENIENCE_FEE > 0) html += '<div class="price-line"><span class="price-line-label">Convenience fee</span><span class="price-line-val">\u20b1'+CONVENIENCE_FEE.toLocaleString()+'</span></div>';
+    if (fee > 0) html += '<div class="price-line"><span class="price-line-label">Convenience fee</span><span class="price-line-val">\u20b1'+fee.toLocaleString()+'</span></div>';
     html += '<div class="price-line total-line"><span class="price-line-label">Total</span><span class="price-line-val">\u20b1'+total.toLocaleString()+'</span></div>';
   }
   var priceBreakdownEl = document.getElementById('priceBreakdown');
@@ -3258,7 +3377,8 @@ async function submitBooking() {
   }
   var discRate = booking.memberValid ? (MEMBER_DISCOUNT[svc] || 0) : 0;
   var discAmt  = Math.round(subtotal * discRate);
-  var total    = subtotal - discAmt + CONVENIENCE_FEE;
+  var fee      = currentConvenienceFee();
+  var total    = subtotal - discAmt + fee;
 
   var groomServiceName = '';
   if (booking.groomService) {
@@ -3406,7 +3526,7 @@ async function submitBooking() {
     waiverMedia:document.getElementById('waiverMedia').classList.contains('checked'),
     waiverPlaypark:document.getElementById('waiverPlaypark')?document.getElementById('waiverPlaypark').classList.contains('checked'):false,
     waiverTexts: buildWaiverTexts(),
-    subtotal:subtotal, discountAmount:discAmt, convenienceFee:CONVENIENCE_FEE, total:total,
+    subtotal:subtotal, discountAmount:discAmt, convenienceFee:fee, total:total,
     hotelLateTotal:    booking.hotelLateTotal    || 0,
     groomServicePrice: booking.groomServicePrice || 0,
     vaccineDocuments:  vaccineDocuments,
@@ -3530,7 +3650,7 @@ async function submitBooking() {
         daycareDropoffText: svc === 'daycare' ? booking.daycareDropoffText : null,
         daycarePickupText: svc === 'daycare' ? booking.daycarePickupText : null,
         subtotal: subtotal, discountAmount: discAmt,
-        convenienceFee: CONVENIENCE_FEE, total: total,
+        convenienceFee: fee, total: total,
         bookingId: data.booking_id || null,
         pendingId: data.pending_id || null,
         refNumber: data.ref_number || null,

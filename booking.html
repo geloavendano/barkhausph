@@ -396,6 +396,15 @@ async function checkGate() {
       </div>
       <span class="option-icon">&#127970;</span>
     </div>
+    <div class="option-card" id="simulatePaymentCard" style="display:none" onclick="startSimulatedPaymentFlow()">
+      <div class="option-radio"></div>
+      <div class="option-info">
+        <p class="option-name">Simulate payment</p>
+        <p class="option-detail">Test Maya checkout with a prefilled daycare booking for today.</p>
+        <span class="option-badge">Test amount: &#8369;1.00</span>
+      </div>
+      <span class="option-icon">&#128179;</span>
+    </div>
     <div class="option-card disabled">
       <div class="option-radio"></div>
       <div class="option-info">
@@ -1305,7 +1314,7 @@ async function checkGate() {
 
 <script src="pricing.js"></script>
 <script src="validation.js"></script>
-<script src="booking.js?v=20260623-maya"></script>
+<script src="booking.js?v=20260623-maya-test"></script>
 
 <div id="contactModalOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:1000;align-items:center;justify-content:center;padding:24px" onclick="if(event.target===this)closeContactModal()">
   <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:20px;padding:28px 24px;max-width:340px;width:100%;text-align:center">
