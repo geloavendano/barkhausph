@@ -471,6 +471,10 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
   const openBooking = bookings.find(b => b.id === openId)
   const openBlock   = blockedSchedules.find(b => b.id === openBlockId)
   const showGroomerMarkers = currentSvc === 'grooming' || activeFilter?.type === 'groomer'
+  // Sidebar/filter sections track the active service (All shows everything).
+  const sbRooms    = (currentSvc === 'all' || currentSvc === 'hotel')    && rooms.length > 0
+  const sbGroomers = (currentSvc === 'all' || currentSvc === 'grooming') && groomers.length > 0
+  const sbStudios  = (currentSvc === 'all' || currentSvc === 'studio')   && studios.length > 0
   const visibleGroomerHours = showGroomerMarkers
     ? groomerHours.flatMap(hours => {
         const groomer = groomers.find(item => item.id === hours.resource_id)
@@ -533,7 +537,7 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
       <div className={styles.body}>
         {/* Calendar sidebar (rooms / groomers / studios) */}
         <aside className={styles.sidebar}>
-          {rooms.length > 0 && (
+          {sbRooms && (
             <SbSection label="Rooms">
               {rooms.map(r => (
                 <SbItem key={r.id} color={r.color} label={r.name}
@@ -546,8 +550,8 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
               ))}
             </SbSection>
           )}
-          {groomers.length > 0 && (
-            <SbSection label="Groomers" topMargin={rooms.length > 0}>
+          {sbGroomers && (
+            <SbSection label="Groomers" topMargin={sbRooms}>
               {groomers.map(g => (
                 <SbItem key={g.id} color={g.color} label={g.name} isRound
                   count={bookings.filter(b => b.service === 'grooming' && (first(b.grooming_details) ?? {}).groomer_id === g.id).length}
@@ -556,8 +560,8 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
               ))}
             </SbSection>
           )}
-          {studios.length > 0 && (
-            <SbSection label="Studios" topMargin>
+          {sbStudios && (
+            <SbSection label="Studios" topMargin={sbRooms || sbGroomers}>
               {studios.map(s => (
                 <SbItem key={s.id} color={s.color} label={s.name} isRound
                   count={bookings.filter(b => b.service === 'studio' && (first(b.studio_details) ?? {}).studio_id === s.id).length}
@@ -565,6 +569,9 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
                   onToggle={() => toggleFilter('studio', s.id)} />
               ))}
             </SbSection>
+          )}
+          {currentSvc === 'daycare' && (
+            <p className={styles.sbEmpty}>Daycare has no assignable inventory.</p>
           )}
         </aside>
 
@@ -820,9 +827,9 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
 
       {filterOpen && (
         <FilterDrawer
-          rooms={rooms}
-          groomers={groomers}
-          studios={studios}
+          rooms={sbRooms ? rooms : []}
+          groomers={sbGroomers ? groomers : []}
+          studios={sbStudios ? studios : []}
           bookings={bookings}
           activeFilter={activeFilter}
           onSelect={(type, id) => { toggleFilter(type, id); setFilterOpen(false) }}
