@@ -141,6 +141,52 @@ function weekLabel(from, to) {
   return `${MONTHS[from.getMonth()].slice(0, 3)} ${from.getDate()} – ${MONTHS[to.getMonth()].slice(0, 3)} ${to.getDate()}${yr}`
 }
 
+// ── Multi-day spanning bars (Google Calendar style) ─────────────────────────
+function isoToDate(iso) { return new Date(iso + 'T00:00:00') }
+function daysBetween(aIso, bIso) { return Math.round((isoToDate(bIso) - isoToDate(aIso)) / 86400000) }
+
+// Inclusive [startISO, endISO] of the calendar days a booking occupies.
+// Hotel spans check-in → check-out; other services are a single service_date.
+function bookingDayRange(b) {
+  if (b.service === 'hotel') { const hd = first(b.hotel_details) ?? {}; return (hd.checkin_date && hd.checkout_date) ? [hd.checkin_date, hd.checkout_date] : null }
+  const ds = b.service === 'grooming' ? first(b.grooming_details)?.service_date
+           : b.service === 'daycare'  ? first(b.daycare_details)?.service_date
+           : b.service === 'studio'   ? first(b.studio_details)?.service_date : null
+  return ds ? [ds, ds] : null
+}
+
+// For one week (weekStart = its Sunday), clip every booking to a column segment
+// [startCol..endCol] (0–6). `predicate` optionally restricts which bookings count.
+// contL/contR mark stays that continue past this week's edges (for flat corners).
+function weekSegments(bookings, weekStart, predicate) {
+  const wkStart = dateToISO(weekStart), wkEnd = dateToISO(addDays(weekStart, 6))
+  const segs = []
+  bookings.forEach(b => {
+    if (predicate && !predicate(b)) return
+    const r = bookingDayRange(b); if (!r) return
+    const [s, e] = r
+    if (e < wkStart || s > wkEnd) return
+    const startCol = Math.max(0, daysBetween(wkStart, s))
+    const endCol   = Math.min(6, daysBetween(wkStart, e))
+    if (startCol > endCol) return
+    segs.push({ b, startCol, endCol, contL: s < wkStart, contR: e > wkEnd })
+  })
+  return segs
+}
+
+// Pack segments into lanes so no two in a lane overlap columns. Longer/earlier
+// segments settle into the top lanes (each segment gets a `.lane` index).
+function packLanes(segs) {
+  const sorted = [...segs].sort((a, z) => a.startCol - z.startCol || (z.endCol - z.startCol) - (a.endCol - a.startCol))
+  const lanes = []
+  sorted.forEach(seg => {
+    let li = lanes.findIndex(lane => lane.every(s => seg.startCol > s.endCol || seg.endCol < s.startCol))
+    if (li === -1) { li = lanes.length; lanes.push([]) }
+    lanes[li].push(seg); seg.lane = li
+  })
+  return lanes
+}
+
 // ── Main component ─────────────────────────────────────────────────────────
 export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, groomers, currentAdmin }) {
   const [currentDate,      setCurrentDate]      = useState(() => new Date())
@@ -689,7 +735,7 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
             <MonthView
               monthAnchor={currentDate} filtered={filtered}
               rooms={rooms} groomers={groomers} today={now}
-              onPickDay={pickDay}
+              onPickDay={pickDay} onOpenBooking={setOpenId}
             />
           )}
         </div>
@@ -796,38 +842,58 @@ function SbItem({ color, label, count, isOn, isRound, onToggle }) {
   )
 }
 
-// ── Week view: 7 compact day-columns with time-labeled chips ────────────────
+// ── Week view: all-day spanning band (hotel) + timed chips per day ───────────
 function WeekView({ weekStart, filtered, rooms, groomers, today, onOpenBooking, onPickDay }) {
   const todayISO = dateToISO(today)
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
+  const lanes = packLanes(weekSegments(filtered, weekStart, b => b.service === 'hotel'))
   return (
     <div className={styles.weekScroll}>
-      <div className={styles.weekGrid}>
-        {days.map(d => {
-          const ds = dateToISO(d)
-          const isToday = ds === todayISO
-          const dayBk = filtered.filter(b => bookingOnDay(b, ds))
-          const hotels = dayBk.filter(b => b.service === 'hotel')
-          const timed  = dayBk.filter(b => b.service !== 'hotel')
-            .map(b => ({ b, st: getBookingTimes(b, ds).st }))
-            .sort((a, c) => a.st - c.st)
-          return (
-            <div key={ds} className={styles.weekCol}>
-              <button className={`${styles.weekColHead} ${isToday ? styles.weekColHeadToday : ''}`} onClick={() => onPickDay(d)}>
-                <span className={styles.weekDow}>{DAYS[d.getDay()]}</span>
-                <span className={styles.weekDate}>{d.getDate()}</span>
-              </button>
-              <div className={styles.weekColBody}>
-                {hotels.map(b => {
-                  const color = getCardColor(b, rooms, groomers)
+      <div className={styles.weekInner}>
+        {/* Day headers */}
+        <div className={styles.weekHeadRow}>
+          {days.map(d => (
+            <button key={dateToISO(d)} className={`${styles.weekHead} ${dateToISO(d) === todayISO ? styles.weekHeadToday : ''}`} onClick={() => onPickDay(d)}>
+              <span className={styles.weekDow}>{DAYS[d.getDay()]}</span>
+              <span className={styles.weekDate}>{d.getDate()}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* All-day spanning bars (multi-day hotel stays) */}
+        {lanes.length > 0 && (
+          <div className={styles.weekBand}>
+            {lanes.map((lane, li) => (
+              <div key={li} className={styles.weekLaneRow}>
+                {lane.map(seg => {
+                  const color = getCardColor(seg.b, rooms, groomers)
                   return (
-                    <div key={b.id} className={styles.weekAllDay}
-                      style={{ background: hexBg(color), borderLeftColor: color }}
-                      onClick={() => onOpenBooking(b.id)}>
-                      🏨 {first(b.pets)?.name ?? 'Pet'}
+                    <div key={seg.b.id} className={styles.spanBar}
+                      style={{
+                        gridColumn: `${seg.startCol + 1} / ${seg.endCol + 2}`,
+                        background: hexBg(color), borderLeftColor: color,
+                        borderTopLeftRadius: seg.contL ? 0 : 4, borderBottomLeftRadius: seg.contL ? 0 : 4,
+                        borderTopRightRadius: seg.contR ? 0 : 4, borderBottomRightRadius: seg.contR ? 0 : 4,
+                      }}
+                      onClick={() => onOpenBooking(seg.b.id)}>
+                      🏨 {first(seg.b.pets)?.name ?? 'Pet'}
                     </div>
                   )
                 })}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Timed bookings (grooming / daycare / studio) per day */}
+        <div className={styles.weekBody}>
+          {days.map(d => {
+            const ds = dateToISO(d)
+            const timed = filtered.filter(b => b.service !== 'hotel' && bookingOnDay(b, ds))
+              .map(b => ({ b, st: getBookingTimes(b, ds).st }))
+              .sort((a, c) => a.st - c.st)
+            return (
+              <div key={ds} className={styles.weekColBody}>
                 {timed.map(({ b, st }) => {
                   const color = getCardColor(b, rooms, groomers)
                   const cancelled = b.status === 'cancelled' || b.status === 'rejected'
@@ -843,52 +909,82 @@ function WeekView({ weekStart, filtered, rooms, groomers, today, onOpenBooking, 
                     </div>
                   )
                 })}
-                {dayBk.length === 0 && <div className={styles.weekEmpty}>—</div>}
               </div>
-            </div>
-          )
-        })}
+            )
+          })}
+        </div>
       </div>
     </div>
   )
 }
 
-// ── Month view: classic grid with event chips, click a day to drill in ──────
-function MonthView({ monthAnchor, filtered, rooms, groomers, today, onPickDay }) {
+// ── Month view: 6 week-rows with lane-packed spanning bars ──────────────────
+function MonthView({ monthAnchor, filtered, rooms, groomers, today, onPickDay, onOpenBooking }) {
   const y = monthAnchor.getFullYear(), mon = monthAnchor.getMonth()
   const todayISO = dateToISO(today)
   const first0 = new Date(y, mon, 1)
   const gridStart = addDays(first0, -first0.getDay())
-  const cells = Array.from({ length: 42 }, (_, i) => addDays(gridStart, i))
-  const MAX = 3
+  const weeks = Array.from({ length: 6 }, (_, w) => addDays(gridStart, w * 7))
+  const MAX_LANES = 3
   return (
     <div className={styles.monthScroll}>
       <div className={styles.monthDows}>
         {DAYS.map(d => <div key={d} className={styles.monthDow}>{d}</div>)}
       </div>
-      <div className={styles.monthGrid}>
-        {cells.map(d => {
-          const ds = dateToISO(d)
-          const inMonth = d.getMonth() === mon
-          const isToday = ds === todayISO
-          const dayBk = filtered.filter(b => bookingOnDay(b, ds))
-            .map(b => ({ b, st: b.service === 'hotel' ? -1 : getBookingTimes(b, ds).st }))
-            .sort((a, c) => a.st - c.st)
+      <div className={styles.monthBody}>
+        {weeks.map((wkStart, wi) => {
+          const days = Array.from({ length: 7 }, (_, i) => addDays(wkStart, i))
+          const lanes = packLanes(weekSegments(filtered, wkStart, null))
+          const moreByCol = Array(7).fill(0)
+          lanes.slice(MAX_LANES).forEach(lane => lane.forEach(seg => { for (let c = seg.startCol; c <= seg.endCol; c++) moreByCol[c]++ }))
           return (
-            <div key={ds}
-              className={`${styles.monthCell} ${inMonth ? '' : styles.monthCellOther} ${isToday ? styles.monthCellToday : ''}`}
-              onClick={() => onPickDay(d)}>
-              <div className={styles.monthNum}>{d.getDate()}</div>
-              <div className={styles.monthEvents}>
-                {dayBk.slice(0, MAX).map(({ b }) => {
-                  const color = getCardColor(b, rooms, groomers)
-                  return (
-                    <div key={b.id} className={styles.monthEv} style={{ background: hexBg(color), borderLeftColor: color }}>
-                      {b.service === 'hotel' ? '🏨 ' : ''}{first(b.pets)?.name ?? 'Pet'}
+            <div key={wi} className={styles.monthWeek}>
+              {/* Background cells — borders, today/other-month, click-to-drill */}
+              <div className={styles.monthWeekBg}>
+                {days.map(d => (
+                  <div key={dateToISO(d)}
+                    className={`${styles.monthBgCell} ${dateToISO(d) === todayISO ? styles.monthBgToday : ''}`}
+                    onClick={() => onPickDay(d)} />
+                ))}
+              </div>
+              {/* Foreground — day numbers, spanning bars, +more */}
+              <div className={styles.monthWeekFg}>
+                <div className={styles.monthNumRow}>
+                  {days.map(d => (
+                    <div key={dateToISO(d)} className={styles.monthNumCell}>
+                      <span className={`${styles.monthNum} ${d.getMonth() === mon ? '' : styles.monthNumOther} ${dateToISO(d) === todayISO ? styles.monthNumToday : ''}`}>{d.getDate()}</span>
                     </div>
-                  )
-                })}
-                {dayBk.length > MAX && <div className={styles.monthMore}>+{dayBk.length - MAX} more</div>}
+                  ))}
+                </div>
+                {lanes.slice(0, MAX_LANES).map((lane, li) => (
+                  <div key={li} className={styles.monthLaneRow}>
+                    {lane.map(seg => {
+                      const color = getCardColor(seg.b, rooms, groomers)
+                      const cancelled = seg.b.status === 'cancelled' || seg.b.status === 'rejected'
+                      return (
+                        <div key={seg.b.id} className={`${styles.spanBar} ${styles.monthBar} ${cancelled ? styles.weekChipCancelled : ''}`}
+                          style={{
+                            gridColumn: `${seg.startCol + 1} / ${seg.endCol + 2}`,
+                            background: hexBg(color), borderLeftColor: color,
+                            borderTopLeftRadius: seg.contL ? 0 : 4, borderBottomLeftRadius: seg.contL ? 0 : 4,
+                            borderTopRightRadius: seg.contR ? 0 : 4, borderBottomRightRadius: seg.contR ? 0 : 4,
+                          }}
+                          onClick={e => { e.stopPropagation(); onOpenBooking(seg.b.id) }}>
+                          {seg.b.service === 'hotel' ? '🏨 ' : ''}{first(seg.b.pets)?.name ?? 'Pet'}
+                        </div>
+                      )
+                    })}
+                  </div>
+                ))}
+                {moreByCol.some(n => n > 0) && (
+                  <div className={styles.monthMoreRow}>
+                    {moreByCol.map((n, ci) => (
+                      <div key={ci} className={styles.monthMoreCell} style={{ gridColumn: ci + 1 }}>
+                        {n > 0 && <span className={styles.monthMore}>+{n} more</span>}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )
