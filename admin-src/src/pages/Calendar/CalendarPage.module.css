@@ -225,6 +225,14 @@
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .bkStar { position: absolute; top: 3px; right: 4px; font-size: 9px; color: #FFCE58; line-height: 1; pointer-events: none; }
+/* Unassigned booking signal (needs a groomer/room/studio) */
+.bkUnassigned { box-shadow: inset 0 0 0 1px rgba(255,206,88,0.55); }
+.bkWarn { color: var(--yellow); font-size: 10px; line-height: 1; margin-left: 2px; flex-shrink: 0; }
+.bkAssign {
+  font-size: 9px; font-weight: 700; color: var(--yellow); margin-top: 1px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.spanBarUnassigned { box-shadow: inset 0 0 0 1px rgba(255,206,88,0.6); }
 .bkNameRotated {
   writing-mode: vertical-rl; text-orientation: mixed;
   transform: rotate(180deg); font-size: 11px; font-weight: 700; color: var(--cream);

@@ -111,6 +111,16 @@ function getCardColor(b, rooms, groomers) {
   return '#6AAEC8'
 }
 
+// A booking whose assignable resource hasn't been set yet — grooming with no
+// groomer, hotel with no specific room, or studio with no unit. Flagged on cards
+// so admins can spot what still needs assigning.
+function isUnassigned(b) {
+  if (b.service === 'grooming') return !first(b.grooming_details)?.groomer_id
+  if (b.service === 'hotel')    { const hd = first(b.hotel_details) ?? {}; return !hd.room_id && hd.room_type !== 'other' }
+  if (b.service === 'studio')   return !first(b.studio_details)?.studio_id
+  return false
+}
+
 // ── View helpers (day / week / month) ───────────────────────────────────────
 const VIEW_OPTS = [{ k: 'day', label: 'Day' }, { k: 'week', label: 'Week' }, { k: 'month', label: 'Month' }, { k: 'list', label: 'List' }]
 
@@ -737,20 +747,23 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
                     // narrow for horizontal text (measured), not merely when many overlap.
                     const colPx = colAreaW > 0 ? colAreaW / item.total : null
                     const rotate = colPx != null ? colPx < 76 : item.total >= 4
+                    const unassigned = isUnassigned(b)
                     return (
                       <div key={b.id}
-                        className={`${styles.bk} ${isCancelled ? styles.bkCancelled : ''} ${b.status === 'pending' ? styles.bkPending : ''}`}
-                        style={{ top, height: ht, left: l, width: w, background: hexBg(color), borderLeftColor: color }}
+                        className={`${styles.bk} ${isCancelled ? styles.bkCancelled : ''} ${b.status === 'pending' ? styles.bkPending : ''} ${unassigned ? styles.bkUnassigned : ''}`}
+                        style={{ top, height: ht, left: l, width: w, background: hexBg(color), borderLeftColor: unassigned ? 'var(--yellow)' : color }}
                         onClick={() => setOpenId(b.id)}>
                         {rotate ? (
-                          <div className={styles.bkNameRotated}>{pet.name ?? 'Pet'}</div>
+                          <div className={styles.bkNameRotated}>{unassigned ? '⚠ ' : ''}{pet.name ?? 'Pet'}</div>
                         ) : (
                           <>
                             <div className={styles.bkPet}>
                               <span className={styles.sdot} style={{ background: STATUS_COLORS[b.status] ?? '#888' }} />
                               <span style={{ fontSize: 12 }}>{pet.animal_type === 'cat' ? '🐱' : '🐶'}</span>
                               {pet.name ?? 'Pet'}
+                              {unassigned && <span className={styles.bkWarn} title="Needs assignment">⚠</span>}
                             </div>
+                            {unassigned && ht > 38 && <div className={styles.bkAssign}>⚠ Needs assignment</div>}
                             {ht > 52 && detail     && <div className={styles.bkSub}>{detail}</div>}
                             {ht > 72 && (first(b.owners)?.first_name ?? '') && <div className={styles.bkSub}>{first(b.owners).first_name}</div>}
                             {(b.discount_amount ?? 0) > 0 && <span className={styles.bkStar}>★</span>}
@@ -937,16 +950,17 @@ function WeekView({ weekStart, filtered, rooms, groomers, today, onOpenBooking, 
               <div key={li} className={styles.weekLaneRow}>
                 {lane.map(seg => {
                   const color = getCardColor(seg.b, rooms, groomers)
+                  const unassigned = isUnassigned(seg.b)
                   return (
-                    <div key={seg.b.id} className={styles.spanBar}
+                    <div key={seg.b.id} className={`${styles.spanBar} ${unassigned ? styles.spanBarUnassigned : ''}`}
                       style={{
                         gridColumn: `${seg.startCol + 1} / ${seg.endCol + 2}`,
-                        background: hexBg(color), borderLeftColor: color,
+                        background: hexBg(color), borderLeftColor: unassigned ? 'var(--yellow)' : color,
                         borderTopLeftRadius: seg.contL ? 0 : 4, borderBottomLeftRadius: seg.contL ? 0 : 4,
                         borderTopRightRadius: seg.contR ? 0 : 4, borderBottomRightRadius: seg.contR ? 0 : 4,
                       }}
                       onClick={() => onOpenBooking(seg.b.id)}>
-                      🏨 {first(seg.b.pets)?.name ?? 'Pet'}
+                      {unassigned ? '⚠ ' : ''}🏨 {first(seg.b.pets)?.name ?? 'Pet'}
                     </div>
                   )
                 })}
@@ -967,13 +981,15 @@ function WeekView({ weekStart, filtered, rooms, groomers, today, onOpenBooking, 
                 {timed.map(({ b, st }) => {
                   const color = getCardColor(b, rooms, groomers)
                   const cancelled = b.status === 'cancelled' || b.status === 'rejected'
+                  const unassigned = isUnassigned(b)
                   return (
                     <div key={b.id} className={`${styles.weekChip} ${cancelled ? styles.weekChipCancelled : ''}`}
-                      style={{ background: hexBg(color), borderLeftColor: color }}
+                      style={{ background: hexBg(color), borderLeftColor: unassigned ? 'var(--yellow)' : color }}
                       onClick={() => onOpenBooking(b.id)}>
                       <span className={styles.weekChipTime}>{formatMins(st)}</span>
                       <span className={styles.weekChipName}>
                         <span className={styles.sdot} style={{ background: STATUS_COLORS[b.status] ?? '#888' }} />
+                        {unassigned && <span className={styles.bkWarn} title="Needs assignment">⚠</span>}
                         {petEmoji(b)} {first(b.pets)?.name ?? 'Pet'}
                       </span>
                     </div>
@@ -1031,16 +1047,17 @@ function MonthView({ monthAnchor, filtered, rooms, groomers, today, onPickDay, o
                     {lane.map(seg => {
                       const color = getCardColor(seg.b, rooms, groomers)
                       const cancelled = seg.b.status === 'cancelled' || seg.b.status === 'rejected'
+                      const unassigned = isUnassigned(seg.b)
                       return (
                         <div key={seg.b.id} className={`${styles.spanBar} ${styles.monthBar} ${cancelled ? styles.weekChipCancelled : ''}`}
                           style={{
                             gridColumn: `${seg.startCol + 1} / ${seg.endCol + 2}`,
-                            background: hexBg(color), borderLeftColor: color,
+                            background: hexBg(color), borderLeftColor: unassigned ? 'var(--yellow)' : color,
                             borderTopLeftRadius: seg.contL ? 0 : 4, borderBottomLeftRadius: seg.contL ? 0 : 4,
                             borderTopRightRadius: seg.contR ? 0 : 4, borderBottomRightRadius: seg.contR ? 0 : 4,
                           }}
                           onClick={e => { e.stopPropagation(); onOpenBooking(seg.b.id) }}>
-                          {seg.b.service === 'hotel' ? '🏨 ' : ''}{first(seg.b.pets)?.name ?? 'Pet'}
+                          {unassigned ? '⚠ ' : ''}{seg.b.service === 'hotel' ? '🏨 ' : ''}{first(seg.b.pets)?.name ?? 'Pet'}
                         </div>
                       )
                     })}
@@ -1068,17 +1085,21 @@ function MonthView({ monthAnchor, filtered, rooms, groomers, today, onPickDay, o
 const STATUS_LABELS = { pending: 'Pending', confirmed: 'Confirmed', checked_in: 'Checked in', completed: 'Completed', cancelled: 'Cancelled', rejected: 'Rejected' }
 
 function ListRow({ b, label, color, onOpenBooking }) {
-  const status    = b.status ?? 'confirmed'
-  const cancelled = status === 'cancelled' || status === 'rejected'
-  const pending   = status === 'pending'
+  const status     = b.status ?? 'confirmed'
+  const cancelled  = status === 'cancelled' || status === 'rejected'
+  const pending    = status === 'pending'
+  const unassigned = isUnassigned(b)
   return (
     <div
       className={`${styles.listRow} ${cancelled ? styles.listRowCancelled : ''} ${pending ? styles.listRowPending : ''}`}
-      style={{ borderLeftColor: color }}
+      style={{ borderLeftColor: unassigned ? 'var(--yellow)' : color }}
       onClick={() => onOpenBooking(b.id)}>
       <span className={styles.listTime}>{label}</span>
       <span className={styles.listStatusDot} style={{ background: STATUS_COLORS[status] ?? '#888' }} />
       <span className={styles.listName}>{petEmoji(b)} {first(b.pets)?.name ?? 'Pet'}</span>
+      {unassigned && (
+        <span className={styles.listBadge} style={{ color: 'var(--yellow)', borderColor: 'var(--yellow)' }}>⚠ Assign</span>
+      )}
       {status !== 'confirmed' && status !== 'checked_in' && (
         <span className={styles.listBadge} style={{ color: STATUS_COLORS[status] ?? '#888', borderColor: STATUS_COLORS[status] ?? '#888' }}>{STATUS_LABELS[status] ?? status}</span>
       )}
@@ -1167,21 +1188,24 @@ function DayPeek({ date, filtered, rooms, groomers, onOpenBooking, onClose }) {
           {hotels.map(b => {
             const color = getCardColor(b, rooms, groomers)
             const cancelled = b.status === 'cancelled' || b.status === 'rejected'
+            const unassigned = isUnassigned(b)
             return (
               <div key={b.id} className={`${styles.peekBar} ${cancelled ? styles.weekChipCancelled : ''}`}
-                style={{ background: hexBg(color), borderLeftColor: color }}
+                style={{ background: hexBg(color), borderLeftColor: unassigned ? 'var(--yellow)' : color }}
                 onClick={() => onOpenBooking(b.id)}>
-                🏨 {first(b.pets)?.name ?? 'Pet'}
+                {unassigned ? '⚠ ' : ''}🏨 {first(b.pets)?.name ?? 'Pet'}
               </div>
             )
           })}
           {timed.map(({ b, st }) => {
             const cancelled = b.status === 'cancelled' || b.status === 'rejected'
+            const unassigned = isUnassigned(b)
             return (
               <div key={b.id} className={`${styles.peekRow} ${cancelled ? styles.weekChipCancelled : ''}`} onClick={() => onOpenBooking(b.id)}>
                 <span className={styles.peekTime}>{formatMins(st)}</span>
                 <span className={styles.sdot} style={{ background: STATUS_COLORS[b.status] ?? '#888' }} />
-                <span className={styles.peekName}>{petEmoji(b)} {first(b.pets)?.name ?? 'Pet'}</span>
+                <span className={styles.peekName}>{unassigned && <span className={styles.bkWarn} title="Needs assignment">⚠</span>}{petEmoji(b)} {first(b.pets)?.name ?? 'Pet'}</span>
+                {unassigned && <span className={styles.listBadge} style={{ color: 'var(--yellow)', borderColor: 'var(--yellow)' }}>Assign</span>}
               </div>
             )
           })}
