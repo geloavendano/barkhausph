@@ -105,6 +105,7 @@ function getCardColor(b, rooms, groomers) {
   if (b.service === 'hotel' && hd?.room_id)    { const r = rooms.find(x => x.id === hd.room_id);       if (r) return r.color }
   if (b.service === 'hotel' && hd?.room_type)  { const rc = { large_cage:'#EF9F27', medium_cage:'#4D96B9', small_cage:'#1D9E75', single_cabin:'#D4537E', villa:'#9B95E8' }; return rc[hd.room_type] ?? '#6AAEC8' }
   if (b.service === 'grooming' && gd?.groomer_id) { const g = groomers.find(x => x.id === gd.groomer_id); if (g) return g.color }
+  if (b.service === 'grooming') return '#8A8A8A'   // unassigned groomer → neutral grey (distinct from blue bookings)
   if (b.service === 'daycare') return '#1D9E75'
   if (b.service === 'studio')  return '#D4537E'
   return '#6AAEC8'
@@ -222,6 +223,19 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
   // without needing to re-subscribe every time the user navigates.
   const rangeRef = useRef(range)
   useEffect(() => { rangeRef.current = range }, [range])
+
+  // Day-view: measure the booking column area so we can rotate pet names only
+  // when columns get genuinely narrow (mobile / compressed window), not just
+  // when many bookings overlap on a wide desktop.
+  const tlColRef = useRef(null)
+  const [colAreaW, setColAreaW] = useState(0)
+  useEffect(() => {
+    const el = tlColRef.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(entries => { for (const e of entries) setColAreaW(e.contentRect.width) })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [view])
 
   // ── Loaders ───────────────────────────────────────────────────────────────
   // Loads every booking whose service date (or hotel stay) intersects [from, to].
@@ -658,7 +672,7 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
               </div>
 
               {/* Cards area */}
-              <div className={styles.tlCol}>
+              <div className={styles.tlCol} ref={tlColRef}>
                 <div className={styles.tlInner} style={{ height: TIMELINE_HEIGHT }}>
                   {/* Hour grid lines */}
                   {Array.from({ length: HOUR_COUNT }, (_, i) => <div key={i} className={styles.tlLine} style={{ top: i * 90 }} />)}
@@ -719,12 +733,16 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
                       ? (gd.groom_service_name ?? 'Groom') + (gd.preferred_stylist && gd.preferred_stylist !== 'any' ? ` | ${gd.preferred_stylist}` : '')
                       : hd ? (hd.room_type === 'other' ? 'Other' : (rooms.find(r => r.id === hd.room_id)?.name ?? ROOM_TYPE_LABELS[hd.room_type] ?? hd.room_type ?? 'Hotel'))
                       : first(b.daycare_details) ? 'Daycare' : first(b.studio_details) ? 'Studio' : ''
+                    // Rotate the name vertically only when the column is actually too
+                    // narrow for horizontal text (measured), not merely when many overlap.
+                    const colPx = colAreaW > 0 ? colAreaW / item.total : null
+                    const rotate = colPx != null ? colPx < 76 : item.total >= 4
                     return (
                       <div key={b.id}
                         className={`${styles.bk} ${isCancelled ? styles.bkCancelled : ''} ${b.status === 'pending' ? styles.bkPending : ''}`}
                         style={{ top, height: ht, left: l, width: w, background: hexBg(color), borderLeftColor: color }}
                         onClick={() => setOpenId(b.id)}>
-                        {item.total >= 4 ? (
+                        {rotate ? (
                           <div className={styles.bkNameRotated}>{pet.name ?? 'Pet'}</div>
                         ) : (
                           <>
