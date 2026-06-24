@@ -47,6 +47,44 @@ function sortByTime(arr) {
   return [...arr].sort((a, b) => getBookingTime(a).localeCompare(getBookingTime(b)))
 }
 
+// Parse a booking time into minutes-of-day. Handles display ("2:00 PM"),
+// 24h ("14:00") and bare-hour ("14") forms used across services.
+function parseTimeToMins(s) {
+  if (s == null) return null
+  const str = String(s).trim()
+  const disp = str.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i)
+  if (disp) {
+    let h = +disp[1]; const m = +disp[2]; const ap = disp[3].toUpperCase()
+    if (ap === 'PM' && h !== 12) h += 12
+    if (ap === 'AM' && h === 12) h = 0
+    return h * 60 + m
+  }
+  const hm = str.match(/^(\d{1,2}):(\d{2})/); if (hm) return (+hm[1]) * 60 + (+hm[2])
+  const bare = str.match(/^(\d{1,2})$/);     if (bare) return (+bare[1]) * 60
+  return null
+}
+
+// The day a booking is scheduled to start (check-in for hotel, service date otherwise).
+function scheduledDate(b) {
+  if (b.service === 'hotel')    return first(b.hotel_details)?.checkin_date
+  if (b.service === 'grooming') return first(b.grooming_details)?.service_date
+  if (b.service === 'daycare')  return first(b.daycare_details)?.service_date
+  if (b.service === 'studio')   return first(b.studio_details)?.service_date
+  return null
+}
+
+// Overdue for check-in: still "confirmed" (not checked in) and its scheduled
+// arrival has already passed — either an earlier day, or today before now.
+function isCheckinOverdue(b, today, nowMins) {
+  if (b.status !== 'confirmed') return false
+  const date = scheduledDate(b)
+  if (!date) return false
+  if (date < today) return true
+  if (date > today) return false
+  const startMins = parseTimeToMins(getBookingTime(b))
+  return startMins != null && nowMins > startMins
+}
+
 export default function CheckInPage({ branches, currentBranchIdx = 0, rooms, groomers, currentAdmin }) {
   const [bookings,  setBookings]  = useState([])
   const [loading,   setLoading]   = useState(true)
@@ -126,9 +164,12 @@ export default function CheckInPage({ branches, currentBranchIdx = 0, rooms, gro
   }, [searchQ, searchActive, branch?.id])
 
   // Categorise
-  const needCheckin  = []
-  const inProgress   = []
-  const needCheckout = []
+  const dueCheckin      = []   // overdue: confirmed but should already be checked in
+  const awaitingCheckin = []   // upcoming / pending
+  const inProgress      = []
+  const needCheckout    = []
+
+  const nowMins = (() => { const n = new Date(); return n.getHours() * 60 + n.getMinutes() })()
 
   bookings.forEach(b => {
     const hd = first(b.hotel_details)
@@ -138,12 +179,15 @@ export default function CheckInPage({ branches, currentBranchIdx = 0, rooms, gro
       needCheckout.push(b)
     } else if (isCheckedIn) {
       inProgress.push(b)
+    } else if (isCheckinOverdue(b, today, nowMins)) {
+      dueCheckin.push(b)
     } else {
-      needCheckin.push(b)
+      awaitingCheckin.push(b)
     }
   })
 
-  sortByTime(needCheckin)
+  sortByTime(dueCheckin)
+  sortByTime(awaitingCheckin)
   sortByTime(inProgress)
   sortByTime(needCheckout)
 
@@ -226,18 +270,34 @@ export default function CheckInPage({ branches, currentBranchIdx = 0, rooms, gro
 
       {!loading && bookings.length > 0 && (
         <>
-          {needCheckin.length > 0 && (
+          {dueCheckin.length > 0 && (
+            <Section
+              id="ci_due_checkin"
+              label={`Due for Check-in (${dueCheckin.length} overdue)`}
+              color="var(--error)"
+              cards={dueCheckin}
+              actionLabel="Check In"
+              actionColor="#FF6B6B"
+              overdue
+              today={today}
+              collapsed={!!collapsed['ci_due_checkin']}
+              onToggle={() => toggle('ci_due_checkin')}
+              onOpen={setOpenId}
+            />
+          )}
+          {awaitingCheckin.length > 0 && (
             <Section
               id="ci_checkin"
-              label={`Awaiting Check-In (${needCheckin.length})`}
+              label={`Awaiting Check-In (${awaitingCheckin.length})`}
               color="#EF9F27"
-              cards={needCheckin}
+              cards={awaitingCheckin}
               actionLabel="Check In"
               actionColor="#EF9F27"
               today={today}
               collapsed={!!collapsed['ci_checkin']}
               onToggle={() => toggle('ci_checkin')}
               onOpen={setOpenId}
+              topMargin={dueCheckin.length > 0}
             />
           )}
           {inProgress.length > 0 && (
@@ -252,7 +312,7 @@ export default function CheckInPage({ branches, currentBranchIdx = 0, rooms, gro
               collapsed={!!collapsed['ci_inprogress']}
               onToggle={() => toggle('ci_inprogress')}
               onOpen={setOpenId}
-              topMargin={needCheckin.length > 0}
+              topMargin={dueCheckin.length > 0 || awaitingCheckin.length > 0}
             />
           )}
           {needCheckout.length > 0 && (
@@ -269,7 +329,7 @@ export default function CheckInPage({ branches, currentBranchIdx = 0, rooms, gro
               collapsed={!!collapsed['ci_checkout']}
               onToggle={() => toggle('ci_checkout')}
               onOpen={setOpenId}
-              topMargin={needCheckin.length > 0 || inProgress.length > 0}
+              topMargin={dueCheckin.length > 0 || awaitingCheckin.length > 0 || inProgress.length > 0}
             />
           )}
         </>
@@ -291,7 +351,7 @@ export default function CheckInPage({ branches, currentBranchIdx = 0, rooms, gro
   )
 }
 
-function Section({ id, label, color, cards, actionLabel, actionColor, today, collapsed, onToggle, onOpen, topMargin }) {
+function Section({ id, label, color, cards, actionLabel, actionColor, today, overdue, collapsed, onToggle, onOpen, topMargin }) {
   return (
     <div className={styles.section} style={topMargin ? { marginTop: 20 } : undefined}>
       <button className={styles.sectionHeader} onClick={onToggle}>
@@ -307,6 +367,7 @@ function Section({ id, label, color, cards, actionLabel, actionColor, today, col
               actionLabel={actionLabel}
               actionColor={actionColor}
               today={today}
+              overdue={overdue}
               onClick={() => onOpen(b.id)}
             />
           ))}
@@ -316,7 +377,7 @@ function Section({ id, label, color, cards, actionLabel, actionColor, today, col
   )
 }
 
-function BookingCard({ booking: b, actionLabel, actionColor, today, onClick }) {
+function BookingCard({ booking: b, actionLabel, actionColor, today, overdue, onClick }) {
   const gd  = first(b.grooming_details)
   const hd  = first(b.hotel_details)
   const dd  = first(b.daycare_details)
@@ -328,7 +389,7 @@ function BookingCard({ booking: b, actionLabel, actionColor, today, onClick }) {
   const time       = rawTime !== '99:99' ? fmtTime(rawTime) : ''
   const svcColor   = SVC_COLORS[b.service] ?? '#888'
   const statusColor = STATUS_COLORS[b.status] ?? '#888'
-  const isOverdue  = hd?.checkout_date && hd.checkout_date < today
+  const isOverdue  = overdue || (hd?.checkout_date && hd.checkout_date < today)
 
   return (
     <div
