@@ -259,9 +259,18 @@ function waiverCard(d: any): string {
     hotel:    ["Hotel Waiver", "hotel-waiver"],
   };
   const items: Array<[string, string, boolean]> = [];
+  if (d.waiverHouseRules != null) {
+    items.push(["General House Rules", "general-house-rules", !!d.waiverHouseRules]);
+  }
   if (generalByService[d.service]) {
     const [label, anchor] = generalByService[d.service];
     items.push([label, anchor, !!d.waiverGeneral]);
+  }
+  if (d.service === "grooming" && d.waiverGroomingPolicy != null) {
+    items.push(["Grooming Services Booking Policy", "grooming-booking-policy", !!d.waiverGroomingPolicy]);
+  }
+  if (d.service === "hotel" && d.waiverHotelCancellation != null) {
+    items.push(["Hotel Cancellation and Refund Policy", "hotel-cancellation-policy", !!d.waiverHotelCancellation]);
   }
   if (d.service === "studio") {
     items.push(["Studio Usage Agreement", "studio-agreement", !!d.waiverStudio]);
@@ -880,12 +889,25 @@ Deno.serve(async (req) => {
     await supabase.from("waivers").insert({
       booking_id:            bookingId!,
       general_terms:         body.waiverGeneral        === true,
+      house_rules_accepted:  body.waiverHouseRules == null
+        ? null
+        : body.waiverHouseRules === true || body.waiverHouseRules === "true",
+      grooming_booking_policy: body.service === "grooming"
+        ? body.waiverGroomingPolicy == null
+          ? null
+          : body.waiverGroomingPolicy === true || body.waiverGroomingPolicy === "true"
+        : null,
+      hotel_cancellation_policy: body.service === "hotel"
+        ? body.waiverHotelCancellation == null
+          ? null
+          : body.waiverHotelCancellation === true || body.waiverHotelCancellation === "true"
+        : null,
       health_declaration:    body.waiverVaccine         === true,
       senior_medical_waiver: body.waiverSeniorMedical   === true,
       studio_agreement:      body.waiverStudio          === true,
       media_consent:         body.waiverMedia           === true,
       waiver_texts:          body.waiverTexts           || null,
-      waiver_version:        "1.0",
+      waiver_version:        "2.0",
     });
 
     // ── 7. Payment record ──
@@ -956,6 +978,15 @@ Deno.serve(async (req) => {
         groomNotes:      body.groomNotes      || null,
         daycareNotes:    body.daycareNotes    || null,
         waiverGeneral:       body.waiverGeneral       === true || body.waiverGeneral       === "true",
+        waiverHouseRules: body.waiverHouseRules == null
+          ? null
+          : body.waiverHouseRules === true || body.waiverHouseRules === "true",
+        waiverGroomingPolicy: body.waiverGroomingPolicy == null
+          ? null
+          : body.waiverGroomingPolicy === true || body.waiverGroomingPolicy === "true",
+        waiverHotelCancellation: body.waiverHotelCancellation == null
+          ? null
+          : body.waiverHotelCancellation === true || body.waiverHotelCancellation === "true",
         waiverVaccine:       body.waiverVaccine       === true || body.waiverVaccine       === "true",
         waiverSeniorMedical: body.waiverSeniorMedical === true || body.waiverSeniorMedical === "true",
         waiverStudio:        body.waiverStudio        === true || body.waiverStudio        === "true",

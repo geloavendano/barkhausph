@@ -29,7 +29,7 @@ const MONTHS = ['January','February','March','April','May','June','July','August
 // Common (non-service-detail) columns + embeds shared by every service query.
 const COMMON_SELECT = [
   '*',
-  'waivers(general_terms,health_declaration,media_consent,studio_agreement,senior_medical_waiver,signed_at)',
+  'waivers(general_terms,house_rules_accepted,grooming_booking_policy,hotel_cancellation_policy,health_declaration,media_consent,studio_agreement,senior_medical_waiver,signed_at)',
   'owners(id,first_name,last_name,mobile,email,referral_source)',
   'pets(id,name,animal_type,breed,size,gender,age_value,age_unit,temperament,medical_notes)',
   'booking_addons(addon_key,addon_name,price)',

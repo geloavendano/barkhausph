@@ -519,6 +519,8 @@ function silentValidateStep(step) {
     return true;
   }
   if (step === 7) {
+    var wh = document.getElementById('waiverHouseRules');
+    if (!wh || !wh.classList.contains('checked')) return false;
     var cfg = SERVICE_CONFIG[svc];
     if (cfg && cfg.generalWaiverId) {
       var we = document.getElementById(cfg.generalWaiverId);
@@ -529,6 +531,14 @@ function silentValidateStep(step) {
     if (svc === 'studio') {
       var ws = document.getElementById('waiverStudio');
       if (!ws || !ws.classList.contains('checked')) return false;
+    }
+    if (svc === 'grooming') {
+      var gp = document.getElementById('waiverGroomingPolicy');
+      if (!gp || !gp.classList.contains('checked')) return false;
+    }
+    if (svc === 'hotel') {
+      var hp = document.getElementById('waiverHotelCancellation');
+      if (!hp || !hp.classList.contains('checked')) return false;
     }
     var ageV = parseInt(g('petAgeNum')) || 0;
     var unitV = g('petAgeUnit') || 'months';
@@ -2319,8 +2329,14 @@ function buildWaiverTexts() {
     vaccine: 'I acknowledge and agree that my dog may acquire illnesses or diseases due to outdated or incomplete vaccinations, and that even with complete and updated vaccinations, there remains a minimal risk of contracting illness. I will not hold Barkhaus liable for any such occurrences.',
     senior: 'I, the undersigned, acknowledge that I am leaving my dog, who is a senior dog and/or has pre-existing medical conditions, in the care of Barkhaus. I am aware that senior dogs and dogs with existing medical conditions may be at increased risk for health complications, including sudden illness or death, especially in a boarding environment. In the event of a medical emergency, Barkhaus will make every reasonable effort to contact me. If I cannot be reached, I authorize Barkhaus to seek immediate veterinary care at their discretion, and I agree to be responsible for all costs incurred. I have disclosed all known medical conditions, medications, and special care instructions for my dog. I agree that Barkhaus may charge Special Handling Fees due to my dog\'s age and/or pre-existing condition(s). I understand that Barkhaus reserves the right to limit my dog\'s access to the play park and/or exposure to other dogs in the interest of my dog\'s well-being. I release Barkhaus from any liability related to the worsening of any existing conditions or the occurrence of age-related complications during or after the stay. I hereby voluntarily release, forever discharge, and agree to indemnify and hold harmless Barkhaus, its staff, owners, and affiliates, from any and all claims arising out of or connected with the services provided, including those involving negligent acts or omissions.',
     media: 'I consent to Barkhaus taking photographs or videos of my pet during grooming for promotional use, including social media and marketing materials.',
+    houseRules: 'Dogs without a valid vaccination record will not be allowed entry into the Play Park area. Owners must present their dog\'s updated vaccination record upon check-in for verification. Day Care guests without presented or updated vaccination records may still be admitted, subject to hotel room availability, but will be required to stay inside the Dog Hotel with an additional PHP 100 charge. Timeouts using a leash or cage may be implemented for reasons including rough or inappropriate play, aggressive behavior toward other dogs, guests, or staff, signs of exhaustion or overstimulation, scheduled meal times, designated rest and quiet periods, and nighttime sleeping hours for hotel guests. These measures are intended to ensure the safety, comfort, and well-being of all dogs in our care while maintaining a calm and positive environment. Owners and companions using the Indoor Play Park are responsible for supervising and monitoring their own dogs at all times. Our daycare attendants are always available to assist whenever needed. A PHP 250 late pickup penalty will be charged for daycare guests picked up after mall operating hours. The safety of all dog guests, human companions, and daycare attendants remains our highest priority at all times. Guests are expected to treat all Barkhaus staff members with respect at all times. The use of profanity, abusive language, or inappropriate behavior toward our staff will not be tolerated.',
+    groomingPolicy: 'All grooming appointments are scheduled in advance and reserved exclusively for each client. Appointment slots are fixed and cannot be moved once confirmed; however, a fifteen (15)-minute grace period will be provided to accommodate unforeseen delays. Clients who fail to arrive within the allotted grace period may forfeit their appointment slot, and the reserved time may be reassigned to another client. To ensure smooth scheduling and fairness to all guests, rescheduling requests will only be accommodated once and must be communicated to Barkhaus at least three (3) hours prior to the scheduled appointment time. All down payments made for grooming appointments are strictly non-refundable, including cases of no-shows, late arrivals resulting in forfeited slots, or cancelled appointments. Owners are expected to pick up their dogs promptly after grooming services are completed. Failure to do so may require Barkhaus to extend the dog\'s stay for additional hours or overnight care, which will be subject to corresponding boarding or extended care charges.',
+    hotelCancellation: 'To confirm all reservations, a non-refundable advance payment is required. Guests who wish to cancel or re-book their booking must notify management in advance. Cancellations made at least seven (7) days prior to the scheduled check-in date will be eligible for a refund equivalent to fifty percent (50%) of the total amount paid. Cancellations made six (6) days or less before the scheduled check-in date will only be eligible for a refund equivalent to twenty-five percent (25%) of the total amount paid. One-time rescheduling of bookings may be accommodated provided the request is made at least seven (7) days before the original check-in date and is subject to availability. Rescheduled bookings are considered final and may no longer be eligible for additional changes, cancellations, or refunds. Failure to arrive on the scheduled check-in date without prior notice will be considered a "No Show," and all payments made will be forfeited. Approved refunds will be processed within three (3) to seven (7) banking days.',
   };
+  texts.houseRules = WAIVER_TEXT.houseRules;
   texts.general  = WAIVER_TEXT[svc] || '';
+  if (svc === 'grooming') texts.groomingPolicy = WAIVER_TEXT.groomingPolicy;
+  if (svc === 'hotel') texts.hotelCancellation = WAIVER_TEXT.hotelCancellation;
   texts.vaccine  = WAIVER_TEXT.vaccine;
   texts.media    = WAIVER_TEXT.media;
   if (booking.playparkConsent) texts.playpark = WAIVER_TEXT.playpark;
@@ -3215,6 +3231,9 @@ async function editAfterCancelledPayment() {
   if (_svc === 'daycare')  _restoreCheck('waiverGeneralDaycare',  _rp.waiverGeneral);
   if (_svc === 'studio')   _restoreCheck('waiverStudio',          _rp.waiverStudio);
   _restoreCheck('waiverVaccineDecl',  _rp.waiverVaccine);
+  _restoreCheck('waiverHouseRules',    _rp.waiverHouseRules);
+  _restoreCheck('waiverGroomingPolicy', _rp.waiverGroomingPolicy);
+  _restoreCheck('waiverHotelCancellation', _rp.waiverHotelCancellation);
   _restoreCheck('waiverMedia',        _rp.waiverMedia);
   _restoreCheck('waiverPlaypark',     _rp.waiverPlaypark);
   _restoreCheck('seniorWaiver',       _rp.waiverSeniorMedical);
@@ -3552,6 +3571,9 @@ async function submitBooking() {
     ownerEmail:booking.ownerEmail, ownerPhone:booking.ownerPhone,
     ownerSource:booking.ownerSource,
     waiverGeneral:(function(){ var m={grooming:'waiverGeneralGrooming',daycare:'waiverGeneralDaycare',hotel:'waiverGeneralHotel'}; var el=m[booking.service]?document.getElementById(m[booking.service]):null; return el?el.classList.contains('checked'):false; })(),
+    waiverHouseRules:document.getElementById('waiverHouseRules').classList.contains('checked'),
+    waiverGroomingPolicy:document.getElementById('waiverGroomingPolicy')?document.getElementById('waiverGroomingPolicy').classList.contains('checked'):false,
+    waiverHotelCancellation:document.getElementById('waiverHotelCancellation')?document.getElementById('waiverHotelCancellation').classList.contains('checked'):false,
     waiverVaccine:document.getElementById('waiverVaccineDecl').classList.contains('checked'),
     waiverSeniorMedical:document.getElementById('seniorWaiver')?document.getElementById('seniorWaiver').classList.contains('checked'):false,
     waiverStudio:document.getElementById('waiverStudio')?document.getElementById('waiverStudio').classList.contains('checked'):false,

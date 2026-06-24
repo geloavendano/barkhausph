@@ -99,7 +99,8 @@ function mkBk(branchId) {
     // booking
     status:'confirmed', paysts:'unpaid', paymethod:'', payref:'',
     memcode:'', memvalid:false,
-    wgen:true, wvacc:true, wmedia:true, anotes:'',
+    wgen:true, whouse:true, wgroompolicy:true, whotelpolicy:true,
+    wvacc:true, wmedia:true, anotes:'',
     recby:'Admin', mode:'admin',
   }
 }
@@ -324,6 +325,9 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
       osource: own.referral_source ?? '', owner_id: own.id ?? null,
       anotes: b.notes ?? '',
       wgen:   waiver?.general_terms      ?? true,
+      whouse: waiver?.house_rules_accepted ?? true,
+      wgroompolicy: waiver?.grooming_booking_policy ?? true,
+      whotelpolicy: waiver?.hotel_cancellation_policy ?? true,
       wvacc:  waiver?.health_declaration ?? true,
       wmedia: waiver?.media_consent      ?? true,
       memcode:  b.member_code_used ?? '',
@@ -592,6 +596,13 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
       if (!bk.ofirst.trim() || !bk.olast.trim()) return alert('Enter the owner\'s first and last name.'), false
       if (!bk.ophone.trim()) return alert('Enter the owner\'s mobile number.'), false
     }
+    if (s === 4) {
+      if (!bk.whouse) return alert('General House Rules acceptance is required.'), false
+      if (bk.svc === 'grooming' && !bk.wgroompolicy)
+        return alert('Grooming Services Booking Policy acceptance is required.'), false
+      if (bk.svc === 'hotel' && !bk.whotelpolicy)
+        return alert('Hotel Cancellation and Refund Policy acceptance is required.'), false
+    }
     return true
   }
 
@@ -686,6 +697,15 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
           open_time: bk.dcopen, notes: bk.dcnotes||null,
         })
         if (bk.svc==='studio') await sbPatch('studio_details', `booking_id=eq.${b.id}`, { service_date: bk.stdate||null, timeslot: bk.stslot||'' })
+        await sbPatch('waivers', `booking_id=eq.${b.id}`, {
+          general_terms: bk.wgen,
+          house_rules_accepted: bk.whouse,
+          grooming_booking_policy: bk.svc === 'grooming' ? bk.wgroompolicy : null,
+          hotel_cancellation_policy: bk.svc === 'hotel' ? bk.whotelpolicy : null,
+          health_declaration: bk.wvacc,
+          media_consent: bk.wmedia,
+          waiver_version: '2.0',
+        })
 
         await sbDelete('pet_vaccines', `booking_id=eq.${b.id}`)
         const vaccRows = Object.keys(bk.vacc).map(i => ({
@@ -744,6 +764,9 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
           studioDate: bk.stdate, studioSlot: bk.stslot,
           addons: addonsPayload, vaccines: vaccPayload,
           waiverGeneral: bk.wgen, waiverVaccine: bk.wvacc,
+          waiverHouseRules: bk.whouse,
+          waiverGroomingPolicy: bk.svc === 'grooming' ? bk.wgroompolicy : false,
+          waiverHotelCancellation: bk.svc === 'hotel' ? bk.whotelpolicy : false,
           waiverSeniorMedical: false, waiverStudio: false, waiverMedia: bk.wmedia,
           membershipId: bk.memvalid ? bk.memcode : null,
           subtotal: subtotal, discountAmount: disc, total,
@@ -1191,7 +1214,10 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
           </>
         )}
         <SectionHead>Waivers</SectionHead>
-        {[['wgen','General terms accepted'],['wvacc','Health declaration'],['wmedia','Media consent (photos/videos)']].map(([k,l]) => (
+        {[['whouse','General House Rules (required)'],
+          ...(bk.svc === 'grooming' ? [['wgroompolicy','Grooming Services Booking Policy (required)']] : []),
+          ...(bk.svc === 'hotel' ? [['whotelpolicy','Hotel Cancellation and Refund Policy (required)']] : []),
+          ['wgen','General terms accepted'],['wvacc','Health declaration'],['wmedia','Media consent (photos/videos)']].map(([k,l]) => (
           <Toggle key={k} label={l} val={bk[k]} onToggle={() => upd(k, !bk[k])} />
         ))}
         <FG label="Internal notes" style={{ marginTop: 12 }}>

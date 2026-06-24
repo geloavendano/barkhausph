@@ -10,7 +10,7 @@ import styles from './BookingsPage.module.css'
 
 const BOOKING_SELECT = [
   '*',
-  'waivers(general_terms,health_declaration,media_consent,studio_agreement,senior_medical_waiver,signed_at)',
+  'waivers(general_terms,house_rules_accepted,grooming_booking_policy,hotel_cancellation_policy,health_declaration,media_consent,studio_agreement,senior_medical_waiver,signed_at)',
   'owners(id,first_name,last_name,mobile,email,referral_source)',
   'pets(id,name,animal_type,breed,size,gender,age_value,age_unit,temperament,medical_notes)',
   'grooming_details(timeslot,preferred_stylist,groom_service_name,groom_service_key,special_requests,groomer_id,service_date)',

@@ -65,6 +65,22 @@ Deno.serve(async (req) => {
     if (!publicKey) throw new Error("MAYA_PUBLIC_KEY not configured");
 
     const body = await req.json();
+    const accepted = (value: unknown) => value === true || value === "true";
+    if (!accepted(body.waiverHouseRules)) {
+      return new Response(JSON.stringify({ error: "General House Rules acceptance is required." }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (body.service === "grooming" && !accepted(body.waiverGroomingPolicy)) {
+      return new Response(JSON.stringify({ error: "Grooming Services Booking Policy acceptance is required." }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (body.service === "hotel" && !accepted(body.waiverHotelCancellation)) {
+      return new Response(JSON.stringify({ error: "Hotel Cancellation and Refund Policy acceptance is required." }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     // ── Validate required fields ──
     for (const f of ["service","petName","ownerFirst","ownerLast","ownerEmail","ownerPhone","total"]) {

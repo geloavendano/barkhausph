@@ -1019,6 +1019,24 @@ async function checkGate() {
   <h1 class="step-title">Waivers &amp; Consent</h1>
   <p class="step-subtitle">Please read each statement and check to confirm your agreement.</p>
 
+  <!-- ── GENERAL HOUSE RULES (ALL SERVICES) ── -->
+  <div class="waiver-box">
+    <h4>General House Rules</h4>
+    <ol class="waiver-list">
+      <li>Dogs without a valid vaccination record will not be allowed entry into the Play Park area. Owners must present their dog's updated vaccination record upon check-in for verification.</li>
+      <li>Day Care guests without presented or updated vaccination records may still be admitted, subject to hotel room availability, but will be required to stay inside the Dog Hotel with an additional PHP 100 charge.</li>
+      <li>Timeouts using a leash or cage may be implemented for reasons including rough or inappropriate play, aggressive behavior toward other dogs, guests, or staff, signs of exhaustion or overstimulation, scheduled meal times, designated rest and quiet periods, and nighttime sleeping hours for hotel guests. These measures are intended to ensure the safety, comfort, and well-being of all dogs in our care while maintaining a calm and positive environment.</li>
+      <li>Owners and companions using the Indoor Play Park are responsible for supervising and monitoring their own dogs at all times. Our daycare attendants are always available to assist whenever needed.</li>
+      <li>A PHP 250 late pickup penalty will be charged for daycare guests picked up after mall operating hours.</li>
+      <li>The safety of all dog guests, human companions, and daycare attendants remains our highest priority at all times.</li>
+      <li>Guests are expected to treat all Barkhaus staff members with respect at all times. The use of profanity, abusive language, or inappropriate behavior toward our staff will not be tolerated.</li>
+    </ol>
+  </div>
+  <div class="checkbox-row" onclick="toggleCheck('waiverHouseRules')">
+    <div class="checkbox-box" id="waiverHouseRules"></div>
+    <span class="checkbox-label">I have read and agree to the <strong>General House Rules</strong>.</span>
+  </div>
+
   <!-- ── GROOMING WAIVERS ── -->
   <div id="groomingWaivers" style="display:none">
     <div class="waiver-box">
@@ -1043,6 +1061,17 @@ async function checkGate() {
     <div class="checkbox-row" onclick="toggleCheck('waiverGeneralGrooming')">
       <div class="checkbox-box" id="waiverGeneralGrooming"></div>
       <span class="checkbox-label">I have read and agree to the <strong>Grooming Waiver</strong>.</span>
+    </div>
+    <div class="waiver-box" style="margin-top:12px">
+      <h4>Grooming Services Booking Policy</h4>
+      <p>All grooming appointments are scheduled in advance and reserved exclusively for each client. Appointment slots are fixed and cannot be moved once confirmed; however, a fifteen (15)-minute grace period will be provided to accommodate unforeseen delays.</p>
+      <p>Clients who fail to arrive within the allotted grace period may forfeit their appointment slot, and the reserved time may be reassigned to another client. To ensure smooth scheduling and fairness to all guests, rescheduling requests will only be accommodated once and must be communicated to Barkhaus at least three (3) hours prior to the scheduled appointment time.</p>
+      <p>All down payments made for grooming appointments are strictly non-refundable, including cases of no-shows, late arrivals resulting in forfeited slots, or cancelled appointments.</p>
+      <p>Owners are expected to pick up their dogs promptly after grooming services are completed. Failure to do so may require Barkhaus to extend the dog's stay for additional hours or overnight care, which will be subject to corresponding boarding or extended care charges.</p>
+    </div>
+    <div class="checkbox-row" onclick="toggleCheck('waiverGroomingPolicy')">
+      <div class="checkbox-box" id="waiverGroomingPolicy"></div>
+      <span class="checkbox-label">I have read and agree to the <strong>Grooming Services Booking Policy</strong>.</span>
     </div>
   </div>
 
@@ -1088,6 +1117,18 @@ async function checkGate() {
     <div class="checkbox-row" onclick="toggleCheck('waiverGeneralHotel')">
       <div class="checkbox-box" id="waiverGeneralHotel"></div>
       <span class="checkbox-label">I have read and agree to the <strong>Hotel Waiver</strong>.</span>
+    </div>
+    <div class="waiver-box" style="margin-top:12px">
+      <h4>Hotel Cancellation and Refund Policy</h4>
+      <p>To confirm all reservations, a non-refundable advance payment is required. Guests who wish to cancel or re-book their booking must notify management in advance.</p>
+      <p>Cancellations made at least seven (7) days prior to the scheduled check-in date will be eligible for a refund equivalent to fifty percent (50%) of the total amount paid. Cancellations made six (6) days or less before the scheduled check-in date will only be eligible for a refund equivalent to twenty-five percent (25%) of the total amount paid.</p>
+      <p>One-time rescheduling of bookings may be accommodated provided the request is made at least seven (7) days before the original check-in date and is subject to availability. Rescheduled bookings are considered final and may no longer be eligible for additional changes, cancellations, or refunds.</p>
+      <p>Failure to arrive on the scheduled check-in date without prior notice will be considered a "No Show," and all payments made will be forfeited.</p>
+      <p>Approved refunds will be processed within three (3) to seven (7) banking days.</p>
+    </div>
+    <div class="checkbox-row" onclick="toggleCheck('waiverHotelCancellation')">
+      <div class="checkbox-box" id="waiverHotelCancellation"></div>
+      <span class="checkbox-label">I have read and agree to the <strong>Hotel Cancellation and Refund Policy</strong>.</span>
     </div>
 
     <!-- Play park consent - shown conditionally when playparkConsent = yes -->
@@ -1314,7 +1355,7 @@ async function checkGate() {
 
 <script src="pricing.js"></script>
 <script src="validation.js"></script>
-<script src="booking.js?v=20260624-inventory-lock"></script>
+<script src="booking.js?v=20260624-required-policies"></script>
 
 <div id="contactModalOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:1000;align-items:center;justify-content:center;padding:24px" onclick="if(event.target===this)closeContactModal()">
   <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:20px;padding:28px 24px;max-width:340px;width:100%;text-align:center">

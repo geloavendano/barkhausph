@@ -387,9 +387,16 @@ function waiverCard(d: any): string {
     hotel:    ["Hotel Waiver", "hotel-waiver"],
   };
   const items: Array<[string, string, boolean]> = [];
+  items.push(["General House Rules", "general-house-rules", !!d.waiverHouseRules]);
   if (generalByService[d.service]) {
     const [label, anchor] = generalByService[d.service];
     items.push([label, anchor, !!d.waiverGeneral]);
+  }
+  if (d.service === "grooming") {
+    items.push(["Grooming Services Booking Policy", "grooming-booking-policy", !!d.waiverGroomingPolicy]);
+  }
+  if (d.service === "hotel") {
+    items.push(["Hotel Cancellation and Refund Policy", "hotel-cancellation-policy", !!d.waiverHotelCancellation]);
   }
   if (d.service === "studio") {
     items.push(["Studio Usage Agreement", "studio-agreement", !!d.waiverStudio]);
@@ -578,6 +585,22 @@ Deno.serve(async (req) => {
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
+    }
+    const accepted = (value: unknown) => value === true || value === "true";
+    if (!accepted(body.waiverHouseRules)) {
+      return new Response(JSON.stringify({ error: "General House Rules acceptance is required." }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (body.service === "grooming" && !accepted(body.waiverGroomingPolicy)) {
+      return new Response(JSON.stringify({ error: "Grooming Services Booking Policy acceptance is required." }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (body.service === "hotel" && !accepted(body.waiverHotelCancellation)) {
+      return new Response(JSON.stringify({ error: "Hotel Cancellation and Refund Policy acceptance is required." }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // 1. Resolve branch — fetch full row for email footer
@@ -850,12 +873,15 @@ Deno.serve(async (req) => {
     const { error: waiverErr } = await supabase.from("waivers").insert({
       booking_id:            bookingId,
       general_terms:         body.waiverGeneral       === true,
+      house_rules_accepted:  accepted(body.waiverHouseRules),
+      grooming_booking_policy: body.service === "grooming" ? accepted(body.waiverGroomingPolicy) : null,
+      hotel_cancellation_policy: body.service === "hotel" ? accepted(body.waiverHotelCancellation) : null,
       health_declaration:    body.waiverVaccine        === true,
       senior_medical_waiver: body.waiverSeniorMedical === true,
       studio_agreement:      body.waiverStudio         === true,
       media_consent:         body.waiverMedia          === true,
       waiver_texts:          body.waiverTexts          || null,
-      waiver_version:        "1.0",
+      waiver_version:        "2.0",
     });
     if (waiverErr) throw new Error(`Waiver insert failed: ${waiverErr.message}`);
 
@@ -924,6 +950,9 @@ Deno.serve(async (req) => {
           service:         body.service,
           // Accepted waivers / consents (for the email waiver card + links)
           waiverGeneral:       body.waiverGeneral       === true || body.waiverGeneral       === "true",
+          waiverHouseRules:    accepted(body.waiverHouseRules),
+          waiverGroomingPolicy: accepted(body.waiverGroomingPolicy),
+          waiverHotelCancellation: accepted(body.waiverHotelCancellation),
           waiverVaccine:       body.waiverVaccine       === true || body.waiverVaccine       === "true",
           waiverSeniorMedical: body.waiverSeniorMedical === true || body.waiverSeniorMedical === "true",
           waiverStudio:        body.waiverStudio        === true || body.waiverStudio        === "true",

@@ -927,10 +927,13 @@ function PayRow({ pay, receiptUrl }) {
 
 function WaiverSection({ waiver: wr, service, hd }) {
   const items = [
+    { label: 'General House Rules',     val: wr.house_rules_accepted },
     { label: 'General terms',          val: wr.general_terms },
     { label: 'Health declaration',     val: wr.health_declaration },
     { label: 'Media consent (photos)', val: wr.media_consent },
   ]
+  if (service === 'grooming') items.push({ label: 'Grooming Services Booking Policy', val: wr.grooming_booking_policy })
+  if (service === 'hotel') items.push({ label: 'Hotel Cancellation and Refund Policy', val: wr.hotel_cancellation_policy })
   if (service === 'studio') items.push({ label: 'Studio usage agreement', val: wr.studio_agreement })
   if (wr.senior_medical_waiver != null) items.push({ label: 'Senior / medical waiver', val: wr.senior_medical_waiver })
   if (service === 'hotel') items.push({ label: 'Play park consent', val: hd?.playpark_consent ?? null })
