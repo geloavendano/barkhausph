@@ -2843,18 +2843,21 @@ function showHostedPaymentSuccess(ref) {
   }
 })();
 
+async function getHostedPaymentState(ref) {
+  try {
+    var res = await fetch(PAYMENT_STATUS_URL + '?ref=' + encodeURIComponent(ref), {
+      headers: { 'Authorization': 'Bearer ' + SUPABASE_ANON_KEY, 'apikey': SUPABASE_ANON_KEY }
+    });
+    if (res.ok) return await res.json();
+  } catch(e) {}
+  return null;
+}
+
 async function waitForHostedPayment(ref) {
   for (var attempt = 0; attempt < 10; attempt++) {
-    try {
-      var res = await fetch(PAYMENT_STATUS_URL + '?ref=' + encodeURIComponent(ref), {
-        headers: { 'Authorization': 'Bearer ' + SUPABASE_ANON_KEY, 'apikey': SUPABASE_ANON_KEY }
-      });
-      if (res.ok) {
-        var state = await res.json();
-        if (state.confirmed) return true;
-        if (state.status === 'cancelled') return false;
-      }
-    } catch(e) {}
+    var state = await getHostedPaymentState(ref);
+    if (state && state.confirmed) return true;
+    if (state && state.status === 'cancelled') return false;
     await new Promise(function(resolve) { setTimeout(resolve, 2000); });
   }
   return false;
@@ -2986,8 +2989,27 @@ async function retryPayment() {
   if (editBtn) { editBtn.disabled = true; }
   if (statusEl) statusEl.textContent = 'Connecting to payment gateway…';
   try {
+    var latestState = await getHostedPaymentState(snap.refNumber);
+    if (latestState && latestState.confirmed) {
+      showHostedPaymentSuccess(snap.refNumber);
+      return;
+    }
+
+    if (snap.refNumber && snap.cancellationToken) {
+      if (statusEl) statusEl.textContent = 'Releasing your previous booking hold…';
+      var released = await cancelPendingBooking(snap.refNumber, snap.cancellationToken);
+      if (!released) {
+        latestState = await getHostedPaymentState(snap.refNumber);
+        if (latestState && latestState.confirmed) {
+          showHostedPaymentSuccess(snap.refNumber);
+          return;
+        }
+      }
+    }
+
+    snap.bookingId = null;
+    snap.cancellationToken = null;
     var retryPayload = Object.assign({}, snap.rawPayload, {
-      existing_booking_id: snap.bookingId || null,
       retry: true
     });
     var res  = await fetch(hostedPaymentEndpoint(), {
