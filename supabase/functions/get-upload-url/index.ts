@@ -26,8 +26,8 @@ const CORS = {
 
 const BUCKET = "vaccine-docs";
 const PURPOSE_LIMITS: Record<string, number> = {
-  vaccine_document: 30 * 1024 * 1024,
-  grooming_reference: 15 * 1024 * 1024,
+  vaccine_document: 10 * 1024 * 1024,
+  grooming_reference: 10 * 1024 * 1024,
   manual_payment_receipt: 10 * 1024 * 1024,
 };
 
@@ -51,9 +51,20 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
-    await supabase.from("pending_uploads")
-      .delete()
-      .lt("expires_at", new Date().toISOString());
+    const now = new Date().toISOString();
+    const { data: expiredUploads } = await supabase.from("pending_uploads")
+      .select("id,bucket_id,object_path")
+      .lt("expires_at", now)
+      .is("consumed_at", null)
+      .limit(50);
+    for (const upload of expiredUploads ?? []) {
+      await supabase.storage.from(upload.bucket_id).remove([upload.object_path]);
+    }
+    if (expiredUploads?.length) {
+      await supabase.from("pending_uploads")
+        .delete()
+        .in("id", expiredUploads.map((upload: any) => upload.id));
+    }
 
     const { uploadId, fileName, contentType, fileSize, purpose, vaccineKey } = await req.json();
 
@@ -80,6 +91,24 @@ Deno.serve(async (req) => {
       );
     }
 
+    const forwarded = req.headers.get("cf-connecting-ip") ||
+      req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      req.headers.get("x-real-ip") || "unknown";
+    const fingerprintHash = await sha256(forwarded);
+    const { data: rateLimitReason, error: rateLimitError } = await supabase
+      .rpc("authorize_upload_request", {
+        p_fingerprint_hash: fingerprintHash,
+        p_purpose: purpose,
+        p_declared_size_bytes: Number(fileSize),
+      });
+    if (rateLimitError) throw new Error(`Upload quota check failed: ${rateLimitError.message}`);
+    if (rateLimitReason) {
+      return new Response(JSON.stringify({ error: rateLimitReason }), {
+        status: 429,
+        headers: { ...CORS, "Content-Type": "application/json", "Retry-After": "600" },
+      });
+    }
+
     // ── Build storage path ──
     // uploads/{uploadId}/{vaccineKey}-{timestamp}.{ext}
     // submit-booking uses these paths when inserting vaccine/payment rows.
@@ -100,6 +129,7 @@ Deno.serve(async (req) => {
       content_type: contentType.toLowerCase(),
       max_size_bytes: maxSize,
       expires_at: expiresAt,
+      fingerprint_hash: fingerprintHash,
     });
     if (authorizationError) throw new Error(`Upload authorization error: ${authorizationError.message}`);
 

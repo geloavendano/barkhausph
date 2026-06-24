@@ -4,6 +4,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { randomToken, sha256 } from "../_shared/security.ts";
+import { assertHostedInventory, inventoryLockKey } from "../_shared/inventory.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -43,8 +44,14 @@ Deno.serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  let supabase: any = null;
+  let mutexKey: string | null = null;
+  let mutexToken: string | null = null;
+  let createdBookingId: string | null = null;
+  let createdDetailTable: string | null = null;
+  let createdRefNumber: string | null = null;
   try {
-    const supabase = createClient(
+    supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
@@ -84,6 +91,39 @@ Deno.serve(async (req) => {
       .ilike("name", branchName)
       .single();
     if (branchErr || !branch) throw new Error(`Branch not found: ${branchName}`);
+
+    mutexKey = inventoryLockKey(branch.id, body);
+    if (mutexKey) {
+      mutexToken = randomToken(16);
+      const { data: acquired, error: mutexError } = await supabase.rpc("acquire_inventory_mutex", {
+        p_lock_key: mutexKey,
+        p_lock_token: mutexToken,
+        p_ttl_seconds: 120,
+      });
+      if (mutexError) throw new Error(`Could not reserve inventory: ${mutexError.message}`);
+      if (!acquired) {
+        mutexKey = null;
+        mutexToken = null;
+        return new Response(JSON.stringify({
+          conflict: body.service === "hotel" ? "room" : "slot",
+          error: "This inventory is being reserved by another customer. Please try again.",
+        }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      try {
+        await assertHostedInventory(supabase, branch.id, body);
+      } catch (inventoryError) {
+        await supabase.rpc("release_inventory_mutex", {
+          p_lock_key: mutexKey,
+          p_lock_token: mutexToken,
+        });
+        mutexKey = null;
+        mutexToken = null;
+        return new Response(JSON.stringify({
+          conflict: body.service === "hotel" ? "room" : "slot",
+          error: inventoryError instanceof Error ? inventoryError.message : "Inventory is unavailable.",
+        }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+    }
 
     // ── 2. Upsert owner ──
     const email = (body.ownerEmail as string).trim().toLowerCase();
@@ -179,12 +219,15 @@ Deno.serve(async (req) => {
       }).select("id, ref_number").single();
     if (bookingErr || !newBooking) throw new Error(`Failed to create booking: ${bookingErr?.message}`);
     const bookingId = newBooking.id;
+    createdBookingId = bookingId;
+    createdRefNumber = refNumber;
 
     // Authoritative ref — use whatever the DB actually persisted (handles any
     // ref_number DEFAULT/trigger that overrode our inserted value).
     if (newBooking.ref_number && newBooking.ref_number !== refNumber) {
       console.warn(`ref_number overridden by DB: inserted ${refNumber}, stored ${newBooking.ref_number}`);
       refNumber = newBooking.ref_number;
+      createdRefNumber = refNumber;
     }
 
     // ── 4b. Create the service detail row up front (best-effort) ──
@@ -200,9 +243,9 @@ Deno.serve(async (req) => {
       daycare: "daycare_details", studio: "studio_details",
     };
     const detailTable = detailTableFor[body.service as string] || null;
-    try {
-      if (body.service === "hotel") {
-        await supabase.from("hotel_details").insert({
+    createdDetailTable = detailTable;
+    if (body.service === "hotel") {
+      const { error } = await supabase.from("hotel_details").insert({
           booking_id: bookingId,
           checkin_date: body.hotelCheckin, checkout_date: body.hotelCheckout,
           dropoff_time: body.hotelDropoff || null, pickup_time: body.hotelPickup || null,
@@ -212,19 +255,21 @@ Deno.serve(async (req) => {
           feeding_instructions: body.hotelFeeding || null, medications: body.hotelMeds || null,
           vet_clinic: body.vetClinic || null, vet_contact: body.vetContact || null, vet_address: body.vetAddress || null,
           emergency_name: body.emergencyName || null, emergency_phone: body.emergencyPhone || null,
-        });
-      } else if (body.service === "grooming") {
-        await supabase.from("grooming_details").insert({
+      });
+      if (error) throw new Error(`Hotel inventory hold failed: ${error.message}`);
+    } else if (body.service === "grooming") {
+      const { error } = await supabase.from("grooming_details").insert({
           booking_id: bookingId, service_date: body.groomDate || null,
           timeslot: body.groomSlot,
           preferred_stylist: body.preferredStylist || "any",
           groomer_id: body.preferredStylistId || null,
           groom_service_key: body.groomService || "", groom_service_name: body.groomServiceName || "",
           special_requests: body.groomNotes || null,
-        });
-      } else if (body.service === "daycare") {
+      });
+      if (error) throw new Error(`Grooming inventory hold failed: ${error.message}`);
+    } else if (body.service === "daycare") {
         const openTime = body.daycareOpenTime === true;
-        await supabase.from("daycare_details").insert({
+        const { error } = await supabase.from("daycare_details").insert({
           booking_id: bookingId, service_date: body.daycareDate || null,
           dropoff_time: body.daycareDropoff || "", dropoff_hour: parseInt(body.daycareDropoffHour) || 0,
           pickup_time: openTime ? null : (body.daycarePickup || null),
@@ -232,22 +277,20 @@ Deno.serve(async (req) => {
           hours_total: openTime ? 0 : Math.max(0, (parseInt(body.daycarePickupHour)||0) - (parseInt(body.daycareDropoffHour)||0)),
           open_time: openTime, notes: body.daycareNotes || null,
         });
-      } else if (body.service === "studio") {
-        await supabase.from("studio_details").insert({
+        if (error) throw new Error(`Daycare detail insert failed: ${error.message}`);
+    } else if (body.service === "studio") {
+      const { error } = await supabase.from("studio_details").insert({
           booking_id: bookingId, service_date: body.studioDate || null,
-          timeslot: body.studioSlot || "",
-        });
-      }
-    } catch (detailErr) {
-      console.warn("Early service-detail insert failed (non-fatal — webhook will create it):",
-        detailErr instanceof Error ? detailErr.message : detailErr);
+          timeslot: body.studioSlot || "", studio_id: body._reservedStudioId || null,
+      });
+      if (error) throw new Error(`Studio inventory hold failed: ${error.message}`);
     }
 
     // ── 5. Store full payload in pending_bookings (webhook uses this to create child records) ──
     const expiresAt = new Date(Date.now() + 20 * 60 * 1000).toISOString(); // 20-min window
     const cancellationToken = randomToken();
     const cancellationTokenHash = await sha256(cancellationToken);
-    await supabase.from("pending_bookings").insert({
+    const { error: pendingError } = await supabase.from("pending_bookings").insert({
       ref_number: refNumber,
       payload:    body,
       amount:     total,
@@ -255,6 +298,16 @@ Deno.serve(async (req) => {
       payment_provider: "paymongo",
       cancellation_token_hash: cancellationTokenHash,
     });
+    if (pendingError) throw new Error(`Failed to create pending checkout: ${pendingError.message}`);
+
+    if (mutexKey && mutexToken) {
+      await supabase.rpc("release_inventory_mutex", {
+        p_lock_key: mutexKey,
+        p_lock_token: mutexToken,
+      });
+      mutexKey = null;
+      mutexToken = null;
+    }
 
     // ── 6. Build PayMongo line items ──
     const serviceAmount = subtotal - discountAmount;
@@ -321,6 +374,9 @@ Deno.serve(async (req) => {
       .eq("ref_number", refNumber);
 
     console.log(`Booking ${bookingId} | Session ${sessionId} | Ref ${refNumber}`);
+    createdBookingId = null;
+    createdDetailTable = null;
+    createdRefNumber = null;
 
     return new Response(
       JSON.stringify({
@@ -334,6 +390,25 @@ Deno.serve(async (req) => {
     );
 
   } catch (err) {
+    if (supabase && mutexKey && mutexToken) {
+      try {
+        await supabase.rpc("release_inventory_mutex", {
+          p_lock_key: mutexKey,
+          p_lock_token: mutexToken,
+        });
+      } catch {}
+    }
+    if (supabase && createdBookingId) {
+      try {
+        if (createdDetailTable) {
+          await supabase.from(createdDetailTable).delete().eq("booking_id", createdBookingId);
+        }
+        if (createdRefNumber) {
+          await supabase.from("pending_bookings").delete().eq("ref_number", createdRefNumber);
+        }
+        await supabase.from("bookings").delete().eq("id", createdBookingId);
+      } catch {}
+    }
     console.error("create-payment error:", err instanceof Error ? err.message : err);
     return new Response(
       JSON.stringify({ error: err instanceof Error ? err.message : "Unexpected error" }),
