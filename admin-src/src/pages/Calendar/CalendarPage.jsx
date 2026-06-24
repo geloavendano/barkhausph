@@ -210,6 +210,7 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
   const [filterOpen,       setFilterOpen]       = useState(false)
   const [view,             setView]             = useState(() => { try { return localStorage.getItem('cal_view') || 'day' } catch { return 'day' } })
   const [peekDate,         setPeekDate]         = useState(null)   // month "+N more" day overlay
+  const [listScrollKey,    setListScrollKey]    = useState(0)      // bump → List view scrolls to today
 
   const branch  = branches?.[currentBranchIdx]
   const dateStr = useMemo(() => dateToISO(currentDate), [currentDate])
@@ -509,7 +510,9 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
           </button>
           <div className={styles.dateArrows}>
             <button className={styles.navArrow} onClick={() => shiftDate(-1)}>‹</button>
-            {!todayInView && <button className={styles.todayBtn} onClick={goToday}>Today</button>}
+            {(!todayInView || view === 'list') && (
+              <button className={styles.todayBtn} onClick={() => { goToday(); if (view === 'list') setListScrollKey(k => k + 1) }}>Today</button>
+            )}
             <button className={styles.navArrow} onClick={() => shiftDate(1)}>›</button>
           </div>
         </div>
@@ -776,7 +779,7 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
             <ListView
               rangeFrom={range.from} rangeTo={range.to} filtered={filtered}
               rooms={rooms} groomers={groomers} today={now}
-              onOpenBooking={setOpenId}
+              onOpenBooking={setOpenId} scrollKey={listScrollKey}
             />
           )}
         </div>
@@ -1044,8 +1047,46 @@ function MonthView({ monthAnchor, filtered, rooms, groomers, today, onPickDay, o
 }
 
 // ── List/agenda view: bookings grouped by day (empty days skipped) ──────────
-function ListView({ rangeFrom, rangeTo, filtered, rooms, groomers, today, onOpenBooking }) {
+const STATUS_LABELS = { pending: 'Pending', confirmed: 'Confirmed', checked_in: 'Checked in', completed: 'Completed', cancelled: 'Cancelled', rejected: 'Rejected' }
+
+function ListRow({ b, label, color, onOpenBooking }) {
+  const status    = b.status ?? 'confirmed'
+  const cancelled = status === 'cancelled' || status === 'rejected'
+  const pending   = status === 'pending'
+  return (
+    <div
+      className={`${styles.listRow} ${cancelled ? styles.listRowCancelled : ''} ${pending ? styles.listRowPending : ''}`}
+      style={{ borderLeftColor: color }}
+      onClick={() => onOpenBooking(b.id)}>
+      <span className={styles.listTime}>{label}</span>
+      <span className={styles.listStatusDot} style={{ background: STATUS_COLORS[status] ?? '#888' }} />
+      <span className={styles.listName}>{petEmoji(b)} {first(b.pets)?.name ?? 'Pet'}</span>
+      {status !== 'confirmed' && status !== 'checked_in' && (
+        <span className={styles.listBadge} style={{ color: STATUS_COLORS[status] ?? '#888', borderColor: STATUS_COLORS[status] ?? '#888' }}>{STATUS_LABELS[status] ?? status}</span>
+      )}
+      <span className={styles.listSvc}>{SVC_LABELS[b.service] ?? b.service}</span>
+    </div>
+  )
+}
+
+function ListView({ rangeFrom, rangeTo, filtered, rooms, groomers, today, onOpenBooking, scrollKey }) {
   const todayISO = dateToISO(today)
+  const todayRef = useRef(null)
+  const pending  = useRef(true)    // scroll to today on first render
+  const firstRun = useRef(true)
+
+  const doScroll = () => requestAnimationFrame(() => {
+    if (todayRef.current) {
+      todayRef.current.scrollIntoView({ behavior: firstRun.current ? 'auto' : 'smooth', block: 'start' })
+      pending.current = false
+      firstRun.current = false
+    }
+  })
+  // Trigger on mount + when the Today button bumps scrollKey…
+  useEffect(() => { pending.current = true; doScroll() }, [scrollKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  // …and once data for a newly-navigated month has rendered the today row.
+  useEffect(() => { if (pending.current) doScroll() }, [filtered]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const days = []
   for (let d = new Date(rangeFrom); d <= rangeTo; d = addDays(d, 1)) days.push(new Date(d))
   const groups = days.map(d => {
@@ -1064,38 +1105,21 @@ function ListView({ rangeFrom, rangeTo, filtered, rooms, groomers, today, onOpen
   return (
     <div className={styles.listScroll}>
       {groups.map(g => (
-        <div key={g.ds} className={styles.listDay}>
+        <div key={g.ds} ref={g.ds === todayISO ? todayRef : null} className={styles.listDay}>
           <div className={`${styles.listDayHead} ${g.ds === todayISO ? styles.listDayToday : ''}`}>
             <span className={styles.listDow}>{DAYS[g.d.getDay()]}</span>
             <span className={styles.listDateNum}>{g.d.getDate()}</span>
             <span className={styles.listMon}>{MONTHS[g.d.getMonth()].slice(0, 3)}</span>
+            {g.ds === todayISO && <span className={styles.listTodayTag}>Today</span>}
             <span className={styles.listCount}>{g.count} booking{g.count > 1 ? 's' : ''}</span>
           </div>
           <div className={styles.listItems}>
-            {g.hotels.map(b => {
-              const color = getCardColor(b, rooms, groomers)
-              const cancelled = b.status === 'cancelled' || b.status === 'rejected'
-              return (
-                <div key={b.id} className={`${styles.listRow} ${cancelled ? styles.weekChipCancelled : ''}`} onClick={() => onOpenBooking(b.id)}>
-                  <span className={styles.listTime}>🏨</span>
-                  <span className={styles.listDot} style={{ background: color }} />
-                  <span className={styles.listName}>{petEmoji(b)} {first(b.pets)?.name ?? 'Pet'}</span>
-                  <span className={styles.listSvc}>Hotel</span>
-                </div>
-              )
-            })}
-            {g.timed.map(({ b, st }) => {
-              const color = getCardColor(b, rooms, groomers)
-              const cancelled = b.status === 'cancelled' || b.status === 'rejected'
-              return (
-                <div key={b.id} className={`${styles.listRow} ${cancelled ? styles.weekChipCancelled : ''}`} onClick={() => onOpenBooking(b.id)}>
-                  <span className={styles.listTime}>{formatMins(st)}</span>
-                  <span className={styles.listDot} style={{ background: color }} />
-                  <span className={styles.listName}>{petEmoji(b)} {first(b.pets)?.name ?? 'Pet'}</span>
-                  <span className={styles.listSvc}>{SVC_LABELS[b.service] ?? b.service}</span>
-                </div>
-              )
-            })}
+            {g.hotels.map(b => (
+              <ListRow key={b.id} b={b} label="🏨" color={getCardColor(b, rooms, groomers)} onOpenBooking={onOpenBooking} />
+            ))}
+            {g.timed.map(({ b, st }) => (
+              <ListRow key={b.id} b={b} label={formatMins(st)} color={getCardColor(b, rooms, groomers)} onOpenBooking={onOpenBooking} />
+            ))}
           </div>
         </div>
       ))}
