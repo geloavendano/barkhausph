@@ -2570,6 +2570,7 @@ function renderSuccessDetails(snap, detailsId, priceId) {
   if (!snap) return;
   var bk  = snap.bookingState || {};
   var svc = bk.service || '';
+  renderSuccessPolicyNotice(svc);
 
   // Store meta for printBooking() to use as the PDF filename
   window._printMeta = { branch: snap.location || '', service: snap.service || '' };
@@ -2741,6 +2742,27 @@ function renderSuccessDetails(snap, detailsId, priceId) {
 
   var priceEl = document.getElementById(priceId || 'successPriceBreakdown');
   if (priceEl) priceEl.innerHTML = ph;
+}
+
+function renderSuccessPolicyNotice(service) {
+  var el = document.getElementById('successPolicyNotice');
+  if (!el) return;
+  var html = '';
+  if (service === 'grooming') {
+    html =
+      '<strong>Grooming changes and cancellations</strong><br>' +
+      'A one-time reschedule may be requested at least <strong>3 hours before</strong> the appointment. ' +
+      'There is a <strong>15-minute grace period</strong>; arriving later may forfeit the reserved slot. ' +
+      'All grooming down payments are <strong>non-refundable</strong>, including no-shows, late arrivals that forfeit the slot, and cancellations.';
+  } else if (service === 'hotel') {
+    html =
+      '<strong>Hotel changes, cancellations, and refunds</strong><br>' +
+      'A one-time reschedule may be requested at least <strong>7 days before check-in</strong>, subject to availability. ' +
+      'Cancellations at least 7 days before check-in are eligible for a <strong>50% refund</strong>; cancellations 6 days or less before check-in are eligible for a <strong>25% refund</strong>. ' +
+      'Rescheduled bookings are final, no-shows forfeit all payments, and approved refunds are processed within <strong>3-7 banking days</strong>.';
+  }
+  el.innerHTML = html;
+  el.style.display = html ? '' : 'none';
 }
 
 // ── PDF / Print ──

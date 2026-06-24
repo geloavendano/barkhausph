@@ -332,7 +332,7 @@
   <ul>
     <li>Hosted-payment webhooks confirm payment; processing is <strong>idempotent</strong>. Maya events are verified server-to-server against Maya's Payments API, including status, reference, currency, and amount. The dormant PayMongo path retains signature verification and duplicate-event handling.</li>
     <li>The booking flips to <code>confirmed / paid</code>; all detail rows are written (service details with appointment date, add-ons, itemized charges, vaccines, waiver record, uploaded vaccine documents).</li>
-    <li>A <strong>confirmation email</strong> is sent (§7) and the customer returns to a success screen: full booking recap, price breakdown, "arrive 15 minutes early" note, and a print/PDF prompt.</li>
+    <li>A <strong>confirmation email</strong> is sent (§7) and the customer returns to a success screen: full booking recap, price breakdown, "arrive 15 minutes early" note, service-specific cancellation/rescheduling/refund guidance for grooming and hotel, and a print/PDF prompt.</li>
   </ul>
 
   <h3>4.3 Payment cancelled / failed</h3>

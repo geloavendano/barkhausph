@@ -424,6 +424,20 @@ function waiverCard(d: any): string {
     </table>`;
 }
 
+function bookingPolicyNotice(d: any): string {
+  let text = "";
+  if (d.service === "grooming") {
+    text = `A one-time reschedule may be requested at least <strong style="color:#4D96B9">3 hours before</strong> the appointment. A 15-minute grace period applies; later arrival may forfeit the slot. All grooming down payments are <strong style="color:#FFCE58">non-refundable</strong>, including no-shows, forfeited late arrivals, and cancellations.`;
+  } else if (d.service === "hotel") {
+    text = `A one-time reschedule may be requested at least <strong style="color:#4D96B9">7 days before check-in</strong>, subject to availability. Cancellations at least 7 days before check-in are eligible for a 50% refund; cancellations 6 days or less before check-in are eligible for a 25% refund. Rescheduled bookings are final, no-shows forfeit all payments, and approved refunds are processed within 3-7 banking days.`;
+  } else {
+    text = `For booking changes or cancellations, please <strong style="color:#4D96B9">contact the branch directly</strong>.`;
+  }
+  return `<div style="background:rgba(77,150,185,0.1);border:0.5px solid rgba(77,150,185,0.25);border-radius:10px;padding:12px 14px;margin-bottom:22px">
+    <p style="margin:0;font-size:13px;color:#B8D4E0;line-height:1.55">📋 ${text}</p>
+  </div>`;
+}
+
 function buildEmailHtml(d: any): string {
   const bookingDate = new Date().toLocaleDateString("en-PH", {
     month: "long", day: "numeric", year: "numeric",
@@ -497,11 +511,7 @@ function buildEmailHtml(d: any): string {
         ⏰ Please arrive <strong style="color:#FFCE58">15 minutes before</strong> your scheduled time to make check-in a breeze!
       </p>
     </div>
-    <div style="background:rgba(77,150,185,0.1);border:0.5px solid rgba(77,150,185,0.25);border-radius:10px;padding:12px 14px;margin-bottom:22px">
-      <p style="margin:0;font-size:13px;color:#B8D4E0;line-height:1.55">
-        📋 Need to reschedule or cancel? Please <strong style="color:#4D96B9">call the branch directly</strong> at least 24 hours before your appointment. We totally understand — just give us a heads up so we can open the slot for another furry guest!
-      </p>
-    </div>
+    ${bookingPolicyNotice(d)}
     <p style="color:#6AAEC8;font-size:13px;line-height:1.6;margin:0 0 16px">
       Can't wait to see ${d.petName}! If you have any questions before your visit, reach out to your branch directly using the details below. 🐶
     </p>
