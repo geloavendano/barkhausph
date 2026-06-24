@@ -1190,31 +1190,8 @@ async function renderGroomSlots() {
         r._durationAddons = r.has_duration_addon ? { demat:true } : null;
       });
     } catch(occupancyErr) {
-      // Temporary fail-safe until the occupancy RPC migration is applied. Do
-      // not fail open: treating all detail rows as occupied is safer than
-      // offering an already-booked slot.
-      console.warn('Grooming occupancy RPC unavailable; using conservative fallback.', occupancyErr);
-      bookingRows = (await sbFetchPublic('grooming_details',
-        'select=booking_id,timeslot,groom_service_key,groomer_id' +
-        '&service_date=eq.' + dateVal)) || [];
-    }
-    var ids = bookingRows.filter(function(r){ return !r.has_duration_addon; })
-      .map(function(r){ return r.booking_id; }).filter(Boolean);
-    if (ids.length) {
-      try {
-        var addonRows = (await sbFetchPublic('booking_addons',
-          'select=booking_id,addon_key&booking_id=in.(' + ids.join(',') + ')')) || [];
-        var durationAddonsByBooking = {};
-        addonRows.forEach(function(a) {
-          if (GROOM_DURATION_ADDONS[a.addon_key]) durationAddonsByBooking[a.booking_id] = true;
-        });
-        bookingRows.forEach(function(r) {
-          if (r.has_duration_addon) return;
-          r._durationAddons = durationAddonsByBooking[r.booking_id] ? { demat:true } : null;
-        });
-      } catch(addonErr) {
-        console.warn('Could not read booking add-ons for duration checks:', addonErr);
-      }
+      console.warn('Grooming occupancy check unavailable.', occupancyErr);
+      throw new Error('occupancy_unavailable');
     }
 
     // 2. ALL one-off blocked_schedules for groomers on this date (no resource filter).
@@ -1541,13 +1518,8 @@ async function loadRoomAvailability() {
           p_checkout: cout,
         });
       } catch(occupancyErr) {
-        console.warn('Hotel occupancy RPC unavailable; using REST fallback.', occupancyErr);
-        detailRows = await sbFetchPublic('hotel_details',
-          'select=room_id,room_type,checkin_date,checkout_date,bookings!inner(branch_id,status)' +
-          '&bookings.branch_id=eq.' + branch +
-          '&bookings.status=not.in.(cancelled,rejected)' +
-          '&checkin_date=lt.' + cout +
-          '&checkout_date=gt.' + cin);
+        console.warn('Hotel occupancy check unavailable.', occupancyErr);
+        throw new Error('occupancy_unavailable');
       }
       (detailRows || []).forEach(function(r) {
         var key = r.room_id || r.room_type;
@@ -1934,18 +1906,10 @@ async function loadStudioSlots() {
     var branchId = await getSelectedBranchId();
     if (!branchId || !studioPool.length) throw new Error('missing_context');
 
-    // 1. All studio bookings on this date at this branch
-    var bkRows = await sbFetchPublic('bookings',
-      'select=id&branch_id=eq.' + branchId +
-      '&service=eq.studio&booking_date=eq.' + dateVal +
-      '&status=not.in.(cancelled,rejected)');
-
-    if (bkRows && bkRows.length) {
-      var ids = bkRows.map(function(r){ return r.id; }).join(',');
-      // 2. Get studio_details for those bookings (studio_id + timeslot)
-      bookingRows = await sbFetchPublic('studio_details',
-        'select=studio_id,timeslot&booking_id=in.(' + ids + ')') || [];
-    }
+    bookingRows = (await sbRpcPublic('get_studio_occupancy', {
+      p_branch_id: branchId,
+      p_service_date: dateVal,
+    })) || [];
 
     // 3. One-off blocked_schedules for studio resources on this date
     var sids = studioPool.map(function(s){ return s.id; }).join(',');
@@ -1958,10 +1922,8 @@ async function loadStudioSlots() {
     } catch(e) { blockRows = []; }
 
   } catch(e) {
-    console.warn('Studio slot availability check failed, showing all slots:', e);
-    grid.innerHTML = ALL_SLOTS.map(function(s) {
-      return '<div class="timeslot" onclick="selectSlot(this)">' + s + '</div>';
-    }).join('');
+    console.warn('Studio slot availability check failed:', e);
+    grid.innerHTML = '<p style="font-size:12px;color:var(--error);padding:8px 0">Could not verify studio availability. Please try again.</p>';
     return;
   }
 
@@ -3285,16 +3247,13 @@ async function checkAvailabilityBeforePayment() {
     if (svc === 'hotel') {
       if (!booking.hotelRoomId) return { available: true }; // fallback type — edge fn will verify
       var cin = booking.hotelCheckin, cout = booking.hotelCheckout;
-      var bkRows = await sbFetchPublic('bookings',
-        'select=id&branch_id=eq.' + branchId +
-        '&service=eq.hotel&status=not.in.(cancelled,rejected)');
-      if (bkRows && bkRows.length) {
-        var ids = bkRows.map(function(b){return b.id;}).join(',');
-        var dtRows = await sbFetchPublic('hotel_details',
-          'select=room_id&booking_id=in.(' + ids + ')' +
-          '&checkin_date=lt.' + cout + '&checkout_date=gt.' + cin +
-          '&room_id=eq.' + booking.hotelRoomId);
-        if (dtRows && dtRows.length) return { available: false, conflict: 'room' };
+      var dtRows = (await sbRpcPublic('get_hotel_occupancy', {
+        p_branch_id: branchId,
+        p_checkin: cin,
+        p_checkout: cout,
+      })) || [];
+      if (dtRows.some(function(r){ return r.room_id === booking.hotelRoomId; })) {
+        return { available: false, conflict: 'room' };
       }
       return { available: true };
     }
@@ -3308,27 +3267,13 @@ async function checkAvailabilityBeforePayment() {
       var myDuration = groomDurationMins(serviceKey, booking.selectedAddons);
       var candStart  = slotToMins(slot);
       var candEnd    = candStart + myDuration;
-      // Fetch ALL bookings for this date (no groomer filter) so unassigned ones are visible
-      var bkQuery = 'select=booking_id,timeslot,groom_service_key,groomer_id,bookings!inner(status,branch_id)' +
-        '&service_date=eq.' + dateVal + '&bookings.branch_id=eq.' + branchId +
-        '&bookings.status=not.in.(cancelled,rejected)';
-      var bkRows = (await sbFetchPublic('grooming_details', bkQuery)) || [];
-      var ids = bkRows.map(function(r){ return r.booking_id; }).filter(Boolean);
-      if (ids.length) {
-        try {
-          var addonRows = (await sbFetchPublic('booking_addons',
-            'select=booking_id,addon_key&booking_id=in.(' + ids.join(',') + ')')) || [];
-          var durationAddonsByBooking = {};
-          addonRows.forEach(function(a) {
-            if (GROOM_DURATION_ADDONS[a.addon_key]) durationAddonsByBooking[a.booking_id] = true;
-          });
-          bkRows.forEach(function(r) {
-            r._durationAddons = durationAddonsByBooking[r.booking_id] ? { demat:true } : null;
-          });
-        } catch(addonErr) {
-          console.warn('Could not read booking add-ons for duration checks:', addonErr);
-        }
-      }
+      var bkRows = (await sbRpcPublic('get_grooming_occupancy', {
+        p_branch_id: branchId,
+        p_service_date: dateVal,
+      })) || [];
+      bkRows.forEach(function(r) {
+        r._durationAddons = r.has_duration_addon ? { demat:true } : null;
+      });
       var serviceHours = null;
       try {
         serviceHours = (await sbFetchPublic('resource_service_hours',
@@ -3386,9 +3331,8 @@ async function checkAvailabilityBeforePayment() {
     }
   } catch(e) {
     console.warn('Pre-payment availability check error:', e);
-    if (svc === 'grooming') return { available: false, conflict: 'slot' };
+    return { available: false, conflict: svc === 'hotel' ? 'room' : 'slot' };
   }
-  return { available: true };
 }
 
 async function handleBookingConflict(conflictType) {
