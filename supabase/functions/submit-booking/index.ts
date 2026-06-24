@@ -378,33 +378,42 @@ function paymentSummaryRows(charges: ChargeItem[], addonRows: Array<{ addon_name
   return rows;
 }
 
-// Waiver card: lists the waivers/consents the customer accepted, each linking to
-// the matching anchor on the public waivers page. Returns "" when none accepted.
+// Waiver card: lists applicable agreements and their recorded consent status.
 function waiverCard(d: any): string {
-  const WAIVERS_URL = "https://barkhaus.ph/waivers.html";
+  const WAIVERS_URL = "https://barkhaus.ph/waivers";
   const generalByService: Record<string, [string, string]> = {
     grooming: ["Grooming Waiver", "grooming-waiver"],
     daycare:  ["Daycare Waiver", "daycare-waiver"],
     hotel:    ["Hotel Waiver", "hotel-waiver"],
   };
-  const items: Array<[string, string]> = [];
-  if (d.waiverGeneral && generalByService[d.service]) items.push(generalByService[d.service]);
-  if (d.waiverStudio)        items.push(["Studio Usage Agreement", "studio-agreement"]);
-  if (d.waiverVaccine)       items.push(["Vaccine & Health Declaration", "vaccine-declaration"]);
-  if (d.waiverSeniorMedical) items.push(["Senior & Pre-existing Conditions Waiver", "senior-waiver"]);
-  if (d.waiverPlaypark)      items.push(["Play Park Consent", "playpark-consent"]);
-  if (d.waiverMedia)         items.push(["Media Consent", "media-consent"]);
+  const items: Array<[string, string, boolean]> = [];
+  if (generalByService[d.service]) {
+    const [label, anchor] = generalByService[d.service];
+    items.push([label, anchor, !!d.waiverGeneral]);
+  }
+  if (d.service === "studio") {
+    items.push(["Studio Usage Agreement", "studio-agreement", !!d.waiverStudio]);
+  }
+  items.push(["Vaccine & Health Declaration", "vaccine-declaration", !!d.waiverVaccine]);
+  if (d.seniorWaiverApplicable || d.waiverSeniorMedical) {
+    items.push(["Senior & Pre-existing Conditions Waiver", "senior-waiver", !!d.waiverSeniorMedical]);
+  }
+  if (d.service === "hotel" && d.petAnimal !== "cat") {
+    items.push(["Play Park Consent", "playpark-consent", !!d.waiverPlaypark]);
+  }
+  items.push(["Media Consent", "media-consent", !!d.waiverMedia]);
   if (items.length === 0) return "";
 
-  const rows = items.map(([label, anchor]) =>
+  const rows = items.map(([label, anchor, accepted]) =>
     `<tr><td style="padding:8px 14px;border-bottom:0.5px solid rgba(77,150,185,0.08)">
-       <a href="${WAIVERS_URL}#${anchor}" style="color:#B8D4E0;font-size:13px;font-weight:600;text-decoration:none">✓&nbsp; ${label}</a>
+       <a href="${WAIVERS_URL}#${anchor}" style="color:#B8D4E0;font-size:13px;font-weight:600;text-decoration:none">${label}</a>
+       <span style="float:right;color:${accepted ? "#6BCB77" : "#FFCE58"};font-size:11px;font-weight:700">${accepted ? "✓ Accepted" : "Did not consent"}</span>
      </td></tr>`).join("");
 
   return `<table width="100%" cellpadding="0" cellspacing="0" style="background:#1F3D55;border:0.5px solid rgba(77,150,185,0.25);border-radius:10px;overflow:hidden;margin-bottom:14px">
-      <tr><td style="padding:9px 14px;font-size:9px;font-weight:700;color:#6AAEC8;text-transform:uppercase;letter-spacing:0.12em;border-bottom:0.5px solid rgba(77,150,185,0.2)">Waivers &amp; consents accepted</td></tr>
+      <tr><td style="padding:9px 14px;font-size:9px;font-weight:700;color:#6AAEC8;text-transform:uppercase;letter-spacing:0.12em;border-bottom:0.5px solid rgba(77,150,185,0.2)">Waivers &amp; consent status</td></tr>
       ${rows}
-      <tr><td style="padding:9px 14px;font-size:11px;color:#6AAEC8;line-height:1.5">You agreed to these during booking. Tap any item to read the full agreement, or view all at <a href="${WAIVERS_URL}" style="color:#4D96B9;text-decoration:none;font-weight:600">barkhaus.ph/waivers</a>.</td></tr>
+      <tr><td style="padding:9px 14px;font-size:11px;color:#6AAEC8;line-height:1.5">Tap any item to read the corresponding agreement, or view all at <a href="${WAIVERS_URL}" style="color:#4D96B9;text-decoration:none;font-weight:600">barkhaus.ph/waivers</a>.</td></tr>
     </table>`;
 }
 
@@ -920,6 +929,8 @@ Deno.serve(async (req) => {
           waiverStudio:        body.waiverStudio        === true || body.waiverStudio        === "true",
           waiverMedia:         body.waiverMedia         === true || body.waiverMedia         === "true",
           waiverPlaypark:      body.waiverPlaypark      === true || body.waiverPlaypark      === "true",
+          seniorWaiverApplicable: !!body.waiverTexts?.senior ||
+            body.waiverSeniorMedical === true || body.waiverSeniorMedical === "true",
           branch,
           total,
           charges:         emailCharges,

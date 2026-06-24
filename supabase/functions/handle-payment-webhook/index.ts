@@ -251,6 +251,43 @@ function paymentSummaryRows(
   return rows;
 }
 
+function waiverCard(d: any): string {
+  const WAIVERS_URL = "https://barkhaus.ph/waivers";
+  const generalByService: Record<string, [string, string]> = {
+    grooming: ["Grooming Waiver", "grooming-waiver"],
+    daycare:  ["Daycare Waiver", "daycare-waiver"],
+    hotel:    ["Hotel Waiver", "hotel-waiver"],
+  };
+  const items: Array<[string, string, boolean]> = [];
+  if (generalByService[d.service]) {
+    const [label, anchor] = generalByService[d.service];
+    items.push([label, anchor, !!d.waiverGeneral]);
+  }
+  if (d.service === "studio") {
+    items.push(["Studio Usage Agreement", "studio-agreement", !!d.waiverStudio]);
+  }
+  items.push(["Vaccine & Health Declaration", "vaccine-declaration", !!d.waiverVaccine]);
+  if (d.seniorWaiverApplicable || d.waiverSeniorMedical) {
+    items.push(["Senior & Pre-existing Conditions Waiver", "senior-waiver", !!d.waiverSeniorMedical]);
+  }
+  if (d.service === "hotel" && d.petAnimal !== "cat") {
+    items.push(["Play Park Consent", "playpark-consent", !!d.waiverPlaypark]);
+  }
+  items.push(["Media Consent", "media-consent", !!d.waiverMedia]);
+
+  const rows = items.map(([label, anchor, accepted]) =>
+    `<tr><td style="padding:8px 14px;border-bottom:0.5px solid rgba(77,150,185,0.08)">
+       <a href="${WAIVERS_URL}#${anchor}" style="color:#B8D4E0;font-size:13px;font-weight:600;text-decoration:none">${label}</a>
+       <span style="float:right;color:${accepted ? "#6BCB77" : "#FFCE58"};font-size:11px;font-weight:700">${accepted ? "✓ Accepted" : "Did not consent"}</span>
+     </td></tr>`).join("");
+
+  return `<table width="100%" cellpadding="0" cellspacing="0" style="background:#1F3D55;border:0.5px solid rgba(77,150,185,0.25);border-radius:10px;overflow:hidden;margin-bottom:14px">
+      <tr><td style="padding:9px 14px;font-size:9px;font-weight:700;color:#6AAEC8;text-transform:uppercase;letter-spacing:0.12em;border-bottom:0.5px solid rgba(77,150,185,0.2)">Waivers &amp; consent status</td></tr>
+      ${rows}
+      <tr><td style="padding:9px 14px;font-size:11px;color:#6AAEC8;line-height:1.5">Tap any item to read the corresponding agreement, or view all at <a href="${WAIVERS_URL}" style="color:#4D96B9;text-decoration:none;font-weight:600">barkhaus.ph/waivers</a>.</td></tr>
+    </table>`;
+}
+
 function buildEmailHtml(d: any): string {
   const bookingDate = new Date().toLocaleDateString("en-PH", {
     month: "long", day: "numeric", year: "numeric",
@@ -301,6 +338,8 @@ function buildEmailHtml(d: any): string {
       <tr><td style="padding:9px 14px;font-size:9px;font-weight:700;color:#6AAEC8;text-transform:uppercase;letter-spacing:0.12em;border-bottom:0.5px solid rgba(77,150,185,0.2)">Owner details</td></tr>
       ${ownerDetailRows(d)}
     </table>
+
+    ${waiverCard(d)}
 
     <table width="100%" cellpadding="0" cellspacing="0" style="background:#1F3D55;border:0.5px solid rgba(77,150,185,0.25);border-radius:10px;overflow:hidden;margin-bottom:20px">
       <tr><td colspan="2" style="padding:9px 14px;font-size:9px;font-weight:700;color:#6AAEC8;text-transform:uppercase;letter-spacing:0.12em;border-bottom:0.5px solid rgba(77,150,185,0.2)">Payment summary</td></tr>
@@ -916,6 +955,14 @@ Deno.serve(async (req) => {
         hotelMeds:       body.hotelMeds       || null,
         groomNotes:      body.groomNotes      || null,
         daycareNotes:    body.daycareNotes    || null,
+        waiverGeneral:       body.waiverGeneral       === true || body.waiverGeneral       === "true",
+        waiverVaccine:       body.waiverVaccine       === true || body.waiverVaccine       === "true",
+        waiverSeniorMedical: body.waiverSeniorMedical === true || body.waiverSeniorMedical === "true",
+        waiverStudio:        body.waiverStudio        === true || body.waiverStudio        === "true",
+        waiverMedia:         body.waiverMedia         === true || body.waiverMedia         === "true",
+        waiverPlaypark:      body.waiverPlaypark      === true || body.waiverPlaypark      === "true",
+        seniorWaiverApplicable: !!body.waiverTexts?.senior ||
+          body.waiverSeniorMedical === true || body.waiverSeniorMedical === "true",
         refNumber:       finalRef,
         service:         body.service,
         branch,

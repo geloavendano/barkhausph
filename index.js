@@ -314,7 +314,7 @@ var services = [
       { label: 'Pet-friendly seating',      detail: 'Bring your fur baby along' },
       { label: 'Eastwood only',             detail: 'Available at our Eastwood branch' },
     ],
-    pricing: '<div class="svc-price-row"><span class="svc-price-label">Cafe Menu</span><a class="svc-price-val svc-contact-link" href="https://www.instagram.com/barkhausph/" target="_blank" rel="noopener">View Menu</a></div>',
+    pricing: '<div class="svc-price-row"><span class="svc-price-label">Cafe Menu</span><a class="svc-price-val svc-contact-link" href="images/cafe-menu.png" onclick="lbOpen([\'images/cafe-menu.png\'],0);return false;">View Menu</a></div>',
   },
 ];
 

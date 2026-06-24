@@ -106,9 +106,23 @@ const BARKHAUS_IMAGES = {
       "images/grooming-12.jpg",
     ],
     studio: [
+      "images/studio-01.jpg",
       "images/studio-02.jpg",
       "images/studio-03.jpg",
       "images/studio-04.jpg",
+      "images/studio-05.jpg",
+      "images/studio-06.jpg",
+      "images/studio-07.JPG",
+      "images/studio-08.JPG",
+      "images/studio-09.JPG",
+      "images/studio-10.JPG",
+      "images/studio-11.JPG",
+      "images/studio-12.JPG",
+      "images/studio-13.JPG",
+      "images/studio-14.JPG",
+      "images/studio-15.JPG",
+      "images/studio-16.JPG",
+      "images/studio-17.JPG",
     ],
     events: [
       "images/events-01.jpg",
@@ -154,7 +168,7 @@ const BARKHAUS_IMAGES = {
 };
 
 /* Refresh cached local photos when the bundled gallery is updated. */
-const BARKHAUS_IMAGE_VERSION = "20260621";
+const BARKHAUS_IMAGE_VERSION = "20260624-services";
 BARKHAUS_IMAGES.hero += "?v=" + BARKHAUS_IMAGE_VERSION;
 BARKHAUS_IMAGES.b1 = BARKHAUS_IMAGES.b1.map(src => src + "?v=" + BARKHAUS_IMAGE_VERSION);
 BARKHAUS_IMAGES.b2 = BARKHAUS_IMAGES.b2.map(src => src + "?v=" + BARKHAUS_IMAGE_VERSION);
