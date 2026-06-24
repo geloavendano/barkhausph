@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import logo from '../../assets/barkhaus-logo.png'
-import { sbGet } from '../../lib/supabase'
+import { sbGet, supabase } from '../../lib/supabase'
 import styles from './Shell.module.css'
 
 const NAV_ITEMS = [
@@ -63,6 +63,64 @@ function GroomingCoverageBanner({ branch, groomers, refreshKey, ready, onOpenInv
   )
 }
 
+// Alerts when grooming bookings for today / tomorrow still have no groomer
+// assigned (grooming_details.groomer_id IS NULL), so staff can assign one.
+function UnassignedGroomingBanner({ branch, refreshKey, ready, onAssign }) {
+  const [info, setInfo] = useState({ count: 0, today: 0, tomorrow: 0 })
+
+  useEffect(() => {
+    if (!branch?.id || !ready) { setInfo({ count: 0, today: 0, tomorrow: 0 }); return }
+    let cancelled = false
+    const today = localDateString(new Date())
+    const tmw = new Date(); tmw.setDate(tmw.getDate() + 1)
+    const tomorrow = localDateString(tmw)
+    async function load() {
+      try {
+        const rows = await sbGet('grooming_details',
+          `select=service_date,bookings!inner(branch_id,status)` +
+          `&groomer_id=is.null` +
+          `&service_date=in.(${today},${tomorrow})` +
+          `&bookings.branch_id=eq.${branch.id}` +
+          `&bookings.status=not.in.(cancelled,rejected)`)
+        if (cancelled) return
+        const list = rows ?? []
+        setInfo({
+          count: list.length,
+          today: list.filter(r => r.service_date === today).length,
+          tomorrow: list.filter(r => r.service_date === tomorrow).length,
+        })
+      } catch (error) {
+        if (!/PGRST205|42P01|404/.test(error.message)) console.error('Unassigned grooming check failed:', error)
+        if (!cancelled) setInfo({ count: 0, today: 0, tomorrow: 0 })
+      }
+    }
+    load()
+    // Live refresh: groomer assignments + new/cancelled grooming bookings happen
+    // in the Calendar, not Inventory, so listen for those changes directly.
+    let debounce
+    const refresh = () => { clearTimeout(debounce); debounce = setTimeout(load, 800) }
+    const channel = supabase.channel(`unassigned-groom-${branch.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'grooming_details' }, refresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, refresh)
+      .subscribe()
+    return () => { cancelled = true; clearTimeout(debounce); supabase.removeChannel(channel) }
+  }, [branch?.id, refreshKey, ready])
+
+  if (!info.count) return null
+  const parts = []
+  if (info.today)    parts.push(`${info.today} today`)
+  if (info.tomorrow) parts.push(`${info.tomorrow} tomorrow`)
+  return (
+    <div className={styles.coverageBanner} role="alert">
+      <div>
+        <strong>Grooming bookings need a groomer</strong>
+        <span>{info.count} grooming booking{info.count > 1 ? 's' : ''} ({parts.join(', ')}) {info.count > 1 ? 'have' : 'has'} no groomer assigned.</span>
+      </div>
+      <button onClick={onAssign}>Assign in Calendar</button>
+    </div>
+  )
+}
+
 export default function Shell({ page, onPageChange, greeting, branches = [], branchIdx = 0, onBranchChange, onSignOut, contentFill, coverageBranch, groomers = [], coverageRefreshKey = 0, coverageReady = false, onOpenGroomerInventory, children }) {
   const [moreOpen, setMoreOpen] = useState(false)
 
@@ -113,6 +171,14 @@ export default function Shell({ page, onPageChange, greeting, branches = [], bra
         refreshKey={coverageRefreshKey}
         ready={coverageReady}
         onOpenInventory={() => onOpenGroomerInventory?.()}
+      />
+
+      <UnassignedGroomingBanner
+        key={`unassigned-${coverageBranch?.id ?? 'no-branch'}`}
+        branch={coverageBranch}
+        refreshKey={coverageRefreshKey}
+        ready={coverageReady}
+        onAssign={() => onPageChange('calendar')}
       />
 
       {/* ── Body ── */}
