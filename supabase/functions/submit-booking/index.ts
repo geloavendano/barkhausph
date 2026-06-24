@@ -7,6 +7,7 @@
 // service_date column, mirroring how hotel uses checkin_date/checkout_date.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { requireAdmin, sha256 } from "../_shared/security.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -102,6 +103,63 @@ function groomingDuration(body: Record<string, any>): number {
   const base: Record<string, number> = { bath_dry: 30, basic: 60, premium: 120, ala_carte: 60 };
   const hasBuffer = Object.keys(body.addons ?? {}).some((key) => key === "demat" || key === "deshed");
   return (base[body.groomService] ?? 60) + (hasBuffer ? 30 : 0);
+}
+
+async function consumeWalkinToken(supabase: any, token: unknown): Promise<boolean> {
+  if (typeof token !== "string" || !token) return false;
+  const cutoff = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+  const { data, error } = await supabase.from("walkin_tokens")
+    .delete()
+    .eq("id", token)
+    .gte("created_at", cutoff)
+    .select("id")
+    .maybeSingle();
+  if (error) throw new Error(`Walk-in authorization failed: ${error.message}`);
+  return !!data;
+}
+
+async function claimManualReceipt(
+  supabase: any,
+  manualPayment: Record<string, any>,
+): Promise<string> {
+  const path = String(manualPayment?.receiptPath || "");
+  const uploadToken = String(manualPayment?.uploadToken || "");
+  if (!path || !uploadToken) throw new Error("A valid receipt upload authorization is required.");
+
+  const tokenHash = await sha256(uploadToken);
+  const { data: upload, error: uploadError } = await supabase.from("pending_uploads")
+    .select("id,bucket_id,object_path,content_type,max_size_bytes")
+    .eq("token_hash", tokenHash)
+    .eq("object_path", path)
+    .eq("purpose", "manual_payment_receipt")
+    .is("consumed_at", null)
+    .gt("expires_at", new Date().toISOString())
+    .maybeSingle();
+  if (uploadError || !upload) throw new Error("Receipt upload authorization is invalid or expired.");
+
+  const slash = path.lastIndexOf("/");
+  const folder = slash >= 0 ? path.slice(0, slash) : "";
+  const fileName = slash >= 0 ? path.slice(slash + 1) : path;
+  const { data: files, error: storageError } = await supabase.storage
+    .from(upload.bucket_id)
+    .list(folder, { search: fileName, limit: 10 });
+  if (storageError) throw new Error(`Could not verify uploaded receipt: ${storageError.message}`);
+  const object = (files ?? []).find((file: any) => file.name === fileName);
+  const size = Number(object?.metadata?.size ?? 0);
+  const mime = String(object?.metadata?.mimetype ?? object?.metadata?.contentType ?? "").toLowerCase();
+  if (!object || size <= 0 || size > Number(upload.max_size_bytes) ||
+      (mime && mime !== String(upload.content_type).toLowerCase())) {
+    throw new Error("Uploaded receipt could not be verified.");
+  }
+
+  const { data: claimed, error: claimError } = await supabase.from("pending_uploads")
+    .update({ consumed_at: new Date().toISOString() })
+    .eq("id", upload.id)
+    .is("consumed_at", null)
+    .select("id")
+    .maybeSingle();
+  if (claimError || !claimed) throw new Error("Receipt upload authorization has already been used.");
+  return upload.id;
 }
 
 async function assertGroomingAvailable(supabase: any, branchId: string, body: Record<string, any>) {
@@ -460,6 +518,8 @@ Deno.serve(async (req) => {
   }
 
   let bookingId: string | null = null;
+  let claimedUploadId: string | null = null;
+  let consumedWalkinToken: string | null = null;
 
   try {
     const supabase = createClient(
@@ -468,11 +528,40 @@ Deno.serve(async (req) => {
     );
 
     const body = await req.json();
+    const isWalkin = body.booking_source === "walkin" &&
+      typeof body.walkinToken === "string" && body.walkinToken.length > 0;
+    const isAdminCreated = body.adminCreated === true && !isWalkin;
+    const configuredProvider = (Deno.env.get("PAYMENT_GATEWAY_PROVIDER") || "maya").toLowerCase();
+    let admin: Record<string, any> | null = null;
+
+    if (isAdminCreated) {
+      try {
+        admin = await requireAdmin(req, supabase);
+      } catch (authError) {
+        return new Response(JSON.stringify({
+          error: authError instanceof Error ? authError.message : "Admin authentication required",
+        }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+    }
+    const manual = body.manualPayment?.receiptPath ? body.manualPayment : null;
+    if (!isAdminCreated && !isWalkin) {
+      if (!manual || configuredProvider !== "manual") {
+        return new Response(JSON.stringify({ error: "Direct public booking submission is not enabled." }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    } else if (manual) {
+      return new Response(JSON.stringify({ error: "Manual receipt submissions are only accepted from the public manual-payment flow." }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     // Validate required fields
     const required = ["location", "service", "petName", "petAnimal", "petGender",
                       "ownerFirst", "ownerLast", "ownerPhone"];
-    if (!body.adminCreated) required.push("ownerEmail");
+    if (!isAdminCreated && !isWalkin) required.push("ownerEmail");
     for (const field of required) {
       if (!body[field]) {
         return new Response(
@@ -489,11 +578,27 @@ Deno.serve(async (req) => {
       .ilike("name", body.location === "estancia" ? "%Estancia%" : "%Eastwood%")
       .single();
     if (branchErr || !branch) throw new Error(`Branch not found: ${body.location}`);
+    if (admin && Array.isArray(admin.branch_ids) && admin.branch_ids.length > 0 &&
+        !admin.branch_ids.includes(branch.id)) {
+      return new Response(JSON.stringify({ error: "This admin does not have access to the selected branch." }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     // Validate against the same service-hours, cutoff, block, booking, and duration
     // rules used by both booking UIs before creating owner/pet/booking records.
     await assertGroomingAvailable(supabase, branch.id, body);
     await assertHotelAvailable(supabase, branch.id, body);
+
+    if (isWalkin && !(await consumeWalkinToken(supabase, body.walkinToken))) {
+      return new Response(JSON.stringify({ error: "Walk-in authorization is invalid, expired, or already used." }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (isWalkin) consumedWalkinToken = body.walkinToken;
+    if (manual) claimedUploadId = await claimManualReceipt(supabase, manual);
 
     // 2. Upsert owner
     let ownerId: string;
@@ -573,8 +678,9 @@ Deno.serve(async (req) => {
     // table's service_date column (mirrors hotel's checkin_date/checkout_date).
     const bookingDate = new Date().toISOString().split("T")[0];
 
-    // Online manual bank/e-wallet transfer: confirmed + paid on submit, with a receipt.
-    const manual = body.manualPayment && body.manualPayment.receiptPath ? body.manualPayment : null;
+    const initialStatus = (manual || isWalkin) ? "confirmed" : "pending";
+    const initialPaymentStatus = "unpaid";
+    const bookingSource = isAdminCreated ? (body.booking_source || "admin") : (isWalkin ? "walkin" : "online");
 
     // 7. Insert booking
     const { data: booking, error: bookingErr } = await supabase
@@ -584,15 +690,15 @@ Deno.serve(async (req) => {
         owner_id:                ownerId,
         pet_id:                  pet.id,
         service:                 body.service,
-        status:                  manual ? "confirmed" : "pending",
-        payment_status:          manual ? "paid" : "unpaid",
+        status:                  initialStatus,
+        payment_status:          initialPaymentStatus,
         booking_date:            bookingDate,
         subtotal,
         discount_amount:         discountAmt,
         total,
         member_discount_applied: memberDiscountApplied,
         member_code_used:        memberCodeUsed,
-        booking_source:          body.booking_source || "admin",
+        booking_source:          bookingSource,
       })
       .select("id, ref_number")
       .single();
@@ -615,7 +721,7 @@ Deno.serve(async (req) => {
         method:       "manual_online",
         receipt_path: manual.receiptPath,
         recorded_by:  "customer",
-        notes:        destinationBank,
+        notes:        `${destinationBank} receipt submitted — awaiting verification`,
       });
       if (payErr) throw new Error(`Payment insert failed: ${payErr.message}`);
     }
@@ -804,8 +910,8 @@ Deno.serve(async (req) => {
           groomNotes:      body.groomNotes      || null,
           daycareNotes:    body.daycareNotes    || null,
           refNumber:       booking.ref_number,
-          status:          manual ? "confirmed" : "pending",
-          bookingSource:   body.booking_source || "admin",
+          status:          initialStatus,
+          bookingSource,
           service:         body.service,
           // Accepted waivers / consents (for the email waiver card + links)
           waiverGeneral:       body.waiverGeneral       === true || body.waiverGeneral       === "true",
@@ -847,7 +953,12 @@ Deno.serve(async (req) => {
 
     // 13. Success
     return new Response(
-      JSON.stringify({ success: true, ref_number: booking.ref_number, booking_id: bookingId }),
+      JSON.stringify({
+        success: true,
+        ref_number: booking.ref_number,
+        booking_id: bookingId,
+        payment_status: initialPaymentStatus,
+      }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
@@ -865,6 +976,30 @@ Deno.serve(async (req) => {
         console.log("Rolled back orphaned booking:", bookingId);
       } catch (cleanupErr) {
         console.error("Rollback failed:", cleanupErr);
+      }
+    }
+    if (claimedUploadId) {
+      try {
+        const supabase = createClient(
+          Deno.env.get("SUPABASE_URL")!,
+          Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+        );
+        await supabase.from("pending_uploads")
+          .update({ consumed_at: null })
+          .eq("id", claimedUploadId);
+      } catch (uploadCleanupErr) {
+        console.error("Upload authorization rollback failed:", uploadCleanupErr);
+      }
+    }
+    if (consumedWalkinToken) {
+      try {
+        const supabase = createClient(
+          Deno.env.get("SUPABASE_URL")!,
+          Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+        );
+        await supabase.from("walkin_tokens").insert({ id: consumedWalkinToken });
+      } catch (walkinCleanupErr) {
+        console.error("Walk-in token rollback failed:", walkinCleanupErr);
       }
     }
 

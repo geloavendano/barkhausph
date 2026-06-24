@@ -3,6 +3,7 @@
 // success_url and cancel_url handle redirect back to booking.html
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { randomToken, sha256 } from "../_shared/security.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -244,12 +245,15 @@ Deno.serve(async (req) => {
 
     // ── 5. Store full payload in pending_bookings (webhook uses this to create child records) ──
     const expiresAt = new Date(Date.now() + 20 * 60 * 1000).toISOString(); // 20-min window
+    const cancellationToken = randomToken();
+    const cancellationTokenHash = await sha256(cancellationToken);
     await supabase.from("pending_bookings").insert({
       ref_number: refNumber,
       payload:    body,
       amount:     total,
       expires_at: expiresAt,
       payment_provider: "paymongo",
+      cancellation_token_hash: cancellationTokenHash,
     });
 
     // ── 6. Build PayMongo line items ──
@@ -319,7 +323,13 @@ Deno.serve(async (req) => {
     console.log(`Booking ${bookingId} | Session ${sessionId} | Ref ${refNumber}`);
 
     return new Response(
-      JSON.stringify({ success: true, checkout_url: checkoutUrl, ref_number: refNumber, booking_id: bookingId }),
+      JSON.stringify({
+        success: true,
+        checkout_url: checkoutUrl,
+        ref_number: refNumber,
+        booking_id: bookingId,
+        cancellation_token: cancellationToken,
+      }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 

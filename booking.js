@@ -61,30 +61,12 @@ var BOOKING_PARAMS = new URLSearchParams(window.location.search);
 var IS_WALKIN = BOOKING_PARAMS.get('walkin') === '1';
 var WALKIN_TOKEN = BOOKING_PARAMS.get('token') || '';
 var TEST_PAYMENT_MODE = BOOKING_PARAMS.get('testPayment') === '1';
-var _walkinGatePromise = null; // resolves to true (allowed) or false (blocked)
+var _walkinGatePromise = null;
 
 if (IS_WALKIN) {
   CONVENIENCE_FEE = 0;
-  // Auth gate: validate one-time Supabase token — cannot be forged or replayed
-  _walkinGatePromise = (async function() {
-    if (!WALKIN_TOKEN) return false;
-    try {
-      var rows = await sbFetchPublic('walkin_tokens',
-        'id=eq.' + encodeURIComponent(WALKIN_TOKEN) + '&select=id,created_at&limit=1');
-      if (!rows || !rows.length) return false;
-      var age = Date.now() - new Date(rows[0].created_at).getTime();
-      if (age > 60 * 60 * 1000) return false; // expired (> 1 hour)
-      // Consume the token immediately — DELETE so it cannot be reused
-      await fetch(SUPABASE_URL + '/rest/v1/walkin_tokens?id=eq.' + encodeURIComponent(WALKIN_TOKEN), {
-        method: 'DELETE',
-        headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + SUPABASE_ANON_KEY }
-      });
-      return true;
-    } catch(e) {
-      console.warn('Walk-in token validation failed:', e);
-      return false;
-    }
-  })();
+  // The Edge Function validates and consumes this single-use token on submit.
+  _walkinGatePromise = Promise.resolve(!!WALKIN_TOKEN);
 }
 
 // ── STATE ──
@@ -3035,6 +3017,7 @@ async function retryPayment() {
     if (data.ref_number) {
       snap.refNumber  = data.ref_number;
       snap.bookingId  = data.booking_id || snap.bookingId;
+      snap.cancellationToken = data.cancellation_token || snap.cancellationToken;
       var refEl = document.getElementById('payReturnRef');
       if (refEl) refEl.textContent = data.ref_number;
       try { sessionStorage.setItem('bk_snapshot', JSON.stringify(snap)); } catch(e) {}
@@ -3050,9 +3033,9 @@ async function retryPayment() {
 }
 
 // Cancel a pending booking via Edge Function (service role) so the slot is freed immediately.
-// bookingId comes from data.booking_id returned by the create-payment edge function.
-async function cancelPendingBooking(bookingId) {
-  if (!bookingId) return false;
+// The checkout response returns a separate cancellation credential for this hold.
+async function cancelPendingBooking(refNumber, cancellationToken) {
+  if (!refNumber || !cancellationToken) return false;
   try {
     var res = await fetch(SUPABASE_URL + '/functions/v1/cancel-pending-booking', {
       method:  'POST',
@@ -3060,7 +3043,7 @@ async function cancelPendingBooking(bookingId) {
         'Content-Type': 'application/json',
         'apikey':       SUPABASE_ANON_KEY,
       },
-      body: JSON.stringify({ booking_id: bookingId }),
+      body: JSON.stringify({ ref_number: refNumber, cancellation_token: cancellationToken }),
     });
     if (!res.ok) return false;
     var data = await res.json();
@@ -3139,7 +3122,7 @@ async function editAfterCancelledPayment() {
   if (statusEl) statusEl.textContent = 'Cancelling previous booking to free your slot…';
 
   // Cancel the old pending booking in Supabase so inventory is released
-  var cancelled = await cancelPendingBooking(snap.bookingId);
+  var cancelled = await cancelPendingBooking(snap.refNumber, snap.cancellationToken);
   if (statusEl) statusEl.textContent = cancelled
     ? ''
     : 'Note: previous booking will auto-release within 15 minutes.';
@@ -3421,7 +3404,10 @@ async function submitBooking() {
             'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,   // required — without it the gateway returns 401
             'apikey':        SUPABASE_ANON_KEY,
           },
-          body: JSON.stringify({ uploadId: uploadId, fileName: _vf.name, contentType: _vf.type, vaccineKey: _vKey }),
+          body: JSON.stringify({
+            uploadId: uploadId, fileName: _vf.name, contentType: _vf.type,
+            fileSize: _vf.size, purpose: 'vaccine_document', vaccineKey: _vKey
+          }),
         });
         var _vUrlData = await _vUrlRes.json();
         if (_vUrlData.uploadUrl && _vUrlData.path) {
@@ -3455,7 +3441,10 @@ async function submitBooking() {
             'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
             'apikey':        SUPABASE_ANON_KEY,
           },
-          body: JSON.stringify({ uploadId: pegUploadId, fileName: _pf.name, contentType: _pf.type, vaccineKey: _pKey }),
+          body: JSON.stringify({
+            uploadId: pegUploadId, fileName: _pf.name, contentType: _pf.type,
+            fileSize: _pf.size, purpose: 'grooming_reference', vaccineKey: _pKey
+          }),
         });
         var _pUrlData = await _pUrlRes.json();
         if (_pUrlData.uploadUrl && _pUrlData.path) {
@@ -3470,22 +3459,28 @@ async function submitBooking() {
   }
 
   // ── Upload the manual-transfer receipt (manual provider only) ──
-  var paymentReceiptPath = null, paymentReceiptName = null;
+  var paymentReceiptPath = null, paymentReceiptName = null, paymentReceiptUploadToken = null;
   if (!IS_WALKIN && PAYMENT_GATEWAY_PROVIDER === 'manual' && paymentReceiptFile) {
     try {
       var _rId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : 'receipt-' + Date.now();
       var _rRes = await fetch(GET_UPLOAD_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SUPABASE_ANON_KEY, 'apikey': SUPABASE_ANON_KEY },
-        body: JSON.stringify({ uploadId: _rId, fileName: paymentReceiptFile.name, contentType: paymentReceiptFile.type, vaccineKey: 'receipt' }),
+        body: JSON.stringify({
+          uploadId: _rId, fileName: paymentReceiptFile.name,
+          contentType: paymentReceiptFile.type, fileSize: paymentReceiptFile.size,
+          purpose: 'manual_payment_receipt', vaccineKey: 'receipt'
+        }),
       });
       var _rData = await _rRes.json();
       if (_rData.uploadUrl && _rData.path) {
         await fetch(_rData.uploadUrl, { method: 'PUT', body: paymentReceiptFile, headers: { 'Content-Type': paymentReceiptFile.type } });
-        paymentReceiptPath = _rData.path; paymentReceiptName = paymentReceiptFile.name;
+        paymentReceiptPath = _rData.path;
+        paymentReceiptName = paymentReceiptFile.name;
+        paymentReceiptUploadToken = _rData.authorizationToken || null;
       }
     } catch (_re) { console.warn('Receipt upload failed:', _re); }
-    if (!paymentReceiptPath) {
+    if (!paymentReceiptPath || !paymentReceiptUploadToken) {
       _submitting = false;
       showToast('Could not upload your receipt. Please check your connection and try again.', 6000);
       if (btn) { btn.textContent = 'Submit Payment'; btn.disabled = false; btn.style.opacity = ''; }
@@ -3553,12 +3548,14 @@ async function submitBooking() {
     // no payment), so flag them as admin-created with a walkin source.
     adminCreated:  IS_WALKIN,
     booking_source: IS_WALKIN ? 'walkin' : 'online',
-    // The active manual provider marks the booking confirmed + paid, records the
-    // receipt, and sends email. Hosted providers ignore this null field.
+    walkinToken: IS_WALKIN ? WALKIN_TOKEN : null,
+    // The manual provider records a receipt for staff verification. Hosted
+    // providers ignore this null field.
     manualPayment: (!IS_WALKIN && PAYMENT_GATEWAY_PROVIDER === 'manual' && paymentReceiptPath) ? {
       method:          selectedPaymentBank,
       receiptPath:     paymentReceiptPath,
       receiptFileName: paymentReceiptName,
+      uploadToken:     paymentReceiptUploadToken,
     } : null,
   };
 
@@ -3669,6 +3666,7 @@ async function submitBooking() {
         bookingId: data.booking_id || null,
         pendingId: data.pending_id || null,
         refNumber: data.ref_number || null,
+        cancellationToken: data.cancellation_token || null,
         bookingState: JSON.parse(JSON.stringify(booking)),
         rawPayload: payload
       }));
@@ -3702,7 +3700,7 @@ async function submitBooking() {
       } catch(e) {}
       return;
     }
-    // Online manual-transfer path → booking is confirmed + paid; show success.
+    // Online manual-transfer path → booking is confirmed while staff verifies the receipt.
     var refNumOnline = data.ref_number || data.booking_id || 'BK-' + Date.now();
     document.querySelectorAll('.step-panel').forEach(function(el){ el.classList.remove('active'); });
     var pwO = document.getElementById('progressWrap'); if (pwO) pwO.style.display = 'none';

@@ -5,6 +5,7 @@
 // Uses service role — bypasses RLS — but only operates on 'pending' bookings.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { sha256 } from '../_shared/security.ts';
 
 const CORS = {
   'Access-Control-Allow-Origin':  '*',
@@ -17,10 +18,11 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { booking_id } = await req.json();
+    const { ref_number, cancellation_token } = await req.json();
 
-    if (!booking_id || typeof booking_id !== 'string') {
-      return new Response(JSON.stringify({ error: 'booking_id is required' }), {
+    if (!ref_number || !cancellation_token ||
+        typeof ref_number !== 'string' || typeof cancellation_token !== 'string') {
+      return new Response(JSON.stringify({ error: 'ref_number and cancellation_token are required' }), {
         status: 400,
         headers: { ...CORS, 'Content-Type': 'application/json' },
       });
@@ -31,18 +33,37 @@ Deno.serve(async (req: Request) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    // Only cancel if still pending — prevents cancelling confirmed/checked-in bookings
+    const tokenHash = await sha256(cancellation_token);
+    const { data: pending, error: pendingError } = await supabase
+      .from('pending_bookings')
+      .select('id,ref_number')
+      .eq('ref_number', ref_number.trim().toUpperCase())
+      .eq('cancellation_token_hash', tokenHash)
+      .gt('expires_at', new Date().toISOString())
+      .maybeSingle();
+    if (pendingError) throw pendingError;
+    if (!pending) {
+      return new Response(JSON.stringify({ cancelled: false }), {
+        status: 403,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Only cancel if still pending — prevents cancelling confirmed/checked-in bookings.
     const { data, error } = await supabase
       .from('bookings')
       .update({
         status: 'cancelled',
         cancellation_reason: 'Customer initiated — editing booking after failed payment',
       })
-      .eq('id', booking_id)
+      .eq('ref_number', pending.ref_number)
       .eq('status', 'pending')
       .select('id');
 
     if (error) throw error;
+    if (Array.isArray(data) && data.length > 0) {
+      await supabase.from('pending_bookings').delete().eq('id', pending.id);
+    }
 
     return new Response(
       JSON.stringify({ cancelled: Array.isArray(data) && data.length > 0 }),

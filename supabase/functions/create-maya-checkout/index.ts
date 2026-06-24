@@ -3,6 +3,7 @@
 // success_url and cancel_url handle redirect back to booking.html
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { randomToken, sha256 } from "../_shared/security.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -250,12 +251,15 @@ Deno.serve(async (req) => {
     // ── 5. Store full payload in pending_bookings (webhook uses this to create child records) ──
     // Keep the inventory hold short; expired pending bookings are released by expire_pending_bookings().
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+    const cancellationToken = randomToken();
+    const cancellationTokenHash = await sha256(cancellationToken);
     const { error: pendingErr } = await supabase.from("pending_bookings").insert({
       ref_number: refNumber,
       payload:    body,
       amount:     total,
       expires_at: expiresAt,
       payment_provider: "maya",
+      cancellation_token_hash: cancellationTokenHash,
     });
     if (pendingErr) {
       if (detailTable) await supabase.from(detailTable).delete().eq("booking_id", bookingId);
@@ -337,7 +341,13 @@ Deno.serve(async (req) => {
     console.log(`Booking ${bookingId} | Session ${sessionId} | Ref ${refNumber}`);
 
     return new Response(
-      JSON.stringify({ success: true, checkout_url: checkoutUrl, ref_number: refNumber, booking_id: bookingId }),
+      JSON.stringify({
+        success: true,
+        checkout_url: checkoutUrl,
+        ref_number: refNumber,
+        booking_id: bookingId,
+        cancellation_token: cancellationToken,
+      }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
