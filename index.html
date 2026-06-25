@@ -358,11 +358,11 @@
 
   /* ══ BLOG FOLD ══ */
   #blog { scroll-snap-align:start; min-height:100svh; background:var(--bg); display:flex; flex-direction:column; justify-content:center; padding:60px 0 80px; position:relative; }
-  .blog-inner { width:100%; max-width:1100px; margin:0 auto; padding:0 24px; }
+  .blog-inner { width:100%; max-width:1100px; margin:0 auto; padding:0 24px; position:relative; }
   .blog-eyebrow { font-size:9px; letter-spacing:0.22em; text-transform:uppercase; color:var(--yellow); font-weight:700; margin-bottom:8px; }
-  .blog-heading { font-size:clamp(26px,5vw,40px); font-weight:800; color:var(--cream); margin-bottom:32px; line-height:1.15; }
+  .blog-heading { font-size:clamp(26px,5vw,40px); font-weight:800; color:var(--cream); margin-bottom:32px; line-height:1.15; max-width:calc(100% - 120px); position:relative; z-index:1; }
   .blog-heading span { color:var(--yellow); }
-  .blog-track { display:flex; gap:16px; overflow-x:auto; scroll-snap-type:x mandatory; -webkit-overflow-scrolling:touch; scrollbar-width:none; padding:6px 2px 4px; touch-action:pan-x; }
+  .blog-track { display:flex; gap:16px; overflow-x:auto; scroll-snap-type:x mandatory; -webkit-overflow-scrolling:touch; scrollbar-width:none; padding:6px 2px 4px; touch-action:pan-x; position:relative; z-index:1; }
   .blog-track::-webkit-scrollbar { display:none; }
   .blog-card { flex:0 0 min(82vw,340px); scroll-snap-align:start; background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:24px; display:flex; flex-direction:column; gap:12px; text-decoration:none; color:inherit; transition:border-color 0.2s, transform 0.2s; }
   .blog-card:hover { border-color:var(--yellow); transform:translateY(-2px); }
@@ -371,9 +371,11 @@
   .blog-card-excerpt { font-size:13px; color:var(--cream-m); line-height:1.65; display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical; overflow:hidden; flex:1; }
   .blog-card-cta { font-size:12px; font-weight:700; color:var(--yellow); margin-top:4px; display:flex; align-items:center; gap:4px; }
   .blog-card-img { width:100%; height:160px; object-fit:cover; object-position:center; border-radius:10px 10px 0 0; display:block; margin-bottom:14px; }
-  .blog-nav { display:flex; gap:10px; margin-top:20px; justify-content:flex-end; }
+  .blog-nav { display:flex; gap:10px; margin-top:20px; justify-content:flex-end; position:relative; z-index:1; }
   .blog-nav-btn { width:38px; height:38px; border-radius:50%; background:var(--surface); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--cream); transition:background 0.18s, border-color 0.18s; }
   .blog-nav-btn:hover { background:var(--raised); border-color:var(--yellow); color:var(--yellow); }
+  .blog-mascot { position:absolute; right:-10px; top:-10px; width:130px; pointer-events:none; z-index:0; filter:drop-shadow(0 4px 14px rgba(0,0,0,0.3)); }
+  @media(min-width:640px) { .blog-mascot { width:170px; right:-16px; } }
 
   /* ══ FAQ FOLD ══ */
   #faq-fold { scroll-snap-align:start; min-height:100svh; background:var(--bg); display:flex; align-items:center; justify-content:center; padding:60px 0 80px; }
@@ -744,6 +746,7 @@
   <div class="blog-inner">
     <p class="blog-eyebrow">From the blog</p>
     <h2 class="blog-heading">Tips &amp; guides for <span>happy pets</span></h2>
+    <img class="blog-mascot" src="images/faq-dog.webp" alt="">
     <div class="blog-track" id="blogTrack">
       <!-- populated by index.js from blog_posts table -->
     </div>
