@@ -308,54 +308,6 @@
 </head>
 <body>
 
-<!-- ═══════════════════════════════════════════════════════════
-     ACCESS GATE — pre-launch password wall
-     Remove this block (and the <script> below) when going live.
-     Password: barkhaus2026   (SHA-256 stored — raw value not in source)
-     ═══════════════════════════════════════════════════════════ -->
-<div id="accessGate" style="display:none;position:fixed;inset:0;z-index:9999;background:#0F1C26;align-items:center;justify-content:center;padding:24px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif">
-  <div style="background:#1A3044;border:0.5px solid rgba(77,150,185,0.3);border-radius:20px;padding:36px 28px;max-width:360px;width:100%;text-align:center">
-    <img src="images/Barkhaus Pet Hotel Logo.png" alt="Barkhaus" height="52" style="display:block;margin:0 auto 20px;filter:drop-shadow(0 0 10px rgba(77,150,185,0.35))">
-    <p style="font-size:13px;color:#6AAEC8;margin:0 0 6px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase">Staff access only</p>
-    <p style="font-size:13px;color:#B8D4E0;margin:0 0 24px;line-height:1.6">Booking is not yet open to the public.<br>Enter the access code to continue.</p>
-    <input id="gateInput" type="password" placeholder="Access code" autocomplete="off" autofocus
-      style="width:100%;box-sizing:border-box;background:#0F1C26;border:1px solid rgba(77,150,185,0.35);border-radius:10px;padding:13px 14px;color:#F0EDE6;font-size:15px;font-family:inherit;outline:none;margin-bottom:12px"
-      onkeydown="if(event.key==='Enter')checkGate()">
-    <button onclick="checkGate()" style="width:100%;background:#FFCE58;color:#0F1C26;border:none;border-radius:10px;padding:13px;font-family:inherit;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:10px">Continue</button>
-    <p id="gateError" style="display:none;color:#FF6B6B;font-size:12px;margin:4px 0 0">Incorrect code. Please try again.</p>
-  </div>
-</div>
-<script>
-(function() {
-  var HASH = 'f61fd736be45d05fb45e77d166bfca7441527f362e7861cc3c4be0d5beb70f72';
-  var KEY  = 'bk_access_v1';
-  var gate = document.getElementById('accessGate');
-  // Already authenticated this browser
-  if (localStorage.getItem(KEY) === HASH) return;
-  // Show gate, hide main booking UI until authenticated
-  gate.style.display = 'flex';
-  document.getElementById('bookingApp') && (document.getElementById('bookingApp').style.visibility = 'hidden');
-})();
-async function checkGate() {
-  var HASH = 'f61fd736be45d05fb45e77d166bfca7441527f362e7861cc3c4be0d5beb70f72';
-  var KEY  = 'bk_access_v1';
-  var val  = document.getElementById('gateInput').value;
-  var buf  = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(val));
-  var hex  = Array.from(new Uint8Array(buf)).map(function(b){return b.toString(16).padStart(2,'0');}).join('');
-  if (hex === HASH) {
-    localStorage.setItem(KEY, HASH);
-    document.getElementById('accessGate').style.display = 'none';
-    var app = document.getElementById('bookingApp');
-    if (app) app.style.visibility = '';
-  } else {
-    document.getElementById('gateError').style.display = 'block';
-    document.getElementById('gateInput').value = '';
-    document.getElementById('gateInput').focus();
-  }
-}
-</script>
-<!-- ═══════════════════════════════════════════════════════════ -->
-
 <header class="booking-header">
   <a href="index.html" class="header-back">
     <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
