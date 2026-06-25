@@ -6,6 +6,7 @@ import BookingDrawer from '../Bookings/BookingDrawer'
 import FAB from '../../components/FAB/FAB'
 import AddBookingPanel from '../../components/AddBookingPanel/AddBookingPanel'
 import BlockSchedulePanel from '../../components/BlockSchedulePanel/BlockSchedulePanel'
+import { BlockEditor } from '../../components/GroomerResourceDrawer/GroomerResourceDrawer'
 import styles from './CalendarPage.module.css'
 
 // ── Constants ──────────────────────────────────────────────────────────────
@@ -215,6 +216,7 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
   const [calModalDate,     setCalModalDate]     = useState(() => new Date())
   const [openId,           setOpenId]           = useState(null)
   const [openBlockId,      setOpenBlockId]      = useState(null)
+  const [editingBlock,     setEditingBlock]     = useState(null)
   const [showAddBooking,   setShowAddBooking]   = useState(false)
   const [showBlockPanel,   setShowBlockPanel]   = useState(false)
   const [editBooking,      setEditBooking]      = useState(null)
@@ -284,13 +286,14 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
     catch { setBlockedSchedules([]) }
   }, [branch?.id])
 
-  const loadGroomerHours = useCallback(async date => {
+  const loadGroomerHours = useCallback(async (fromDate, toDate = fromDate) => {
     if (!branch?.id) return
-    const ds = dateToISO(date)
+    const from = dateToISO(fromDate)
+    const to = dateToISO(toDate)
     try {
       setGroomerHours((await sbGet('resource_service_hours',
-        `branch_id=eq.${branch.id}&resource_type=eq.groomer&service_date=eq.${ds}&active=eq.true` +
-        `&select=resource_id,start_time,end_time,last_service_time`)) ?? [])
+        `branch_id=eq.${branch.id}&resource_type=eq.groomer&service_date=gte.${from}&service_date=lte.${to}&active=eq.true` +
+        `&select=resource_id,service_date,start_time,end_time,last_service_time`)) ?? [])
     } catch { setGroomerHours([]) }
   }, [branch])
 
@@ -335,11 +338,11 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
   }, [branch?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load bookings whenever the active window (branch / view / focused date) changes.
-  // Groomer-hour markers are a day-view-only concern.
+  // Groomer hours appear as timeline markers in Day and compact assignments in Week.
   useEffect(() => {
     if (!branch?.id) return
     loadBookings(range.from, range.to)
-    if (view === 'day') loadGroomerHours(currentDate)
+    if (view === 'day' || view === 'week') loadGroomerHours(range.from, range.to)
     else setGroomerHours([])
   }, [rangeKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -389,6 +392,7 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
       // Esc: close overlays in priority order (innermost first)
       if (e.key === 'Escape') {
         if (showAddBooking)  { setShowAddBooking(false); setEditBooking(null); return }
+        if (editingBlock)    { setEditingBlock(null); return }
         if (showBlockPanel)  { setShowBlockPanel(false); return }
         if (filterOpen)      { setFilterOpen(false);     return }
         if (openId)          { setOpenId(null);           return }
@@ -402,14 +406,14 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
         const tag = document.activeElement?.tagName?.toLowerCase()
         if (tag === 'input' || tag === 'textarea' || tag === 'select') return
         if (document.activeElement?.isContentEditable) return
-        if (showAddBooking || showBlockPanel || filterOpen || openId || openBlockId || calOpen) return
+        if (showAddBooking || editingBlock || showBlockPanel || filterOpen || openId || openBlockId || calOpen) return
         reloadBookings()
         loadBlocked()
       }
     }
     document.addEventListener('keydown', handleKey)
     return () => document.removeEventListener('keydown', handleKey)
-  }, [showAddBooking, showBlockPanel, filterOpen, openId, openBlockId, peekDate, calOpen, reloadBookings, loadBlocked]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [showAddBooking, editingBlock, showBlockPanel, filterOpen, openId, openBlockId, peekDate, calOpen, reloadBookings, loadBlocked]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Date navigation ───────────────────────────────────────────────────────
   // Handlers only move the focused date / view; the range effect reloads data.
@@ -792,8 +796,11 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
           {view === 'week' && (
             <WeekView
               weekStart={range.from} filtered={filtered}
-              rooms={rooms} groomers={groomers} today={now}
-              onOpenBooking={setOpenId} onPickDay={pickDay}
+              rooms={rooms} groomers={groomers} studios={studios} today={now}
+              groomerHours={groomerHours} blockedSchedules={blockedSchedules}
+              showGroomerAssignments={showGroomerMarkers}
+              currentSvc={currentSvc} activeFilter={activeFilter}
+              onOpenBooking={setOpenId} onOpenBlock={setOpenBlockId} onPickDay={pickDay}
             />
           )}
 
@@ -843,12 +850,29 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
         <BlockDrawer
           block={openBlock} rooms={rooms} groomers={groomers} studios={studios}
           onClose={() => setOpenBlockId(null)}
+          onEdit={() => { setOpenBlockId(null); setEditingBlock(openBlock) }}
           onDelete={async id => {
             await sbPatch('blocked_schedules', `id=eq.${id}`, { active: false })
             setOpenBlockId(null); loadBlocked()
           }}
         />
       )}
+
+      {editingBlock && (() => {
+        const pool = editingBlock.resource_type === 'groomer' ? groomers : editingBlock.resource_type === 'studio' ? studios : rooms
+        const resource = pool.find(item => item.id === editingBlock.resource_id)
+        if (!resource) return null
+        return (
+          <BlockEditor
+            branch={branch}
+            resourceType={editingBlock.resource_type}
+            resource={resource}
+            block={editingBlock}
+            onClose={() => setEditingBlock(null)}
+            onSaved={async () => { await loadBlocked(); setEditingBlock(null) }}
+          />
+        )
+      })()}
 
       {openBooking && (
         <BookingDrawer
@@ -926,7 +950,11 @@ function SbItem({ color, label, count, isOn, isRound, onToggle }) {
 }
 
 // ── Week view: all-day spanning band (hotel) + timed chips per day ───────────
-function WeekView({ weekStart, filtered, rooms, groomers, today, onOpenBooking, onPickDay }) {
+function WeekView({
+  weekStart, filtered, rooms, groomers, studios, today,
+  groomerHours, blockedSchedules, showGroomerAssignments, currentSvc, activeFilter,
+  onOpenBooking, onOpenBlock, onPickDay,
+}) {
   const todayISO = dateToISO(today)
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
   const lanes = packLanes(weekSegments(filtered, weekStart, b => b.service === 'hotel'))
@@ -973,11 +1001,55 @@ function WeekView({ weekStart, filtered, rooms, groomers, today, onOpenBooking, 
         <div className={styles.weekBody}>
           {days.map(d => {
             const ds = dateToISO(d)
+            const assignments = showGroomerAssignments
+              ? groomerHours.flatMap(hours => {
+                  if (hours.service_date !== ds) return []
+                  const groomer = groomers.find(item => item.id === hours.resource_id)
+                  if (!groomer || groomer.is_unavailable) return []
+                  if (activeFilter?.type === 'groomer' && activeFilter.id !== groomer.id) return []
+                  return [{ ...hours, groomer }]
+                })
+              : []
+            const blocks = blockedSchedules.filter(block => {
+              const dates = Array.isArray(block.dates) ? block.dates : (block.dates ? String(block.dates).replace(/[{}"]/g, '').split(',') : [])
+              if (!dates.includes(ds)) return false
+              if (currentSvc === 'grooming' && block.resource_type !== 'groomer') return false
+              if (currentSvc === 'hotel' && block.resource_type !== 'room') return false
+              if (currentSvc === 'studio' && block.resource_type !== 'studio') return false
+              if (currentSvc === 'daycare') return false
+              if (activeFilter?.id && block.resource_id !== activeFilter.id) return false
+              return true
+            })
             const timed = filtered.filter(b => b.service !== 'hotel' && bookingOnDay(b, ds))
               .map(b => ({ b, st: getBookingTimes(b, ds).st }))
               .sort((a, c) => a.st - c.st)
             return (
               <div key={ds} className={styles.weekColBody}>
+                {(assignments.length > 0 || blocks.length > 0) && (
+                  <div className={styles.weekSchedules}>
+                    {assignments.map(hours => (
+                      <div key={`hours-${hours.resource_id}`} className={styles.weekHoursChip}
+                        style={{ borderLeftColor: hours.groomer.color }}>
+                        <strong>{hours.groomer.name}</strong>
+                        <span>{formatMins(parseMins(hours.start_time))}-{formatMins(parseMins(hours.end_time))}</span>
+                        <small>last {formatMins(parseMins(hours.last_service_time))}</small>
+                      </div>
+                    ))}
+                    {blocks.map(block => {
+                      const pool = block.resource_type === 'groomer' ? groomers : block.resource_type === 'studio' ? studios : rooms
+                      const resource = pool.find(item => item.id === block.resource_id)
+                      return (
+                        <button key={`block-${block.id}`} className={styles.weekBlockChip}
+                          style={{ borderLeftColor: resource?.color ?? '#9B95E8' }}
+                          onClick={() => onOpenBlock(block.id)}>
+                          <strong>Blocked · {resource?.name ?? block.resource_type}</strong>
+                          <span>{(block.start_time ?? '').slice(0,5)}-{(block.end_time ?? '').slice(0,5)}</span>
+                          {block.reason && <small>{block.reason}</small>}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
                 {timed.map(({ b, st }) => {
                   const color = getCardColor(b, rooms, groomers)
                   const cancelled = b.status === 'cancelled' || b.status === 'rejected'
@@ -1342,7 +1414,7 @@ function FilterDrawer({ rooms, groomers, studios, bookings, activeFilter, onSele
   )
 }
 
-function BlockDrawer({ block: bl, rooms, groomers, studios, onClose, onDelete }) {
+function BlockDrawer({ block: bl, rooms, groomers, studios, onClose, onEdit, onDelete }) {
   const [deleting, setDeleting] = useState(false)
   const pool = bl.resource_type === 'groomer' ? groomers : bl.resource_type === 'studio' ? studios : rooms
   const res  = pool.find(r => r.id === bl.resource_id)
@@ -1377,6 +1449,7 @@ function BlockDrawer({ block: bl, rooms, groomers, studios, onClose, onDelete })
           </div>
           <div className={styles.bdFooter}>
             <button className={styles.bdDeleteBtn} onClick={handleDelete} disabled={deleting}>🗑 Delete Block</button>
+            <button className={styles.bdEditBtn} onClick={onEdit} disabled={deleting}>Edit</button>
             <button className={styles.bdDoneBtn} onClick={onClose}>Done</button>
           </div>
         </div>

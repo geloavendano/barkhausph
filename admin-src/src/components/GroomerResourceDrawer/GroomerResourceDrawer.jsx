@@ -128,7 +128,8 @@ function BulkHoursPanel({ branch, groomer, onClose, onSaved }) {
   )
 }
 
-function BlockEditor({ branch, groomer, block, onClose, onSaved }) {
+export function BlockEditor({ branch, resourceType = 'groomer', resource, groomer, block, onClose, onSaved }) {
+  const selectedResource = resource ?? groomer
   const initialDates = parsedDates(block?.dates)
   const initialDate = initialDates[0] ? new Date(`${initialDates[0]}T00:00:00`) : new Date()
   const [month, setMonth] = useState({ y: initialDate.getFullYear(), m: initialDate.getMonth() })
@@ -148,7 +149,7 @@ function BlockEditor({ branch, groomer, block, onClose, onSaved }) {
     if (!start || !end || start >= end) return setError('Set a valid start and end time.')
     setSaving(true); setError('')
     const payload = {
-      branch_id: branch.id, resource_type: 'groomer', resource_id: groomer.id,
+      branch_id: branch.id, resource_type: resourceType, resource_id: selectedResource.id,
       dates, start_time: start, end_time: end, reason: reason.trim() || null, active: true,
     }
     try {
@@ -297,7 +298,7 @@ export default function GroomerResourceDrawer({ branch, groomer, onClose, onSave
         </div>
       </aside>
       {bulkOpen && <BulkHoursPanel branch={branch} groomer={groomer} onClose={() => setBulkOpen(false)} onSaved={nestedSaved} />}
-      {blockEditor !== undefined && <BlockEditor branch={branch} groomer={groomer} block={blockEditor} onClose={() => setBlockEditor(undefined)} onSaved={nestedSaved} />}
+      {blockEditor !== undefined && <BlockEditor branch={branch} resourceType="groomer" resource={groomer} block={blockEditor} onClose={() => setBlockEditor(undefined)} onSaved={nestedSaved} />}
     </div>
   )
 }
