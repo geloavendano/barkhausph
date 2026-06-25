@@ -745,7 +745,7 @@ async function checkGate() {
       </div>
     </div>
     <p class="section-label">Pick-up time</p>
-    <div class="info-box" style="margin-bottom:10px">Standard checkout is <strong>2:00 PM</strong>. Late pick-up up to 8:00 PM is <strong id="hotelLateRateFee">+&#8369;?/hour</strong>. Holiday rates may apply on public holidays. Extension beyond <strong>6 hours</strong> past standard checkout counts as <strong>1 additional night</strong>. Failure to pick up by 8:00 PM will be charged as an additional night.</div>
+    <div class="info-box" style="margin-bottom:10px">Standard checkout is <strong>2:00 PM</strong>. Late pick-up through 8:00 PM is <strong id="hotelLateRateFee">+&#8369;?/hour</strong>. Pick-up after <strong>8:00 PM</strong> is charged as <strong>1 additional night</strong> at the applicable room rate. Holiday rates may apply on public holidays.</div>
     <select class="form-select" id="hotelPickupTime" onchange="calcHotelTotal(); refreshContinueBtn(); autoScroll('playparkSection', 100);">
       <option value="">Select pick-up time</option>
       <option value="14">On or before 2:00 PM (standard)</option>
@@ -1356,7 +1356,7 @@ async function checkGate() {
 
 <script src="pricing.js"></script>
 <script src="validation.js"></script>
-<script src="booking.js?v=20260624-success-policies"></script>
+<script src="booking.js?v=20260625-pricing-rules"></script>
 
 <div id="contactModalOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:1000;align-items:center;justify-content:center;padding:24px" onclick="if(event.target===this)closeContactModal()">
   <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:20px;padding:28px 24px;max-width:340px;width:100%;text-align:center">

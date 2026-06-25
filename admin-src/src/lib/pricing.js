@@ -120,7 +120,18 @@ export function calcHotel(bk, p) {
 
 export function calcLate(bk, p) {
   if (bk.svc !== 'hotel') return 0
-  return Math.max(0, (parseInt(bk.hpickHour) || 14) - 14) * (p.lateRate ?? 0)
+  const pickupHour = parseInt(bk.hpickHour) || 14
+  if (pickupHour > 20) {
+    const checkout = bk.hcout ? new Date(`${bk.hcout}T00:00:00`) : null
+    const day = checkout && !Number.isNaN(checkout.getTime()) ? checkout.getDay() : 1
+    const dayType = day === 0 || day === 5 || day === 6 ? 'weekend' : 'weekday'
+    return p.hotel[dayType]?.[hotelSizeKey(bk)] ?? 0
+  }
+  return Math.max(0, pickupHour - 14) * (p.lateRate ?? 0)
+}
+
+export function isHotelAdditionalNight(bk) {
+  return bk.svc === 'hotel' && (parseInt(bk.hpickHour) || 14) > 20
 }
 
 export function calcBase(bk, p) {

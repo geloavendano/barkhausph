@@ -40,7 +40,7 @@ var GROOM_SERVICES = [
 // Add-ons enabled per service (null = all enabled)
 var ADDON_ENABLED = {
   bath_dry:  null,
-  basic:     ['face_trim','antitick','whitening','demat','deshed'],
+  basic:     ['face_trim','antitick','whitening','demat','deshed','premium_shampoo'],
   premium:   ['face_trim','antitick','whitening','demat','deshed'],
   ala_carte: null
 };
@@ -83,7 +83,7 @@ var booking = {
   groomDate:null, groomSlot:null, preferredStylist:null, preferredStylistId:null, groomNotes:'',
   // Hotel
   hotelCheckin:null, hotelCheckout:null, hotelRoomType:null, hotelRoomId:null, hotelRoomName:null,
-  hotelBaseTotal:0, hotelLateTotal:0,
+  hotelBaseTotal:0, hotelLateTotal:0, hotelLateIsAdditionalNight:false,
   hotelDropoffTime:'', hotelPickupTime:'', hotelPickupHour:14,
   hotelFeeding:'', hotelMeds:'', playparkConsent:null,
   vetClinic:'', vetContact:'', vetAddress:'',
@@ -1679,7 +1679,27 @@ function buildPickupTimeOptions() {
   }
   // Restore saved value after rebuild
   if (booking.hotelPickupTime) sel.value = booking.hotelPickupTime;
-  if (feeEl) feeEl.textContent = '+₱' + HOTEL_LATE_RATE.toLocaleString() + '/hour after 2:00 PM';
+  if (feeEl) feeEl.textContent = '+₱' + HOTEL_LATE_RATE.toLocaleString() + '/hour from 2:00–8:00 PM';
+}
+
+function hotelLateCharge(pickupHour, checkoutDate, rateSize) {
+  var hour = parseInt(pickupHour) || 14;
+  if (hour > 20) {
+    var checkout = checkoutDate ? new Date(checkoutDate + ' 00:00:00') : null;
+    var dow = checkout && !isNaN(checkout.getTime()) ? checkout.getDay() : 1;
+    var dayType = (dow === 0 || dow === 5 || dow === 6) ? 'weekend' : 'weekday';
+    return {
+      amount: (HOTEL_RATES[dayType] && HOTEL_RATES[dayType][rateSize]) || 0,
+      additionalNight: true,
+      lateHours: 0
+    };
+  }
+  var lateHours = Math.max(0, hour - 14);
+  return {
+    amount: lateHours * HOTEL_LATE_RATE,
+    additionalNight: false,
+    lateHours: lateHours
+  };
 }
 
 function calcHotelTotal() {
@@ -1719,15 +1739,19 @@ function calcHotelTotal() {
   var pickupEl   = document.getElementById('hotelPickupTime');
   var pickupHour = pickupEl ? (parseInt(pickupEl.value) || 14) : 14;
   booking.hotelPickupHour = pickupHour;
-  var lateHours  = Math.max(0, pickupHour - 14);
-  booking.hotelLateTotal = lateHours * HOTEL_LATE_RATE;
+  var lateCharge = hotelLateCharge(pickupHour, cout, rateSize);
+  var lateHours  = lateCharge.lateHours;
+  booking.hotelLateTotal = lateCharge.amount;
+  booking.hotelLateIsAdditionalNight = lateCharge.additionalNight;
 
   // Show / hide the late pick-up fee note below the selector
   var lateNoteEl = document.getElementById('hotelLatePickupNote');
   if (lateNoteEl) {
     if (booking.hotelLateTotal > 0) {
-      lateNoteEl.innerHTML = '<strong>Late pick-up fee:</strong> +&#8369;' + booking.hotelLateTotal.toLocaleString() +
-        ' (' + lateHours + ' hr' + (lateHours !== 1 ? 's' : '') + ' &times; &#8369;' + HOTEL_LATE_RATE.toLocaleString() + '/hr)';
+      lateNoteEl.innerHTML = lateCharge.additionalNight
+        ? '<strong>Additional night:</strong> +&#8369;' + booking.hotelLateTotal.toLocaleString() + ' (pick-up after 8:00 PM)'
+        : '<strong>Late pick-up fee:</strong> +&#8369;' + booking.hotelLateTotal.toLocaleString() +
+          ' (' + lateHours + ' hr' + (lateHours !== 1 ? 's' : '') + ' &times; &#8369;' + HOTEL_LATE_RATE.toLocaleString() + '/hr)';
       lateNoteEl.style.display = '';
     } else {
       lateNoteEl.style.display = 'none';
@@ -1767,7 +1791,8 @@ function calcHotelTotal() {
       s4html += '<div class="price-line component"><span class="price-line-label">'+weCount+' weekend/holiday night'+(weCount!==1?'s':'')+' &times; &#8369;'+weRate2.toLocaleString()+' ('+roomLabel+')</span><span class="price-line-val">&#8369;'+weTotal.toLocaleString()+'</span></div>';
     }
     if (booking.hotelLateTotal > 0) {
-      s4html += '<div class="price-line component"><span class="price-line-label">Late pick-up fee ('+lateHours+' hr'+(lateHours!==1?'s':'')+')</span><span class="price-line-val">&#8369;'+booking.hotelLateTotal.toLocaleString()+'</span></div>';
+      var lateLabel = lateCharge.additionalNight ? 'Additional night (pick-up after 8:00 PM)' : 'Late pick-up fee ('+lateHours+' hr'+(lateHours!==1?'s':'')+')';
+      s4html += '<div class="price-line component"><span class="price-line-label">'+lateLabel+'</span><span class="price-line-val">&#8369;'+booking.hotelLateTotal.toLocaleString()+'</span></div>';
     }
     s4html += '<div class="price-line subtotal-line"><span class="price-line-label">Subtotal</span><span class="price-line-val">&#8369;'+subtotal.toLocaleString()+'</span></div>';
     if (discount > 0) {
@@ -2506,7 +2531,7 @@ function buildSummary() {
       }
     }
     if (booking.hotelLateTotal > 0) {
-      lines.push({ label:'Late pickup fee', val:'\u20b1'+booking.hotelLateTotal.toLocaleString(), amount:booking.hotelLateTotal });
+      lines.push({ label:booking.hotelLateIsAdditionalNight ? 'Additional night (pickup after 8 PM)' : 'Late pickup fee', val:'\u20b1'+booking.hotelLateTotal.toLocaleString(), amount:booking.hotelLateTotal });
       subtotal += booking.hotelLateTotal;
     }
   } else if (svc === 'daycare') {
@@ -2710,8 +2735,10 @@ function renderSuccessDetails(snap, detailsId, priceId) {
       }
     }
     if (bk.hotelLateTotal > 0) {
-      var lateHrs = bk.hotelLateTotal / (HOTEL_LATE_RATE||100);
-      plines.push({ label: 'Late pick-up fee ('+lateHrs+' hr'+(lateHrs!==1?'s':'')+' × ₱'+(HOTEL_LATE_RATE||100).toLocaleString()+'/hr)', amount: bk.hotelLateTotal });
+      var lateLabel = bk.hotelLateIsAdditionalNight
+        ? 'Additional night (pick-up after 8:00 PM)'
+        : 'Late pick-up fee ('+(bk.hotelLateTotal / (HOTEL_LATE_RATE||100))+' hr'+((bk.hotelLateTotal / (HOTEL_LATE_RATE||100))!==1?'s':'')+' × ₱'+(HOTEL_LATE_RATE||100).toLocaleString()+'/hr)';
+      plines.push({ label: lateLabel, amount: bk.hotelLateTotal });
       calcSub += bk.hotelLateTotal;
     }
   } else if (svc === 'daycare') {
@@ -3604,6 +3631,7 @@ async function submitBooking() {
     waiverTexts: buildWaiverTexts(),
     subtotal:subtotal, discountAmount:discAmt, convenienceFee:fee, total:total,
     hotelLateTotal:    booking.hotelLateTotal    || 0,
+    hotelLateIsAdditionalNight: !!booking.hotelLateIsAdditionalNight,
     groomServicePrice: booking.groomServicePrice || 0,
     vaccineDocuments:  vaccineDocuments,
     vaccineFileNames:  vaccineFileNames,

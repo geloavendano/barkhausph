@@ -278,7 +278,11 @@ function chargesFromPayload(body: Record<string, unknown>, subtotal: number, dis
   const baseAmt = body.service === "grooming" ? groomSvcPrice : subtotal - lateFee;
   const rows: ChargeItem[] = [];
   if (baseAmt > 0)     rows.push({ type: "base_service",    label: svcLabel,           amount: baseAmt });
-  if (lateFee > 0)     rows.push({ type: "late_pickup",     label: "Late pick-up fee", amount: lateFee });
+  if (lateFee > 0)     rows.push({
+    type: "late_pickup",
+    label: body.hotelLateIsAdditionalNight ? "Additional night (pickup after 8 PM)" : "Late pick-up fee",
+    amount: lateFee,
+  });
   if (discountAmt > 0) rows.push({ type: "member_discount", label: "Member discount",  amount: discountAmt });
   if (convFee > 0)     rows.push({ type: "convenience_fee", label: "Convenience fee",  amount: convFee });
   return rows;
@@ -371,7 +375,7 @@ function paymentSummaryRows(charges: ChargeItem[], addonRows: Array<{ addon_name
   if (base && base.amount > 0) rows += stdRow(base.label, `₱${base.amount.toLocaleString()}`);
   for (const a of (addonRows || [])) if ((a.price || 0) > 0) rows += stdRow(a.addon_name, `₱${a.price.toLocaleString()}`);
   const late = charges.find(c => c.type === "late_pickup");
-  if (late && late.amount > 0) rows += stdRow("Late pickup fee", `₱${late.amount.toLocaleString()}`);
+  if (late && late.amount > 0) rows += stdRow(late.label, `₱${late.amount.toLocaleString()}`);
   const disc = charges.find(c => c.type === "member_discount");
   if (disc && disc.amount > 0) rows += discRow("Member discount", `−₱${disc.amount.toLocaleString()}`);
   rows += totalRow("Total · Pay on arrival", `₱${total.toLocaleString()}`);

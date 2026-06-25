@@ -10,7 +10,7 @@ import {
   sbPatchAudit,
   sbPostAudit,
 } from '../../lib/adminAudit'
-import { parsePricing, emptyPricing, calcBase, calcLate, calcTotal, calcNights, calcHotelBreakdown, calcDaycare, hotelSizeKey, DEFAULT_ADDONS } from '../../lib/pricing'
+import { parsePricing, emptyPricing, calcBase, calcLate, calcTotal, calcNights, calcHotelBreakdown, calcDaycare, hotelSizeKey, isHotelAdditionalNight } from '../../lib/pricing'
 import { groomDurationMins } from '../../lib/grooming'
 import { availableGroomingSlots, availableHotelRooms, availableStudioSlots, buildGroomingSlots } from '../../lib/availability'
 import styles from './AddBookingPanel.module.css'
@@ -22,7 +22,7 @@ const GROOM_SVCS = [
   { k:'premium',  n:'Premium Groom', d:'2 hrs'  },
   { k:'ala_carte',n:'Ala Carte',     d:'varies' },
 ]
-const ADDON_COMPAT = { bath_dry:null, basic:['face_trim','antitick','whitening','demat','deshed'], premium:['face_trim','antitick','whitening','demat','deshed'], ala_carte:null }
+const ADDON_COMPAT = { bath_dry:null, basic:['face_trim','antitick','whitening','demat','deshed','premium_shampoo'], premium:['face_trim','antitick','whitening','demat','deshed'], ala_carte:null }
 const BK_SIZES     = ['small_dog','medium_dog','large_dog','giant_dog','cat']
 const SIZE_LBL     = { small_dog:'Small dog', medium_dog:'Medium dog', large_dog:'Large dog', giant_dog:'Giant dog', cat:'Cat' }
 const ROOM_TYPES   = { small_cage:'Small Cage', medium_cage:'Medium Cage', large_cage:'Large Cage', single_cabin:'Cat Cabin', villa:'Cat Villa' }
@@ -38,11 +38,11 @@ const DROP_OPTS = [
   [12,'12:00 PM'],[13,'1:00 PM'],[14,'2:00 PM'],[15,'3:00 PM'],[16,'4:00 PM'],
   [17,'5:00 PM'],[18,'6:00 PM'],[19,'7:00 PM'],[20,'8:00 PM'],[21,'9:00 PM'],[22,'10:00 PM'],
 ]
-// Pick-up: 7 AM – 8 PM. Same format as drop-off, no embedded labels.
+// Pick-up: 7 AM through branch closing. After 8 PM is billed as one additional night.
 const PICK_OPTS = [
   [7,'7:00 AM'],[8,'8:00 AM'],[9,'9:00 AM'],[10,'10:00 AM'],[11,'11:00 AM'],
   [12,'12:00 PM'],[13,'1:00 PM'],[14,'2:00 PM'],[15,'3:00 PM'],[16,'4:00 PM'],
-  [17,'5:00 PM'],[18,'6:00 PM'],[19,'7:00 PM'],[20,'8:00 PM'],
+  [17,'5:00 PM'],[18,'6:00 PM'],[19,'7:00 PM'],[20,'8:00 PM'],[21,'9:00 PM'],[22,'10:00 PM'],
 ]
 const SVC_COLORS   = { grooming:'#4D96B9', hotel:'#EF9F27', daycare:'#1D9E75', studio:'#D4537E' }
 
@@ -72,7 +72,8 @@ function buildAdminCharges(bookingId, bk, pricing, base, disc, late) {
     : ({ hotel: 'Pet Hotel Stay', daycare: 'Daycare', studio: 'Studio Session' }[bk.svc] ?? 'Service')
 
   if (baseServiceAmt > 0) charges.push({ booking_id: bookingId, sort_order: i++, type: 'base_service',    label: svcName,          amount: baseServiceAmt })
-  if (late > 0)           charges.push({ booking_id: bookingId, sort_order: i++, type: 'late_pickup',     label: 'Late pickup fee', amount: late })
+  if (late > 0)           charges.push({ booking_id: bookingId, sort_order: i++, type: 'late_pickup',
+    label: isHotelAdditionalNight(bk) ? 'Additional night (pickup after 8 PM)' : 'Late pickup fee', amount: late })
   if (disc > 0)           charges.push({ booking_id: bookingId, sort_order: i++, type: 'member_discount', label: 'Member discount', amount: disc })
   return charges
 }
@@ -676,7 +677,7 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
           })
           await sbDelete('booking_addons', `booking_id=eq.${b.id}`)
           const addonRows = Object.keys(bk.addons).map(k => {
-            const a = DEFAULT_ADDONS.find(x => x.key === k)
+            const a = pricing.addons.find(x => x.key === k)
             return { booking_id: b.id, addon_key: k, addon_name: a?.name??k,
               price: a ? (a.sizeDependent ? (pricing.faceTrim[bk.size]??0) : a.price) : 0 }
           })
@@ -734,7 +735,7 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
           return 'estancia'
         })()
         const addonsPayload = Object.keys(bk.addons).reduce((acc, k) => {
-          const a = DEFAULT_ADDONS.find(x => x.key === k)
+          const a = pricing.addons.find(x => x.key === k)
           if (a) acc[k] = a.assessment ? 0 : a.sizeDependent ? (pricing.faceTrim[bk.size]??0) : a.price
           return acc
         }, {})
@@ -770,6 +771,8 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
           waiverSeniorMedical: false, waiverStudio: false, waiverMedia: bk.wmedia,
           membershipId: bk.memvalid ? bk.memcode : null,
           subtotal: subtotal, discountAmount: disc, total,
+          hotelLateTotal: late,
+          hotelLateIsAdditionalNight: isHotelAdditionalNight(bk),
           adminCreated: true, booking_source: bk.mode || 'admin',
           createdBy: adminSnapshot(currentAdmin),
         }
@@ -870,7 +873,7 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
         <FG label="Add-ons">
           {bk.gsvc === 'ala_carte' && <IBox>Ala Carte: at least one add-on required.</IBox>}
           <div className={styles.addonGrid}>
-            {DEFAULT_ADDONS.map(a => {
+            {pricing.addons.map(a => {
               const compat = ADDON_COMPAT[bk.gsvc]
               const enabled = !compat || compat.includes(a.key)
               const isPremFT = a.key === 'face_trim' && bk.gsvc === 'premium'
@@ -1236,7 +1239,7 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
     const { base, disc, late, subtotal, total } = calcTotal(bk, pricing)
     const gsvc = GROOM_SVCS.find(x => x.k === bk.gsvc)
     const hasFaceTrimIncluded = bk.svc==='grooming' && bk.gsvc==='premium' && bk.addons['face_trim']
-    const hasAssess = bk.svc==='grooming' && Object.keys(bk.addons).some(k => DEFAULT_ADDONS.find(a => a.key===k && a.assessment))
+    const hasAssess = bk.svc==='grooming' && Object.keys(bk.addons).some(k => pricing.addons.find(a => a.key===k && a.assessment))
 
     return (
       <>
@@ -1248,7 +1251,7 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
           <SRow k="Stylist" v={bk.stylist === 'any' ? 'Any available' : bk.stylist} />
           <SRow k="Date & time" v={bk.gdate && bk.gslot ? `${bk.gdate} at ${fmtTime12(bk.gslot)}` : '—'} />
           <SRow k="Duration" v={`${groomDurationMins(bk.gsvc, bk.addons)} minutes`} />
-          {Object.keys(bk.addons).length > 0 && <SRow k="Add-ons" v={Object.keys(bk.addons).map(k => DEFAULT_ADDONS.find(a=>a.key===k)?.name??k).join(', ')} />}
+          {Object.keys(bk.addons).length > 0 && <SRow k="Add-ons" v={Object.keys(bk.addons).map(k => pricing.addons.find(a=>a.key===k)?.name??k).join(', ')} />}
         </>}
         {bk.svc === 'hotel' && <>
           <SRow k="Room" v={bk.hroom || '—'} />
@@ -1275,7 +1278,7 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
         {bk.svc === 'grooming' && <>
           {bk.gsvc !== 'ala_carte' && <SRow k={gsvc?.n ?? 'Base'} v={fmt((pricing.groom[bk.gsvc]?.[bk.size]) ?? 0)} />}
           {Object.keys(bk.addons).map(k => {
-            const a = DEFAULT_ADDONS.find(x => x.key === k)
+            const a = pricing.addons.find(x => x.key === k)
             if (!a) return null
             return <SRow key={k} k={`Add-on — ${a.name}`} v={a.assessment ? 'For assessment' : a.sizeDependent ? fmt(pricing.faceTrim[bk.size]??0) : fmt(a.price)} />
           })}
@@ -1286,7 +1289,7 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
           return <>
             {bd.weekday.count > 0 && <SRow k={`Weekday (${bd.weekday.count} night${bd.weekday.count !== 1 ? 's' : ''})`} v={fmt(bd.weekday.total)} />}
             {bd.weekend.count > 0 && <SRow k={`Weekend (${bd.weekend.count} night${bd.weekend.count !== 1 ? 's' : ''})`} v={fmt(bd.weekend.total)} />}
-            {late > 0 && <SRow k="Late pickup fee" v={fmt(late)} />}
+            {late > 0 && <SRow k={isHotelAdditionalNight(bk) ? 'Additional night (pickup after 8 PM)' : 'Late pickup fee'} v={fmt(late)} />}
           </>
         })()}
         {bk.svc === 'daycare' && (() => {
