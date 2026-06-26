@@ -111,6 +111,99 @@ function branchBookingEmail(branch?: { name?: string } | null): string | null {
   return null;
 }
 
+function branchBookingEmailFromLocation(location?: string | null): string | null {
+  const loc = String(location || "").toLowerCase();
+  if (loc.includes("estancia")) return BRANCH_BOOKING_EMAILS.estancia;
+  if (loc.includes("eastwood")) return BRANCH_BOOKING_EMAILS.eastwood;
+  return null;
+}
+
+function escapeHtml(value: unknown): string {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+async function recordPaymentEvent(supabase: any, event: Record<string, unknown>) {
+  const { data, error } = await supabase.from("payment_events").insert(event).select("id").single();
+  if (error) {
+    console.error("Payment event audit insert failed:", error.message);
+    return null;
+  }
+  return data?.id ?? null;
+}
+
+async function markPaymentEventAlerted(supabase: any, eventId: string | null, alertError?: string | null) {
+  if (!eventId) return;
+  const payload = alertError
+    ? { alert_sent: false, alert_error: alertError.slice(0, 500) }
+    : { alert_sent: true, alert_error: null };
+  const { error } = await supabase.from("payment_events").update(payload).eq("id", eventId);
+  if (error) console.error("Payment event alert audit update failed:", error.message);
+}
+
+async function sendPaymentFailureAlert(details: Record<string, any>) {
+  const apiKey = Deno.env.get("RESEND_API_KEY");
+  if (!apiKey) throw new Error("RESEND_API_KEY not set");
+
+  const branchEmail = branchBookingEmailFromLocation(details.location);
+  const recipients = branchEmail
+    ? [branchEmail]
+    : Object.values(BRANCH_BOOKING_EMAILS);
+
+  const ref = details.refNumber || "Unknown ref";
+  const eventType = details.eventType || "Unknown event";
+  const amount = Number(details.amount || 0).toLocaleString("en-PH");
+  const action = eventType === "PAYMENT_EXPIRED"
+    ? "The pending booking hold was expired and inventory was released."
+    : "The booking hold remains active until customer retry/edit or the 15-minute expiry.";
+
+  const rows = [
+    ["Booking ref", ref],
+    ["Maya event", eventType],
+    ["Maya payment ID", details.paymentId || "—"],
+    ["Checkout ID", details.checkoutId || "—"],
+    ["Amount", details.amount ? `PHP ${amount}` : "—"],
+    ["Branch", details.location || "—"],
+    ["Service", details.service || "—"],
+    ["Pet", details.petName || "—"],
+    ["Owner", [details.ownerFirst, details.ownerLast].filter(Boolean).join(" ") || "—"],
+    ["Owner email", details.ownerEmail || "—"],
+    ["Action", action],
+  ];
+
+  const htmlRows = rows.map(([label, value]) => `
+    <tr>
+      <td style="padding:8px 10px;border-bottom:1px solid #e5e7eb;color:#64748b">${escapeHtml(label)}</td>
+      <td style="padding:8px 10px;border-bottom:1px solid #e5e7eb;color:#111827;font-weight:600">${escapeHtml(value)}</td>
+    </tr>
+  `).join("");
+
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      from: "Barkhaus Pet Services <hello@barkhaus.ph>",
+      to: recipients,
+      subject: `Maya payment alert — ${eventType} — ${ref}`,
+      html: `<!doctype html>
+        <html><body style="font-family:Arial,sans-serif;background:#f8fafc;padding:24px">
+          <div style="max-width:640px;margin:auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden">
+            <div style="padding:18px 22px;background:#0B1F2A;color:#fff">
+              <h1 style="margin:0;font-size:18px">Maya payment alert</h1>
+              <p style="margin:6px 0 0;color:#bae6fd">${escapeHtml(ref)}</p>
+            </div>
+            <table style="width:100%;border-collapse:collapse;font-size:14px">${htmlRows}</table>
+          </div>
+        </body></html>`,
+    }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+}
+
 async function sendBookingConfirmation(details: any) {
   const apiKey = Deno.env.get("RESEND_API_KEY");
   if (!apiKey) { console.error("RESEND_API_KEY not set — skipping email"); return; }
@@ -571,6 +664,28 @@ Deno.serve(async (req) => {
 
     console.log("bookingId (meta):", bookingIdFromMeta, "ref:", refNumber);
 
+    let paymentEventId: string | null = null;
+    if (isMaya) {
+      paymentEventId = await recordPaymentEvent(supabase, {
+        provider,
+        event_type: eventType,
+        payment_status: eventType,
+        ref_number: refNumber,
+        booking_id: bookingIdFromMeta,
+        gateway_checkout_id: mayaCheckoutId(eventData),
+        gateway_payment_id: paymentId || null,
+        amount: paidAmount || null,
+        currency: eventData?.totalAmount?.currency || eventData?.currency || null,
+        payment_channel: eventData?.paymentScheme || eventData?.fundSource?.type || null,
+        metadata: {
+          source: "handle-payment-webhook",
+          event_ref: mayaReference(event),
+          verified_ref: mayaReference(eventData),
+          verified_status: eventType,
+        },
+      });
+    }
+
     if (!bookingIdFromMeta && !refNumber) {
       // payment.paid events from checkout-session payments carry no metadata or
       // description on the payment object itself — those live on the checkout
@@ -647,12 +762,37 @@ Deno.serve(async (req) => {
         .update({ gateway_payment_id: paymentId })
         .eq("id", pending.id);
     }
+    if (isMaya && paymentEventId) {
+      await supabase.from("payment_events")
+        .update({
+          pending_booking_id: pending.id,
+          ref_number: pending.ref_number || refNumber,
+          gateway_checkout_id: mayaCheckoutId(eventData) || pending.gateway_checkout_id || null,
+          gateway_payment_id: paymentId || pending.gateway_payment_id || null,
+        })
+        .eq("id", paymentEventId);
+    }
 
     // Maya expiry is final and releases the pending booking. Cancel/failed
     // webhooks can arrive during wallet/browser handoff even when a later
     // success event follows, so keep those holds until retry/edit or the
     // 15-minute expiry job releases them.
     if (isMaya && !paidEvent) {
+      try {
+        await sendPaymentFailureAlert({
+          ...(pending.payload || {}),
+          eventType,
+          refNumber: pending.ref_number || refNumber,
+          amount: paidAmount || pending.amount,
+          paymentId,
+          checkoutId: mayaCheckoutId(eventData) || pending.gateway_checkout_id,
+        });
+        await markPaymentEventAlerted(supabase, paymentEventId);
+      } catch (alertErr) {
+        const message = alertErr instanceof Error ? alertErr.message : String(alertErr);
+        console.error("Maya payment alert failed:", message);
+        await markPaymentEventAlerted(supabase, paymentEventId, message);
+      }
       if (eventType === "PAYMENT_EXPIRED") {
         await supabase.from("bookings").update({ status: "cancelled" })
           .eq("ref_number", pending.ref_number).eq("status", "pending");
