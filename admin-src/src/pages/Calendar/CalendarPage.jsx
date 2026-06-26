@@ -753,14 +753,14 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
                     const b   = item.b, pet = first(b.pets) ?? {}, gd = first(b.grooming_details), hd = first(b.hotel_details)
                     const color = getCardColor(b, rooms, groomers)
                     const isCancelled = b.status === 'cancelled' || b.status === 'rejected'
-                    const detail = gd
-                      ? (gd.groom_service_name ?? 'Groom') + (gd.preferred_stylist && gd.preferred_stylist !== 'any' ? ` | ${gd.preferred_stylist}` : '')
+	                    const detail = gd
+	                      ? (gd.groom_service_name || gd.groom_service_key || 'Groom') + (gd.preferred_stylist && gd.preferred_stylist !== 'any' ? ` | ${gd.preferred_stylist}` : '')
                       : hd ? (hd.room_type === 'other' ? 'Other' : (rooms.find(r => r.id === hd.room_id)?.name ?? ROOM_TYPE_LABELS[hd.room_type] ?? hd.room_type ?? 'Hotel'))
                       : first(b.daycare_details) ? 'Daycare' : first(b.studio_details) ? 'Studio' : ''
                     // Rotate the name vertically only when the column is actually too
                     // narrow for horizontal text (measured), not merely when many overlap.
-                    const colPx = colAreaW > 0 ? colAreaW / item.total : null
-                    const rotate = colPx != null ? colPx < 76 : item.total >= 4
+	                    const colPx = colAreaW > 0 ? colAreaW / item.total : null
+	                    const rotate = colPx != null ? colPx < 76 : item.total >= 4
 	                    const unassigned = isUnassigned(b)
 	                    const pay = paymentMeta(b)
 	                    return (
@@ -778,14 +778,12 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
                               {pet.name ?? 'Pet'}
                               {unassigned && <span className={styles.bkWarn} title="Needs assignment">⚠</span>}
                             </div>
-                            {unassigned && ht > 38 && <div className={styles.bkAssign}>⚠ Needs assignment</div>}
-	                            {ht > 52 && detail     && <div className={styles.bkSub}>{detail}</div>}
-	                            {ht > 72 && (first(b.owners)?.first_name ?? '') && <div className={styles.bkSub}>{first(b.owners).first_name}</div>}
-	                            {ht > 92 && (
-	                              <span className={styles.payPill} style={{ color: pay.color, borderColor: pay.color, background: hexBg(pay.color) }}>
-	                                {pay.label}
-	                              </span>
-	                            )}
+	                            {unassigned && ht > 58 && <div className={styles.bkAssign}>⚠ Needs assignment</div>}
+	                            {detail && <div className={styles.bkSub}>{detail}</div>}
+	                            {ht > 76 && (first(b.owners)?.first_name ?? '') && <div className={styles.bkSub}>{first(b.owners).first_name}</div>}
+	                            <span className={styles.payPill} style={{ color: pay.color, borderColor: pay.color, background: hexBg(pay.color) }}>
+	                              {pay.label}
+	                            </span>
 	                            {(b.discount_amount ?? 0) > 0 && <span className={styles.bkStar}>★</span>}
 	                          </>
                         )}

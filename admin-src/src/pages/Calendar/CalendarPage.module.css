@@ -212,6 +212,7 @@
   /* clip-path instead of overflow:hidden so sticky children can reach the scroll ancestor */
   clip-path: inset(0 round 6px); overflow: visible;
   transition: filter 0.12s; z-index: 2;
+  display: flex; flex-direction: column; gap: 1px;
 }
 .bk:hover { filter: brightness(1.1); z-index: 10; }
 .bkCancelled { opacity: 0.4; filter: grayscale(1); }
@@ -223,11 +224,12 @@
   font-size: 12px; font-weight: 700; color: var(--cream);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   display: flex; align-items: center; gap: 4px;
-  padding-bottom: 2px;
+  line-height: 1.15;
 }
 .bkSub {
-  font-size: 10px; color: var(--cream-m); margin-top: 1px;
+  font-size: 10px; color: var(--cream-m);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  line-height: 1.18;
 }
 .bkStar { position: absolute; top: 3px; right: 4px; font-size: 9px; color: #FFCE58; line-height: 1; pointer-events: none; }
 /* Unassigned booking signal (needs a groomer/room/studio) */
@@ -485,7 +487,8 @@
 .payPill {
   align-self: flex-start;
   font-size: 8px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase;
-  border: 0.5px solid; border-radius: 20px; padding: 1px 6px;
+  border: 0.5px solid; border-radius: 20px; padding: 0 6px;
+  line-height: 1.45;
   white-space: nowrap; flex-shrink: 0;
 }
 
