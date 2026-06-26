@@ -49,8 +49,13 @@
   background: transparent; border: 0.5px solid var(--border);
   border-radius: 20px; padding: 3px 10px; cursor: pointer;
   font-family: 'Nunito', sans-serif;
+  flex-shrink: 0;
 }
 .todayBtn:hover { background: var(--raised); color: var(--cream); }
+.todayBtnHidden {
+  visibility: hidden;
+  pointer-events: none;
+}
 .loadDot {
   display: inline-block; width: 6px; height: 6px; border-radius: 50%;
   background: var(--blue); animation: pulse 1s ease-in-out infinite;
@@ -513,28 +518,30 @@
 }
 .weekColBody:last-child { border-right: none; }
 .weekSchedules {
-  display: flex; flex-direction: column; gap: 3px;
+  display: flex; flex-direction: column; gap: 4px;
   padding-bottom: 5px; margin-bottom: 1px;
   border-bottom: 0.5px dashed var(--border);
 }
-.weekHoursChip,
 .weekBlockChip {
   border: 0; border-left: 3px solid; border-radius: 4px;
   padding: 4px 5px; text-align: left; font-family: 'Nunito', sans-serif;
   display: flex; flex-direction: column; gap: 1px;
   min-width: 0;
 }
-.weekHoursChip { background: rgba(29,158,117,.12); color: var(--cream-m); }
+.weekHoursChip {
+  display: flex; align-items: center; gap: 5px; min-width: 0;
+  padding: 4px 7px; border: 0.5px solid var(--border); border-radius: 20px;
+  background: var(--surface); color: var(--cream-m); font-size: 9px;
+}
+.weekHoursChip strong { color: var(--cream); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.weekHoursChip span { white-space: nowrap; }
 .weekBlockChip {
   background: repeating-linear-gradient(135deg,rgba(155,149,232,.22) 0,rgba(155,149,232,.22) 5px,rgba(155,149,232,.1) 5px,rgba(155,149,232,.1) 10px);
   color: var(--cream-m); cursor: pointer;
 }
 .weekBlockChip:hover { filter: brightness(1.15); }
-.weekHoursChip strong,
 .weekBlockChip strong { color: var(--cream); font-size: 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.weekHoursChip span,
 .weekBlockChip span { color: var(--mid); font-size: 8px; font-weight: 700; }
-.weekHoursChip small,
 .weekBlockChip small { color: var(--mid); font-size: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .weekChip {
   border-left: 3px solid; border-radius: 4px;

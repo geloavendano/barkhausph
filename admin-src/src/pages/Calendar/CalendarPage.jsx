@@ -536,15 +536,20 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
             <span className={styles.lblFull}>{navLabel}</span>
             <span className={styles.lblShort}>{navLabelShort}</span>
           </button>
-          <div className={styles.dateArrows}>
-            <button className={styles.navArrow} onClick={() => shiftDate(-1)}>‹</button>
-            {(!todayInView || view === 'list') && (
-              <button className={styles.todayBtn} onClick={() => { goToday(); if (view === 'list') setListScrollKey(k => k + 1) }}>Today</button>
-            )}
-            <button className={styles.navArrow} onClick={() => shiftDate(1)}>›</button>
-          </div>
-        </div>
-        {loading && <span className={styles.loadDot} />}
+	          <div className={styles.dateArrows}>
+	            <button className={styles.navArrow} onClick={() => shiftDate(-1)}>‹</button>
+	            <button className={styles.navArrow} onClick={() => shiftDate(1)}>›</button>
+	          </div>
+	        </div>
+	        <button
+	          className={`${styles.todayBtn} ${(!todayInView || view === 'list') ? '' : styles.todayBtnHidden}`}
+	          onClick={() => { goToday(); if (view === 'list') setListScrollKey(k => k + 1) }}
+	          aria-hidden={(!todayInView || view === 'list') ? undefined : 'true'}
+	          tabIndex={(!todayInView || view === 'list') ? 0 : -1}
+	        >
+	          Today
+	        </button>
+	        {loading && <span className={styles.loadDot} />}
 
         {/* View switch — segmented on desktop, dropdown on mobile */}
         <div className={styles.viewToggle}>
@@ -1027,14 +1032,14 @@ function WeekView({
               <div key={ds} className={styles.weekColBody}>
                 {(assignments.length > 0 || blocks.length > 0) && (
                   <div className={styles.weekSchedules}>
-                    {assignments.map(hours => (
-                      <div key={`hours-${hours.resource_id}`} className={styles.weekHoursChip}
-                        style={{ borderLeftColor: hours.groomer.color }}>
-                        <strong>{hours.groomer.name}</strong>
-                        <span>{formatMins(parseMins(hours.start_time))}-{formatMins(parseMins(hours.end_time))}</span>
-                        <small>last {formatMins(parseMins(hours.last_service_time))}</small>
-                      </div>
-                    ))}
+	                    {assignments.map(hours => (
+	                      <div key={`hours-${hours.resource_id}`} className={styles.weekHoursChip}>
+	                        <span className={styles.groomerHoursDot} style={{ background: hours.groomer.color }} />
+	                        <strong>{hours.groomer.name}</strong>
+	                        <span>{formatMins(parseMins(hours.start_time))}-{formatMins(parseMins(hours.end_time))}</span>
+	                        <span className={styles.groomerHoursLast}>last {formatMins(parseMins(hours.last_service_time))}</span>
+	                      </div>
+	                    ))}
                     {blocks.map(block => {
                       const pool = block.resource_type === 'groomer' ? groomers : block.resource_type === 'studio' ? studios : rooms
                       const resource = pool.find(item => item.id === block.resource_id)
