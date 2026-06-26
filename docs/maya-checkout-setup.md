@@ -55,6 +55,12 @@ The handler retrieves every Maya event from Maya's Payments API using the
 secret key, then verifies payment ID, status, booking reference, and amount
 before confirming a Barkhaus booking. It retains PayMongo signature handling.
 
+Important invariant: Maya `PAYMENT_CANCELLED` and `PAYMENT_FAILED` must not
+cancel or delete the pending booking. Hosted/mobile handoff can emit those
+events before a later `PAYMENT_SUCCESS`. Only `PAYMENT_EXPIRED` is treated as
+final/destructive. Run `node scripts/payment-flow-regression-check.mjs` before
+deploying webhook changes.
+
 ## 5. Sandbox acceptance checks
 
 Keep the public provider set to `manual` while testing the Maya function
@@ -66,7 +72,8 @@ directly. Before launch, verify:
 
 - successful card payment confirms one booking and creates one payment row;
 - duplicate/replayed success webhooks remain idempotent;
-- failed, expired, and cancelled checkouts cancel the pending booking;
+- failed and cancelled checkouts send alerts but keep the hold pending;
+- expired checkouts cancel the pending booking and release inventory;
 - a mismatched amount or reference is rejected;
 - success redirect waits for webhook confirmation;
 - confirmation email is sent once;
