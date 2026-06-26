@@ -218,6 +218,10 @@
 .bkCancelled { opacity: 0.4; filter: grayscale(1); }
 .bkCancelled .bkPet { text-decoration: line-through; }
 .bkPending { opacity: 0.55; filter: grayscale(0.6); }
+.pencilBooked {
+  background-image: radial-gradient(circle, rgba(255,255,255,0.32) 1px, transparent 1.2px) !important;
+  background-size: 8px 8px !important;
+}
 .bkPet {
   position: sticky; top: 0; z-index: 1;
   background: inherit;
@@ -696,6 +700,9 @@
 .listRowCancelled { opacity: 0.5; filter: grayscale(0.8); }
 .listRowCancelled .listName { text-decoration: line-through; }
 .listRowPending { opacity: 0.78; }
+.listRow.pencilBooked {
+  background-color: rgba(155,149,232,0.08);
+}
 .listTime { font-size: 12px; font-weight: 700; color: var(--mid); min-width: 56px; flex-shrink: 0; }
 .listStatusDot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
 .listName { font-size: 13px; font-weight: 600; color: var(--cream); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

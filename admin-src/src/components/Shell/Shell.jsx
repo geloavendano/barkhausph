@@ -6,7 +6,7 @@ import styles from './Shell.module.css'
 const NAV_ITEMS = [
   { key: 'calendar',  icon: '📅', label: 'Calendar'  },
   { key: 'bookings',  icon: '📋', label: 'Bookings'  },
-  { key: 'checkin',   icon: '🐾', label: 'Check In'  },
+  { key: 'checkin',   icon: '🐾', label: 'Pending'   },
   { key: 'members',   icon: '👤', label: 'Members'   },
   { key: 'resources', icon: '📦', label: 'Inventory' },
   { key: 'reports',   icon: '📊', label: 'Reports'   },

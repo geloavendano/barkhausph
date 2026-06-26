@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { supabase, sbGet, sbPatch } from '../../lib/supabase'
-import { STATUS_COLORS, SVC_LABELS, PAY_COLORS, PAY_LABELS, first, hexBg } from '../../lib/constants'
+import { STATUS_COLORS, STATUS_LABELS, SVC_LABELS, PAY_COLORS, PAY_LABELS, first, hexBg } from '../../lib/constants'
 import { groomDurationMins, groomServiceLabel } from '../../lib/grooming'
 import BookingDrawer from '../Bookings/BookingDrawer'
 import FAB from '../../components/FAB/FAB'
@@ -763,9 +763,10 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
 	                    const rotate = colPx != null ? colPx < 76 : item.total >= 4
 	                    const unassigned = isUnassigned(b)
 	                    const pay = paymentMeta(b)
+	                    const pencil = b.status === 'pencil-booked'
 	                    return (
                       <div key={b.id}
-                        className={`${styles.bk} ${isCancelled ? styles.bkCancelled : ''} ${b.status === 'pending' ? styles.bkPending : ''} ${unassigned ? styles.bkUnassigned : ''}`}
+                        className={`${styles.bk} ${isCancelled ? styles.bkCancelled : ''} ${b.status === 'pending' ? styles.bkPending : ''} ${pencil ? styles.pencilBooked : ''} ${unassigned ? styles.bkUnassigned : ''}`}
                         style={{ top, height: ht, left: l, width: w, background: hexBg(color), borderLeftColor: unassigned ? 'var(--yellow)' : color }}
                         onClick={() => setOpenId(b.id)}>
                         {rotate ? (
@@ -996,7 +997,7 @@ function WeekView({
                   const color = getCardColor(seg.b, rooms, groomers)
                   const unassigned = isUnassigned(seg.b)
                   return (
-                    <div key={seg.b.id} className={`${styles.spanBar} ${unassigned ? styles.spanBarUnassigned : ''}`}
+                    <div key={seg.b.id} className={`${styles.spanBar} ${seg.b.status === 'pencil-booked' ? styles.pencilBooked : ''} ${unassigned ? styles.spanBarUnassigned : ''}`}
                       style={{
                         gridColumn: `${seg.startCol + 1} / ${seg.endCol + 2}`,
                         background: hexBg(color), borderLeftColor: unassigned ? 'var(--yellow)' : color,
@@ -1070,8 +1071,9 @@ function WeekView({
                   const color = getCardColor(b, rooms, groomers)
                   const cancelled = b.status === 'cancelled' || b.status === 'rejected'
                   const unassigned = isUnassigned(b)
+                  const pencil = b.status === 'pencil-booked'
                   return (
-                    <div key={b.id} className={`${styles.weekChip} ${cancelled ? styles.weekChipCancelled : ''}`}
+                    <div key={b.id} className={`${styles.weekChip} ${cancelled ? styles.weekChipCancelled : ''} ${pencil ? styles.pencilBooked : ''}`}
                       style={{ background: hexBg(color), borderLeftColor: unassigned ? 'var(--yellow)' : color }}
                       onClick={() => onOpenBooking(b.id)}>
                       <span className={styles.weekChipTime}>{formatMins(st)}</span>
@@ -1136,8 +1138,9 @@ function MonthView({ monthAnchor, filtered, rooms, groomers, today, onPickDay, o
                       const color = getCardColor(seg.b, rooms, groomers)
                       const cancelled = seg.b.status === 'cancelled' || seg.b.status === 'rejected'
                       const unassigned = isUnassigned(seg.b)
+                      const pencil = seg.b.status === 'pencil-booked'
                       return (
-                        <div key={seg.b.id} className={`${styles.spanBar} ${styles.monthBar} ${cancelled ? styles.weekChipCancelled : ''}`}
+                        <div key={seg.b.id} className={`${styles.spanBar} ${styles.monthBar} ${cancelled ? styles.weekChipCancelled : ''} ${pencil ? styles.pencilBooked : ''}`}
                           style={{
                             gridColumn: `${seg.startCol + 1} / ${seg.endCol + 2}`,
                             background: hexBg(color), borderLeftColor: unassigned ? 'var(--yellow)' : color,
@@ -1170,17 +1173,16 @@ function MonthView({ monthAnchor, filtered, rooms, groomers, today, onPickDay, o
 }
 
 // ── List/agenda view: bookings grouped by day (empty days skipped) ──────────
-const STATUS_LABELS = { pending: 'Pending', confirmed: 'Confirmed', checked_in: 'Checked in', completed: 'Completed', cancelled: 'Cancelled', rejected: 'Rejected' }
-
 function ListRow({ b, label, color, onOpenBooking }) {
   const status     = b.status ?? 'confirmed'
   const cancelled  = status === 'cancelled' || status === 'rejected'
   const pending    = status === 'pending'
+  const pencil     = status === 'pencil-booked'
   const unassigned = isUnassigned(b)
   const pay        = paymentMeta(b)
   return (
     <div
-      className={`${styles.listRow} ${cancelled ? styles.listRowCancelled : ''} ${pending ? styles.listRowPending : ''}`}
+      className={`${styles.listRow} ${cancelled ? styles.listRowCancelled : ''} ${pending ? styles.listRowPending : ''} ${pencil ? styles.pencilBooked : ''}`}
       style={{ borderLeftColor: unassigned ? 'var(--yellow)' : color }}
       onClick={() => onOpenBooking(b.id)}>
       <span className={styles.listTime}>{label}</span>
@@ -1279,8 +1281,9 @@ function DayPeek({ date, filtered, rooms, groomers, onOpenBooking, onClose }) {
             const color = getCardColor(b, rooms, groomers)
             const cancelled = b.status === 'cancelled' || b.status === 'rejected'
             const unassigned = isUnassigned(b)
+            const pencil = b.status === 'pencil-booked'
             return (
-              <div key={b.id} className={`${styles.peekBar} ${cancelled ? styles.weekChipCancelled : ''}`}
+              <div key={b.id} className={`${styles.peekBar} ${cancelled ? styles.weekChipCancelled : ''} ${pencil ? styles.pencilBooked : ''}`}
                 style={{ background: hexBg(color), borderLeftColor: unassigned ? 'var(--yellow)' : color }}
                 onClick={() => onOpenBooking(b.id)}>
                 {unassigned ? '⚠ ' : ''}🏨 {first(b.pets)?.name ?? 'Pet'}
@@ -1290,8 +1293,9 @@ function DayPeek({ date, filtered, rooms, groomers, onOpenBooking, onClose }) {
           {timed.map(({ b, st }) => {
             const cancelled = b.status === 'cancelled' || b.status === 'rejected'
             const unassigned = isUnassigned(b)
+            const pencil = b.status === 'pencil-booked'
             return (
-              <div key={b.id} className={`${styles.peekRow} ${cancelled ? styles.weekChipCancelled : ''}`} onClick={() => onOpenBooking(b.id)}>
+              <div key={b.id} className={`${styles.peekRow} ${cancelled ? styles.weekChipCancelled : ''} ${pencil ? styles.pencilBooked : ''}`} onClick={() => onOpenBooking(b.id)}>
                 <span className={styles.peekTime}>{formatMins(st)}</span>
                 <span className={styles.sdot} style={{ background: STATUS_COLORS[b.status] ?? '#888' }} />
                 <span className={styles.peekName}>{unassigned && <span className={styles.bkWarn} title="Needs assignment">⚠</span>}{petEmoji(b)} {first(b.pets)?.name ?? 'Pet'}</span>

@@ -33,11 +33,22 @@ export const SVC_COLORS = {
 
 export const STATUS_COLORS = {
   pending:    '#FFCE58',
+  'pencil-booked': '#9B95E8',
   confirmed:  '#4D96B9',
   checked_in: '#1D9E75',
   completed:  '#6BCB77',
   cancelled:  '#888888',
   rejected:   '#888888',
+}
+
+export const STATUS_LABELS = {
+  pending: 'Pending',
+  'pencil-booked': 'Pencil-booked',
+  confirmed: 'Confirmed',
+  checked_in: 'Checked in',
+  completed: 'Completed',
+  cancelled: 'Cancelled',
+  rejected: 'Rejected',
 }
 
 export const PAY_COLORS = {

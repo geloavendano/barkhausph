@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { sbGet } from '../../lib/supabase'
-import { SVC_LABELS, SVC_COLORS, STATUS_COLORS, first, fmtTime } from '../../lib/constants'
+import { SVC_LABELS, SVC_COLORS, STATUS_COLORS, STATUS_LABELS, first, fmtTime } from '../../lib/constants'
 import { searchBookings } from '../../lib/search'
 import BookingDrawer from '../Bookings/BookingDrawer'
 import styles from './CheckInPage.module.css'
@@ -35,6 +35,10 @@ function ciSelectFor(innerSvc) {
 // Search select: all detail embeds as left joins (any service can match).
 const CI_SEARCH_SELECT = [CI_COMMON, ...Object.values(CI_DETAIL)].join(',')
 
+function localDateISO(date = new Date()) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
 function getBookingTime(b) {
   const gd = first(b.grooming_details)
   const hd = first(b.hotel_details)
@@ -45,6 +49,31 @@ function getBookingTime(b) {
 
 function sortByTime(arr) {
   return [...arr].sort((a, b) => getBookingTime(a).localeCompare(getBookingTime(b)))
+}
+
+function daysBetweenISO(fromISO, toISO) {
+  if (!fromISO || !toISO) return 99999
+  const from = new Date(fromISO + 'T00:00:00')
+  const to = new Date(toISO + 'T00:00:00')
+  return Math.round((to - from) / 86_400_000)
+}
+
+function sortByDaysUntil(arr, today) {
+  return [...arr].sort((a, b) => {
+    const da = daysBetweenISO(today, scheduledDate(a))
+    const db = daysBetweenISO(today, scheduledDate(b))
+    if (da !== db) return da - db
+    return getBookingTime(a).localeCompare(getBookingTime(b))
+  })
+}
+
+function daysUntilLabel(b, today) {
+  const days = daysBetweenISO(today, scheduledDate(b))
+  if (days === 99999) return 'No schedule date'
+  if (days < 0) return `${Math.abs(days)} day${Math.abs(days) === 1 ? '' : 's'} overdue`
+  if (days === 0) return 'Today'
+  if (days === 1) return 'Tomorrow'
+  return `${days} days until schedule`
 }
 
 // Parse a booking time into minutes-of-day. Handles display ("2:00 PM"),
@@ -104,21 +133,26 @@ export default function CheckInPage({ branches, currentBranchIdx = 0, rooms, gro
     setLoading(true)
     setError('')
 
-    const todayISO = new Date().toISOString().slice(0, 10)
+    const todayISO = localDateISO()
     setToday(todayISO)
 
     try {
       const base   = `branch_id=eq.${branch.id}`
       const status = 'status=in.(confirmed,pending,checked_in)'
+      const pencil = 'status=eq.pencil-booked'
 
       // Non-hotel: due when the service date (in each detail table) is today or
       // earlier. Filtered server-side via !inner on service_date.
-      const [groomRows, dayRows, studioRows, hotelAll] = await Promise.all([
+      const [groomRows, dayRows, studioRows, hotelAll, pencilGroomRows, pencilDayRows, pencilStudioRows, pencilHotelRows] = await Promise.all([
         sbGet('bookings', `${base}&service=eq.grooming&${status}&grooming_details.service_date=lte.${todayISO}&order=created_at&select=${ciSelectFor('grooming')}`),
         sbGet('bookings', `${base}&service=eq.daycare&${status}&daycare_details.service_date=lte.${todayISO}&order=created_at&select=${ciSelectFor('daycare')}`),
         sbGet('bookings', `${base}&service=eq.studio&${status}&studio_details.service_date=lte.${todayISO}&order=created_at&select=${ciSelectFor('studio')}`),
         // Hotel: fetch all active and filter client-side on checkin/checkout.
         sbGet('bookings', `${base}&service=eq.hotel&${status}&order=created_at&select=${ciSelectFor('hotel')}`),
+        sbGet('bookings', `${base}&service=eq.grooming&${pencil}&order=created_at&select=${ciSelectFor('grooming')}`),
+        sbGet('bookings', `${base}&service=eq.daycare&${pencil}&order=created_at&select=${ciSelectFor('daycare')}`),
+        sbGet('bookings', `${base}&service=eq.studio&${pencil}&order=created_at&select=${ciSelectFor('studio')}`),
+        sbGet('bookings', `${base}&service=eq.hotel&${pencil}&order=created_at&select=${ciSelectFor('hotel')}`),
       ])
 
       const hotelFiltered = (hotelAll ?? []).filter(bk => {
@@ -132,7 +166,7 @@ export default function CheckInPage({ branches, currentBranchIdx = 0, rooms, gro
       // Merge + deduplicate
       const seen = new Set()
       const all = []
-      for (const arr of [groomRows ?? [], dayRows ?? [], studioRows ?? [], hotelFiltered]) {
+      for (const arr of [groomRows ?? [], dayRows ?? [], studioRows ?? [], hotelFiltered, pencilGroomRows ?? [], pencilDayRows ?? [], pencilStudioRows ?? [], pencilHotelRows ?? []]) {
         for (const bk of arr) {
           if (!seen.has(bk.id)) { seen.add(bk.id); all.push(bk) }
         }
@@ -164,10 +198,11 @@ export default function CheckInPage({ branches, currentBranchIdx = 0, rooms, gro
   }, [searchQ, searchActive, branch?.id])
 
   // Categorise
-  const dueCheckin      = []   // overdue: confirmed but should already be checked in
-  const awaitingCheckin = []   // upcoming / pending
-  const inProgress      = []
-  const needCheckout    = []
+  const pendingConfirmation = []
+  const dueCheckin          = []   // overdue: confirmed but should already be checked in
+  const awaitingCheckin     = []   // upcoming / pending
+  const inProgress          = []
+  const needCheckout        = []
 
   const nowMins = (() => { const n = new Date(); return n.getHours() * 60 + n.getMinutes() })()
 
@@ -175,7 +210,9 @@ export default function CheckInPage({ branches, currentBranchIdx = 0, rooms, gro
     const hd = first(b.hotel_details)
     const isCheckedIn = b.status === 'checked_in'
     const isHotel     = b.service === 'hotel'
-    if (isHotel && hd && hd.checkout_date <= today && isCheckedIn) {
+    if (b.status === 'pencil-booked') {
+      pendingConfirmation.push(b)
+    } else if (isHotel && hd && hd.checkout_date <= today && isCheckedIn) {
       needCheckout.push(b)
     } else if (isCheckedIn) {
       inProgress.push(b)
@@ -186,10 +223,11 @@ export default function CheckInPage({ branches, currentBranchIdx = 0, rooms, gro
     }
   })
 
-  sortByTime(dueCheckin)
-  sortByTime(awaitingCheckin)
-  sortByTime(inProgress)
-  sortByTime(needCheckout)
+  const sortedPendingConfirmation = sortByDaysUntil(pendingConfirmation, today)
+  const sortedDueCheckin = sortByTime(dueCheckin)
+  const sortedAwaitingCheckin = sortByTime(awaitingCheckin)
+  const sortedInProgress = sortByTime(inProgress)
+  const sortedNeedCheckout = sortByTime(needCheckout)
 
   const overdueCount = needCheckout.filter(b => {
     const hd = first(b.hotel_details)
@@ -209,7 +247,7 @@ export default function CheckInPage({ branches, currentBranchIdx = 0, rooms, gro
     <div className={styles.page}>
       <div className={styles.topRow}>
         <div>
-          <h2 className={styles.title}>Check In</h2>
+          <h2 className={styles.title}>Pending</h2>
           {todayLabel && <p className={styles.dateLabel}>{todayLabel}</p>}
         </div>
         <button className={styles.refreshBtn} onClick={load} disabled={loading}>
@@ -248,7 +286,7 @@ export default function CheckInPage({ branches, currentBranchIdx = 0, rooms, gro
               <BookingCard
                 key={b.id}
                 booking={b}
-                actionLabel={(b.status ?? '').replace(/_/g, ' ')}
+                actionLabel={STATUS_LABELS[b.status] ?? (b.status ?? '').replace(/_/g, ' ')}
                 actionColor={STATUS_COLORS[b.status] ?? '#888'}
                 today={today}
                 onClick={() => setOpenId(b.id)}
@@ -258,80 +296,84 @@ export default function CheckInPage({ branches, currentBranchIdx = 0, rooms, gro
         </>
       ) : (
       <>
-      {loading && <p className={styles.msg}>Loading check-ins…</p>}
+      {loading && <p className={styles.msg}>Loading pending bookings…</p>}
       {error   && <p className={styles.err}>{error}</p>}
 
-      {!loading && !error && bookings.length === 0 && (
-        <div className={styles.empty}>
-          <p className={styles.emptyIcon}>🐾</p>
-          <p className={styles.emptyText}>No active bookings for today.</p>
-        </div>
-      )}
-
-      {!loading && bookings.length > 0 && (
+      {!loading && !error && (
         <>
-          {dueCheckin.length > 0 && (
-            <Section
-              id="ci_due_checkin"
-              label={`Due for Check-in (${dueCheckin.length} overdue)`}
-              color="var(--error)"
-              cards={dueCheckin}
-              actionLabel="Check In"
-              actionColor="#FF6B6B"
-              overdue
-              today={today}
-              collapsed={!!collapsed['ci_due_checkin']}
-              onToggle={() => toggle('ci_due_checkin')}
-              onOpen={setOpenId}
-            />
-          )}
-          {awaitingCheckin.length > 0 && (
-            <Section
-              id="ci_checkin"
-              label={`Awaiting Check-In (${awaitingCheckin.length})`}
-              color="#EF9F27"
-              cards={awaitingCheckin}
-              actionLabel="Check In"
-              actionColor="#EF9F27"
-              today={today}
-              collapsed={!!collapsed['ci_checkin']}
-              onToggle={() => toggle('ci_checkin')}
-              onOpen={setOpenId}
-              topMargin={dueCheckin.length > 0}
-            />
-          )}
-          {inProgress.length > 0 && (
-            <Section
-              id="ci_inprogress"
-              label={`In Progress (${inProgress.length})`}
-              color="#1D9E75"
-              cards={inProgress}
-              actionLabel="In Progress"
-              actionColor="#1D9E75"
-              today={today}
-              collapsed={!!collapsed['ci_inprogress']}
-              onToggle={() => toggle('ci_inprogress')}
-              onOpen={setOpenId}
-              topMargin={dueCheckin.length > 0 || awaitingCheckin.length > 0}
-            />
-          )}
-          {needCheckout.length > 0 && (
-            <Section
-              id="ci_checkout"
-              label={overdueCount
-                ? `Due for Checkout (${needCheckout.length} · ${overdueCount} overdue)`
-                : `Due for Checkout (${needCheckout.length})`}
-              color={overdueCount ? 'var(--error)' : '#4D96B9'}
-              cards={needCheckout}
-              actionLabel="Checkout"
-              actionColor={overdueCount ? '#FF6B6B' : '#4D96B9'}
-              today={today}
-              collapsed={!!collapsed['ci_checkout']}
-              onToggle={() => toggle('ci_checkout')}
-              onOpen={setOpenId}
-              topMargin={dueCheckin.length > 0 || awaitingCheckin.length > 0 || inProgress.length > 0}
-            />
-          )}
+          <Section
+            id="ci_pencil"
+            label={`Pending Confirmation (${sortedPendingConfirmation.length})`}
+            color="#9B95E8"
+            cards={sortedPendingConfirmation}
+            actionLabel="Pencil-booked"
+            actionColor="#9B95E8"
+            today={today}
+            metaFor={b => daysUntilLabel(b, today)}
+            emptyText="No pencil-booked bookings."
+            collapsed={!!collapsed['ci_pencil']}
+            onToggle={() => toggle('ci_pencil')}
+            onOpen={setOpenId}
+          />
+          <Section
+            id="ci_due_checkin"
+            label={`Due for Check-in (${sortedDueCheckin.length}${sortedDueCheckin.length ? ' overdue' : ''})`}
+            color="var(--error)"
+            cards={sortedDueCheckin}
+            actionLabel="Check In"
+            actionColor="#FF6B6B"
+            overdue
+            today={today}
+            emptyText="No overdue check-ins."
+            collapsed={!!collapsed['ci_due_checkin']}
+            onToggle={() => toggle('ci_due_checkin')}
+            onOpen={setOpenId}
+            topMargin
+          />
+          <Section
+            id="ci_checkin"
+            label={`Awaiting Check-In (${sortedAwaitingCheckin.length})`}
+            color="#EF9F27"
+            cards={sortedAwaitingCheckin}
+            actionLabel="Check In"
+            actionColor="#EF9F27"
+            today={today}
+            emptyText="No bookings awaiting check-in."
+            collapsed={!!collapsed['ci_checkin']}
+            onToggle={() => toggle('ci_checkin')}
+            onOpen={setOpenId}
+            topMargin
+          />
+          <Section
+            id="ci_inprogress"
+            label={`In Progress (${sortedInProgress.length})`}
+            color="#1D9E75"
+            cards={sortedInProgress}
+            actionLabel="In Progress"
+            actionColor="#1D9E75"
+            today={today}
+            emptyText="No bookings in progress."
+            collapsed={!!collapsed['ci_inprogress']}
+            onToggle={() => toggle('ci_inprogress')}
+            onOpen={setOpenId}
+            topMargin
+          />
+          <Section
+            id="ci_checkout"
+            label={overdueCount
+              ? `Due for Checkout (${sortedNeedCheckout.length} · ${overdueCount} overdue)`
+              : `Due for Checkout (${sortedNeedCheckout.length})`}
+            color={overdueCount ? 'var(--error)' : '#4D96B9'}
+            cards={sortedNeedCheckout}
+            actionLabel="Checkout"
+            actionColor={overdueCount ? '#FF6B6B' : '#4D96B9'}
+            today={today}
+            emptyText="No bookings due for checkout."
+            collapsed={!!collapsed['ci_checkout']}
+            onToggle={() => toggle('ci_checkout')}
+            onOpen={setOpenId}
+            topMargin
+          />
         </>
       )}
       </>
@@ -351,7 +393,7 @@ export default function CheckInPage({ branches, currentBranchIdx = 0, rooms, gro
   )
 }
 
-function Section({ id, label, color, cards, actionLabel, actionColor, today, overdue, collapsed, onToggle, onOpen, topMargin }) {
+function Section({ id, label, color, cards, actionLabel, actionColor, today, overdue, collapsed, onToggle, onOpen, topMargin, emptyText, metaFor }) {
   return (
     <div className={styles.section} style={topMargin ? { marginTop: 20 } : undefined}>
       <button className={styles.sectionHeader} onClick={onToggle}>
@@ -360,6 +402,7 @@ function Section({ id, label, color, cards, actionLabel, actionColor, today, ove
       </button>
       {!collapsed && (
         <div>
+          {cards.length === 0 && <div className={styles.sectionEmpty}>{emptyText ?? 'No bookings.'}</div>}
           {cards.map(b => (
             <BookingCard
               key={b.id}
@@ -367,6 +410,7 @@ function Section({ id, label, color, cards, actionLabel, actionColor, today, ove
               actionLabel={actionLabel}
               actionColor={actionColor}
               today={today}
+              extraMeta={metaFor ? metaFor(b) : ''}
               overdue={overdue}
               onClick={() => onOpen(b.id)}
             />
@@ -377,7 +421,7 @@ function Section({ id, label, color, cards, actionLabel, actionColor, today, ove
   )
 }
 
-function BookingCard({ booking: b, actionLabel, actionColor, today, overdue, onClick }) {
+function BookingCard({ booking: b, actionLabel, actionColor, today, overdue, extraMeta, onClick }) {
   const gd  = first(b.grooming_details)
   const hd  = first(b.hotel_details)
   const dd  = first(b.daycare_details)
@@ -436,8 +480,9 @@ function BookingCard({ booking: b, actionLabel, actionColor, today, overdue, onC
             </p>
           )}
           <span className={styles.statusPill} style={{ color: statusColor }}>
-            {b.status.replace(/_/g, ' ')}
+            {STATUS_LABELS[b.status] ?? b.status.replace(/_/g, ' ')}
           </span>
+          {extraMeta && <p className={styles.scheduleMeta}>{extraMeta}</p>}
         </div>
       </div>
     </div>

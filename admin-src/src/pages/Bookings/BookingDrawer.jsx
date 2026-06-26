@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase, sbGet, sbPatch, sbPost, sbSignedUrl } from '../../lib/supabase'
 import {
-  STATUS_COLORS, PAY_COLORS, SVC_LABELS, SIZE_LABELS,
+  STATUS_COLORS, STATUS_LABELS, PAY_COLORS, SVC_LABELS, SIZE_LABELS,
   SRC_LABELS, first, fmtDate, fmtTime, hexBg, esc,
 } from '../../lib/constants'
 import { adminSnapshot, bookingEditAudit, sbPostAudit } from '../../lib/adminAudit'
@@ -311,7 +311,7 @@ export default function BookingDrawer({ booking: b, rooms, groomers, currentAdmi
     const printedAt = new Date().toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' })
     const serviceLabel = SVC_LABELS[b.service] ?? b.service ?? 'Booking'
     const fileName = ['Barkhaus', serviceLabel, b.ref_number].map(cleanFilePart).filter(Boolean).join('_')
-    const statusText = String(b.status ?? '').replace(/_/g, ' ')
+    const statusText = STATUS_LABELS[b.status] ?? String(b.status ?? '').replace(/_/g, ' ')
     const payStatusText = String(b.payment_status ?? 'unpaid').replace(/_/g, ' ')
     const serviceRows = []
 
@@ -504,7 +504,7 @@ export default function BookingDrawer({ booking: b, rooms, groomers, currentAdmi
           <div className={styles.statusRow}>
             <span className={styles.timeStr}>{timeStr}</span>
             <span className={styles.pill} style={{ background: hexBg(STATUS_COLORS[b.status] ?? '#888'), color: STATUS_COLORS[b.status] ?? '#888' }}>
-              {(b.status ?? '').replace('_', ' ')}
+              {STATUS_LABELS[b.status] ?? (b.status ?? '').replace('_', ' ')}
             </span>
             <span className={styles.pill} style={{ background: hexBg(PAY_COLORS[b.payment_status ?? 'unpaid']), color: PAY_COLORS[b.payment_status ?? 'unpaid'] }}>
               {(b.payment_status ?? 'unpaid').replace('_', ' ')}
@@ -687,8 +687,8 @@ export default function BookingDrawer({ booking: b, rooms, groomers, currentAdmi
         <div className={styles.stickyFooter}>
           <div className={styles.stickySelects}>
             <select className="fi" value={status} onChange={e => setStatus(e.target.value)}>
-              {['pending','confirmed','checked_in','completed','cancelled'].map(s =>
-                <option key={s} value={s}>{s.replace('_', ' ')}</option>
+              {['pending','pencil-booked','confirmed','checked_in','completed','cancelled'].map(s =>
+                <option key={s} value={s}>{STATUS_LABELS[s] ?? s.replace('_', ' ')}</option>
               )}
             </select>
             <select className="fi" value={payStatus} onChange={e => setPayStatus(e.target.value)}>
