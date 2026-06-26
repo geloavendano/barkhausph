@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { supabase, sbGet, sbPatch } from '../../lib/supabase'
 import { STATUS_COLORS, SVC_LABELS, PAY_COLORS, PAY_LABELS, first, hexBg } from '../../lib/constants'
-import { groomDurationMins } from '../../lib/grooming'
+import { groomDurationMins, groomServiceLabel } from '../../lib/grooming'
 import BookingDrawer from '../Bookings/BookingDrawer'
 import FAB from '../../components/FAB/FAB'
 import AddBookingPanel from '../../components/AddBookingPanel/AddBookingPanel'
@@ -754,7 +754,7 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
                     const color = getCardColor(b, rooms, groomers)
                     const isCancelled = b.status === 'cancelled' || b.status === 'rejected'
 	                    const detail = gd
-	                      ? (gd.groom_service_name || gd.groom_service_key || 'Groom') + (gd.preferred_stylist && gd.preferred_stylist !== 'any' ? ` | ${gd.preferred_stylist}` : '')
+	                      ? groomServiceLabel(gd.groom_service_name || gd.groom_service_key) + (gd.preferred_stylist && gd.preferred_stylist !== 'any' ? ` | ${gd.preferred_stylist}` : '')
                       : hd ? (hd.room_type === 'other' ? 'Other' : (rooms.find(r => r.id === hd.room_id)?.name ?? ROOM_TYPE_LABELS[hd.room_type] ?? hd.room_type ?? 'Hotel'))
                       : first(b.daycare_details) ? 'Daycare' : first(b.studio_details) ? 'Studio' : ''
                     // Rotate the name vertically only when the column is actually too
@@ -780,10 +780,12 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
                             </div>
 	                            {unassigned && ht > 58 && <div className={styles.bkAssign}>⚠ Needs assignment</div>}
 	                            {detail && <div className={styles.bkSub}>{detail}</div>}
-	                            {ht > 76 && (first(b.owners)?.first_name ?? '') && <div className={styles.bkSub}>{first(b.owners).first_name}</div>}
-	                            <span className={styles.payPill} style={{ color: pay.color, borderColor: pay.color, background: hexBg(pay.color) }}>
-	                              {pay.label}
-	                            </span>
+	                            <div className={styles.bkMetaRow}>
+	                              {ht > 76 && (first(b.owners)?.first_name ?? '') && <span className={styles.bkOwner}>{first(b.owners).first_name}</span>}
+	                              <span className={styles.payPill} style={{ color: pay.color, borderColor: pay.color, background: hexBg(pay.color) }}>
+	                                {pay.label}
+	                              </span>
+	                            </div>
 	                            {(b.discount_amount ?? 0) > 0 && <span className={styles.bkStar}>★</span>}
 	                          </>
                         )}
