@@ -24,6 +24,7 @@ const BOOKING_SELECT = [
 
 const SVC_FILTERS = ['all', 'grooming', 'hotel', 'daycare', 'studio']
 const PAGE_SIZE   = 50   // rows per fetch (top-level bookings; embeds are nested)
+const SRC_LABELS  = { online: 'Online', admin: 'Admin', walkin: 'Walk-in' }
 
 export default function BookingsPage({ branches, currentBranchIdx = 0, rooms, groomers, studios = [], currentAdmin }) {
   const [bookings,        setBookings]        = useState([])
@@ -343,15 +344,19 @@ function BookingRow({ booking: b, isLast, onClick }) {
   const sd    = first(b.studio_details)
 
   let sched = ''
-  if (gd?.timeslot) sched = gd.timeslot
+  if (gd?.timeslot) sched = [gd.service_date, gd.timeslot].filter(Boolean).join(' · ')
   else if (hd)      sched = `${hd.checkin_date ?? '-'} → ${hd.checkout_date ?? '-'}`
-  else if (dd)      sched = `${dd.dropoff_time ?? ''} – ${dd.pickup_time ?? 'open'}`
+  else if (dd)      sched = [dd.service_date, `${dd.dropoff_time ?? ''} – ${dd.open_time ? 'open' : (dd.pickup_time ?? 'open')}`].filter(Boolean).join(' · ')
   else if (sd?.timeslot) sched = sd.timeslot
 
   const isCancelled = b.status === 'cancelled' || b.status === 'rejected'
   const svcColor    = SVC_COLORS[b.service] ?? '#888'
   const statusColor = STATUS_COLORS[b.status] ?? '#888'
   const ownerName   = [owner.first_name, owner.last_name].filter(Boolean).join(' ')
+  const bookedAt    = b.created_at
+    ? new Date(b.created_at).toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit', hour12: true })
+    : ''
+  const sourceLabel = SRC_LABELS[b.booking_source] ?? b.booking_source ?? '—'
 
   return (
     <div
@@ -365,6 +370,9 @@ function BookingRow({ booking: b, isLast, onClick }) {
       </span>
       <span className={`${styles.ref} ${isCancelled ? styles.lineThrough : ''}`}>
         {b.ref_number ?? '-'}
+      </span>
+      <span className={styles.bookingMeta}>
+        {bookedAt || '—'} <span>·</span> {sourceLabel}
       </span>
       <span className={styles.petOwner}>
         {pet.name ?? '-'}
