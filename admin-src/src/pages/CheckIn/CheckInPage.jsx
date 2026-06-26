@@ -159,7 +159,7 @@ export default function CheckInPage({ branches, currentBranchIdx = 0, rooms, gro
         const hd = first(bk.hotel_details)
         if (!hd) return false
         if (bk.status === 'confirmed' || bk.status === 'pending') return hd.checkin_date <= todayISO
-        if (bk.status === 'checked_in') return hd.checkout_date <= todayISO
+        if (bk.status === 'checked_in') return hd.checkin_date <= todayISO
         return false
       })
 
