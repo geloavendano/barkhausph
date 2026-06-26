@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { sbGet, sbUpsert } from '../../lib/supabase'
+import { normalizeCsvDate } from '../../lib/csvDate'
 import styles from './MembersPage.module.css'
 
 function esc(s) {
@@ -44,19 +45,6 @@ function parseCsvLine(line) {
   }
   cols.push(cur.trim())
   return cols.map(c => c.replace(/^"|"$/g, ''))
-}
-
-function normalizeCsvDate(value) {
-  const raw = String(value ?? '').trim()
-  if (!raw) return { ok: true, value: null }
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
-    return { ok: false, reason: 'Invalid Valid Until Date.', action: 'Use YYYY-MM-DD, for example 2026-03-04.' }
-  }
-  const date = new Date(raw + 'T00:00:00Z')
-  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== raw) {
-    return { ok: false, reason: 'Invalid Valid Until Date.', action: 'Enter a real calendar date in YYYY-MM-DD format.' }
-  }
-  return { ok: true, value: raw }
 }
 
 const MEMBERS_IMPORT_JOB_KEY = 'barkhaus:members-import-job:v1'
@@ -481,6 +469,7 @@ function CsvUploadCard({ branches }) {
       </p>
       <p className={styles.csvNote}>
         Use an exact branch name for Standard memberships. Leave Branch blank for Passport memberships valid at all branches.
+        Dates may use YYYY-MM-DD or M/D/YYYY format.
       </p>
 
       <input
