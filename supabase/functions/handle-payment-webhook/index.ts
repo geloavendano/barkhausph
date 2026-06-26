@@ -103,6 +103,7 @@ const BRANCH_BOOKING_EMAILS: Record<string, string> = {
   estancia: "booking.barkhausestancia@gmail.com",
   eastwood: "booking.barkhauseastwood@gmail.com",
 };
+const PAYMENT_ALERT_EMAILS = ["gelo@hey.com"];
 
 function branchBookingEmail(branch?: { name?: string } | null): string | null {
   const name = (branch?.name || "").toLowerCase();
@@ -150,9 +151,10 @@ async function sendPaymentFailureAlert(details: Record<string, any>) {
   if (!apiKey) throw new Error("RESEND_API_KEY not set");
 
   const branchEmail = branchBookingEmailFromLocation(details.location);
-  const recipients = branchEmail
-    ? [branchEmail]
-    : Object.values(BRANCH_BOOKING_EMAILS);
+  const recipients = Array.from(new Set([
+    ...(branchEmail ? [branchEmail] : Object.values(BRANCH_BOOKING_EMAILS)),
+    ...PAYMENT_ALERT_EMAILS,
+  ]));
 
   const ref = details.refNumber || "Unknown ref";
   const eventType = details.eventType || "Unknown event";
