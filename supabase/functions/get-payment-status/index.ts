@@ -35,7 +35,13 @@ function isSuccessfulMayaStatus(status?: string | null): boolean {
 }
 
 function mayaAmount(payload: Record<string, any>): number {
-  return Number(payload?.totalAmount?.value ?? payload?.totalAmount?.amount ?? payload?.amount ?? 0);
+  const raw = payload?.totalAmount?.value
+    ?? payload?.totalAmount?.amount
+    ?? payload?.amount?.value
+    ?? payload?.amount?.amount
+    ?? payload?.amount
+    ?? 0;
+  return Number(raw);
 }
 
 async function lookupMayaPayments(ref: string): Promise<Record<string, any>[]> {
@@ -63,6 +69,7 @@ async function lookupMayaPayment(ref: string): Promise<Record<string, any> | nul
 
 async function nudgeMayaFinalizer(ref: string): Promise<void> {
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!supabaseUrl) return;
 
   const payment = await lookupMayaPayment(ref);
@@ -70,12 +77,15 @@ async function nudgeMayaFinalizer(ref: string): Promise<void> {
   const normalizedPayment = {
     ...payment,
     paymentStatus: mayaStatus(payment),
-    requestReferenceNumber: payment.requestReferenceNumber || payment.rrn || payment.referenceNumber || ref,
+    requestReferenceNumber: payment.requestReferenceNumber || payment.metadata?.refNumber || payment.metadata?.ref_number || payment.referenceNumber || ref,
   };
 
   const webhookRes = await fetch(`${supabaseUrl}/functions/v1/handle-payment-webhook`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...(serviceRoleKey ? { "Authorization": `Bearer ${serviceRoleKey}`, "apikey": serviceRoleKey } : {}),
+    },
     body: JSON.stringify(normalizedPayment),
   });
   if (!webhookRes.ok) {
@@ -160,6 +170,29 @@ Deno.serve(async (req) => {
         }
       } else {
         console.warn("Maya paid recovery skipped due to amount mismatch:", paidAmount, booking?.total);
+      }
+    }
+  }
+
+  if (data?.status === "cancelled" && data?.payment_status === "paid") {
+    const { data: booking } = await supabase.from("bookings")
+      .select("id")
+      .eq("ref_number", ref)
+      .maybeSingle();
+    if (booking) {
+      const { error: updateError } = await supabase.from("bookings")
+        .update({
+          status: "confirmed",
+          cancellation_reason: null,
+        })
+        .eq("id", booking.id)
+        .eq("status", "cancelled")
+        .eq("payment_status", "paid");
+      if (updateError) {
+        console.error("Maya cancelled-paid recovery update failed:", updateError.message);
+      } else {
+        const refreshed = await bookingStatus(supabase, ref);
+        if (!refreshed.error) data = refreshed.data;
       }
     }
   }

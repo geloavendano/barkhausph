@@ -16,7 +16,13 @@ function mayaBaseUrl(): string {
 }
 
 function mayaAmount(payload: Record<string, any>): number {
-  return Number(payload?.totalAmount?.value ?? payload?.totalAmount?.amount ?? payload?.amount ?? 0);
+  const raw = payload?.totalAmount?.value
+    ?? payload?.totalAmount?.amount
+    ?? payload?.amount?.value
+    ?? payload?.amount?.amount
+    ?? payload?.amount
+    ?? 0;
+  return Number(raw);
 }
 
 function mayaStatus(payload?: Record<string, any> | null): string | null {
@@ -24,7 +30,21 @@ function mayaStatus(payload?: Record<string, any> | null): string | null {
 }
 
 function mayaReference(payload?: Record<string, any> | null): string | null {
-  return payload?.requestReferenceNumber || payload?.rrn || payload?.referenceNumber || null;
+  return payload?.requestReferenceNumber
+    || payload?.metadata?.refNumber
+    || payload?.metadata?.ref_number
+    || payload?.metadata?.bookingRef
+    || payload?.metadata?.booking_ref
+    || payload?.referenceNumber
+    || null;
+}
+
+function mayaCheckoutId(payload?: Record<string, any> | null): string | null {
+  return payload?.checkoutId || payload?.checkout?.id || payload?.metadata?.checkoutId || null;
+}
+
+function isBookingRef(value?: string | null): boolean {
+  return /^BH-[A-Z0-9]+$/i.test(String(value || ""));
 }
 
 function isSuccessfulMayaStatus(status?: string | null): boolean {
@@ -495,9 +515,13 @@ Deno.serve(async (req) => {
       const verifiedStatus = mayaStatus(verified);
       const verifiedRef = mayaReference(verified);
       const eventRef = mayaReference(event);
+      const verifiedCheckoutId = mayaCheckoutId(verified);
+      const eventCheckoutId = mayaCheckoutId(event);
       const statusesMatch = verifiedStatus === eventType ||
         (isSuccessfulMayaStatus(verifiedStatus) && isSuccessfulMayaStatus(eventType));
-      if (verified.id !== event.id || !statusesMatch || (verifiedRef && eventRef && verifiedRef !== eventRef)) {
+      const refsConflict = verifiedRef && eventRef && verifiedRef !== eventRef &&
+        isBookingRef(verifiedRef) && isBookingRef(eventRef);
+      if (verified.id !== event.id || !statusesMatch || refsConflict) {
         console.error("Maya webhook does not match retrieved payment");
         return new Response(JSON.stringify({ error: "Maya payment verification mismatch" }),
           { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -512,6 +536,9 @@ Deno.serve(async (req) => {
       paymentId   = verified.id || event.id || "";
       paidAmount  = mayaAmount(verified);
       bookingMeta = (verified.metadata || event.metadata || null) as Record<string, string> | null;
+      if (verifiedCheckoutId && eventCheckoutId && verifiedCheckoutId !== eventCheckoutId) {
+        console.warn("Maya checkout ID mismatch between event and verified payment:", eventCheckoutId, verifiedCheckoutId);
+      }
       description = `Maya ${verified.paymentScheme || verified.fundSource?.type || "checkout"}`;
       console.log("Maya event — payment:", paymentId, "amount:", paidAmount);
     } else if (eventType === "checkout_session.payment.paid") {
@@ -538,7 +565,9 @@ Deno.serve(async (req) => {
     const bookingIdFromMeta = bookingMeta?.booking_id || bookingMeta?.bookingId || null;
     const refFromMeta       = bookingMeta?.ref_number || bookingMeta?.refNumber || null;
     const refFromDesc       = description.match(/Ref:\s*(BH-[A-Z0-9]+)/i)?.[1] || null;
-      const refNumber         = isMaya ? mayaReference(event) : (refFromMeta || refFromDesc || null);
+      const refNumber         = isMaya
+        ? (mayaReference(event) || refFromMeta || refFromDesc || null)
+        : (refFromMeta || refFromDesc || null);
 
     console.log("bookingId (meta):", bookingIdFromMeta, "ref:", refNumber);
 
@@ -571,12 +600,17 @@ Deno.serve(async (req) => {
     }
 
     // ── Find pending record ──────────────────────────────────────────────────────
-    // Priority: provider checkout ID → legacy PayMongo session ID → reference.
+    // Priority: provider checkout/payment IDs → legacy PayMongo session ID → reference.
     let pending: any = null;
 
-    if (isMaya && eventData?.id) {
+    if (isMaya && mayaCheckoutId(eventData)) {
       const { data } = await supabase.from("pending_bookings")
-        .select("*").eq("gateway_checkout_id", eventData.id).maybeSingle();
+        .select("*").eq("gateway_checkout_id", mayaCheckoutId(eventData)).maybeSingle();
+      pending = data;
+    }
+    if (isMaya && !pending && paymentId) {
+      const { data } = await supabase.from("pending_bookings")
+        .select("*").eq("gateway_payment_id", paymentId).maybeSingle();
       pending = data;
     }
     if (!pending && eventType === "checkout_session.payment.paid" && eventData?.id) {
@@ -608,9 +642,18 @@ Deno.serve(async (req) => {
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // Maya failure/cancel/expiry events release the pending booking and its slot.
+    if (isMaya && paymentId && !pending.gateway_payment_id) {
+      await supabase.from("pending_bookings")
+        .update({ gateway_payment_id: paymentId })
+        .eq("id", pending.id);
+    }
+
+    // Maya expiry is final and releases the pending booking. Cancel/failed
+    // webhooks can arrive during wallet/browser handoff even when a later
+    // success event follows, so keep those holds until retry/edit or the
+    // 15-minute expiry job releases them.
     if (isMaya && !paidEvent) {
-      if (["PAYMENT_FAILED", "PAYMENT_EXPIRED", "PAYMENT_CANCELLED"].includes(eventType)) {
+      if (eventType === "PAYMENT_EXPIRED") {
         await supabase.from("bookings").update({ status: "cancelled" })
           .eq("ref_number", pending.ref_number).eq("status", "pending");
         await supabase.from("pending_bookings").delete().eq("id", pending.id);

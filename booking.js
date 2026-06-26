@@ -2875,17 +2875,18 @@ function showHostedPaymentSuccess(ref) {
 
     // Maya may return through failure/cancel URLs even after a wallet screen shows
     // success. Always reconcile by booking ref before deciding which screen to show.
+    var paymentState = null;
     if (ref && (status === 'success' || status === 'cancelled' || status === 'failed')) {
       showHostedPaymentChecking(ref);
-      var confirmed = await waitForHostedPayment(ref);
-      if (confirmed) {
+      paymentState = await waitForHostedPaymentState(ref);
+      if (paymentState && paymentState.confirmed) {
         showHostedPaymentSuccess(ref);
         return;
       }
     }
 
     if (status === 'success' && ref) {
-      if (!confirmed) {
+      if (!paymentState || !paymentState.confirmed) {
         var pendingSnap = null;
         try { pendingSnap = JSON.parse(sessionStorage.getItem('bk_snapshot') || 'null'); } catch(e) {}
         if (pendingSnap) showPayReturnScreen(pendingSnap, ref);
@@ -2893,6 +2894,19 @@ function showHostedPaymentSuccess(ref) {
         return;
       }
     } else if (status === 'cancelled' || status === 'failed') {
+      if (paymentState && paymentState.status === 'pending' && paymentState.payment_status === 'unpaid') {
+        var _pendingSnap = null;
+        try { _pendingSnap = JSON.parse(sessionStorage.getItem('bk_snapshot') || 'null'); } catch(e) {}
+        if (_pendingSnap) {
+          showPayReturnScreen(_pendingSnap, ref || _pendingSnap.refNumber);
+          var _pendingStatus = document.getElementById('payReturnStatus');
+          if (_pendingStatus) _pendingStatus.textContent = 'Your payment is still being verified. Please wait a moment before retrying.';
+        } else {
+          showHostedPaymentChecking(ref);
+        }
+        showToast('Payment is still being verified. Please keep your booking reference and check again shortly.', 8000);
+        return;
+      }
       var _retSnap = null;
       try { _retSnap = JSON.parse(sessionStorage.getItem('bk_snapshot') || 'null'); } catch(e) {}
       if (_retSnap) {
@@ -2919,13 +2933,20 @@ async function getHostedPaymentState(ref) {
 }
 
 async function waitForHostedPayment(ref) {
+  var state = await waitForHostedPaymentState(ref);
+  return !!(state && state.confirmed);
+}
+
+async function waitForHostedPaymentState(ref) {
+  var latest = null;
   for (var attempt = 0; attempt < 10; attempt++) {
     var state = await getHostedPaymentState(ref);
-    if (state && state.confirmed) return true;
-    if (state && state.status === 'cancelled') return false;
+    if (state) latest = state;
+    if (state && state.confirmed) return state;
+    if (state && state.status === 'cancelled' && state.payment_status !== 'unpaid') return state;
     await new Promise(function(resolve) { setTimeout(resolve, 2000); });
   }
-  return false;
+  return latest;
 }
 
 // ── POLL FOR PAYMENT if ref is in sessionStorage (QR fallback) ──
