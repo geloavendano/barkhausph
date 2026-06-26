@@ -47,6 +47,13 @@ export const PAY_COLORS = {
   refunded:        '#9B95E8',
 }
 
+export const PAY_LABELS = {
+  unpaid:         'Unpaid',
+  partially_paid: 'Partial',
+  paid:           'Paid',
+  refunded:       'Refund',
+}
+
 export const SIZE_LABELS = {
   tiny:       'Tiny',
   small_dog:  'Small',

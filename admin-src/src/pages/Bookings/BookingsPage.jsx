@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase, sbGet } from '../../lib/supabase'
-import { SVC_LABELS, SVC_COLORS, STATUS_COLORS, PAY_COLORS, first, hexBg } from '../../lib/constants'
+import { SVC_LABELS, SVC_COLORS, STATUS_COLORS, PAY_COLORS, PAY_LABELS, first, hexBg } from '../../lib/constants'
 import BookingDrawer from './BookingDrawer'
 import FAB from '../../components/FAB/FAB'
 import AddBookingPanel from '../../components/AddBookingPanel/AddBookingPanel'
@@ -357,6 +357,8 @@ function BookingRow({ booking: b, isLast, onClick }) {
     ? new Date(b.created_at).toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit', hour12: true })
     : ''
   const sourceLabel = SRC_LABELS[b.booking_source] ?? b.booking_source ?? '—'
+  const payStatus   = b.payment_status ?? 'unpaid'
+  const payColor    = PAY_COLORS[payStatus] ?? PAY_COLORS.unpaid
 
   return (
     <div
@@ -381,6 +383,9 @@ function BookingRow({ booking: b, isLast, onClick }) {
         <span className={styles.ownerName}>· {ownerName || '—'}</span>
       </span>
       <span className={styles.sched}>{sched}</span>
+      <span className={styles.payPill} style={{ color: payColor, borderColor: payColor, background: hexBg(payColor) }}>
+        {PAY_LABELS[payStatus] ?? payStatus}
+      </span>
       <span className={styles.total}>{b.total ? `₱${b.total.toLocaleString()}` : '-'}</span>
     </div>
   )

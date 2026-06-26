@@ -125,6 +125,10 @@
 .ownerName { color: var(--mid); }
 .star      { color: var(--yellow); font-size: 10px; }
 .sched     { font-size: 11px; color: var(--mid); min-width: 100px; }
+.payPill   {
+  font-size: 9px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase;
+  border: 0.5px solid; border-radius: 20px; padding: 2px 8px; flex-shrink: 0;
+}
 .total     { font-size: 12px; font-weight: 700; color: var(--cream); min-width: 70px; text-align: right; margin-left: auto; }
 
 /* ── Load more ── */

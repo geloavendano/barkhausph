@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { supabase, sbGet, sbPatch } from '../../lib/supabase'
-import { STATUS_COLORS, SVC_LABELS, first, hexBg } from '../../lib/constants'
+import { STATUS_COLORS, SVC_LABELS, PAY_COLORS, PAY_LABELS, first, hexBg } from '../../lib/constants'
 import { groomDurationMins } from '../../lib/grooming'
 import BookingDrawer from '../Bookings/BookingDrawer'
 import FAB from '../../components/FAB/FAB'
@@ -120,6 +120,11 @@ function isUnassigned(b) {
   if (b.service === 'hotel')    { const hd = first(b.hotel_details) ?? {}; return !hd.room_id && hd.room_type !== 'other' }
   if (b.service === 'studio')   return !first(b.studio_details)?.studio_id
   return false
+}
+function paymentMeta(b) {
+  const status = b.payment_status ?? 'unpaid'
+  const color = PAY_COLORS[status] ?? PAY_COLORS.unpaid
+  return { status, color, label: PAY_LABELS[status] ?? status }
 }
 
 // ── View helpers (day / week / month) ───────────────────────────────────────
@@ -756,8 +761,9 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
                     // narrow for horizontal text (measured), not merely when many overlap.
                     const colPx = colAreaW > 0 ? colAreaW / item.total : null
                     const rotate = colPx != null ? colPx < 76 : item.total >= 4
-                    const unassigned = isUnassigned(b)
-                    return (
+	                    const unassigned = isUnassigned(b)
+	                    const pay = paymentMeta(b)
+	                    return (
                       <div key={b.id}
                         className={`${styles.bk} ${isCancelled ? styles.bkCancelled : ''} ${b.status === 'pending' ? styles.bkPending : ''} ${unassigned ? styles.bkUnassigned : ''}`}
                         style={{ top, height: ht, left: l, width: w, background: hexBg(color), borderLeftColor: unassigned ? 'var(--yellow)' : color }}
@@ -773,10 +779,15 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
                               {unassigned && <span className={styles.bkWarn} title="Needs assignment">⚠</span>}
                             </div>
                             {unassigned && ht > 38 && <div className={styles.bkAssign}>⚠ Needs assignment</div>}
-                            {ht > 52 && detail     && <div className={styles.bkSub}>{detail}</div>}
-                            {ht > 72 && (first(b.owners)?.first_name ?? '') && <div className={styles.bkSub}>{first(b.owners).first_name}</div>}
-                            {(b.discount_amount ?? 0) > 0 && <span className={styles.bkStar}>★</span>}
-                          </>
+	                            {ht > 52 && detail     && <div className={styles.bkSub}>{detail}</div>}
+	                            {ht > 72 && (first(b.owners)?.first_name ?? '') && <div className={styles.bkSub}>{first(b.owners).first_name}</div>}
+	                            {ht > 92 && (
+	                              <span className={styles.payPill} style={{ color: pay.color, borderColor: pay.color, background: hexBg(pay.color) }}>
+	                                {pay.label}
+	                              </span>
+	                            )}
+	                            {(b.discount_amount ?? 0) > 0 && <span className={styles.bkStar}>★</span>}
+	                          </>
                         )}
                       </div>
                     )
@@ -1166,6 +1177,7 @@ function ListRow({ b, label, color, onOpenBooking }) {
   const cancelled  = status === 'cancelled' || status === 'rejected'
   const pending    = status === 'pending'
   const unassigned = isUnassigned(b)
+  const pay        = paymentMeta(b)
   return (
     <div
       className={`${styles.listRow} ${cancelled ? styles.listRowCancelled : ''} ${pending ? styles.listRowPending : ''}`}
@@ -1180,6 +1192,7 @@ function ListRow({ b, label, color, onOpenBooking }) {
       {status !== 'confirmed' && status !== 'checked_in' && (
         <span className={styles.listBadge} style={{ color: STATUS_COLORS[status] ?? '#888', borderColor: STATUS_COLORS[status] ?? '#888' }}>{STATUS_LABELS[status] ?? status}</span>
       )}
+      <span className={styles.payPill} style={{ color: pay.color, borderColor: pay.color, background: hexBg(pay.color) }}>{pay.label}</span>
       <span className={styles.listSvc}>{SVC_LABELS[b.service] ?? b.service}</span>
     </div>
   )
