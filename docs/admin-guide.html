@@ -666,22 +666,33 @@
 </div>
 
 <script>
-// Screenshot loader — keeps the guide source compact while preserving the capture checklist.
+// Screenshot loader — keeps the guide source compact while preserving the capture
+// checklist. A real PNG dropped into docs/images/<name> shows automatically; a
+// missing one degrades to a tidy "pending" note instead of a broken-image icon.
 (function(){
   document.querySelectorAll('.shot[data-img]').forEach(function(shot){
-    if (shot.querySelector('.shot-img')) return;
-    var filename = shot.querySelector('.fname');
-    var caption = shot.querySelector('.shot-cap');
+    if (shot.querySelector('.shot-img-wrap')) return;
+    var fnameEl  = shot.querySelector('.fname');
+    var vpEl     = shot.querySelector('.vp');
+    var caption  = shot.querySelector('.shot-cap');
+    var src      = shot.getAttribute('data-img');
+    var fname    = fnameEl ? fnameEl.textContent : src;
+    var vp       = vpEl ? ' (' + vpEl.textContent + ')' : '';
     var wrap = document.createElement('div');
-    var img = document.createElement('img');
+    var img  = document.createElement('img');
     var note = document.createElement('p');
     wrap.className = 'shot-img-wrap';
     img.className = 'shot-img';
-    img.src = shot.getAttribute('data-img');
     img.loading = 'lazy';
-    img.alt = filename ? filename.textContent : 'Barkhaus admin screenshot';
+    img.alt = fname;
     note.className = 'shot-note';
-    note.textContent = 'Synthetic test-data mock. Replace this PNG with a seeded admin capture when available.';
+    note.style.display = 'none';
+    img.onerror = function(){
+      img.style.display = 'none';
+      note.style.display = '';
+      note.textContent = '📷 Screenshot pending — save ' + src + vp + ' and it appears here automatically.';
+    };
+    img.src = src;
     wrap.appendChild(img);
     wrap.appendChild(note);
     (caption || shot.querySelector('.shot-top')).insertAdjacentElement('afterend', wrap);
