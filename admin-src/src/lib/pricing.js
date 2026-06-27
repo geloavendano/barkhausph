@@ -165,7 +165,13 @@ export function calcDaycare(bk, p) {
 export function calcTotal(bk, p) {
   const base     = calcBase(bk, p)
   const late     = calcLate(bk, p)
-  const subtotal = base + late                                                    // pre-discount: base service + addons + late pickup
-  const disc     = bk.memvalid ? Math.round(subtotal * (p.disc[bk.svc] ?? 0)) : 0  // discount on full subtotal (consistent with online flow)
+  const subtotal = base + late
+  // Grooming add-ons and hotel late pickup are billed at full price.
+  // Daycare's base already represents its full selected duration.
+  let discountable = base
+  if (bk.svc === 'grooming') {
+    discountable = bk.gsvc !== 'ala_carte' ? (p.groom[bk.gsvc]?.[bk.size] ?? 0) : 0
+  }
+  const disc = bk.memvalid ? Math.round(discountable * (p.disc[bk.svc] ?? 0)) : 0
   return { base, disc, late, subtotal, total: subtotal - disc }
 }

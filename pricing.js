@@ -81,3 +81,8 @@ function loadPricingData(rows) {
   });
   _pricingLoaded = true;
 }
+
+function calculateMemberDiscount(service, discountableAmount, memberValid) {
+  if (!memberValid || discountableAmount <= 0) return 0;
+  return Math.round(discountableAmount * (MEMBER_DISCOUNT[service] || 0));
+}

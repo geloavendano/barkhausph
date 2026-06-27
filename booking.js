@@ -597,20 +597,21 @@ function updateNavTotal() {
 function getRunningTotal() {
   var svc = booking.service;
   var raw = 0;
+  var discountable = 0;
   if (svc === 'grooming') {
     raw = (booking.groomServicePrice || 0) +
       Object.keys(booking.selectedAddons).reduce(function(a,k) {
         return a + (ADDONS.find(function(x){return x.key===k;}) ? booking.selectedAddons[k] : 0);
       }, 0);
+    discountable = booking.groomServicePrice || 0;
   } else if (svc === 'hotel') {
     raw = (booking.hotelBaseTotal || 0) + (booking.hotelLateTotal || 0);
+    discountable = booking.hotelBaseTotal || 0;
   } else if (svc === 'daycare') {
     raw = booking.daycareTotal || 0;
+    discountable = raw;
   }
-  if (raw > 0 && booking.memberValid) {
-    raw = Math.round(raw * (1 - (MEMBER_DISCOUNT[svc] || 0)));
-  }
-  return raw;
+  return raw - calculateMemberDiscount(svc, discountable, booking.memberValid);
 }
 
 // ── LOCATION ──
@@ -1018,7 +1019,7 @@ function updateGroomTotal() {
   var base    = booking.groomServicePrice || 0;
   var addons  = Object.keys(booking.selectedAddons).reduce(function(a,k){return a+(booking.selectedAddons[k]||0);},0);
   var subtotal = base + addons;
-  var discount = booking.memberValid ? Math.round(subtotal * MEMBER_DISCOUNT.grooming) : 0;
+  var discount = calculateMemberDiscount('grooming', base, booking.memberValid);
   var total    = subtotal - discount;
   var el = document.getElementById('groomPriceTotal');
   if (subtotal > 0) {
@@ -1759,7 +1760,7 @@ function calcHotelTotal() {
   }
 
   var subtotal = baseTotal + booking.hotelLateTotal;
-  var discount = booking.memberValid ? Math.round(subtotal * MEMBER_DISCOUNT.hotel) : 0;
+  var discount = calculateMemberDiscount('hotel', baseTotal, booking.memberValid);
   var total    = subtotal - discount;
 
   // \u2500\u2500 Step 3 estimate breakdown (no late fee yet) \u2500\u2500
@@ -2022,7 +2023,7 @@ function calcDaycareTotal() {
   booking.daycareDropoffHour = dropH;
   booking.daycarePickupHour  = pickH;
   booking.daycareTotal = subtotal;
-  var discount = booking.memberValid ? Math.round(subtotal * MEMBER_DISCOUNT.daycare) : 0;
+  var discount = calculateMemberDiscount('daycare', subtotal, booking.memberValid);
   var total    = subtotal - discount;
   var html = '\u20b1' + total.toLocaleString();
   if (discount > 0) html = '<span style="text-decoration:line-through;opacity:0.5;font-size:14px">\u20b1' + subtotal.toLocaleString() + '</span> \u20b1' + total.toLocaleString();
@@ -2482,12 +2483,14 @@ function buildSummary() {
   // \u2500\u2500 Price breakdown \u2500\u2500
   var lines = [];
   var subtotal = 0;
+  var discountable = 0;
   if (svc === 'grooming') {
     if (booking.groomService) {
       var svcObj = GROOM_SERVICES.find(function(s){return s.key===booking.groomService;});
       if (svcObj && booking.groomServicePrice > 0) {
         lines.push({ label:svcObj.name, val:'\u20b1'+booking.groomServicePrice.toLocaleString(), amount:booking.groomServicePrice });
         subtotal += booking.groomServicePrice;
+        discountable += booking.groomServicePrice;
       } else if (svcObj && booking.groomService === 'ala_carte') {
         lines.push({ label:'Ala Carte', val:'\u20b10', amount:0 });
       }
@@ -2523,11 +2526,13 @@ function buildSummary() {
         var wdRate = HOTEL_RATES.weekday[rateSize]||0;
         lines.push({ label: wdCount+' weekday night'+(wdCount!==1?'s':'')+' \u00d7 \u20b1'+wdRate.toLocaleString()+' ('+roomLabel+')', val:'\u20b1'+wdTotal.toLocaleString(), amount:wdTotal });
         subtotal += wdTotal;
+        discountable += wdTotal;
       }
       if (weCount > 0) {
         var weRate = HOTEL_RATES.weekend[rateSize]||0;
         lines.push({ label: weCount+' weekend/holiday night'+(weCount!==1?'s':'')+' \u00d7 \u20b1'+weRate.toLocaleString()+' ('+roomLabel+')', val:'\u20b1'+weTotal.toLocaleString(), amount:weTotal });
         subtotal += weTotal;
+        discountable += weTotal;
       }
     }
     if (booking.hotelLateTotal > 0) {
@@ -2540,6 +2545,7 @@ function buildSummary() {
     var hrs = booking.daycareOpenTime ? 'Open time' : (pH - dH) + ' hour' + ((pH-dH)!==1?'s':'');
     lines.push({ label:'Daycare ('+hrs+')', val:'\u20b1'+booking.daycareTotal.toLocaleString(), amount:booking.daycareTotal });
     subtotal += booking.daycareTotal;
+    discountable += booking.daycareTotal;
   }
   var html = lines.map(function(l) {
     return '<div class="price-line component">' +
@@ -2549,7 +2555,7 @@ function buildSummary() {
   }).join('');
   if (subtotal > 0) {
     var discRate = booking.memberValid ? (MEMBER_DISCOUNT[svc]||0) : 0;
-    var discAmt  = Math.round(subtotal * discRate);
+    var discAmt  = calculateMemberDiscount(svc, discountable, booking.memberValid);
     var fee      = currentConvenienceFee();
     var total    = subtotal - discAmt + fee;
     // Always show subtotal when there are components so the hierarchy is clear
@@ -2759,7 +2765,7 @@ function renderSuccessDetails(snap, detailsId, priceId) {
     ph += '<div class="price-line subtotal-line"><span class="price-line-label">Subtotal</span><span class="price-line-val">₱'+baseSubtotal.toLocaleString()+'</span></div>';
   }
   if ((snap.discountAmount||0) > 0) {
-    var discPct = baseSubtotal > 0 ? Math.round(snap.discountAmount/baseSubtotal*100) : 0;
+    var discPct = Math.round((MEMBER_DISCOUNT[svc] || 0) * 100);
     ph += '<div class="price-line"><span class="price-line-label">Member discount'+(discPct?(' ('+discPct+'%)'):'')+' </span><span class="price-line-val discount">−₱'+snap.discountAmount.toLocaleString()+'</span></div>';
   }
   if ((snap.convenienceFee||0) > 0) {
@@ -3477,15 +3483,18 @@ async function submitBooking() {
 
   var svc = booking.service;
   var subtotal = 0;
+  var discountable = 0;
   if (svc === 'grooming') {
     subtotal = (booking.groomServicePrice||0) + Object.keys(booking.selectedAddons).reduce(function(a,k){return a+(booking.selectedAddons[k]||0);},0);
+    discountable = booking.groomServicePrice || 0;
   } else if (svc === 'hotel') {
     subtotal = (booking.hotelBaseTotal||0) + (booking.hotelLateTotal||0);
+    discountable = booking.hotelBaseTotal || 0;
   } else if (svc === 'daycare') {
     subtotal = booking.daycareTotal || 0;
+    discountable = subtotal;
   }
-  var discRate = booking.memberValid ? (MEMBER_DISCOUNT[svc] || 0) : 0;
-  var discAmt  = Math.round(subtotal * discRate);
+  var discAmt  = calculateMemberDiscount(svc, discountable, booking.memberValid);
   var fee      = currentConvenienceFee();
   var total    = subtotal - discAmt + fee;
 
