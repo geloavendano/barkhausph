@@ -434,6 +434,7 @@ function buildEmailHtml(d: any): string {
   const bookingDate = new Date().toLocaleDateString("en-PH", {
     month: "long", day: "numeric", year: "numeric",
     hour: "numeric", minute: "2-digit", hour12: true,
+    timeZone: "Asia/Manila",
   });
 
   return `<!DOCTYPE html>
