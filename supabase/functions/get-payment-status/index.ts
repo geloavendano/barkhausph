@@ -26,6 +26,16 @@ function mayaStatus(payload?: Record<string, any> | null): string | null {
   return payload?.paymentStatus || payload?.status || payload?.state || payload?.transactionStatus || null;
 }
 
+function mayaReference(payload?: Record<string, any> | null): string | null {
+  return payload?.requestReferenceNumber
+    || payload?.metadata?.refNumber
+    || payload?.metadata?.ref_number
+    || payload?.metadata?.bookingRef
+    || payload?.metadata?.booking_ref
+    || payload?.referenceNumber
+    || null;
+}
+
 function isFinalStatus(status?: string | null): boolean {
   return ["PAYMENT_SUCCESS", "PAYMENT_FAILED", "PAYMENT_EXPIRED", "PAYMENT_CANCELLED", "SUCCESS"].includes(status || "");
 }
@@ -62,7 +72,10 @@ async function lookupMayaPayments(ref: string): Promise<Record<string, any>[]> {
 
 async function lookupMayaPayment(ref: string): Promise<Record<string, any> | null> {
   const payments = await lookupMayaPayments(ref);
-  const payment = payments.find((item) => isSuccessfulMayaStatus(mayaStatus(item))) || payments[0];
+  const matching = payments.filter((item) =>
+    String(mayaReference(item) || "").trim().toUpperCase() === ref
+  );
+  const payment = matching.find((item) => isSuccessfulMayaStatus(mayaStatus(item))) || matching[0];
   if (!payment?.id || !isFinalStatus(mayaStatus(payment))) return null;
   return payment;
 }
@@ -130,7 +143,10 @@ Deno.serve(async (req) => {
 
   if (data?.status === "cancelled" && data?.payment_status === "unpaid") {
     const mayaPayments = await lookupMayaPayments(ref);
-    const payment = mayaPayments.find((item) => isSuccessfulMayaStatus(mayaStatus(item))) || mayaPayments[0] || null;
+    const payment = mayaPayments.find((item) =>
+      isSuccessfulMayaStatus(mayaStatus(item))
+      && String(mayaReference(item) || "").trim().toUpperCase() === ref
+    ) || null;
     const paidAmount = payment ? mayaAmount(payment) : 0;
     if (isSuccessfulMayaStatus(mayaStatus(payment))) {
       const { data: booking } = await supabase.from("bookings")
@@ -138,6 +154,31 @@ Deno.serve(async (req) => {
         .eq("ref_number", ref)
         .maybeSingle();
       if (booking && paidAmount === Number(booking.total)) {
+        const { data: existingPayment } = await supabase.from("payments")
+          .select("id")
+          .eq("reference_number", payment.id)
+          .maybeSingle();
+        if (!existingPayment) {
+          const { error: paymentError } = await supabase.from("payments").insert({
+              booking_id: booking.id,
+              amount: paidAmount,
+              type: "downpayment",
+              method: "online",
+              reference_number: payment.id,
+              notes: `Maya recovery — ${payment.id}`,
+              recorded_by: "maya_status_recovery",
+          });
+          if (paymentError) {
+            console.error("Maya paid recovery payment insert failed:", paymentError.message);
+            return json({
+              found: true,
+              confirmed: false,
+              status: data.status,
+              payment_status: data.payment_status,
+            });
+          }
+        }
+
         const { error: updateError } = await supabase.from("bookings")
           .update({
             status: "confirmed",
@@ -150,49 +191,23 @@ Deno.serve(async (req) => {
         if (updateError) {
           console.error("Maya paid recovery update failed:", updateError.message);
         } else {
-          const { data: existingPayment } = await supabase.from("payments")
-            .select("id")
-            .eq("reference_number", payment.id)
-            .maybeSingle();
-          if (!existingPayment) {
-            await supabase.from("payments").insert({
-              booking_id: booking.id,
-              amount: paidAmount,
-              type: "downpayment",
-              method: "online",
-              reference_number: payment.id,
-              notes: `Maya recovery — ${payment.id}`,
-              recorded_by: "maya_status_recovery",
-            });
-          }
+          await supabase.from("payment_events").insert({
+            provider: "maya",
+            event_type: mayaStatus(payment),
+            payment_status: mayaStatus(payment),
+            ref_number: ref,
+            booking_id: booking.id,
+            gateway_payment_id: payment.id,
+            amount: paidAmount,
+            currency: payment?.totalAmount?.currency || payment?.currency || "PHP",
+            payment_channel: payment?.paymentScheme || payment?.fundSource?.type || null,
+            metadata: { source: "get-payment-status-recovery" },
+          });
           const refreshed = await bookingStatus(supabase, ref);
           if (!refreshed.error) data = refreshed.data;
         }
       } else {
         console.warn("Maya paid recovery skipped due to amount mismatch:", paidAmount, booking?.total);
-      }
-    }
-  }
-
-  if (data?.status === "cancelled" && data?.payment_status === "paid") {
-    const { data: booking } = await supabase.from("bookings")
-      .select("id")
-      .eq("ref_number", ref)
-      .maybeSingle();
-    if (booking) {
-      const { error: updateError } = await supabase.from("bookings")
-        .update({
-          status: "confirmed",
-          cancellation_reason: null,
-        })
-        .eq("id", booking.id)
-        .eq("status", "cancelled")
-        .eq("payment_status", "paid");
-      if (updateError) {
-        console.error("Maya cancelled-paid recovery update failed:", updateError.message);
-      } else {
-        const refreshed = await bookingStatus(supabase, ref);
-        if (!refreshed.error) data = refreshed.data;
       }
     }
   }
