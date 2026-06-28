@@ -560,8 +560,26 @@
   padding: 4px 7px; border: 0.5px solid var(--border); border-radius: 20px;
   background: var(--surface); color: var(--cream-m); font-size: 9px;
 }
-.weekHoursChip strong { color: var(--cream); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.weekHoursChip strong { color: var(--cream); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .weekHoursChip span { white-space: nowrap; }
+.weekHoursMeta { display: flex; align-items: center; gap: 3px; }
+@media (max-width: 640px) {
+  .weekInner { min-width: 700px; }
+  .weekHoursChip {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 1px 5px;
+    padding: 4px 7px;
+    border-radius: 10px;
+  }
+  .weekHoursMeta {
+    grid-column: 2;
+    min-width: 0;
+    gap: 3px;
+    font-size: 8px;
+    color: var(--mid);
+  }
+}
 .weekBlockChip {
   background: repeating-linear-gradient(135deg,rgba(155,149,232,.22) 0,rgba(155,149,232,.22) 5px,rgba(155,149,232,.1) 5px,rgba(155,149,232,.1) 10px);
   color: var(--cream-m); cursor: pointer;

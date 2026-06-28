@@ -1048,8 +1048,10 @@ function WeekView({
 	                      <div key={`hours-${hours.resource_id}`} className={styles.weekHoursChip}>
 	                        <span className={styles.groomerHoursDot} style={{ background: hours.groomer.color }} />
 	                        <strong>{hours.groomer.name}</strong>
-	                        <span>{formatMins(parseMins(hours.start_time))}-{formatMins(parseMins(hours.end_time))}</span>
-	                        <span className={styles.groomerHoursLast}>last {formatMins(parseMins(hours.last_service_time))}</span>
+	                        <span className={styles.weekHoursMeta}>
+	                          <span>{formatMins(parseMins(hours.start_time))}-{formatMins(parseMins(hours.end_time))}</span>
+	                          <span className={styles.groomerHoursLast}>· {formatMins(parseMins(hours.last_service_time))}</span>
+	                        </span>
 	                      </div>
 	                    ))}
                     {blocks.map(block => {
