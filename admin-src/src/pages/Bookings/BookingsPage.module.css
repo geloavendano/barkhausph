@@ -32,6 +32,58 @@
 .filterBtn:hover { background: var(--surface); color: var(--cream); }
 .filterOn { background: var(--surface); color: var(--cream); border-color: var(--blue); }
 
+.advancedFilters {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.filterField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 145px;
+}
+.filterField > span {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--mid);
+  padding-left: 2px;
+}
+.filterField select {
+  width: 100%;
+  min-width: 0;
+  appearance: none;
+  color: var(--cream-m);
+  background: var(--surface);
+  border: 0.5px solid var(--border);
+  border-radius: 9px;
+  padding: 8px 28px 8px 10px;
+  font: 600 12px 'Nunito', sans-serif;
+  cursor: pointer;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--mid) 50%),
+    linear-gradient(135deg, var(--mid) 50%, transparent 50%);
+  background-position:
+    calc(100% - 14px) 50%,
+    calc(100% - 10px) 50%;
+  background-size: 4px 4px, 4px 4px;
+  background-repeat: no-repeat;
+}
+.filterField select:focus { outline: none; border-color: var(--blue); }
+.clearFilters {
+  color: var(--blue);
+  background: transparent;
+  border: none;
+  padding: 8px 4px;
+  font: 700 11px 'Nunito', sans-serif;
+  cursor: pointer;
+}
+.clearFilters:hover { color: var(--cream); }
+
 .msg  { color: var(--mid); padding: 8px 0; font-size: 13px; }
 .err  { color: var(--error); font-size: 13px; }
 
@@ -132,6 +184,26 @@
 .total     { font-size: 12px; font-weight: 700; color: var(--cream); min-width: 70px; text-align: right; margin-left: auto; }
 
 @media (max-width: 640px) {
+  .advancedFilters {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 7px;
+  }
+  .filterField { min-width: 0; }
+  .filterField > span {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .filterField select {
+    padding-left: 8px;
+    font-size: 11px;
+  }
+  .clearFilters {
+    grid-column: 1 / -1;
+    justify-self: end;
+    padding: 2px 4px;
+  }
   .tableWrap {
     overflow-x: hidden;
   }

@@ -9,14 +9,14 @@ import { sbGet } from './supabase'
 //   rawQuery  — the user's search text
 //   select    — the full PostgREST select string (must contain `owners(` and
 //               `pets(` so they can be promoted to !inner for the embed filters)
-export async function searchBookings(branchId, rawQuery, select) {
+export async function searchBookings(branchId, rawQuery, select, topLevelFilters = '') {
   const q = (rawQuery ?? '').trim()
   if (!branchId || q.length < 2) return []
 
   // encodeURIComponent escapes commas/parens/spaces so they can't break the
   // PostgREST or=() grouping or the ilike pattern.
   const like  = `*${encodeURIComponent(q)}*`
-  const base  = `branch_id=eq.${branchId}`
+  const base  = `branch_id=eq.${branchId}${topLevelFilters}`
   const order = 'order=created_at.desc&limit=50'
 
   // Reference number — plain top-level column

@@ -23,6 +23,29 @@ const BOOKING_SELECT = [
 ].join(',')
 
 const SVC_FILTERS = ['all', 'grooming', 'hotel', 'daycare', 'studio']
+const STATUS_FILTERS = [
+  ['all', 'All statuses'],
+  ['pending', 'Pending'],
+  ['pencil-booked', 'Pencil-booked'],
+  ['confirmed', 'Confirmed'],
+  ['checked_in', 'Checked in'],
+  ['completed', 'Completed'],
+  ['cancelled', 'Cancelled'],
+  ['rejected', 'Rejected'],
+]
+const PAYMENT_FILTERS = [
+  ['all', 'All payments'],
+  ['unpaid', 'Unpaid'],
+  ['partially_paid', 'Partial'],
+  ['paid', 'Paid'],
+  ['refunded', 'Refunded'],
+]
+const SOURCE_FILTERS = [
+  ['all', 'All sources'],
+  ['online', 'Online'],
+  ['admin', 'Admin'],
+  ['walkin', 'Walk-in'],
+]
 const PAGE_SIZE   = 50   // rows per fetch (top-level bookings; embeds are nested)
 const SRC_LABELS  = { online: 'Online', admin: 'Admin', walkin: 'Walk-in' }
 
@@ -33,6 +56,9 @@ export default function BookingsPage({ branches, currentBranchIdx = 0, rooms, gr
   const [reachedEnd,      setReachedEnd]      = useState(false)
   const [error,           setError]           = useState('')
   const [svcFilter,       setSvcFilter]       = useState('all')
+  const [statusFilter,    setStatusFilter]    = useState('all')
+  const [paymentFilter,   setPaymentFilter]   = useState('all')
+  const [sourceFilter,    setSourceFilter]    = useState('all')
   const [openId,          setOpenId]          = useState(null)
   const [collapsed,       setCollapsed]       = useState({})
   const [showAddBooking,  setShowAddBooking]  = useState(false)
@@ -44,29 +70,34 @@ export default function BookingsPage({ branches, currentBranchIdx = 0, rooms, gr
 
   const branch = branches?.[currentBranchIdx]
   const searchActive = searchQ.trim().length >= 2
+  const topLevelFilters =
+    `${statusFilter !== 'all' ? `&status=eq.${statusFilter}` : ''}` +
+    `${paymentFilter !== 'all' ? `&payment_status=eq.${paymentFilter}` : ''}` +
+    `${sourceFilter !== 'all' ? `&booking_source=eq.${sourceFilter}` : ''}`
+  const hasSecondaryFilters = statusFilter !== 'all' || paymentFilter !== 'all' || sourceFilter !== 'all'
 
   // How many rows are currently loaded — drives the offset for "load more"
   // and the page size for refreshes (so realtime/poll preserve the expanded view).
   const loadedCountRef = useRef(0)
 
-  const fetchRows = useCallback(async (offset, limit, svc) => {
-    const svcQ = svc !== 'all' ? `&service=eq.${svc}` : ''
+  const fetchRows = useCallback(async (offset, limit) => {
+    const svcQ = svcFilter !== 'all' ? `&service=eq.${svcFilter}` : ''
     return await sbGet(
       'bookings',
-      `branch_id=eq.${branch.id}${svcQ}&order=created_at.desc&select=${BOOKING_SELECT}&limit=${limit}&offset=${offset}`
+      `branch_id=eq.${branch.id}${svcQ}${topLevelFilters}&order=created_at.desc&select=${BOOKING_SELECT}&limit=${limit}&offset=${offset}`
     )
-  }, [branch])
+  }, [branch, svcFilter, topLevelFilters])
 
   // mode 'reset'  → reload from the top (offset 0), keeping at least the rows
   //                 already shown so refreshes don't collapse the list
   // mode 'more'   → append the next PAGE_SIZE rows after what's loaded
-  const load = useCallback(async (mode = 'reset', svc = svcFilter) => {
+  const load = useCallback(async (mode = 'reset') => {
     if (!branch) return
     if (mode === 'more') setLoadingMore(true)
     else                 { setLoading(true); setError('') }
     try {
       if (mode === 'more') {
-        const rows = (await fetchRows(loadedCountRef.current, PAGE_SIZE, svc)) ?? []
+        const rows = (await fetchRows(loadedCountRef.current, PAGE_SIZE)) ?? []
         setBookings(prev => {
           const ids = new Set(prev.map(b => b.id))
           const fresh = rows.filter(b => !ids.has(b.id))
@@ -76,7 +107,7 @@ export default function BookingsPage({ branches, currentBranchIdx = 0, rooms, gr
         if (rows.length < PAGE_SIZE) setReachedEnd(true)
       } else {
         const want = Math.max(PAGE_SIZE, loadedCountRef.current)
-        const rows = (await fetchRows(0, want, svc)) ?? []
+        const rows = (await fetchRows(0, want)) ?? []
         setBookings(rows)
         loadedCountRef.current = rows.length
         setReachedEnd(rows.length < want)
@@ -87,14 +118,14 @@ export default function BookingsPage({ branches, currentBranchIdx = 0, rooms, gr
       setLoading(false)
       setLoadingMore(false)
     }
-  }, [branch, svcFilter, fetchRows])
+  }, [branch, fetchRows])
 
   // Reload from scratch whenever the branch or service filter changes
   useEffect(() => {
     loadedCountRef.current = 0
     setReachedEnd(false)
-    load('reset', svcFilter)
-  }, [branch?.id, svcFilter]) // eslint-disable-line react-hooks/exhaustive-deps
+    load('reset')
+  }, [branch?.id, svcFilter, statusFilter, paymentFilter, sourceFilter]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Search (ref #, owner name/email, pet name) — debounced ────────────────
   useEffect(() => {
@@ -102,13 +133,14 @@ export default function BookingsPage({ branches, currentBranchIdx = 0, rooms, gr
     setSearching(true)
     const t = setTimeout(async () => {
       try {
-        const rows = await searchBookings(branch.id, searchQ, BOOKING_SELECT)
+        const serviceQuery = svcFilter !== 'all' ? `&service=eq.${svcFilter}` : ''
+        const rows = await searchBookings(branch.id, searchQ, BOOKING_SELECT, `${serviceQuery}${topLevelFilters}`)
         setSearchResults(rows)
       } catch { setSearchResults([]) }
       finally { setSearching(false) }
     }, 300)
     return () => clearTimeout(t)
-  }, [searchQ, searchActive, branch?.id])
+  }, [searchQ, searchActive, branch?.id, svcFilter, statusFilter, paymentFilter, sourceFilter]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Live updates: Realtime + disconnected fallback + visibility change ────
   useEffect(() => {
@@ -225,6 +257,40 @@ export default function BookingsPage({ branches, currentBranchIdx = 0, rooms, gr
             </button>
           ))}
         </div>
+      </div>
+
+      <div className={styles.advancedFilters}>
+        <label className={styles.filterField}>
+          <span>Booking status</span>
+          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+            {STATUS_FILTERS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </select>
+        </label>
+        <label className={styles.filterField}>
+          <span>Payment status</span>
+          <select value={paymentFilter} onChange={e => setPaymentFilter(e.target.value)}>
+            {PAYMENT_FILTERS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </select>
+        </label>
+        <label className={styles.filterField}>
+          <span>Booking source</span>
+          <select value={sourceFilter} onChange={e => setSourceFilter(e.target.value)}>
+            {SOURCE_FILTERS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </select>
+        </label>
+        {hasSecondaryFilters && (
+          <button
+            type="button"
+            className={styles.clearFilters}
+            onClick={() => {
+              setStatusFilter('all')
+              setPaymentFilter('all')
+              setSourceFilter('all')
+            }}
+          >
+            Clear
+          </button>
+        )}
       </div>
 
       {/* Search */}
