@@ -34,11 +34,14 @@ Deno.serve(async (req) => {
     if (error) throw new Error(error.message);
 
     const h = (data ?? {}) as Record<string, unknown>;
+    // Healthy = no stranded bookings AND the cron exists and its LAST run didn't
+    // fail. cron_recent_failures stays in the payload for visibility but is NOT a
+    // hard gate — otherwise the check stays red for up to an hour after a broken
+    // cron is fixed, while the old failures age out of the 1-hour window.
     const ok =
       Number(h.stale_pending ?? 0) === 0 &&
       h.cron_job_present === true &&
-      h.cron_last_status !== "failed" &&
-      Number(h.cron_recent_failures ?? 0) === 0;
+      h.cron_last_status !== "failed";
 
     return new Response(JSON.stringify({ ok, ...h }),
       { status: 200, headers: { ...CORS, "Content-Type": "application/json" } });
