@@ -1,0 +1,131 @@
+{
+  "info": {
+    "_postman_id": "d9856af5-29f2-44a5-b264-a27dcccfda08",
+    "name": "Barkhaus - Maya Payment Diagnostics",
+    "description": "Read-only Maya Checkout requests for payment reconciliation. Keep API keys in the selected Postman environment.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Retrieve Payment Status",
+      "request": {
+        "auth": {
+          "type": "basic",
+          "basic": [
+            {
+              "key": "username",
+              "value": "{{maya_public_key}}",
+              "type": "string"
+            },
+            {
+              "key": "password",
+              "value": "",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{maya_base_url}}/payments/v1/payments/{{payment_id}}/status",
+          "host": [
+            "{{maya_base_url}}"
+          ],
+          "path": [
+            "payments",
+            "v1",
+            "payments",
+            "{{payment_id}}",
+            "status"
+          ]
+        },
+        "description": "Returns only the current Maya payment status. Uses the Maya Public API Key."
+      }
+    },
+    {
+      "name": "Retrieve Payment Details",
+      "request": {
+        "auth": {
+          "type": "basic",
+          "basic": [
+            {
+              "key": "username",
+              "value": "{{maya_secret_key}}",
+              "type": "string"
+            },
+            {
+              "key": "password",
+              "value": "",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{maya_base_url}}/payments/v1/payments/{{payment_id}}",
+          "host": [
+            "{{maya_base_url}}"
+          ],
+          "path": [
+            "payments",
+            "v1",
+            "payments",
+            "{{payment_id}}"
+          ]
+        },
+        "description": "Returns the complete payment object. Uses the Maya Secret API Key."
+      }
+    },
+    {
+      "name": "Retrieve Payments by Barkhaus Reference",
+      "request": {
+        "auth": {
+          "type": "basic",
+          "basic": [
+            {
+              "key": "username",
+              "value": "{{maya_secret_key}}",
+              "type": "string"
+            },
+            {
+              "key": "password",
+              "value": "",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{maya_base_url}}/payments/v1/payment-rrns/{{booking_reference}}",
+          "host": [
+            "{{maya_base_url}}"
+          ],
+          "path": [
+            "payments",
+            "v1",
+            "payment-rrns",
+            "{{booking_reference}}"
+          ]
+        },
+        "description": "Returns Maya payments associated with the Barkhaus request reference number. Uses the Maya Secret API Key."
+      }
+    }
+  ]
+}
