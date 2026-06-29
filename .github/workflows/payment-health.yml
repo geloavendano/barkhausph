@@ -1,0 +1,49 @@
+name: Payment health canary
+
+# Independent of Supabase pg_cron: catches stuck online bookings (and a
+# silently-failing expiry cron) by polling the payment-health edge function.
+# Fails the job — which notifies repo admins — when ok=false.
+#
+# Required repo secrets (Settings → Secrets and variables → Actions):
+#   SUPABASE_FUNCTIONS_URL   e.g. https://dxttnbtfhpanyiyduevn.supabase.co/functions/v1
+#   PAYMENT_HEALTH_TOKEN     same random value set as PAYMENT_HEALTH_TOKEN in the
+#                            payment-health function's Supabase env
+
+on:
+  schedule:
+    - cron: '*/20 * * * *'   # every 20 minutes (UTC)
+  workflow_dispatch: {}       # allow manual run from the Actions tab
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe payment-health
+        env:
+          FN_URL: ${{ secrets.SUPABASE_FUNCTIONS_URL }}
+          TOKEN:  ${{ secrets.PAYMENT_HEALTH_TOKEN }}
+        run: |
+          if [ -z "$FN_URL" ] || [ -z "$TOKEN" ]; then
+            echo "::notice::SUPABASE_FUNCTIONS_URL / PAYMENT_HEALTH_TOKEN not configured yet — skipping (no alert)."
+            exit 0
+          fi
+
+          resp="$(curl -sS -m 30 -H "x-health-token: $TOKEN" "$FN_URL/payment-health" || true)"
+          echo "Response: $resp"
+
+          if [ -z "$resp" ]; then
+            echo "::error::No response from payment-health (function down or unreachable)."
+            exit 1
+          fi
+
+          ok="$(echo "$resp"      | jq -r '.ok // "false"')"
+          stale="$(echo "$resp"   | jq -r '.stale_pending // "?"')"
+          refs="$(echo "$resp"    | jq -rc '.stale_refs // []')"
+          cron_s="$(echo "$resp"  | jq -r '.cron_last_status // "unknown"')"
+          cron_f="$(echo "$resp"  | jq -r '.cron_recent_failures // "?"')"
+
+          if [ "$ok" != "true" ]; then
+            echo "::error::Payment health FAILED — stale_pending=$stale, cron_last_status=$cron_s, cron_recent_failures=$cron_f, refs=$refs"
+            exit 1
+          fi
+          echo "Payment health OK — stale_pending=$stale, cron_last_status=$cron_s"
