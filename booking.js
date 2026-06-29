@@ -209,6 +209,10 @@ function localDateStr(d) {
     banner.textContent = '🚶 Walk-in booking — payment collected at counter';
     document.body.insertBefore(banner, document.body.firstChild);
   }
+  var paymentPreparationNotice = document.getElementById('paymentPreparationNotice');
+  if (paymentPreparationNotice && (IS_WALKIN || PAYMENT_GATEWAY_PROVIDER === 'manual')) {
+    paymentPreparationNotice.style.display = 'none';
+  }
   // Warn before unload once the user has made meaningful progress
   window.addEventListener('beforeunload', function(e) {
     if (_redirectingToPayment) return; // intentional redirect — no warning
@@ -439,6 +443,7 @@ function showSummary() {
   onSummaryScreen = true;
   buildSummary();
   document.getElementById('stepSummary').classList.add('active');
+  syncHostedCheckoutNotice();
   updateBottomNavForSummary();
   window.scrollTo(0,0);
 }
@@ -2579,9 +2584,20 @@ function ensureSummaryMarkup() {
     '<p class="step-eyebrow">Almost done!</p>' +
     '<h1 class="step-title">Review your booking</h1>' +
     '<p class="step-subtitle">Please confirm the details below before submitting.</p>' +
+    '<div class="info-box payment-heads-up" id="hostedCheckoutNotice">' +
+      '<p><strong>Next: secure payment through Maya</strong></p>' +
+      '<p>You will be redirected to a Maya checkout page that may display <strong>BARKHAUS EASTWOOD</strong>, even when your booking is for Estancia. This is our registered business account name and does not change your selected branch.</p>' +
+      '<p>After payment, please take a screenshot of Maya&rsquo;s payment confirmation for your records.</p>' +
+    '</div>' +
     '<div class="summary-card" id="bookingDetailsSummary"></div>' +
     '<p class="section-label">Price breakdown</p>' +
     '<div class="price-breakdown" id="priceBreakdown"></div>';
+}
+
+function syncHostedCheckoutNotice() {
+  var notice = document.getElementById('hostedCheckoutNotice');
+  if (!notice) return;
+  notice.style.display = (!IS_WALKIN && PAYMENT_GATEWAY_PROVIDER !== 'manual') ? '' : 'none';
 }
 
 // ── SHOW TOAST ──

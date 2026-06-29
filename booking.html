@@ -193,6 +193,10 @@
   .section-label { font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--yellow); font-weight: 700; margin: 18px 0 10px; padding-bottom: 8px; border-bottom: 0.5px solid var(--border); }
   .info-box { background: rgba(77,150,185,0.08); border: 1px solid rgba(77,150,185,0.2); border-radius: 10px; padding: 12px 14px; font-size: 12px; color: var(--cream-m); line-height: 1.6; margin-bottom: 14px; }
   .info-box strong { color: var(--blue); }
+  .payment-heads-up { background: rgba(255,206,88,0.07); border-color: rgba(255,206,88,0.3); }
+  .payment-heads-up strong { color: var(--yellow); }
+  .payment-heads-up p { margin: 0; }
+  .payment-heads-up p + p { margin-top: 7px; }
   .warn-box { background: rgba(255,206,88,0.08); border: 1px solid rgba(255,206,88,0.25); border-radius: 10px; padding: 12px 14px; font-size: 12px; color: var(--cream-m); line-height: 1.6; margin-top: 10px; }
   .warn-box strong { color: var(--yellow); }
   .divider { border: none; border-top: 0.5px solid var(--border); margin: 20px 0; }
@@ -329,6 +333,10 @@
   <p class="step-eyebrow">Step 1</p>
   <h1 class="step-title">Pick a branch</h1>
   <p class="step-subtitle">Choose the Barkhaus location you would like to visit.</p>
+  <div class="info-box payment-heads-up" id="paymentPreparationNotice">
+    <p><strong>Payment is required to confirm your booking.</strong></p>
+    <p>At the end of this form, you will pay securely by credit card or QR payment. Please have your card or online banking/e-wallet balance ready. Bookings that are not paid will not be confirmed, and the reserved slot will be released.</p>
+  </div>
   <div class="option-grid">
     <div class="option-card" onclick="selectLocation(this,'estancia')">
       <div class="option-radio"></div>
@@ -1158,6 +1166,11 @@
   <p class="step-eyebrow">Almost done!</p>
   <h1 class="step-title">Review your booking</h1>
   <p class="step-subtitle">Please confirm the details below before submitting.</p>
+  <div class="info-box payment-heads-up" id="hostedCheckoutNotice">
+    <p><strong>Next: secure payment through Maya</strong></p>
+    <p>You will be redirected to a Maya checkout page that may display <strong>BARKHAUS EASTWOOD</strong>, even when your booking is for Estancia. This is our registered business account name and does not change your selected branch.</p>
+    <p>After payment, please take a screenshot of Maya&rsquo;s payment confirmation for your records.</p>
+  </div>
   <div class="summary-card" id="bookingDetailsSummary"></div>
   <p class="section-label">Price breakdown</p>
   <div class="price-breakdown" id="priceBreakdown"></div>
