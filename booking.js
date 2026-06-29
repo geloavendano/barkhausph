@@ -645,7 +645,10 @@ function selectLocation(el, val) {
     if (studioCard) { studioCard.classList.add('disabled');    if (studioBadge) studioBadge.textContent = 'Eastwood only'; }
   } else {
     if (hotelCat)   { hotelCat.classList.remove('disabled-opt'); document.getElementById('hotelCatNote').textContent   = 'any size'; }
-    if (daycareCat) { daycareCat.classList.remove('disabled-opt'); document.getElementById('daycareCatNote').textContent = '\u20b1500 base'; }
+    if (daycareCat) {
+      daycareCat.classList.remove('disabled-opt');
+      document.getElementById('daycareCatNote').textContent = '\u20b1' + (DAYCARE_RATES.cat || 300).toLocaleString() + ' base';
+    }
     if (studioCard) { studioCard.classList.remove('disabled'); if (studioBadge) studioBadge.textContent = 'Contact to book'; }
   }
   nextStep();
