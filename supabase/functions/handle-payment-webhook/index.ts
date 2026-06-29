@@ -754,6 +754,25 @@ Deno.serve(async (req) => {
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
     }
+    // Maya PAYMENT_EXPIRED can arrive after the pending hold was already released
+    // (the expiry cron deleted it, or a prior event cleaned it up). Without this,
+    // the function would short-circuit below and leave the booking stranded at
+    // pending/unpaid forever. Cancel the orphaned booking directly by ref / id.
+    // The status+payment guard makes it idempotent and never touches a booking
+    // that was meanwhile confirmed + paid.
+    if (!pending && isMaya && eventType === "PAYMENT_EXPIRED" && (refNumber || bookingIdFromMeta)) {
+      const base = supabase.from("bookings")
+        .update({ status: "cancelled", cancellation_reason: "Payment window expired" })
+        .eq("status", "pending")
+        .eq("payment_status", "unpaid");
+      const { data: cancelled } = refNumber
+        ? await base.eq("ref_number", refNumber).select("id").maybeSingle()
+        : await base.eq("id", bookingIdFromMeta).select("id").maybeSingle();
+      console.log("Expired with no pending — orphaned booking cancel:", cancelled?.id ?? "no match", "ref:", refNumber);
+      return new Response(
+        JSON.stringify({ received: true, note: "Expired — orphaned booking cancelled", booking_id: cancelled?.id ?? null }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
     if (!pending) {
       console.log("Pending not found — already processed or expired");
       return new Response(JSON.stringify({ received: true, note: "Already processed or expired" }),
