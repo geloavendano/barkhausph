@@ -211,19 +211,23 @@ export default function BookingDrawer({ booking: b, rooms, groomers, currentAdmi
     try {
       await sbPatch('bookings', `id=eq.${b.id}`, { status, payment_status: payStatus })
       if (status !== b.status || payStatus !== b.payment_status) {
-        await sbPostAudit('booking_edits', {
-          booking_id: b.id,
-          ...bookingEditAudit(currentAdmin),
-          field_changes: JSON.stringify({
-            status_from: b.status ?? null,
-            status_to: status,
-            payment_status_from: b.payment_status ?? null,
-            payment_status_to: payStatus,
-            edited_by: adminSnapshot(currentAdmin),
-          }),
-        })
+        try {
+          await sbPostAudit('booking_edits', {
+            booking_id: b.id,
+            ...bookingEditAudit(currentAdmin),
+            field_changes: JSON.stringify({
+              status_from: b.status ?? null,
+              status_to: status,
+              payment_status_from: b.payment_status ?? null,
+              payment_status_to: payStatus,
+              edited_by: adminSnapshot(currentAdmin),
+            }),
+          })
+        } catch (auditError) {
+          console.warn('Booking status saved, but audit logging failed:', auditError)
+        }
       }
-      onUpdated()
+      onUpdated({ id: b.id, status, payment_status: payStatus })
       onClose()
     } catch (e) { setErr(e.message); setSaving(false) }
   }

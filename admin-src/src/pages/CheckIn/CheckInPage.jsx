@@ -386,7 +386,17 @@ export default function CheckInPage({ branches, currentBranchIdx = 0, rooms, gro
           groomers={groomers}
           currentAdmin={currentAdmin}
           onClose={() => setOpenId(null)}
-          onUpdated={() => { setOpenId(null); load() }}
+          onUpdated={changes => {
+            setOpenId(null)
+            if (changes?.id) {
+              const applyChanges = rows => rows
+                .map(row => row.id === changes.id ? { ...row, ...changes } : row)
+                .filter(row => ['confirmed', 'pending', 'checked_in', 'pencil-booked'].includes(row.status))
+              setBookings(applyChanges)
+              setSearchResults(applyChanges)
+            }
+            load()
+          }}
         />
       )}
     </div>

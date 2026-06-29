@@ -896,7 +896,16 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
           booking={openBooking} rooms={rooms} groomers={groomers}
           currentAdmin={currentAdmin}
           onClose={() => setOpenId(null)}
-          onUpdated={() => { setOpenId(null); reloadBookings(); loadBlocked() }}
+          onUpdated={changes => {
+            setOpenId(null)
+            if (changes?.id) {
+              setBookings(rows => rows
+                .map(row => row.id === changes.id ? { ...row, ...changes } : row)
+                .filter(row => row.status !== 'cancelled' && row.status !== 'rejected'))
+            }
+            reloadBookings()
+            loadBlocked()
+          }}
           onEdit={b => { setOpenId(null); setEditBooking(b); setShowAddBooking(true) }}
         />
       )}

@@ -180,6 +180,16 @@ export default function BookingsPage({ branches, currentBranchIdx = 0, rooms, gr
     setCollapsed(c => ({ ...c, [dt]: !c[dt] }))
   }
 
+  function handleBookingUpdated(changes) {
+    setOpenId(null)
+    if (changes?.id) {
+      const applyChanges = rows => rows.map(row => row.id === changes.id ? { ...row, ...changes } : row)
+      setBookings(applyChanges)
+      setSearchResults(applyChanges)
+    }
+    load('reset')
+  }
+
   // When searching, show the search results in place of the paginated list
   const displayed = searchActive ? searchResults : bookings
 
@@ -297,7 +307,7 @@ export default function BookingsPage({ branches, currentBranchIdx = 0, rooms, gr
           groomers={groomers}
           currentAdmin={currentAdmin}
           onClose={() => setOpenId(null)}
-          onUpdated={() => { setOpenId(null); load('reset') }}
+          onUpdated={handleBookingUpdated}
           onEdit={b => { setOpenId(null); setEditBooking(b); setShowAddBooking(true) }}
         />
       )}
