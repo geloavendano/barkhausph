@@ -197,16 +197,23 @@ function ValidateCard({ branches }) {
         : (branchObj?.name ?? (m.branch_id ? 'Unknown branch' : '⚠ No branch assigned'))
       // Coverage (branch/Passport) is separate from the discount program.
       const isRenewal = m.membership_type === 'renewal'
-      const tierLabel = isRenewal
-        ? `Renewal${isPassport ? ' · Passport' : ` · ${branchName}`}`
-        : (isPassport ? 'Passport' : `Standard · ${branchName}`)
+      const membershipTypeLabel = isRenewal ? 'Renewal' : 'Standard'
+      const tierLabel = isPassport ? 'Passport' : branchName
       const validStr = m.valid_until
         ? 'Valid until ' + new Date(m.valid_until + 'T00:00:00').toLocaleDateString('en-PH', {
             year: 'numeric', month: 'long', day: 'numeric',
           })
         : 'No expiry set'
 
-      setStatus({ ok: true, tierLabel, branchName, validStr, petName: m.pet_name, petBreed: m.pet_breed })
+      setStatus({
+        ok: true,
+        tierLabel,
+        membershipTypeLabel,
+        branchName,
+        validStr,
+        petName: m.pet_name,
+        petBreed: m.pet_breed,
+      })
     } catch (err) {
       setStatus({ ok: false, text: `Error: ${err.message}` })
     } finally {
@@ -251,6 +258,7 @@ function ValidateCard({ branches }) {
               <span className={styles.tier}>{status.tierLabel}</span>
             </div>
             <div className={styles.resultRows}>
+              <Row label="Member Type" value={status.membershipTypeLabel} />
               <Row label="Coverage" value={status.branchName} />
               <Row label="Validity" value={status.validStr} />
               {status.petName && <Row label="Pet" value={status.petName} />}
