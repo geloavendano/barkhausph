@@ -66,6 +66,11 @@
 .printBtn { color: var(--cream-m); }
 .editBtn:hover,
 .printBtn:hover { background: var(--raised); }
+.printBtn:disabled {
+  opacity: 0.45;
+  cursor: wait;
+  background: transparent;
+}
 .meta   { font-size: 10px; color: var(--mid); margin-bottom: 2px; }
 .petName {
   font-family: 'Fredoka One', cursive;

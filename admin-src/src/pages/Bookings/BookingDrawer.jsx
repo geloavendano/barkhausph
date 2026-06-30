@@ -87,7 +87,7 @@ function getPrintBillRows(b, addons, charges) {
 
 export default function BookingDrawer({ booking: b, rooms, groomers, currentAdmin, onClose, onUpdated, onEdit }) {
   const [payments,    setPayments]    = useState(null)
-  const [charges,     setCharges]     = useState([])
+  const [charges,     setCharges]     = useState(null)
   const [vaccDocs,    setVaccDocs]    = useState([])
   const [groomRefs,   setGroomRefs]   = useState([])
   const [groomRefUrls, setGroomRefUrls] = useState({})
@@ -358,34 +358,78 @@ export default function BookingDrawer({ booking: b, rooms, groomers, currentAdmi
       `${money(p.amount)}${p.reference_number ? ` (${p.reference_number})` : ''}`,
     ])
 
+    const petLine = [pet.name, pet.breed].filter(Boolean).join(' · ') || 'Pet'
+    const membershipText = (b.member_code_used || b.member_discount_applied)
+      ? `${b.member_code_used ?? 'Member'}${b.member_discount_applied ? ' ✓' : ''}`
+      : ''
+
+    // Waivers & consent — mirror the drawer's waiver list (per booking type) + play park.
+    const wr = waiver
+    const waiverItems = []
+    if (wr) {
+      waiverItems.push(['General terms', wr.general_terms])
+      if (wr.house_rules_accepted != null) waiverItems.push(['House rules', wr.house_rules_accepted])
+      waiverItems.push(['Health declaration', wr.health_declaration])
+      waiverItems.push(['Media consent', wr.media_consent])
+      if (b.service === 'grooming' && wr.grooming_booking_policy != null) waiverItems.push(['Grooming policy', wr.grooming_booking_policy])
+      if (b.service === 'hotel' && wr.hotel_cancellation_policy != null) waiverItems.push(['Hotel cancellation', wr.hotel_cancellation_policy])
+      if (b.service === 'studio') waiverItems.push(['Studio agreement', wr.studio_agreement])
+      if (wr.senior_medical_waiver != null) waiverItems.push(['Senior / medical', wr.senior_medical_waiver])
+    }
+    if (hd) waiverItems.push(['Play park consent', hd.playpark_consent ?? null])
+    const waiverMark = (v) => (v === true ? '✓' : v === false ? '✗' : '—')
+    const waiverPrintRows = waiverItems.map(([label, v]) => printRow(label, waiverMark(v)))
+    if (wr?.signed_at) {
+      let s = wr.signed_at
+      try { s = new Date(wr.signed_at).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' }) } catch { /* keep raw */ }
+      waiverPrintRows.push(printRow('Signed', s))
+    }
+
+    const HOTEL_CHECKLIST = ['Bowls', 'Beds', 'Leash / Harness', 'Blanket', 'Toys', 'Food', 'Meds', 'Diapers', 'Hygiene Kit', 'Vaccine Book']
+
     const html = `<!doctype html>
       <html>
       <head>
         <title>${esc(fileName)}</title>
         <style>
-          @page { size: A4; margin: 11mm; }
+          @page { size: Letter; margin: 9mm; }
           * { box-sizing: border-box; }
-          body { margin: 0; font-family: Arial, sans-serif; color: #17212b; font-size: 11px; line-height: 1.35; }
-          .sheet { min-height: 100vh; display: flex; flex-direction: column; gap: 10px; }
-          header { display: flex; justify-content: space-between; gap: 18px; border-bottom: 2px solid #17212b; padding-bottom: 9px; }
-          .brand { font-size: 22px; letter-spacing: 0.06em; font-weight: 800; }
+          html, body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          body { margin: 0; font-family: Arial, sans-serif; color: #17212b; font-size: 9.5px; line-height: 1.3; }
+          .sheet { min-height: 100vh; display: flex; flex-direction: column; gap: 6px; }
+          header { display: flex; justify-content: space-between; gap: 18px; border-bottom: 2px solid #17212b; padding-bottom: 7px; }
+          .brand { font-size: 20px; letter-spacing: 0.06em; font-weight: 800; }
           .title { text-align: right; }
-          .title h1 { margin: 0 0 4px; font-size: 18px; }
+          .title h1 { margin: 0 0 2px; font-size: 16px; }
+          .title h1.petline { color: #2c3e4d; }
           .title p, .muted { margin: 0; color: #617283; }
-          .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
-          .box { border: 1px solid #cad3dc; border-radius: 6px; padding: 7px; min-height: 42px; }
-          .label { color: #617283; font-size: 8px; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 3px; }
-          .value { font-size: 13px; font-weight: 700; text-transform: capitalize; }
-          .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-          section { border: 1px solid #d7dfe7; border-radius: 6px; padding: 8px 10px; break-inside: avoid; }
-          h2 { margin: 0 0 6px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: #456273; }
-          .row { display: grid; grid-template-columns: 105px 1fr; gap: 8px; padding: 3px 0; border-bottom: 1px solid #edf1f5; }
+          .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+          .box { border: 1px solid #cad3dc; border-radius: 5px; padding: 6px; min-height: 34px; }
+          .label { color: #617283; font-size: 7px; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 2px; }
+          .value { font-size: 12px; font-weight: 700; text-transform: capitalize; }
+          .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+          section { border: 1px solid #d7dfe7; border-radius: 5px; padding: 6px 8px; break-inside: avoid; }
+          h2 { margin: 0 0 4px; font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; color: #456273; }
+          .row { display: grid; grid-template-columns: 96px 1fr; gap: 8px; padding: 2px 0; border-bottom: 1px solid #edf1f5; }
           .row:last-child { border-bottom: 0; }
           .row span { color: #617283; }
           .row strong { font-weight: 600; white-space: pre-wrap; }
           .wide { grid-column: 1 / -1; }
-          .bill .row:last-child strong, .bill .row:last-child span { font-size: 13px; font-weight: 800; color: #17212b; }
-          footer { margin-top: auto; border-top: 1px solid #d7dfe7; padding-top: 7px; display: flex; justify-content: space-between; color: #617283; font-size: 9px; }
+          .bill .row:last-child strong, .bill .row:last-child span { font-size: 12px; font-weight: 800; color: #17212b; }
+          footer { margin-top: 6px; border-top: 1px solid #d7dfe7; padding-top: 6px; display: flex; justify-content: space-between; color: #617283; font-size: 8px; }
+          /* Staff-completed (handwritten) area — fills the rest of the page */
+          .manual { display: flex; flex-direction: column; gap: 4px; }
+          .staffdiv { display: flex; align-items: center; gap: 8px; color: #94a3b1; font-size: 7px; letter-spacing: 0.14em; text-transform: uppercase; }
+          .staffdiv::before, .staffdiv::after { content: ''; flex: 1; height: 1px; background: #cad3dc; }
+          section.staff { border: 1.4px solid #17212b; }
+          section.staff h2 { color: #17212b; font-weight: 800; }
+          .chklist { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 16px; }
+          .chk { display: flex; align-items: flex-end; gap: 5px; }
+          .chk span { color: #3a4a57; white-space: nowrap; }
+          .chk i { flex: 1; border-bottom: 1px solid #5a6b78; height: 12px; }
+          .staff.fill { display: flex; flex-direction: column; height: 42px; min-height: 0; }
+          .staff.fill.remarks { height: 52px; }
+          .ruled { flex: 1; min-height: 0; margin-top: 2px; background-image: repeating-linear-gradient(#ffffff, #ffffff 14px, #dfe5ec 14px, #dfe5ec 15px); }
         </style>
       </head>
       <body>
@@ -397,6 +441,7 @@ export default function BookingDrawer({ booking: b, rooms, groomers, currentAdmi
             </div>
             <div class="title">
               <h1>${esc(b.ref_number ?? 'Booking')}</h1>
+              <h1 class="petline">${esc(petLine)}</h1>
               <p>Printed ${esc(printedAt)}</p>
             </div>
           </header>
@@ -418,20 +463,21 @@ export default function BookingDrawer({ booking: b, rooms, groomers, currentAdmi
               printRow('Age', pet.age_value ? `${pet.age_value} ${pet.age_unit ?? ''}`.trim() : ''),
               printRow('Temperament', pet.temperament ? pet.temperament.replace(/_/g, ' ') : ''),
               printRow('Medical notes', pet.medical_notes),
+              printRow('Vaccines', vaccineText),
             ])}
             ${printSection('Owner', [
               printRow('Name', ownerName),
               printRow('Mobile', owner.mobile),
               printRow('Email', owner.email),
               printRow('Referral', owner.referral_source),
+              printRow('Membership', membershipText),
             ])}
             ${printSection(serviceLabel, serviceRows.map(([label, value]) => printRow(label, value)))}
-            ${printSection('Care & Documents', [
-              printRow('Vaccines', vaccineText),
-              printRow('Waiver', waiver ? 'Signed' : ''),
+            ${printSection('Documents', [
               printRow('Vaccine documents', vaccDocs.length > 0 ? `${vaccDocs.length} uploaded` : ''),
               printRow('Reference photos', groomRefs.length > 0 ? `${groomRefs.length} uploaded` : ''),
             ])}
+            ${waiverPrintRows.filter(Boolean).length > 0 ? printSection('Waivers &amp; consent', waiverPrintRows) : ''}
             ${hd ? printSection('Emergency', [
               printRow('Contact', hd.emergency_name ? `${hd.emergency_name}${hd.emergency_phone ? ` / ${hd.emergency_phone}` : ''}` : ''),
               printRow('Vet', hd.vet_clinic),
@@ -441,6 +487,18 @@ export default function BookingDrawer({ booking: b, rooms, groomers, currentAdmi
             ${printSection('Bill', getPrintBillRows(b, addons, charges).map(([label, value]) => printRow(label, value))).replace('<section>', '<section class="bill">')}
             ${paymentRows.length > 0 ? printSection('Payments', paymentRows.map(([label, value]) => printRow(label, value))) : ''}
             ${b.notes ? `<div class="wide">${printSection('Admin Notes', [printRow('Notes', b.notes)])}</div>` : ''}
+          </div>
+
+          <div class="manual">
+            <div class="staffdiv"><span>✎ To be completed by staff</span></div>
+            ${b.service === 'hotel' ? `<section class="staff">
+              <h2>Hotel Checklist</h2>
+              <div class="chklist">
+                ${HOTEL_CHECKLIST.map(item => `<div class="chk"><span>${esc(item)}</span><i></i></div>`).join('')}
+              </div>
+            </section>` : ''}
+            <section class="staff fill"><h2>Add-ons</h2><div class="ruled"></div></section>
+            <section class="staff fill remarks"><h2>Remarks</h2><div class="ruled"></div></section>
           </div>
 
           <footer>
@@ -479,7 +537,15 @@ export default function BookingDrawer({ booking: b, rooms, groomers, currentAdmi
           <div className={styles.refRow}>
             <p className={styles.ref}>{b.ref_number ?? ''}</p>
             <div className={styles.headerActions}>
-              <button type="button" className={styles.printBtn} onClick={handlePrint}>Print</button>
+              <button
+                type="button"
+                className={styles.printBtn}
+                onClick={handlePrint}
+                disabled={payments === null || charges === null}
+                title={payments === null || charges === null ? 'Loading payment details…' : 'Print booking details'}
+              >
+                Print
+              </button>
               {onEdit && (
                 <button type="button" className={styles.editBtn} onClick={() => onEdit(b)}>✏ Edit booking</button>
               )}
