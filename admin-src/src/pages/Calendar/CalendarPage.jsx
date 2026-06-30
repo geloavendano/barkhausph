@@ -17,7 +17,7 @@ const HOUR_COUNT = (DAY_END - DAY_START) / 60
 const TIMELINE_HEIGHT = (DAY_END - DAY_START) * PX_PER_MIN
 
 const INTERNAL_OTHER_ROOM_ID = '__internal_other_room__'
-const ROOM_TYPE_LABELS = { small_cage: 'Small Cage', medium_cage: 'Medium Cage', large_cage: 'Large Cage', single_cabin: 'Cat Cabin', villa: 'Cat Villa', other: 'Other' }
+const ROOM_TYPE_LABELS = { small_cage: 'Small Cage', medium_cage: 'Medium Cage', large_cage: 'Large Cage', single_cabin: 'Cat Cabin', villa: 'Cat Villa', other: 'Own Cage' }
 const SVCS = [
   { key: 'hotel',    label: 'Hotel',    color: '#EF9F27' },
   { key: 'grooming', label: 'Grooming', color: '#4D96B9' },
@@ -755,7 +755,7 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
                     const isCancelled = b.status === 'cancelled' || b.status === 'rejected'
 	                    const detail = gd
 	                      ? groomServiceLabel(gd.groom_service_name || gd.groom_service_key) + (gd.preferred_stylist && gd.preferred_stylist !== 'any' ? ` | ${gd.preferred_stylist}` : '')
-                      : hd ? (hd.room_type === 'other' ? 'Other' : (rooms.find(r => r.id === hd.room_id)?.name ?? ROOM_TYPE_LABELS[hd.room_type] ?? hd.room_type ?? 'Hotel'))
+                      : hd ? (hd.room_type === 'other' ? 'Own Cage' : (rooms.find(r => r.id === hd.room_id)?.name ?? ROOM_TYPE_LABELS[hd.room_type] ?? hd.room_type ?? 'Hotel'))
                       : first(b.daycare_details) ? 'Daycare' : first(b.studio_details) ? 'Studio' : ''
                     // Rotate the name vertically only when the column is actually too
                     // narrow for horizontal text (measured), not merely when many overlap.

@@ -10,12 +10,12 @@ const ROOM_TYPE_OPTS = [
   { key:'small_cage',   label:'Small Cage' },
   { key:'single_cabin', label:'Cat Cabin' },
   { key:'villa',        label:'Cat Villa' },
-  { key:'other',        label:'Other' },
+  { key:'other',        label:'Own Cage' },
 ]
 
 const INTERNAL_OTHER_ROOM = {
   id: '__internal_other_room__',
-  name: 'Other',
+  name: 'Own Cage',
   color: '#888780',
   active: true,
   room_type: 'other',

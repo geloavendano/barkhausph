@@ -303,7 +303,7 @@ export default function BookingDrawer({ booking: b, rooms, groomers, currentAdmi
     } else assignedName = 'Any available'
   } else if (b.service === 'hotel') {
     if (hd?.room_type === 'other') {
-      assignedName = 'Other'; assignedColor = '#888780'; isUnassigned = false
+      assignedName = 'Own Cage'; assignedColor = '#888780'; isUnassigned = false
     } else if (hd?.room_id) {
       const rm = rooms?.find(x => x.id === hd.room_id)
       assignedName = rm?.name ?? 'Unknown'; assignedColor = rm?.color ?? 'var(--mid)'; isUnassigned = false
@@ -330,7 +330,7 @@ export default function BookingDrawer({ booking: b, rooms, groomers, currentAdmi
       const rm      = rooms?.find(r => r.id === hd.room_id)
       const cinStr  = fmtDate(hd.checkin_date) + (hd.dropoff_time ? ' · ' + fmtTime(hd.dropoff_time) : '')
       const coutStr = fmtDate(hd.checkout_date) + (hd.pickup_time ? ' · ' + fmtTime(hd.pickup_time) : '')
-      serviceRows.push(['Room', hd.room_type === 'other' ? 'Other' : (rm?.name ?? hd.room_type ?? '-')])
+      serviceRows.push(['Room', hd.room_type === 'other' ? 'Own Cage' : (rm?.name ?? hd.room_type ?? '-')])
       serviceRows.push(['Check-in', cinStr])
       serviceRows.push(['Check-out', coutStr])
       serviceRows.push(['Play park', hd.playpark_consent ? 'Yes' : 'No'])
@@ -837,7 +837,7 @@ function ServiceRows({ b, gd, hd, dd, sd, addons, rooms }) {
     const coutStr = fmtDate(hd.checkout_date) + (hd.pickup_time  ? ' · ' + fmtTime(hd.pickup_time) : '')
     return (
       <>
-        <DR label="Room"       value={hd.room_type === 'other' ? 'Other' : (rm?.name ?? hd.room_type ?? '-')} />
+        <DR label="Room"       value={hd.room_type === 'other' ? 'Own Cage' : (rm?.name ?? hd.room_type ?? '-')} />
         <DR label="Check-in"  value={cinStr} />
         <DR label="Check-out" value={coutStr} />
         <DR label="Play park" value={hd.playpark_consent ? 'Yes' : 'No'} />

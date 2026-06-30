@@ -230,12 +230,19 @@ async function assertGroomingAvailable(supabase: any, branchId: string, body: Re
   if (!available) throw new Error("That grooming slot is no longer available. Please select another time.");
 }
 
-async function assertHotelAvailable(supabase: any, branchId: string, body: Record<string, any>) {
+async function assertHotelAvailable(
+  supabase: any,
+  branchId: string,
+  body: Record<string, any>,
+  allowOwnCage = false,
+) {
   if (body.service !== "hotel") return;
-  if (!body.hotelCheckin || !body.hotelCheckout || !body.hotelRoomId) {
+  if (!body.hotelCheckin || !body.hotelCheckout) {
     throw new Error("Hotel dates and room selection are required.");
   }
   if (body.hotelCheckout <= body.hotelCheckin) throw new Error("Hotel checkout must be after check-in.");
+  if (allowOwnCage && body.hotelRoom === "other" && !body.hotelRoomId) return;
+  if (!body.hotelRoomId) throw new Error("Hotel dates and room selection are required.");
 
   const { data: room, error: roomError } = await supabase.from("rooms")
     .select("id,room_type,allowed_sizes")
@@ -636,7 +643,7 @@ Deno.serve(async (req) => {
     // Validate against the same service-hours, cutoff, block, booking, and duration
     // rules used by both booking UIs before creating owner/pet/booking records.
     await assertGroomingAvailable(supabase, branch.id, body);
-    await assertHotelAvailable(supabase, branch.id, body);
+    await assertHotelAvailable(supabase, branch.id, body, isAdminCreated);
 
     if (isWalkin && !(await consumeWalkinToken(supabase, body.walkinToken))) {
       return new Response(JSON.stringify({ error: "Walk-in authorization is invalid, expired, or already used." }), {

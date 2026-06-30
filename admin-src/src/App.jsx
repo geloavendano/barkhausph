@@ -11,7 +11,7 @@ import ReportsPage   from './pages/Reports/ReportsPage'
 
 const INTERNAL_OTHER_ROOM = {
   id: '__internal_other_room__',
-  name: 'Other',
+  name: 'Own Cage',
   color: '#888780',
   active: true,
   room_type: 'other',
