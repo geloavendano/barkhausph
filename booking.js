@@ -100,7 +100,7 @@ var booking = {
   // Owner
   ownerFirst:'', ownerLast:'', ownerEmail:'', ownerPhone:'', ownerSource:'',
   // Membership
-  isMember:null, membershipId:null, memberValid:false,
+  isMember:null, membershipId:null, memberValid:false, membershipType:'standard',
   // Test-only checkout shortcut
   simulatePayment:false,
 };
@@ -227,7 +227,7 @@ function localDateStr(d) {
 
 async function loadPricing() {
   try {
-    var rows = await sbFetchPublic('pricing', 'select=category,service_key,size_key,day_type,price');
+    var rows = await sbFetchPublic('pricing', 'select=category,service_key,size_key,day_type,membership_type,price');
     loadPricingData(rows);
     // Manual transfer charges no convenience fee. Hosted providers use the
     // configured pricing-table fee when enabled later.
@@ -617,7 +617,7 @@ function getRunningTotal() {
     raw = booking.daycareTotal || 0;
     discountable = raw;
   }
-  return raw - calculateMemberDiscount(svc, discountable, booking.memberValid);
+  return raw - calculateMemberDiscount(svc, discountable, booking.memberValid, booking.membershipType);
 }
 
 // ── LOCATION ──
@@ -631,6 +631,7 @@ function selectLocation(el, val) {
   // Membership validity is branch-dependent (Standard memberships are branch-bound) —
   // force re-verification after a branch change so a discount can't carry across branches.
   booking.memberValid = false;
+  booking.membershipType = 'standard';
   var _mvMsg = document.getElementById('memberValidMsg');
   if (_mvMsg) _mvMsg.style.display = 'none';
   loadLiveRoomsAndGroomers();
@@ -699,6 +700,7 @@ function startSimulatedPaymentFlow() {
   booking.isMember = false;
   booking.membershipId = null;
   booking.memberValid = false;
+  booking.membershipType = 'standard';
   booking.ownerFirst = 'Maya';
   booking.ownerLast = 'Tester';
   booking.ownerEmail = 'maya-test@barkhaus.ph';
@@ -1051,7 +1053,7 @@ function updateGroomTotal() {
   var base    = booking.groomServicePrice || 0;
   var addons  = Object.keys(booking.selectedAddons).reduce(function(a,k){return a+(booking.selectedAddons[k]||0);},0);
   var subtotal = base + addons;
-  var discount = calculateMemberDiscount('grooming', base, booking.memberValid);
+  var discount = calculateMemberDiscount('grooming', base, booking.memberValid, booking.membershipType);
   var total    = subtotal - discount;
   var el = document.getElementById('groomPriceTotal');
   if (subtotal > 0) {
@@ -1792,7 +1794,7 @@ function calcHotelTotal() {
   }
 
   var subtotal = baseTotal + booking.hotelLateTotal;
-  var discount = calculateMemberDiscount('hotel', baseTotal, booking.memberValid);
+  var discount = calculateMemberDiscount('hotel', baseTotal, booking.memberValid, booking.membershipType);
   var total    = subtotal - discount;
 
   // \u2500\u2500 Step 3 estimate breakdown (no late fee yet) \u2500\u2500
@@ -1829,7 +1831,7 @@ function calcHotelTotal() {
     }
     s4html += '<div class="price-line subtotal-line"><span class="price-line-label">Subtotal</span><span class="price-line-val">&#8369;'+subtotal.toLocaleString()+'</span></div>';
     if (discount > 0) {
-      var discPct = Math.round(MEMBER_DISCOUNT.hotel * 100);
+      var discPct = Math.round(memberDiscountRate('hotel', booking.membershipType) * 100);
       s4html += '<div class="price-line"><span class="price-line-label">Member discount ('+discPct+'%)</span><span class="price-line-val discount">-&#8369;'+discount.toLocaleString()+'</span></div>';
     }
     s4html += '<div class="price-line total-line"><span class="price-line-label">Estimated total</span><span class="price-line-val">&#8369;'+total.toLocaleString()+'</span></div>';
@@ -2055,7 +2057,7 @@ function calcDaycareTotal() {
   booking.daycareDropoffHour = dropH;
   booking.daycarePickupHour  = pickH;
   booking.daycareTotal = subtotal;
-  var discount = calculateMemberDiscount('daycare', subtotal, booking.memberValid);
+  var discount = calculateMemberDiscount('daycare', subtotal, booking.memberValid, booking.membershipType);
   var total    = subtotal - discount;
   var html = '\u20b1' + total.toLocaleString();
   if (discount > 0) html = '<span style="text-decoration:line-through;opacity:0.5;font-size:14px">\u20b1' + subtotal.toLocaleString() + '</span> \u20b1' + total.toLocaleString();
@@ -2167,6 +2169,7 @@ function setMembership(val) {
   if (!val) {
     booking.memberValid = false;
     booking.membershipId = null;
+    booking.membershipType = 'standard';
     document.getElementById('membershipId').value = '';
     document.getElementById('memberValidMsg').style.display = 'none';
     refreshAllTotals();
@@ -2271,9 +2274,12 @@ async function validateMemberId() {
         msg.style.color = 'var(--error)';
         booking.memberValid = false;
       } else {
-        booking.memberValid = true; booking.membershipId = idInput;
-        var disc = Math.round((MEMBER_DISCOUNT[booking.service]||0)*100);
-        msg.textContent = 'Member verified' + (disc ? ' \u2014 ' + disc + '% discount applied' : '') + ' \u2713';
+        booking.memberValid = true;
+        booking.membershipId = idInput;
+        booking.membershipType = member.membership_type || 'standard';
+        var disc = Math.round(memberDiscountRate(booking.service, booking.membershipType) * 100);
+        var memberLabel = booking.membershipType === 'renewal' ? 'Renewal member verified' : 'Member verified';
+        msg.textContent = memberLabel + (disc ? ' \u2014 ' + disc + '% discount applied' : '') + ' \u2713';
         msg.style.color = 'var(--success)';
       }
     }
@@ -2586,8 +2592,8 @@ function buildSummary() {
       '</div>';
   }).join('');
   if (subtotal > 0) {
-    var discRate = booking.memberValid ? (MEMBER_DISCOUNT[svc]||0) : 0;
-    var discAmt  = calculateMemberDiscount(svc, discountable, booking.memberValid);
+    var discRate = booking.memberValid ? memberDiscountRate(svc, booking.membershipType) : 0;
+    var discAmt  = calculateMemberDiscount(svc, discountable, booking.memberValid, booking.membershipType);
     var fee      = currentConvenienceFee();
     var total    = subtotal - discAmt + fee;
     // Always show subtotal when there are components so the hierarchy is clear
@@ -2808,7 +2814,9 @@ function renderSuccessDetails(snap, detailsId, priceId) {
     ph += '<div class="price-line subtotal-line"><span class="price-line-label">Subtotal</span><span class="price-line-val">₱'+baseSubtotal.toLocaleString()+'</span></div>';
   }
   if ((snap.discountAmount||0) > 0) {
-    var discPct = Math.round((MEMBER_DISCOUNT[svc] || 0) * 100);
+    var discountType = (snap.bookingState && snap.bookingState.membershipType) ||
+      (snap.rawPayload && snap.rawPayload.membershipType) || 'standard';
+    var discPct = Math.round(memberDiscountRate(svc, discountType) * 100);
     ph += '<div class="price-line"><span class="price-line-label">Member discount'+(discPct?(' ('+discPct+'%)'):'')+' </span><span class="price-line-val discount">−₱'+snap.discountAmount.toLocaleString()+'</span></div>';
   }
   if ((snap.convenienceFee||0) > 0) {
@@ -3537,7 +3545,7 @@ async function submitBooking() {
     subtotal = booking.daycareTotal || 0;
     discountable = subtotal;
   }
-  var discAmt  = calculateMemberDiscount(svc, discountable, booking.memberValid);
+  var discAmt  = calculateMemberDiscount(svc, discountable, booking.memberValid, booking.membershipType);
   var fee      = currentConvenienceFee();
   var total    = subtotal - discAmt + fee;
 
@@ -3688,6 +3696,7 @@ async function submitBooking() {
     petSize:booking.petSize, petMedical:booking.petMedical,
     petTemperament:booking.petTemperament,
     membershipId:booking.memberValid?booking.membershipId:null,
+    membershipType:booking.memberValid?booking.membershipType:'standard',
     vaccines:_fullVaccines, addons:booking.selectedAddons,
     ownerFirst:booking.ownerFirst, ownerLast:booking.ownerLast,
     ownerEmail:booking.ownerEmail, ownerPhone:booking.ownerPhone,

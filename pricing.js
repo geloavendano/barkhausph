@@ -36,6 +36,7 @@ var DAYCARE_RATES       = { small_dog:0, medium_dog:0, large_dog:0, cat:0 };
 var DAYCARE_EXTRA_RATES = { small_dog:0, medium_dog:0, large_dog:0, cat:0 };
 var HOTEL_LATE_RATE     = 0;
 var MEMBER_DISCOUNT     = { grooming:0, hotel:0, daycare:0 };
+var RENEWAL_MEMBER_DISCOUNT = {};
 var CONVENIENCE_FEE     = 0;
 
 /**
@@ -74,7 +75,8 @@ function loadPricingData(rows) {
         DAYCARE_RATES[sz] = p;
       }
     } else if (cat === 'member_discount' && svc) {
-      MEMBER_DISCOUNT[svc] = p / 100;
+      if (r.membership_type === 'renewal') RENEWAL_MEMBER_DISCOUNT[svc] = p / 100;
+      else MEMBER_DISCOUNT[svc] = p / 100;
     } else if (cat === 'convenience') {
       CONVENIENCE_FEE = p;
     }
@@ -82,7 +84,14 @@ function loadPricingData(rows) {
   _pricingLoaded = true;
 }
 
-function calculateMemberDiscount(service, discountableAmount, memberValid) {
+function memberDiscountRate(service, membershipType) {
+  if (membershipType === 'renewal' && RENEWAL_MEMBER_DISCOUNT[service] != null) {
+    return RENEWAL_MEMBER_DISCOUNT[service];
+  }
+  return MEMBER_DISCOUNT[service] || 0;
+}
+
+function calculateMemberDiscount(service, discountableAmount, memberValid, membershipType) {
   if (!memberValid || discountableAmount <= 0) return 0;
-  return Math.round(discountableAmount * (MEMBER_DISCOUNT[service] || 0));
+  return Math.round(discountableAmount * memberDiscountRate(service, membershipType));
 }

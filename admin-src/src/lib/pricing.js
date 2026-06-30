@@ -26,6 +26,7 @@ export function emptyPricing() {
     extra:   {},
     lateRate: 0,
     disc:    { grooming:0, hotel:0, daycare:0 },
+    renewalDisc: {},
     fee:     0,
     loaded:  false,
   }
@@ -52,7 +53,8 @@ export function parsePricing(rows, base = null) {
       if (svc === 'additional_hour') p.extra[sz] = price
       else p.daycare[sz] = price
     } else if (cat === 'member_discount' && svc) {
-      p.disc[svc] = price / 100
+      if (r.membership_type === 'renewal') p.renewalDisc[svc] = price / 100
+      else p.disc[svc] = price / 100
     } else if (cat === 'convenience') {
       p.fee = price
     }
@@ -172,6 +174,10 @@ export function calcTotal(bk, p) {
   if (bk.svc === 'grooming') {
     discountable = bk.gsvc !== 'ala_carte' ? (p.groom[bk.gsvc]?.[bk.size] ?? 0) : 0
   }
-  const disc = bk.memvalid ? Math.round(discountable * (p.disc[bk.svc] ?? 0)) : 0
+  const standardRate = p.disc[bk.svc] ?? 0
+  const rate = bk.memtype === 'renewal'
+    ? (p.renewalDisc[bk.svc] ?? standardRate)
+    : standardRate
+  const disc = bk.memvalid ? Math.round(discountable * rate) : 0
   return { base, disc, late, subtotal, total: subtotal - disc }
 }

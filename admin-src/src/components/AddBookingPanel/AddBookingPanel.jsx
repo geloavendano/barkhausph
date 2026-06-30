@@ -99,7 +99,7 @@ function mkBk(branchId) {
     ofirst:'', olast:'', oemail:'', ophone:'', osource:'', owner_id:null,
     // booking
     status:'confirmed', paysts:'unpaid', paymethod:'', payref:'',
-    memcode:'', memvalid:false,
+    memcode:'', memvalid:false, memtype:'standard',
     wgen:true, whouse:true, wgroompolicy:true, whotelpolicy:true,
     wvacc:true, wmedia:true, anotes:'',
     recby:'Admin', mode:'admin',
@@ -239,7 +239,7 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
 
   // Load pricing once
   useEffect(() => {
-    sbGet('pricing', 'select=category,service_key,size_key,day_type,price')
+    sbGet('pricing', 'select=category,service_key,size_key,day_type,membership_type,price')
       .then(rows => setPricing(parsePricing(rows)))
       .catch(() => {})
   }, [])
@@ -333,8 +333,22 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
       wmedia: waiver?.media_consent      ?? true,
       memcode:  b.member_code_used ?? '',
       memvalid: !!(b.member_code_used && (b.discount_amount ?? 0) > 0),
+      memtype:  'standard',
     })
   }, [editBooking, branch?.id, rooms])
+
+  useEffect(() => {
+    const code = editBooking?.member_code_used
+    if (!code) return
+    let active = true
+    sbGet('members',
+      `member_code=eq.${encodeURIComponent(code)}&select=membership_type&limit=1`)
+      .then(rows => {
+        if (active) upd('memtype', rows?.[0]?.membership_type ?? 'standard')
+      })
+      .catch(() => {})
+    return () => { active = false }
+  }, [editBooking?.id, editBooking?.member_code_used]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const upd = (key, val) => setBk(prev => ({ ...prev, [key]: val }))
   const updMany = obj => setBk(prev => ({ ...prev, ...obj }))
@@ -548,13 +562,13 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
 
   // ── Member validation ─────────────────────────────────────────────────────
   async function applyMember() {
-    if (bk.memvalid) { updMany({ memvalid:false, memcode:'' }); setMemMsg(''); return }
+    if (bk.memvalid) { updMany({ memvalid:false, memcode:'', memtype:'standard' }); setMemMsg(''); return }
     const code = bk.memcode.trim().toUpperCase()
     if (!code) return
     setMemMsg('Checking…')
     try {
       const rows = await sbGet('members',
-        `member_code=eq.${encodeURIComponent(code)}&select=member_code,tier,active,valid_until,branch_id&limit=1`)
+        `member_code=eq.${encodeURIComponent(code)}&select=member_code,tier,membership_type,active,valid_until,branch_id&limit=1`)
       const m = rows?.[0]
       if (!m?.active) { setMemMsg('Member code not found or inactive.'); return }
       if (m.valid_until && new Date(m.valid_until) < new Date()) {
@@ -563,9 +577,15 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
       if (m.tier !== 'passport' && m.branch_id && m.branch_id !== branch?.id) {
         setMemMsg('This membership belongs to another branch.'); return
       }
-      updMany({ memvalid: true, memcode: code })
-      const pct = Math.round((pricing.disc[bk.svc] ?? 0) * 100)
-      setMemMsg(pct ? `${pct}% member discount applied ✓` : 'Member verified ✓')
+      const memberType = m.membership_type ?? 'standard'
+      updMany({ memvalid: true, memcode: code, memtype: memberType })
+      const standardRate = pricing.disc[bk.svc] ?? 0
+      const rate = memberType === 'renewal'
+        ? (pricing.renewalDisc[bk.svc] ?? standardRate)
+        : standardRate
+      const pct = Math.round(rate * 100)
+      const label = memberType === 'renewal' ? 'Renewal member' : 'Member'
+      setMemMsg(pct ? `${label} verified — ${pct}% discount applied ✓` : `${label} verified ✓`)
     } catch (e) { setMemMsg('Could not verify: ' + e.message) }
   }
 
@@ -770,6 +790,7 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
           waiverHotelCancellation: bk.svc === 'hotel' ? bk.whotelpolicy : false,
           waiverSeniorMedical: false, waiverStudio: false, waiverMedia: bk.wmedia,
           membershipId: bk.memvalid ? bk.memcode : null,
+          membershipType: bk.memvalid ? bk.memtype : 'standard',
           subtotal: subtotal, discountAmount: disc, total,
           hotelLateTotal: late,
           hotelLateIsAdditionalNight: isHotelAdditionalNight(bk),

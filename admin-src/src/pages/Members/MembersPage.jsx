@@ -95,6 +95,7 @@ async function runMembersImportJob(job) {
           valid_until: row.valid_until,
           branch_id: row.branch_id,
           tier: row.tier,
+          membership_type: row.membership_type,
           active: true,
           updated_at: new Date().toISOString(),
         }], 'member_code')
@@ -194,8 +195,11 @@ function ValidateCard({ branches }) {
       const branchName = isPassport
         ? 'All Branches'
         : (branchObj?.name ?? (m.branch_id ? 'Unknown branch' : '⚠ No branch assigned'))
-      // Tier label spells out the branch for Standard memberships
-      const tierLabel  = isPassport ? 'Passport' : `Standard · ${branchName}`
+      // Coverage (branch/Passport) is separate from the discount program.
+      const isRenewal = m.membership_type === 'renewal'
+      const tierLabel = isRenewal
+        ? `Renewal${isPassport ? ' · Passport' : ` · ${branchName}`}`
+        : (isPassport ? 'Passport' : `Standard · ${branchName}`)
       const validStr = m.valid_until
         ? 'Valid until ' + new Date(m.valid_until + 'T00:00:00').toLocaleDateString('en-PH', {
             year: 'numeric', month: 'long', day: 'numeric',
@@ -299,9 +303,10 @@ function CsvUploadCard({ branches }) {
   function downloadSampleCsv() {
     const sampleBranch = branches?.[0]?.name ?? 'Estancia'
     const rows = [
-      ['Membership ID', 'Pet Name', 'Breed', 'Valid Until Date', 'Branch'],
-      ['BH-M001', 'Max', 'Golden Retriever', '2026-12-31', sampleBranch],
-      ['BH-P001', 'Luna', 'Persian', '2026-12-31', ''],
+      ['Membership ID', 'Pet Name', 'Breed', 'Valid Until Date', 'Branch', 'Membership Type'],
+      ['BH-M001', 'Max', 'Golden Retriever', '2026-12-31', sampleBranch, 'Standard'],
+      ['BH-R001', 'Buddy', 'Corgi', '2026-12-31', sampleBranch, 'Renewal'],
+      ['BH-P001', 'Luna', 'Persian', '2026-12-31', '', 'Standard'],
     ]
     downloadCsv('barkhaus-members-template.csv', rows)
   }
@@ -328,9 +333,10 @@ function CsvUploadCard({ branches }) {
       const breedIdx = headers.findIndex(h => h.toLowerCase() === 'breed')
       const dateIdx = headers.findIndex(h => h.toLowerCase() === 'valid until date')
       const brIdx   = headers.findIndex(h => h.toLowerCase() === 'branch')
+      const typeIdx = headers.findIndex(h => h.toLowerCase() === 'membership type')
 
-      if (idIdx < 0 || petIdx < 0) {
-        setResult('Missing required columns: "Membership ID" and "Pet Name".')
+      if (idIdx < 0 || petIdx < 0 || typeIdx < 0) {
+        setResult('Missing required columns: "Membership ID", "Pet Name", and "Membership Type".')
         setResultOk(false); return
       }
 
@@ -349,6 +355,7 @@ function CsvUploadCard({ branches }) {
         const memberCode = (cols[idIdx] ?? '').trim().toUpperCase()
         const petName = (cols[petIdx] ?? '').trim()
         const branchName = brIdx >= 0 ? (cols[brIdx] ?? '').trim() : ''
+        const membershipType = (cols[typeIdx] ?? '').trim().toLowerCase()
         const reportBase = headers.map((_, idx) => cols[idx] ?? '')
 
         function fail(reason, action) {
@@ -362,6 +369,10 @@ function CsvUploadCard({ branches }) {
         }
         if (!petName) {
           fail('Missing Pet Name.', 'Add the registered pet name, then upload the corrected row again.')
+          continue
+        }
+        if (!['standard', 'renewal'].includes(membershipType)) {
+          fail('Membership Type must be Standard or Renewal.', 'Enter Standard or Renewal in the Membership Type column.')
           continue
         }
         const date = normalizeCsvDate(dateIdx >= 0 ? cols[dateIdx] : '')
@@ -386,6 +397,7 @@ function CsvUploadCard({ branches }) {
           // Tier is derived from branch: a branch-bound member is Standard,
           // a member with no branch is Passport (valid at all branches).
           tier:        brMatch ? 'standard' : 'passport',
+          membership_type: membershipType,
         })
       }
 
@@ -465,11 +477,12 @@ function CsvUploadCard({ branches }) {
       <p className={styles.csvHint}>
         Expected columns:{' '}
         <code>Membership ID</code>, <code>Pet Name</code>,{' '}
-        <code>Breed</code>, <code>Valid Until Date</code>, <code>Branch</code>
+        <code>Breed</code>, <code>Valid Until Date</code>, <code>Branch</code>,{' '}
+        <code>Membership Type</code>
       </p>
       <p className={styles.csvNote}>
-        Use an exact branch name for Standard memberships. Leave Branch blank for Passport memberships valid at all branches.
-        Dates may use YYYY-MM-DD or M/D/YYYY format.
+        Use an exact branch name for branch-bound memberships. Leave Branch blank for Passport memberships valid at all branches.
+        Membership Type is required and must be Standard or Renewal. Dates may use YYYY-MM-DD or M/D/YYYY format.
       </p>
 
       <input

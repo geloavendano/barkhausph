@@ -94,3 +94,40 @@ test('daycare membership discount includes additional hours', () => {
     total: 450,
   })
 })
+
+test('renewal members receive the hotel renewal override', () => {
+  const renewalPricing = parsePricing([
+    { category: 'hotel', size_key: 'small_dog', day_type: 'weekday', price: 1000 },
+    { category: 'hotel', size_key: 'small_dog', day_type: 'weekend', price: 1000 },
+    { category: 'member_discount', service_key: 'hotel', membership_type: 'standard', price: 10 },
+    { category: 'member_discount', service_key: 'hotel', membership_type: 'renewal', price: 20 },
+  ], emptyPricing())
+  const baseBooking = {
+    svc: 'hotel',
+    hcin: '2026-07-01',
+    hcout: '2026-07-02',
+    hpickHour: 14,
+    hroom_type: 'small_cage',
+    size: 'small_dog',
+    memvalid: true,
+  }
+
+  assert.equal(calcTotal({ ...baseBooking, memtype: 'standard' }, renewalPricing).disc, 100)
+  assert.equal(calcTotal({ ...baseBooking, memtype: 'renewal' }, renewalPricing).disc, 200)
+})
+
+test('renewal members fall back to standard rates without a service override', () => {
+  const renewalPricing = parsePricing([
+    { category: 'daycare', size_key: 'small_dog', price: 300 },
+    { category: 'member_discount', service_key: 'daycare', membership_type: 'standard', price: 20 },
+  ], emptyPricing())
+  const booking = {
+    svc: 'daycare',
+    size: 'small_dog',
+    dcopen: true,
+    memvalid: true,
+    memtype: 'renewal',
+  }
+
+  assert.equal(calcTotal(booking, renewalPricing).disc, 60)
+})
