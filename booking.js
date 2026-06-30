@@ -22,7 +22,7 @@ function hostedPaymentEndpoint() {
 }
 
 function currentConvenienceFee() {
-  return booking && booking.simulatePayment ? 0 : CONVENIENCE_FEE;
+  return IS_WALKIN || (booking && booking.simulatePayment) ? 0 : CONVENIENCE_FEE;
 }
 
 // ── PRICING TABLES ──
@@ -231,7 +231,7 @@ async function loadPricing() {
     loadPricingData(rows);
     // Manual transfer charges no convenience fee. Hosted providers use the
     // configured pricing-table fee when enabled later.
-    if (PAYMENT_GATEWAY_PROVIDER === 'manual') CONVENIENCE_FEE = 0;
+    if (IS_WALKIN || PAYMENT_GATEWAY_PROVIDER === 'manual') CONVENIENCE_FEE = 0;
   } catch(e) {
     console.warn('Pricing fetch failed:', e);
     // Show a persistent banner — pricing failure is not a recoverable state without a refresh
