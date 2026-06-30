@@ -3894,6 +3894,10 @@ function showContactModal(type) {
       body    = 'Studio bookings are currently available via direct visit or message. Get in touch and we’ll set it up for you.';
       actions = contactActions('eastwood');
     }
+  } else if (type === 'daycare') {
+    icon    = '☀️'; title = 'Daycare';
+    body    = 'Daycare is walk-in for now — no booking needed! Feel free to drop by your branch during mall hours; your pet’s playmates are already waiting for them. 🐾 Message or call us anytime if you’d like to chat first.';
+    actions = contactActions(loc);
   } else { // events
     icon    = '🎉'; title = 'Events';
     body    = 'Event bookings are currently available via direct visit or message. Get in touch with us to plan your pet’s special day!';
