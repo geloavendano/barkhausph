@@ -25,7 +25,7 @@ const GROOM_SVCS = [
 const ADDON_COMPAT = { bath_dry:null, basic:['face_trim','antitick','whitening','demat','deshed','premium_shampoo'], premium:['face_trim','antitick','whitening','demat','deshed'], ala_carte:null }
 const BK_SIZES     = ['small_dog','medium_dog','large_dog','giant_dog','cat']
 const SIZE_LBL     = { small_dog:'Small dog', medium_dog:'Medium dog', large_dog:'Large dog', giant_dog:'Giant dog', cat:'Cat' }
-const ROOM_TYPES   = { small_cage:'Small Cage', medium_cage:'Medium Cage', large_cage:'Large Cage', single_cabin:'Cat Cabin', villa:'Cat Villa' }
+const ROOM_TYPES   = { small_cage:'Small Cage', medium_cage:'Medium Cage', large_cage:'Large Cage', single_cabin:'Cat Cabin', villa:'Cat Villa', other:'Own Cage' }
 const INTERNAL_OTHER_ROOM_ID = '__internal_other_room__'
 const GROOM_SLOTS = ['9:00 AM','10:00 AM','11:00 AM','12:00 PM','1:00 PM','2:00 PM','3:00 PM','4:00 PM','5:00 PM']
 const STUDIO_SLOTS = ['10:00 AM','10:30 AM','11:00 AM','11:30 AM','12:00 PM','12:30 PM',
@@ -79,19 +79,21 @@ function buildAdminCharges(bookingId, bk, pricing, base, disc, late) {
 }
 
 function mkBk(branchId) {
+  const today = localToday()
+  const hotelCheckin = localDatePlusDays(1)
   return {
     svc:'grooming', branch: branchId ?? '',
     // grooming
     size:'small_dog', gsvc:'basic', stylist:'any', stylistId:null,
-    gdate:'', gslot:'', addons:{}, gnotes:'',
+    gdate:today, gslot:'', addons:{}, gnotes:'',
     // hotel
-    hcin:'', hcout:'', hroom:'', hroom_id:null, hroom_type:'',
+    hcin:hotelCheckin, hcout:localDatePlusDays(1, hotelCheckin), hroom:'', hroom_id:null, hroom_type:'',
     hdrop:'10', hpickHour:14, hplay:false,
     hfeed:'', hmeds:'', hemerg:'', hemergp:'', hvet:'', hvetc:'', hvetaddr:'',
     // daycare
-    dcdate:'', dcdrop:'09:00', dcpick:'17:00', dcopen:false, dcnotes:'',
+    dcdate:today, dcdrop:'09:00', dcpick:'17:00', dcopen:false, dcnotes:'',
     // studio
-    stdate:'', stslot:'',
+    stdate:today, stslot:'',
     // pet
     pname:'', panimal:'dog', pgender:'male', pbreed:'',
     page:'', pageunit:'years', ptemp:'', pmed:'', vacc:{},
@@ -132,6 +134,12 @@ function fmt(n) { return '₱' + Number(n).toLocaleString() }
 function localToday() {
   const now = new Date()
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+}
+
+function localDatePlusDays(days, dateStr = localToday()) {
+  const date = new Date(`${dateStr}T00:00:00`)
+  date.setDate(date.getDate() + days)
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 }
 
 /** Normalise any time value to HH:MM for <input type="time">.
@@ -856,7 +864,11 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
               <div key={s.k}
                 className={`${styles.svcCard} ${bk.svc === s.k ? styles.svcOn : ''} ${isLocked ? styles.svcLocked : ''}`}
                 style={{ borderColor: bk.svc === s.k ? s.color : undefined }}
-                onClick={() => { if (!isLocked) updMany({ svc: s.k, addons: {} }) }}>
+                onClick={() => {
+                  if (isLocked) return
+                  updMany({ svc: s.k, addons: {} })
+                  setStep(1)
+                }}>
                 <span className={styles.svcIcon}>{s.icon}</span>
                 <span className={styles.svcLbl}>{s.label}</span>
               </div>
@@ -971,11 +983,22 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
         <div className={styles.twoCol}>
           <FG label="Check-in" req>
             <input type="date" className={styles.inp} value={bk.hcin} min={isEdit ? undefined : localToday()}
-              onChange={e => updMany({ hcin: e.target.value })} />
+              onChange={e => {
+                const hcin = e.target.value
+                const minimumCheckout = hcin ? localDatePlusDays(1, hcin) : ''
+                updMany({
+                  hcin,
+                  hcout: !bk.hcout || bk.hcout < minimumCheckout ? minimumCheckout : bk.hcout,
+                  hroom_id: null,
+                  hroom: '',
+                  hroom_type: '',
+                })
+              }} />
           </FG>
           <FG label="Check-out" req>
             <input type="date" className={styles.inp} value={bk.hcout}
-              onChange={e => updMany({ hcout: e.target.value })} />
+              min={bk.hcin ? localDatePlusDays(1, bk.hcin) : (isEdit ? undefined : localDatePlusDays(1))}
+              onChange={e => updMany({ hcout: e.target.value, hroom_id: null, hroom: '', hroom_type: '' })} />
           </FG>
         </div>
         {nights > 0 && (() => {
@@ -998,14 +1021,28 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
           )
         })()}
         <FG label="Room" req>
-          <select className={styles.sel} value={bk.hroom_id ?? ''} disabled={hotelRoomsLoading || !hotelRooms}
-            onChange={e => {
-              const r = rooms.find(x => x.id === e.target.value)
-              updMany({ hroom_id: r?.id ?? null, hroom: r?.name ?? '', hroom_type: r?.room_type ?? '' })
-            }}>
-            <option value="">{hotelRoomsLoading ? 'Checking availability…' : hotelRooms ? 'Select room…' : 'Select dates first'}</option>
-            {(hotelRooms ?? []).map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-          </select>
+          {hotelRoomsLoading && <IBox>Checking room availability…</IBox>}
+          {!hotelRoomsLoading && hotelRooms && (
+            <div className={styles.addonGrid}>
+              {hotelRooms.map(room => {
+                const selected = bk.hroom_id === room.id
+                return (
+                  <div
+                    key={room.id}
+                    className={`${styles.acard} ${selected ? styles.acardOn : ''}`}
+                    onClick={() => updMany({
+                      hroom_id: room.id,
+                      hroom: room.name,
+                      hroom_type: room.room_type,
+                    })}
+                  >
+                    <div className={styles.acardName}>{room.name}</div>
+                    <div className={styles.acardPrice}>{ROOM_TYPES[room.room_type] ?? room.room_type}</div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
           {!hotelRoomsLoading && hotelRooms?.length === 0 && <p className={styles.emptyAvail}>No rooms are available for these dates.</p>}
           {availabilityError && bk.svc === 'hotel' && <p className={styles.emptyAvail}>{availabilityError}</p>}
         </FG>
@@ -1351,7 +1388,7 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
         )}
         <FG label="Booking status">
           <div className={styles.pills}>
-            {[['pending','Pending'],['confirmed','Confirmed'],['checked_in','Checked in']].map(([k,l]) => (
+            {[['pending','Pending'],['pencil-booked','Pencil-booked'],['confirmed','Confirmed'],['checked_in','Checked in']].map(([k,l]) => (
               <button key={k} className={`${styles.pill} ${bk.status === k ? styles.pillOn : ''}`}
                 onClick={() => upd('status', k)}>{l}</button>
             ))}

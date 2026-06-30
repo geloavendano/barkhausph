@@ -704,13 +704,15 @@
         <strong>⏰ Early drop-off:</strong> Drop-off before mall opening hours is available to <strong>Barkhaus Members</strong> only. Please enter your valid membership ID in the next steps — otherwise we may not be able to accommodate an early drop-off.
       </div>
     </div>
-    <p class="section-label">Pick-up time</p>
-    <div class="info-box" style="margin-bottom:10px">Standard checkout is <strong>2:00 PM</strong>. Late pick-up through 8:00 PM is <strong id="hotelLateRateFee">+&#8369;?/hour</strong>. Pick-up after <strong>8:00 PM</strong> is charged as <strong>1 additional night</strong> at the applicable room rate. Holiday rates may apply on public holidays.</div>
-    <select class="form-select" id="hotelPickupTime" onchange="calcHotelTotal(); refreshContinueBtn(); autoScroll('playparkSection', 100);">
-      <option value="">Select pick-up time</option>
-      <option value="14">On or before 2:00 PM (standard)</option>
-    </select>
-    <div id="hotelLatePickupNote" style="display:none" class="warn-box" style="margin-top:8px"></div>
+    <div class="form-group">
+      <label class="form-label">Pick-up time <span class="required">*</span></label>
+      <div class="info-box" style="margin-bottom:10px">Standard checkout is <strong>2:00 PM</strong>. Late pick-up through 8:00 PM is <strong id="hotelLateRateFee">+&#8369;?/hour</strong>. Pick-up after <strong>8:00 PM</strong> is charged as <strong>1 additional night</strong> at the applicable room rate. Holiday rates may apply on public holidays.</div>
+      <select class="form-select" id="hotelPickupTime" onchange="calcHotelTotal(); refreshContinueBtn(); autoScroll('playparkSection', 100);">
+        <option value="">Select pick-up time</option>
+        <option value="14">On or before 2:00 PM (standard)</option>
+      </select>
+      <div id="hotelLatePickupNote" class="warn-box" style="display:none;margin-top:8px"></div>
+    </div>
     <hr class="divider">
     <div class="form-group" id="playparkSection">
       <label class="form-label">Play park consent</label>
