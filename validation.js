@@ -71,6 +71,10 @@ function validateStep5() {
   if (!booking.petGender)                                { alert("Please select your pet's sex."); return false; }
   if (!document.getElementById('petBreed').value.trim()) { alert("Please enter your pet's breed."); return false; }
   if (!document.getElementById('petAgeNum').value.trim()) { alert("Please enter your pet's age."); return false; }
+  if (typeof isGroomAgeBlocked === 'function' && isGroomAgeBlocked()) {
+    alert("We can't wait to meet your furry baby! 💛 Premium Grooming isn't recommended for pets 7 months and under — they're still a little too sensitive for the full session. Please choose Bath & Dry or Basic Grooming instead, and we'll give them all the gentle pampering they deserve.");
+    return false;
+  }
   if ((booking.service === 'hotel' || booking.service === 'daycare') && !booking.petSize) {
     alert("Please select your pet's size."); return false;
   }
