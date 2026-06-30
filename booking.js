@@ -502,6 +502,7 @@ function silentValidateStep(step) {
   if (step === 5) {
     if (!g('petName').trim() || !booking.petAnimal || !booking.petGender) return false;
     if (!g('petBreed').trim() || !g('petAgeNum').trim()) return false;
+    if (isGroomAgeBlocked()) return false;
     if (!booking.petTemperament) return false;
     var _nf = !uploadedVaccineFiles || uploadedVaccineFiles.length === 0;
     var _bv = document.getElementById('bringVaccines');
@@ -914,6 +915,29 @@ function showWaiverPanel() {
   document.getElementById('seniorWaiverSection').style.display = _needsSenior ? '' : 'none';
   var _showPlaypark = svc === 'hotel' && booking.playparkConsent === 'yes' && booking.petSize !== 'cat';
   document.getElementById('playparkWaiverSection').style.display = _showPlaypark ? '' : 'none';
+  checkGroomAge();
+}
+
+// ── PREMIUM GROOM AGE GUARD ──
+// Premium Grooming is too intensive for pets 7 months and under. Block it (and
+// show a warm inline message) when the customer enters such an age; other
+// grooming services (Bath & Dry, Basic) remain fine for younger pets.
+function groomAgeMonths() {
+  var el = document.getElementById('petAgeNum');
+  if (!el || String(el.value).trim() === '') return null;
+  var v = parseInt(el.value, 10);
+  if (isNaN(v)) return null;
+  var unit = (document.getElementById('petAgeUnit') || {}).value || 'years';
+  return unit === 'months' ? v : v * 12;
+}
+function isGroomAgeBlocked() {
+  if (booking.service !== 'grooming' || booking.groomService !== 'premium') return false;
+  var m = groomAgeMonths();
+  return m != null && m <= 7;
+}
+function checkGroomAge() {
+  var box = document.getElementById('groomAgeError');
+  if (box) box.style.display = isGroomAgeBlocked() ? 'block' : 'none';
 }
 
 // ── GROOMING SIZE ──
