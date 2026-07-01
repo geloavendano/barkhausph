@@ -1,7 +1,8 @@
 // Barkhaus — payment-health edge function
 // Read-only health probe for the external monitoring canary (GitHub Actions).
-// Gated by a shared secret in the `x-health-token` header (PAYMENT_HEALTH_TOKEN
-// env var) so the endpoint can't be scraped — it exposes only non-PII counts.
+// Gated by a shared secret in the `x-health-token` header. The GitHub canary
+// uses PAYMENT_HEALTH_TOKEN, while external uptime monitoring uses the
+// independently rotatable BETTERSTACK_HEALTH_TOKEN.
 //
 // Returns: { ok, checked_at, stale_pending, stale_refs[], cron_job_present,
 //            cron_last_status, cron_last_run, cron_recent_failures }
@@ -18,9 +19,12 @@ const CORS = {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
 
-  const expected = Deno.env.get("PAYMENT_HEALTH_TOKEN");
+  const expected = [
+    Deno.env.get("PAYMENT_HEALTH_TOKEN"),
+    Deno.env.get("BETTERSTACK_HEALTH_TOKEN"),
+  ].filter(Boolean);
   const provided = req.headers.get("x-health-token");
-  if (!expected || !provided || provided !== expected) {
+  if (!provided || !expected.includes(provided)) {
     return new Response(JSON.stringify({ ok: false, error: "unauthorized" }),
       { status: 401, headers: { ...CORS, "Content-Type": "application/json" } });
   }
