@@ -41,7 +41,7 @@ var GROOM_SERVICES = [
 var ADDON_ENABLED = {
   bath_dry:  null,
   basic:     ['face_trim','antitick','whitening','demat','deshed','premium_shampoo'],
-  premium:   ['face_trim','antitick','whitening','demat','deshed'],
+  premium:   ['face_trim','antitick','whitening','demat','deshed','premium_shampoo'],
   ala_carte: null
 };
 // Rate key is determined by the cage selected, not the pet's own size category

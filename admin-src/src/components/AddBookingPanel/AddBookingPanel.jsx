@@ -22,7 +22,7 @@ const GROOM_SVCS = [
   { k:'premium',  n:'Premium Groom', d:'2 hrs'  },
   { k:'ala_carte',n:'Ala Carte',     d:'varies' },
 ]
-const ADDON_COMPAT = { bath_dry:null, basic:['face_trim','antitick','whitening','demat','deshed','premium_shampoo'], premium:['face_trim','antitick','whitening','demat','deshed'], ala_carte:null }
+const ADDON_COMPAT = { bath_dry:null, basic:['face_trim','antitick','whitening','demat','deshed','premium_shampoo'], premium:['face_trim','antitick','whitening','demat','deshed','premium_shampoo'], ala_carte:null }
 const BK_SIZES     = ['small_dog','medium_dog','large_dog','giant_dog','cat']
 const SIZE_LBL     = { small_dog:'Small dog', medium_dog:'Medium dog', large_dog:'Large dog', giant_dog:'Giant dog', cat:'Cat' }
 const ROOM_TYPES   = { small_cage:'Small Cage', medium_cage:'Medium Cage', large_cage:'Large Cage', single_cabin:'Cat Cabin', villa:'Cat Villa', other:'Own Cage' }
