@@ -49,7 +49,17 @@ const SOURCE_FILTERS = [
 const PAGE_SIZE   = 50   // rows per fetch (top-level bookings; embeds are nested)
 const SRC_LABELS  = { online: 'Online', admin: 'Admin', walkin: 'Walk-in' }
 
-export default function BookingsPage({ branches, currentBranchIdx = 0, rooms, groomers, studios = [], currentAdmin }) {
+export default function BookingsPage({
+  branches,
+  currentBranchIdx = 0,
+  rooms,
+  groomers,
+  studios = [],
+  currentAdmin,
+  initialBookingRef,
+  onBookingOpen,
+  onBookingClose,
+}) {
   const [bookings,        setBookings]        = useState([])
   const [loading,         setLoading]         = useState(true)
   const [loadingMore,     setLoadingMore]     = useState(false)
@@ -59,7 +69,8 @@ export default function BookingsPage({ branches, currentBranchIdx = 0, rooms, gr
   const [statusFilter,    setStatusFilter]    = useState('all')
   const [paymentFilter,   setPaymentFilter]   = useState('all')
   const [sourceFilter,    setSourceFilter]    = useState('all')
-  const [openId,          setOpenId]          = useState(null)
+  const [openId,          setOpenIdState]     = useState(null)
+  const [linkedBooking,   setLinkedBooking]   = useState(null)
   const [collapsed,       setCollapsed]       = useState({})
   const [showAddBooking,  setShowAddBooking]  = useState(false)
   const [showBlockPanel,  setShowBlockPanel]  = useState(false)
@@ -75,6 +86,40 @@ export default function BookingsPage({ branches, currentBranchIdx = 0, rooms, gr
     `${paymentFilter !== 'all' ? `&payment_status=eq.${paymentFilter}` : ''}` +
     `${sourceFilter !== 'all' ? `&booking_source=eq.${sourceFilter}` : ''}`
   const hasSecondaryFilters = statusFilter !== 'all' || paymentFilter !== 'all' || sourceFilter !== 'all'
+
+  function setOpenId(id) {
+    setOpenIdState(id)
+    if (!id) {
+      onBookingClose?.()
+      return
+    }
+    const booking = bookings.find(row => row.id === id)
+      || searchResults.find(row => row.id === id)
+      || (linkedBooking?.id === id ? linkedBooking : null)
+    if (booking?.ref_number) onBookingOpen?.(booking.ref_number)
+  }
+
+  useEffect(() => {
+    if (!initialBookingRef) {
+      setLinkedBooking(null)
+      setOpenIdState(null)
+      return
+    }
+    if (!branch?.id) return
+    let cancelled = false
+    sbGet(
+      'bookings',
+      `branch_id=eq.${branch.id}&ref_number=eq.${encodeURIComponent(initialBookingRef)}&select=${BOOKING_SELECT}&limit=1`
+    )
+      .then(rows => {
+        if (!cancelled && rows?.[0]) {
+          setLinkedBooking(rows[0])
+          setOpenIdState(rows[0].id)
+        }
+      })
+      .catch(() => { if (!cancelled) setLinkedBooking(null) })
+    return () => { cancelled = true }
+  }, [initialBookingRef, branch?.id])
 
   // How many rows are currently loaded — drives the offset for "load more"
   // and the page size for refreshes (so realtime/poll preserve the expanded view).
@@ -240,6 +285,7 @@ export default function BookingsPage({ branches, currentBranchIdx = 0, rooms, gr
   const sortedDates = Object.keys(groups).sort((a, b) => b.localeCompare(a))
 
   const openBooking = displayed.find(b => b.id === openId)
+    || (linkedBooking?.id === openId ? linkedBooking : null)
 
   return (
     <div className={styles.page}>

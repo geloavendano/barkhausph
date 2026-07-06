@@ -114,12 +114,22 @@ function isCheckinOverdue(b, today, nowMins) {
   return startMins != null && nowMins > startMins
 }
 
-export default function CheckInPage({ branches, currentBranchIdx = 0, rooms, groomers, currentAdmin }) {
+export default function CheckInPage({
+  branches,
+  currentBranchIdx = 0,
+  rooms,
+  groomers,
+  currentAdmin,
+  initialBookingRef,
+  onBookingOpen,
+  onBookingClose,
+}) {
   const [bookings,  setBookings]  = useState([])
   const [loading,   setLoading]   = useState(true)
   const [error,     setError]     = useState('')
   const [collapsed, setCollapsed] = useState({})
-  const [openId,    setOpenId]    = useState(null)
+  const [openId,    setOpenIdState] = useState(null)
+  const [linkedBooking, setLinkedBooking] = useState(null)
   const [today,     setToday]     = useState('')
   const [searchQ,       setSearchQ]       = useState('')
   const [searchResults, setSearchResults] = useState([])
@@ -127,6 +137,40 @@ export default function CheckInPage({ branches, currentBranchIdx = 0, rooms, gro
 
   const branch = branches?.[currentBranchIdx]
   const searchActive = searchQ.trim().length >= 2
+
+  function setOpenId(id) {
+    setOpenIdState(id)
+    if (!id) {
+      onBookingClose?.()
+      return
+    }
+    const booking = bookings.find(row => row.id === id)
+      || searchResults.find(row => row.id === id)
+      || (linkedBooking?.id === id ? linkedBooking : null)
+    if (booking?.ref_number) onBookingOpen?.(booking.ref_number)
+  }
+
+  useEffect(() => {
+    if (!initialBookingRef) {
+      setLinkedBooking(null)
+      setOpenIdState(null)
+      return
+    }
+    if (!branch?.id) return
+    let cancelled = false
+    sbGet(
+      'bookings',
+      `branch_id=eq.${branch.id}&ref_number=eq.${encodeURIComponent(initialBookingRef)}&select=${CI_SEARCH_SELECT}&limit=1`
+    )
+      .then(rows => {
+        if (!cancelled && rows?.[0]) {
+          setLinkedBooking(rows[0])
+          setOpenIdState(rows[0].id)
+        }
+      })
+      .catch(() => { if (!cancelled) setLinkedBooking(null) })
+    return () => { cancelled = true }
+  }, [initialBookingRef, branch?.id])
 
   const load = useCallback(async () => {
     if (!branch) return
@@ -240,6 +284,7 @@ export default function CheckInPage({ branches, currentBranchIdx = 0, rooms, gro
 
   const toggle = id => setCollapsed(prev => ({ ...prev, [id]: !prev[id] }))
   const openBooking = (searchActive ? searchResults : bookings).find(b => b.id === openId)
+    || (linkedBooking?.id === openId ? linkedBooking : null)
 
   if (!branch) return <p className={styles.msg}>No branch selected.</p>
 

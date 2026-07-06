@@ -206,7 +206,16 @@ function packLanes(segs) {
 }
 
 // ── Main component ─────────────────────────────────────────────────────────
-export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, groomers, currentAdmin }) {
+export default function CalendarPage({
+  branches,
+  currentBranchIdx = 0,
+  rooms,
+  groomers,
+  currentAdmin,
+  initialBookingRef,
+  onBookingOpen,
+  onBookingClose,
+}) {
   const [currentDate,      setCurrentDate]      = useState(() => new Date())
   const [bookings,         setBookings]         = useState([])
   const [blockedSchedules, setBlockedSchedules] = useState([])
@@ -219,7 +228,8 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
   const [monthDots,        setMonthDots]        = useState({})
   const [calOpen,          setCalOpen]          = useState(false)
   const [calModalDate,     setCalModalDate]     = useState(() => new Date())
-  const [openId,           setOpenId]           = useState(null)
+  const [openId,           setOpenIdState]      = useState(null)
+  const [linkedBooking,    setLinkedBooking]    = useState(null)
   const [openBlockId,      setOpenBlockId]      = useState(null)
   const [editingBlock,     setEditingBlock]     = useState(null)
   const [showAddBooking,   setShowAddBooking]   = useState(false)
@@ -235,6 +245,42 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
   const range   = useMemo(() => viewRange(view, currentDate), [view, currentDate])
   // String key so range-change effects fire once per (branch, view, window) without Date-identity churn.
   const rangeKey = `${branch?.id ?? ''}|${view}|${dateToISO(range.from)}|${dateToISO(range.to)}`
+
+  function setOpenId(id) {
+    setOpenIdState(id)
+    if (!id) {
+      onBookingClose?.()
+      return
+    }
+    const booking = bookings.find(row => row.id === id) || (linkedBooking?.id === id ? linkedBooking : null)
+    if (booking?.ref_number) onBookingOpen?.(booking.ref_number)
+  }
+
+  useEffect(() => {
+    if (!initialBookingRef) {
+      setLinkedBooking(null)
+      setOpenIdState(null)
+      return
+    }
+    if (!branch?.id) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const base = `branch_id=eq.${branch.id}&ref_number=eq.${encodeURIComponent(initialBookingRef)}`
+        const serviceRows = await sbGet('bookings', `${base}&select=service&limit=1`)
+        const service = serviceRows?.[0]?.service
+        if (!service || !DETAIL_EMBED[service]) return
+        const rows = await sbGet('bookings', `${base}&select=${selectForService(service)}&limit=1`)
+        if (!cancelled && rows?.[0]) {
+          setLinkedBooking(rows[0])
+          setOpenIdState(rows[0].id)
+        }
+      } catch {
+        if (!cancelled) setLinkedBooking(null)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [initialBookingRef, branch?.id])
 
   // Keep a ref so realtime/polling closures always reload the active view window
   // without needing to re-subscribe every time the user navigates.
@@ -512,6 +558,7 @@ export default function CalendarPage({ branches, currentBranchIdx = 0, rooms, gr
   const todayISO    = dateToISO(now)
   const todayInView = dateToISO(range.from) <= todayISO && todayISO <= dateToISO(range.to)
   const openBooking = bookings.find(b => b.id === openId)
+    || (linkedBooking?.id === openId ? linkedBooking : null)
   const openBlock   = blockedSchedules.find(b => b.id === openBlockId)
   const showGroomerMarkers = currentSvc === 'grooming' || activeFilter?.type === 'groomer'
   // Sidebar/filter sections track the active service (All shows everything).

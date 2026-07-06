@@ -19,6 +19,26 @@ const INTERNAL_OTHER_ROOM = {
 }
 
 const SESSION_RESTORE_TIMEOUT_MS = 10000
+const ADMIN_PAGES = new Set(['calendar', 'bookings', 'checkin', 'members', 'resources', 'reports'])
+
+function readAdminUrl() {
+  const params = new URLSearchParams(window.location.search)
+  const requestedPage = params.get('page')
+  return {
+    page: ADMIN_PAGES.has(requestedPage) ? requestedPage : 'calendar',
+    bookingRef: (params.get('booking') || '').trim().toUpperCase() || null,
+  }
+}
+
+function writeAdminUrl(page, bookingRef = null, replace = false) {
+  const url = new URL(window.location.href)
+  url.search = ''
+  url.hash = ''
+  url.searchParams.set('page', page)
+  if (bookingRef) url.searchParams.set('booking', bookingRef)
+  else url.searchParams.delete('booking')
+  window.history[replace ? 'replaceState' : 'pushState']({}, '', `${url.pathname}${url.search}`)
+}
 
 function withTimeout(promise, timeoutMs) {
   let timeoutId
@@ -29,10 +49,12 @@ function withTimeout(promise, timeoutMs) {
 }
 
 export default function App() {
+  const initialUrl = useState(readAdminUrl)[0]
   const [session,      setSession]      = useState(undefined)
   const [allowed,      setAllowed]      = useState(false)
   const [greeting,     setGreeting]     = useState('')
-  const [page,         setPage]         = useState('calendar')
+  const [page,         setPage]         = useState(initialUrl.page)
+  const [bookingRef,   setBookingRef]   = useState(initialUrl.bookingRef)
   const [branches,     setBranches]     = useState([])
   const [branchIdx,    setBranchIdx]    = useState(0)
   const [rooms,        setRooms]        = useState([])
@@ -102,6 +124,31 @@ export default function App() {
       window.removeEventListener('barkhaus-admin-session-expired', handleSessionExpired)
     }
   }, [])
+
+  useEffect(() => {
+    const onPopState = () => {
+      const route = readAdminUrl()
+      setPage(route.page)
+      setBookingRef(route.bookingRef)
+    }
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [])
+
+  // A booking deep link follows the booking's branch when that branch is
+  // available to the signed-in Admin.
+  useEffect(() => {
+    if (!bookingRef || branches.length === 0) return
+    let cancelled = false
+    sbGet('bookings', `ref_number=eq.${encodeURIComponent(bookingRef)}&select=branch_id&limit=1`)
+      .then(rows => {
+        if (cancelled || !rows?.[0]?.branch_id) return
+        const index = branches.findIndex(branch => branch.id === rows[0].branch_id)
+        if (index >= 0) setBranchIdx(index)
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [bookingRef, branches])
 
   async function onSessionReady(sess) {
     const adminRow = await verifyAdmin(sess)
@@ -198,6 +245,31 @@ export default function App() {
 
   const pageProps = { branches, currentBranchIdx: branchIdx, rooms, groomers, studios, currentAdmin }
 
+  function handlePageChange(nextPage) {
+    setPage(nextPage)
+    setBookingRef(null)
+    writeAdminUrl(nextPage)
+  }
+
+  function handleBookingOpen(ref) {
+    if (!ref) return
+    const normalized = ref.trim().toUpperCase()
+    setBookingRef(normalized)
+    writeAdminUrl(page, normalized)
+  }
+
+  function handleBookingClose() {
+    setBookingRef(null)
+    writeAdminUrl(page, null, true)
+  }
+
+  const routedPageProps = {
+    ...pageProps,
+    initialBookingRef: bookingRef,
+    onBookingOpen: handleBookingOpen,
+    onBookingClose: handleBookingClose,
+  }
+
   function handleSignOut() {
     supabase.auth.signOut()
   }
@@ -205,7 +277,7 @@ export default function App() {
   return (
     <Shell
       page={page}
-      onPageChange={setPage}
+      onPageChange={handlePageChange}
       greeting={greeting}
       branches={branches}
       branchIdx={branchIdx}
@@ -216,11 +288,14 @@ export default function App() {
       groomers={groomers}
       coverageRefreshKey={coverageRefreshKey}
       coverageReady={resourcesBranchId === branches[branchIdx]?.id}
-      onOpenGroomerInventory={() => { setInventoryTab('groomers'); setPage('resources') }}
+      onOpenGroomerInventory={() => {
+        setInventoryTab('groomers')
+        handlePageChange('resources')
+      }}
     >
-      {page === 'calendar'  && <CalendarPage  {...pageProps} />}
-      {page === 'bookings'  && <BookingsPage  {...pageProps} />}
-      {page === 'checkin'   && <CheckInPage   {...pageProps} />}
+      {page === 'calendar'  && <CalendarPage  {...routedPageProps} />}
+      {page === 'bookings'  && <BookingsPage  {...routedPageProps} />}
+      {page === 'checkin'   && <CheckInPage   {...routedPageProps} />}
       {page === 'members'   && <MembersPage   {...pageProps} />}
       {page === 'reports'   && <ReportsPage   {...pageProps} />}
       {page === 'resources' && (
