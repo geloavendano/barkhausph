@@ -143,6 +143,72 @@
 .payMeta { font-size: 11px; color: var(--mid); margin-top: 2px; }
 .payDate { font-size: 11px; color: var(--mid); }
 
+/* ── Change history ── */
+.historyList {
+  display: flex;
+  flex-direction: column;
+}
+.historyRow {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr);
+  gap: 9px;
+  position: relative;
+  padding: 0 0 14px;
+}
+.historyRow:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 10px;
+  bottom: 0;
+  width: 1px;
+  background: var(--border);
+}
+.historyDot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  margin-top: 3px;
+  background: var(--mid);
+  border: 2px solid var(--bg);
+  box-shadow: 0 0 0 1px var(--border);
+  z-index: 1;
+}
+.history_booking_status { background: var(--blue); }
+.history_payment_status,
+.history_payment { background: var(--success); }
+.history_refund { background: var(--mid); }
+.history_assignment { background: var(--amber); }
+.history_created { background: var(--yellow); }
+.historyBody { min-width: 0; }
+.historyHeading {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+.historyTitle {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--cream);
+}
+.historyTime {
+  flex-shrink: 0;
+  font-size: 9px;
+  color: var(--mid);
+}
+.historyDetail {
+  margin-top: 2px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--cream-m);
+}
+.historyActor {
+  margin-top: 2px;
+  font-size: 9px;
+  color: var(--mid);
+}
+
 /* ── Check-in form ── */
 .ciForm  { background: var(--surface); border-radius: 8px; padding: 12px; margin-top: 8px; }
 .ynRow   { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 0.5px solid var(--border); }

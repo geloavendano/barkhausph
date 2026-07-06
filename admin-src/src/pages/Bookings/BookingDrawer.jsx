@@ -5,6 +5,7 @@ import {
   SRC_LABELS, first, fmtDate, fmtTime, hexBg, esc,
 } from '../../lib/constants'
 import { adminSnapshot, bookingEditAudit, sbPostAudit } from '../../lib/adminAudit'
+import { buildBookingHistory } from '../../lib/bookingHistory'
 import PaymentPanel from './PaymentPanel'
 import styles from './BookingDrawer.module.css'
 
@@ -102,6 +103,7 @@ export default function BookingDrawer({ booking: b, rooms, groomers, currentAdmi
   const [err,         setErr]         = useState('')
   const [docUrls,     setDocUrls]     = useState({})
   const [receiptUrls, setReceiptUrls] = useState({})
+  const [auditRows,    setAuditRows]    = useState(null)
 
   const pet    = first(b.pets)    ?? {}
   const owner  = first(b.owners)  ?? {}
@@ -120,7 +122,13 @@ export default function BookingDrawer({ booking: b, rooms, groomers, currentAdmi
     else if (b.service === 'hotel') setInvVal(hd?.room_type === 'other' ? INTERNAL_OTHER_ROOM_ID : (hd?.room_id ?? ''))
   }, [b])
 
-  useEffect(() => { loadPayments(); loadCharges(); loadVaccDocs(); loadGroomRefs() }, [b.id])
+  useEffect(() => {
+    loadPayments()
+    loadAuditRows()
+    loadCharges()
+    loadVaccDocs()
+    loadGroomRefs()
+  }, [b.id])
 
   // Generate 1-hour signed read URLs for vaccine documents whenever they load
   useEffect(() => {
@@ -174,6 +182,21 @@ export default function BookingDrawer({ booking: b, rooms, groomers, currentAdmi
       const rows = await sbGet('payments', `select=*&booking_id=eq.${b.id}&order=created_at`)
       setPayments(rows ?? [])
     } catch { setPayments([]) }
+  }
+
+  async function loadAuditRows() {
+    try {
+      const bookingId = encodeURIComponent(b.id)
+      const [bookingStatuses, paymentStatuses, bookingEdits] = await Promise.all([
+        sbGet('booking_status_history', `select=*&booking_id=eq.${bookingId}&order=changed_at.desc`),
+        sbGet('payment_status_history', `select=*&booking_id=eq.${bookingId}&order=changed_at.desc`),
+        sbGet('booking_edits', `select=*&booking_id=eq.${bookingId}&order=edited_at.desc`),
+      ])
+      setAuditRows({ bookingStatuses, paymentStatuses, bookingEdits })
+    } catch (error) {
+      console.warn('Could not load booking change history:', error)
+      setAuditRows({ bookingStatuses: [], paymentStatuses: [], bookingEdits: [] })
+    }
   }
 
   async function loadCharges() {
@@ -309,6 +332,16 @@ export default function BookingDrawer({ booking: b, rooms, groomers, currentAdmi
       assignedName = rm?.name ?? 'Unknown'; assignedColor = rm?.color ?? 'var(--mid)'; isUnassigned = false
     }
   }
+
+  const history = auditRows === null || payments === null
+    ? null
+    : buildBookingHistory({
+        booking: b,
+        ...auditRows,
+        payments,
+        rooms,
+        groomers,
+      })
 
   function handlePrint() {
     const ownerName = [owner.first_name, owner.last_name].filter(Boolean).join(' ')
@@ -751,6 +784,17 @@ export default function BookingDrawer({ booking: b, rooms, groomers, currentAdmi
             {ciOpen && <CheckInForm booking={b} onSaved={() => { onUpdated(); onClose() }} />}
           </Section>
 
+          <Section title="Change history">
+            {history === null
+              ? <p className={styles.muted}>Loading history…</p>
+              : history.length === 0
+                ? <p className={styles.muted}>No history recorded.</p>
+                : <div className={styles.historyList}>
+                    {history.map(event => <HistoryRow key={event.id} event={event} />)}
+                  </div>
+            }
+          </Section>
+
         </div>
 
         {/* ── Sticky footer ── */}
@@ -783,7 +827,11 @@ export default function BookingDrawer({ booking: b, rooms, groomers, currentAdmi
           bookingId={b.id}
           currentAdmin={currentAdmin}
           onClose={() => setPayOpen(false)}
-          onSaved={onUpdated}
+          onSaved={() => {
+            loadPayments()
+            loadAuditRows()
+            onUpdated()
+          }}
         />
       )}
     </>
@@ -817,6 +865,31 @@ function DR({ label, value }) {
 function SmallBtn({ onClick, children }) {
   return (
     <button className={styles.smallBtn} onClick={onClick}>{children}</button>
+  )
+}
+
+function HistoryRow({ event }) {
+  const timestamp = new Date(event.at).toLocaleString('en-PH', {
+    timeZone: 'Asia/Manila',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  })
+  return (
+    <div className={styles.historyRow}>
+      <span className={`${styles.historyDot} ${styles[`history_${event.kind}`] ?? ''}`} />
+      <div className={styles.historyBody}>
+        <div className={styles.historyHeading}>
+          <p className={styles.historyTitle}>{event.title}</p>
+          <time className={styles.historyTime}>{timestamp}</time>
+        </div>
+        {event.detail && <p className={styles.historyDetail}>{event.detail}</p>}
+        {event.actor && <p className={styles.historyActor}>By {event.actor}</p>}
+      </div>
+    </div>
   )
 }
 
