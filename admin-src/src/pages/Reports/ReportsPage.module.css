@@ -15,6 +15,29 @@
   margin: 0;
 }
 
+.tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 18px;
+  border-bottom: 0.5px solid var(--border);
+}
+
+.tab {
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  color: var(--mid);
+  padding: 9px 14px;
+  font: 700 12px 'Nunito', sans-serif;
+  cursor: pointer;
+}
+
+.tab:hover { color: var(--cream); }
+.tabActive {
+  color: var(--yellow);
+  border-bottom-color: var(--yellow);
+}
+
 .controls {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -134,8 +157,131 @@
 .msg { color: var(--mid); padding: 8px 0; font-size: 13px; }
 .err { color: var(--error); font-size: 13px; }
 
+.paymentCard {
+  max-width: 680px;
+  background: var(--surface);
+  border: 0.5px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.cardLabel {
+  margin: 0 0 16px;
+  color: var(--mid);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.lookupField span {
+  display: block;
+  color: var(--mid);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+}
+
+.lookupField input {
+  width: 100%;
+  background: var(--bg);
+  border: 0.5px solid var(--border);
+  border-radius: 8px;
+  color: var(--cream);
+  font: 600 14px 'Nunito', sans-serif;
+  padding: 11px 12px;
+  text-transform: uppercase;
+}
+
+.lookupField input:focus {
+  border-color: var(--blue);
+  outline: none;
+}
+
+.checkButton {
+  width: 100%;
+  margin-top: 12px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--yellow);
+  color: var(--bg);
+  cursor: pointer;
+  font: 800 13px 'Nunito', sans-serif;
+  padding: 11px;
+}
+
+.checkButton:disabled { opacity: 0.6; cursor: wait; }
+.lookupError {
+  color: var(--error);
+  font-size: 12px;
+  margin: 12px 0 0;
+}
+
+.emptyResult {
+  margin-top: 14px;
+  border: 0.5px solid var(--border);
+  border-radius: 8px;
+  color: var(--cream-m);
+  font-size: 13px;
+  padding: 12px;
+}
+
+.paymentResults { margin-top: 16px; }
+.resultHeading {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--mid);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
+.paymentResult {
+  background: var(--bg);
+  border: 0.5px solid var(--border);
+  border-radius: 9px;
+  margin-top: 8px;
+  padding: 13px;
+}
+
+.paymentResultTop {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  border-bottom: 0.5px solid var(--border);
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+}
+
+.paymentResultTop strong { color: var(--success); font-size: 13px; }
+.paymentResultTop span { color: var(--yellow); font-size: 13px; font-weight: 800; }
+
+.resultRow {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 10px;
+  padding: 3px 0;
+  font-size: 12px;
+}
+
+.resultRow span { color: var(--mid); }
+.resultRow strong {
+  color: var(--cream-m);
+  overflow-wrap: anywhere;
+}
+
 @media (max-width: 760px) {
   .controls,
   .summary { grid-template-columns: 1fr; }
   .listHead { flex-direction: column; }
+  .tabs { overflow-x: auto; }
+  .tab { white-space: nowrap; }
+  .paymentCard { padding: 15px; }
+  .resultHeading { flex-direction: column; }
+  .resultRow { grid-template-columns: 92px minmax(0, 1fr); }
 }

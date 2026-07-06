@@ -88,6 +88,18 @@ export async function sbDelete(table, filter) {
   if (!res.ok) throw await restError(`DELETE ${table}`, res)
 }
 
+/** Invoke an authenticated Edge Function with the cached Admin access token. */
+export async function sbFunction(name, body) {
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/${name}`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(body),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data?.error || `${name}: ${res.status}`)
+  return data
+}
+
 /** Build auth headers using the cached access token (set via setAuthToken) */
 function authHeaders() {
   return {
