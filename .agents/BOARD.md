@@ -13,6 +13,11 @@ teammates. Keep entries short and current.
 
 ## Handoffs
 
+- 2026-07-08 - Codex: fixed walk-in bookings being created as online when
+  `PAYMENT_GATEWAY_PROVIDER` is a hosted provider such as Maya. Walk-in submits now
+  always route to `submit-booking`, so the edge function can validate the one-time
+  token and store `booking_source = walkin`. Verified production `submit-booking`
+  recognizes invalid walk-in tokens before inserts; `node --check booking.js` passes.
 - 2026-07-07 - Codex: replaced admin-guide mock/stale screenshots with current UI
   captures. Desktop captures are now 1920px wide; mobile captures are 430px wide and
   constrained in the guide so they do not stretch/pixelate. Drawer/payment/note shots

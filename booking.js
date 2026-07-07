@@ -3767,7 +3767,9 @@ async function submitBooking() {
 
   // Manual/walk-in submissions create the booking immediately. Hosted providers
   // create a pending booking and redirect to their secure checkout page.
-  var paymentEndpoint = PAYMENT_GATEWAY_PROVIDER === 'manual' ? EDGE_FN_URL : hostedPaymentEndpoint();
+  var paymentEndpoint = IS_WALKIN
+    ? EDGE_FN_URL
+    : (PAYMENT_GATEWAY_PROVIDER === 'manual' ? EDGE_FN_URL : hostedPaymentEndpoint());
   fetch(paymentEndpoint, {
     method: 'POST',
     headers: {
