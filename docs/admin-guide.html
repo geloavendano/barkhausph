@@ -84,6 +84,7 @@
   .shot-cap strong{color:var(--cream);}
   .shot-img-wrap{margin:12px 0 12px;border:1px solid var(--border);border-radius:10px;overflow:hidden;background:#0b1620;box-shadow:0 14px 38px rgba(0,0,0,.24);}
   .shot-img{display:block;width:100%;height:auto;}
+  .shot:has(.vp.mob) .shot-img-wrap{max-width:430px;margin-left:auto;margin-right:auto;}
   .shot-note{font-size:11px;color:var(--mid);margin:0;padding:8px 12px 12px;}
   .shot-cos{font-size:12px;color:var(--mid);}
   .shot-cos .co{width:16px;height:16px;font-size:10px;}
@@ -174,7 +175,7 @@
   </div>
 </div>
 
-<div class="note">This guide follows the <strong>jobs you actually do during a shift</strong>, in roughly the order you do them. Chapter 0 covers the basics every task relies on; chapters 1–10 are the day's workflows; the appendices are quick reference. Solid green screenshot frames are current live UI captures; dashed frames are annotated UI references still awaiting a safe live replacement. Because this file is publicly served, screenshots may show operational cards but must not expose customer contact details, medical notes, receipts, vaccine documents, or other sensitive drawer content.</div>
+<div class="note">This guide follows the <strong>jobs you actually do during a shift</strong>, in roughly the order you do them. Chapter 0 covers the basics every task relies on; chapters 1–10 are the day's workflows; the appendices are quick reference. Solid green screenshot frames are current UI captures. Because this file is publicly served, screenshots may show operational cards but must not expose customer contact details, medical notes, receipts, vaccine documents, or other sensitive drawer content.</div>
 
 <!-- ════════════ START HERE ════════════ -->
 <section class="chapter" id="start">
@@ -193,7 +194,7 @@
   <h3><span class="sub-n">0.2</span> The branch switcher — the most important control</h3>
   <p>The top bar has <strong>Estancia / Eastwood</strong> tabs <span class="co">1</span>. <em>Every page shows only the selected branch's data.</em> Switching jumps the Calendar back to <strong>today on the "All" tab</strong> and reloads bookings, the check-in queue, members, inventory and reports for that branch. If something you expect is "missing", the selected branch is the first thing to check.</p>
   <div class="shot actual" data-img="images/04-branch-switch.png">
-    <div class="shot-top"><span class="cam">📷</span><span class="fname">04-branch-switch.png</span><span class="vp desk">Desktop 1280</span></div>
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">04-branch-switch.png</span><span class="vp desk">Desktop 1920</span></div>
     <div class="shot-cap"><strong>Current UI:</strong> desktop Calendar with Estancia selected in the top bar.</div>
     <ul class="shot-cos"><li><span class="co">1</span> Active branch tab (highlighted border)</li></ul>
   </div>
@@ -202,12 +203,12 @@
   <p><strong>Desktop:</strong> a left sidebar lists <strong>Calendar · Bookings · Pending · Members · Inventory · Reports · Admin Guide</strong>; the top bar holds the branch tabs, your greeting, and <strong>Sign out (↪)</strong> — always sign out on shared devices.</p>
   <p><strong>Mobile:</strong> the sidebar becomes a <strong>bottom bar</strong> — Calendar · Bookings · Pending · <strong>More</strong> <span class="co">1</span>. Tap <strong>More</strong> for Members, Inventory, Reports and this guide <span class="co">2</span>. The yellow <strong>＋ button (FAB)</strong> floats above the bar <span class="co">3</span> — that's where you create bookings, walk-ins, and blocks.</p>
   <div class="shot actual" data-img="images/03-layout-mobile-more.png">
-    <div class="shot-top"><span class="cam">📷</span><span class="fname">03-layout-mobile-more.png</span><span class="vp mob">Mobile 390</span></div>
-    <div class="shot-cap"><strong>Current UI:</strong> mobile Reports with the More sheet open above the bottom navigation.</div>
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">03-layout-mobile-more.png</span><span class="vp mob">Mobile 430</span></div>
+    <div class="shot-cap"><strong>Current UI:</strong> mobile Calendar with the bottom navigation visible and the FAB action menu open.</div>
     <ul class="shot-cos">
       <li><span class="co">1</span> Bottom nav: Calendar · Bookings · Pending · More</li>
-      <li><span class="co">2</span> More sheet</li>
-      <li><span class="co">3</span> The ＋ FAB</li>
+      <li><span class="co">2</span> More entry point</li>
+      <li><span class="co">3</span> The ＋ FAB and quick actions</li>
     </ul>
   </div>
 
@@ -221,7 +222,7 @@
   </ul>
   <p>Reading a Day card: pet name with 🐶/🐱, the room/package, and owner when there's room. The card's color is the <strong>assigned room or groomer's color</strong> (set in Inventory). A small <strong>status dot</strong> shows the booking status (Appendix A), a <strong>★</strong> means a member discount, and a red <strong>"now" line</strong> marks the current time on today. The <strong>service tabs</strong> (All · Hotel · Grooming · Daycare · Studio) filter by service and show each day's count.</p>
   <div class="shot actual" data-img="images/05-calendar-day.png">
-    <div class="shot-top"><span class="cam">📷</span><span class="fname">05-calendar-day.png</span><span class="vp desk">Desktop 1280</span></div>
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">05-calendar-day.png</span><span class="vp desk">Desktop 1920</span></div>
     <div class="shot-cap"><strong>Current UI:</strong> a live Day view with the view switch, service counts, resource sidebar, mixed bookings, and an unassigned-grooming alert.</div>
     <ul class="shot-cos">
       <li><span class="co">1</span> Day / Week / Month / List switch</li>
@@ -235,9 +236,9 @@
 
   <h3><span class="sub-n">0.5</span> The booking drawer — everything about one booking</h3>
   <p>Click any booking — on the Calendar, Bookings, Pending, or Reports — and the <strong>same drawer</strong> opens. Top to bottom: reference, booked time, source / creator, <strong>Print</strong>, and <strong>✏ Edit booking</strong>; the pet header; <strong>status &amp; payment pills</strong>; a red <strong>medical-notes</strong> box (read it before handling the pet); temperament, vaccines, waivers, and any uploaded vaccine or grooming-reference files; <strong>service details</strong> with the <strong>Assign</strong> button for room/groomer; owner &amp; emergency/vet; <strong>Bill</strong>, <strong>Payments (+ Record)</strong>, admin/check-in notes, and <strong>Change history</strong>. A pinned <strong>sticky footer</strong> holds the booking-status and payment-status dropdowns plus <strong>Update</strong>. Changing status anywhere in the app happens in that footer.</p>
-  <div class="shot" data-img="images/15-drawer-top.png">
-    <div class="shot-top"><span class="cam">📷</span><span class="fname">15-drawer-top.png</span><span class="vp mob">Mobile 390</span></div>
-    <div class="shot-cap"><strong>Capture:</strong> top of a hotel drawer — ref/source, edit button, pet header, status pills, medical-notes box, vaccines.</div>
+  <div class="shot actual" data-img="images/15-drawer-top.png">
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">15-drawer-top.png</span><span class="vp mob">Mobile 430</span></div>
+    <div class="shot-cap"><strong>Current UI:</strong> top of a live hotel drawer — ref/source, print/edit controls, pet header, status pills, vaccine and waiver summary, and service details.</div>
     <ul class="shot-cos"><li><span class="co">1</span> Ref + source &amp; Edit</li><li><span class="co">2</span> Status / payment pills</li><li><span class="co">3</span> Medical-notes box</li></ul>
   </div>
 
@@ -260,7 +261,7 @@
     <li>To schedule many days at once, use <strong>Add in bulk</strong> — it overwrites the hours across all the dates you pick.</li>
   </ol>
   <div class="shot actual" data-img="images/37-inventory.png">
-    <div class="shot-top"><span class="cam">📷</span><span class="fname">37-inventory.png</span><span class="vp desk">Desktop 1280</span></div>
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">37-inventory.png</span><span class="vp desk">Desktop 1920</span></div>
     <div class="shot-cap"><strong>Current UI:</strong> Inventory → Groomers with a live month schedule, saved hours, last-service time, Add in bulk, and resource details.</div>
     <ul class="shot-cos"><li><span class="co">1</span> Groomers tab</li><li><span class="co">2</span> Month schedule on today</li><li><span class="co">3</span> Hours + last service time</li></ul>
   </div>
@@ -275,9 +276,9 @@
     <li>Set start/end time <span class="co">4</span>, write a short reason ("Lunch", "On leave"), and save.</li>
   </ol>
   <p>Blocks appear on the Calendar as <strong>hatched stripes</strong> in the resource's color, sitting beside (never under) any booking in the same hour. Tap one to view or <strong>delete</strong> it — removing a block frees the time everywhere immediately. For a long absence (weeks), prefer marking the groomer/room <strong>unavailable</strong> in Inventory instead.</p>
-  <div class="shot" data-img="images/34-block-panel.png">
-    <div class="shot-top"><span class="cam">📷</span><span class="fname">34-block-panel.png</span><span class="vp mob">Mobile 390</span></div>
-    <div class="shot-cap"><strong>Capture:</strong> Block Schedule panel — Groomer selected, 2 dates picked, 12:00–13:00, reason filled.</div>
+  <div class="shot actual" data-img="images/34-block-panel.png">
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">34-block-panel.png</span><span class="vp mob">Mobile 430</span></div>
+    <div class="shot-cap"><strong>Current UI:</strong> Block Schedule panel with resource type, resource selector, date picker, time fields, and reason field before saving.</div>
     <ul class="shot-cos"><li><span class="co">1</span> Resource type</li><li><span class="co">2</span> Resource dropdown</li><li><span class="co">3</span> Multi-date calendar</li><li><span class="co">4</span> Start/end time</li></ul>
   </div>
   <div class="backtop"><a href="#top">↑ back to top</a></div>
@@ -295,7 +296,7 @@
     <li><strong>Pending (🐾)</strong> — the front-desk queue: who's <strong>arriving</strong>, who's <strong>here</strong>, and who's <strong>leaving</strong> (Chapter 3).</li>
   </ul>
   <div class="shot actual" data-img="images/05-calendar-day.png">
-    <div class="shot-top"><span class="cam">📷</span><span class="fname">05-calendar-day.png</span><span class="vp desk">Desktop 1280</span></div>
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">05-calendar-day.png</span><span class="vp desk">Desktop 1920</span></div>
     <div class="shot-cap"><strong>Current UI:</strong> today on the live Calendar Day view.</div>
     <ul class="shot-cos"><li><span class="co">1</span> Today's bookings</li></ul>
   </div>
@@ -307,14 +308,14 @@
     <li><span class="co">2</span> On the Calendar, unassigned cards carry an amber left edge and a <strong>⚠</strong> marker (a <strong>⚠ Assign</strong> badge in List view).</li>
   </ul>
   <p>To assign: open the booking → in the <strong>Groomer</strong> section tap <strong>Assign</strong> <span class="co">3</span> → pick a groomer → save. The card immediately recolors to that groomer. (Same flow assigns a <strong>Room</strong> for an unassigned hotel booking.)</p>
-  <div class="shot" data-img="images/40-unassigned-alert.png">
-    <div class="shot-top"><span class="cam">📷</span><span class="fname">40-unassigned-alert.png</span><span class="vp desk">Desktop 1280</span></div>
-    <div class="shot-cap"><strong>Capture:</strong> the amber "Grooming bookings need a groomer" banner above the page, plus a calendar card showing the ⚠ unassigned marker.</div>
+  <div class="shot actual" data-img="images/40-unassigned-alert.png">
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">40-unassigned-alert.png</span><span class="vp desk">Desktop 1920</span></div>
+    <div class="shot-cap"><strong>Current UI:</strong> live Calendar Day view showing the unassigned-grooming alert area and mixed booking cards.</div>
     <ul class="shot-cos"><li><span class="co">1</span> Unassigned-grooming banner + count</li><li><span class="co">2</span> ⚠ marker on a card</li></ul>
   </div>
-  <div class="shot" data-img="images/17-assign-room.png">
-    <div class="shot-top"><span class="cam">📷</span><span class="fname">17-assign-room.png</span><span class="vp mob">Mobile 390</span></div>
-    <div class="shot-cap"><strong>Capture:</strong> drawer Groomer/Room section with the Assign dropdown open.</div>
+  <div class="shot actual" data-img="images/17-assign-room.png">
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">17-assign-room.png</span><span class="vp mob">Mobile 430</span></div>
+    <div class="shot-cap"><strong>Current UI:</strong> drawer Room section with the Assign control and resource selector open.</div>
     <ul class="shot-cos"><li><span class="co">3</span> Assign button + open dropdown</li></ul>
   </div>
   <div class="backtop"><a href="#top">↑ back to top</a></div>
@@ -336,7 +337,7 @@
   </ul>
   <p>Each card shows service, reference, pet, owner and time. The <strong>search box</strong> here searches <em>all</em> bookings (not just today's) by reference, owner name/email, or pet name — handy when a guest arrives early or off-schedule.</p>
   <div class="shot actual" data-img="images/41-checkin-overdue.png">
-    <div class="shot-top"><span class="cam">📷</span><span class="fname">41-checkin-overdue.png</span><span class="vp desk">Desktop 1280</span></div>
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">41-checkin-overdue.png</span><span class="vp desk">Desktop 1920</span></div>
     <div class="shot-cap"><strong>Current UI:</strong> Pending page with customer rows collapsed, showing Pending Confirmation, Due for Check-in, Awaiting Check-In, In Progress, and Due for Checkout counts.</div>
     <ul class="shot-cos">
       <li><span class="co">1</span> Due for Check-in (red, overdue)</li><li><span class="co">2</span> Awaiting Check-In</li>
@@ -346,9 +347,9 @@
 
   <h3><span class="sub-n">3.2</span> Confirming payment</h3>
   <p>Open the card and check the <strong>payment pill</strong>. Successfully paid online bookings arrive <strong>Paid</strong>; when a manual-transfer receipt exists, it appears under Payments. For walk-ins, phone bookings, or balances, collect now and record it: <strong>Payments → + Record</strong> → amount, type, method, and reference — the signed-in admin is recorded automatically — then set the <strong>payment status</strong> in the sticky footer to match (partially paid / paid).</p>
-  <div class="shot" data-img="images/33-record-payment.png">
-    <div class="shot-top"><span class="cam">📷</span><span class="fname">33-record-payment.png</span><span class="vp mob">Mobile 390</span></div>
-    <div class="shot-cap"><strong>Capture:</strong> Record Payment panel filled with a sample payment.</div>
+  <div class="shot actual" data-img="images/33-record-payment.png">
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">33-record-payment.png</span><span class="vp mob">Mobile 430</span></div>
+    <div class="shot-cap"><strong>Current UI:</strong> Record Payment panel with amount, type, method, reference, notes, recorded-by, and save controls.</div>
     <ul class="shot-cos"><li><span class="co">1</span> Amount / Type / Method</li><li><span class="co">2</span> Reference + Recorded by</li></ul>
   </div>
 
@@ -360,10 +361,10 @@
     <li><strong>Daycare</strong> — remarks + add-on purchases.</li>
   </ul>
   <div class="tip">Fill this in <em>with the owner present</em>. A pre-existing skin condition noted at check-in protects both the pet and the staff later.</div>
-  <div class="shot" data-img="images/32-checkin-notes.png">
-    <div class="shot-top"><span class="cam">📷</span><span class="fname">32-checkin-notes.png</span><span class="vp mob">Mobile 390</span></div>
-    <div class="shot-cap"><strong>Capture:</strong> grooming check-in notes form with Yes/No rows, a couple toggled.</div>
-    <ul class="shot-cos"><li><span class="co">1</span> Remarks</li><li><span class="co">2</span> Yes/No condition rows</li></ul>
+  <div class="shot actual" data-img="images/32-checkin-notes.png">
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">32-checkin-notes.png</span><span class="vp mob">Mobile 430</span></div>
+    <div class="shot-cap"><strong>Current UI:</strong> hotel check-in notes fields for physical inspection, personal items, and add-on purchases.</div>
+    <ul class="shot-cos"><li><span class="co">1</span> Condition and item notes</li><li><span class="co">2</span> Save notes control</li></ul>
   </div>
 
   <h3><span class="sub-n">3.4</span> Updating status to Checked in</h3>
@@ -392,9 +393,9 @@
     <li><strong>Collect the balance</strong> and record it (Payments → + Record); set payment status to <strong>paid</strong>.</li>
     <li>Set booking status to <strong>completed</strong> → <strong>Update</strong>. The guest leaves the Pending page; the slot/room is free.</li>
   </ol>
-  <div class="shot" data-img="images/20-sticky-footer.png">
-    <div class="shot-top"><span class="cam">📷</span><span class="fname">20-sticky-footer.png</span><span class="vp mob">Mobile 390</span></div>
-    <div class="shot-cap"><strong>Capture:</strong> drawer sticky footer — status set to "completed", payment "paid", Update button.</div>
+  <div class="shot actual" data-img="images/20-sticky-footer.png">
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">20-sticky-footer.png</span><span class="vp mob">Mobile 430</span></div>
+    <div class="shot-cap"><strong>Current UI:</strong> drawer sticky footer with booking-status dropdown, payment-status dropdown, Done, and Update controls.</div>
     <ul class="shot-cos"><li><span class="co">1</span> Status + payment dropdowns</li><li><span class="co">2</span> Update button</li></ul>
   </div>
   <div class="backtop"><a href="#top">↑ back to top</a></div>
@@ -407,15 +408,15 @@
 
   <p>Tap the <strong>＋ FAB → 🚶 Walk-in</strong>. This opens the <em>customer-facing</em> booking page in a new tab, secured by a one-time pass that only the admin app can create <span class="co">1</span>. Hand the customer the tablet/phone; they fill in pet, waivers and contact details themselves. Differences from an online booking: <strong>no convenience fee</strong>, no online payment — the final screen shows the <strong>amount to collect in-store</strong> <span class="co">2</span> — and the booking is tagged <strong>Walk-in</strong>.</p>
   <p>It appears on the Calendar and Pending page <strong>instantly</strong>. Then: assign a room/groomer if needed (Chapter 2.2), collect payment and record it (Chapter 3.2), and check them in (Chapter 3.4).</p>
-  <div class="shot" data-img="images/21-fab-open.png">
-    <div class="shot-top"><span class="cam">📷</span><span class="fname">21-fab-open.png</span><span class="vp mob">Mobile 390</span></div>
-    <div class="shot-cap"><strong>Capture:</strong> FAB expanded — Add Booking · Walk-in · Block Schedule.</div>
+  <div class="shot actual" data-img="images/21-fab-open.png">
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">21-fab-open.png</span><span class="vp mob">Mobile 430</span></div>
+    <div class="shot-cap"><strong>Current UI:</strong> FAB expanded — Add Booking · Walk-in · Block Schedule.</div>
     <ul class="shot-cos"><li><span class="co">1</span> 🚶 Walk-in action</li></ul>
   </div>
-  <div class="shot" data-img="images/28-walkin-summary.png">
-    <div class="shot-top"><span class="cam">📷</span><span class="fname">28-walkin-summary.png</span><span class="vp mob">Mobile 390</span></div>
-    <div class="shot-cap"><strong>Capture:</strong> walk-in booking final screen — ₱0 convenience fee and "amount to collect in-store".</div>
-    <ul class="shot-cos"><li><span class="co">2</span> Amount to collect in-store</li></ul>
+  <div class="shot actual" data-img="images/28-walkin-summary.png">
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">28-walkin-summary.png</span><span class="vp mob">Mobile 430</span></div>
+    <div class="shot-cap"><strong>Current UI:</strong> Walk-in entry point from the FAB. The customer-facing summary appears after the customer completes the booking flow and shows the in-store amount to collect.</div>
+    <ul class="shot-cos"><li><span class="co">2</span> Walk-in action entry point</li></ul>
   </div>
   <div class="note">Prefer Walk-in over ＋ → Add Booking for in-person customers — they enter and consent to their own details. Use <strong>Add Booking</strong> for phone reservations (Chapter 6).</div>
   <div class="backtop"><a href="#top">↑ back to top</a></div>
@@ -437,10 +438,10 @@
     <li><strong>Summary</strong> — apply a <strong>member code</strong> if any (Apply → ✓ and the discount appears); set status (usually <strong>Confirmed</strong>) and payment; put your name under <strong>Recorded by</strong>; <strong>Create booking</strong>.</li>
   </ul>
   <div class="note">If the owner's email is filled in, a <strong>confirmation email is sent immediately</strong> on create — admin bookings don't wait for payment.</div>
-  <div class="shot" data-img="images/26-owner-search.png">
-    <div class="shot-top"><span class="cam">📷</span><span class="fname">26-owner-search.png</span><span class="vp desk">Desktop 1280</span></div>
-    <div class="shot-cap"><strong>Capture:</strong> Owner step with the search dropdown showing an existing match.</div>
-    <ul class="shot-cos"><li><span class="co">1</span> Search field</li><li><span class="co">2</span> Matching owner row</li></ul>
+  <div class="shot actual" data-img="images/26-owner-search.png">
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">26-owner-search.png</span><span class="vp desk">Desktop 1920</span></div>
+    <div class="shot-cap"><strong>Current UI:</strong> Add Booking Owner step with the search field and owner contact fields before a real phone/email lookup is entered.</div>
+    <ul class="shot-cos"><li><span class="co">1</span> Search field</li><li><span class="co">2</span> Owner detail fields</li></ul>
   </div>
 
   <h3><span class="sub-n">6.2</span> Looking up membership ID records</h3>
@@ -451,9 +452,9 @@
     <li><strong>Membership type</strong> is separate from coverage: <strong>Standard</strong> or <strong>Renewal</strong>, which determines the applicable discount rate.</li>
   </ul>
   <p>You can also just type the code on the booking <strong>Summary</strong> step (§6.1) and press Apply — a wrong-branch, expired, or inactive code is rejected with the reason.</p>
-  <div class="shot" data-img="images/36-members.png">
-    <div class="shot-top"><span class="cam">📷</span><span class="fname">36-members.png</span><span class="vp desk">Desktop 1280</span></div>
-    <div class="shot-cap"><strong>Capture:</strong> Members page — the Validate card with a successful ✓ result (tier + expiry).</div>
+  <div class="shot actual" data-img="images/36-members.png">
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">36-members.png</span><span class="vp desk">Desktop 1920</span></div>
+    <div class="shot-cap"><strong>Current UI:</strong> Members page with the Validate in-store membership card and CSV upload card.</div>
     <ul class="shot-cos"><li><span class="co">1</span> Validate card with result</li></ul>
   </div>
   <div class="backtop"><a href="#top">↑ back to top</a></div>
@@ -473,9 +474,9 @@
     <li>Proceed — progress shows while it runs.</li>
     <li>When it finishes, the dashboard downloads a <strong>row-level import report</strong> noting each row's status and next action. Open it to confirm everything imported cleanly.</li>
   </ol>
-  <div class="shot" data-img="images/36-members.png">
-    <div class="shot-top"><span class="cam">📷</span><span class="fname">36-members.png</span><span class="vp desk">Desktop 1280</span></div>
-    <div class="shot-cap"><strong>Capture:</strong> Members page — the CSV upload card with a chosen file, row count, and proceed/cancel.</div>
+  <div class="shot actual" data-img="images/36-members.png">
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">36-members.png</span><span class="vp desk">Desktop 1920</span></div>
+    <div class="shot-cap"><strong>Current UI (reuse):</strong> Members page with the CSV upload card and required-column guidance.</div>
     <ul class="shot-cos"><li><span class="co">1</span> CSV upload card</li><li><span class="co">2</span> Filename + row-count review</li></ul>
   </div>
 
@@ -499,7 +500,7 @@
   </ul>
   <p>When all three are clear, the next shift opens to a queue that reflects reality.</p>
   <div class="shot actual" data-img="images/41-checkin-overdue.png">
-    <div class="shot-top"><span class="cam">📷</span><span class="fname">41-checkin-overdue.png</span><span class="vp desk">Desktop 1280</span></div>
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">41-checkin-overdue.png</span><span class="vp desk">Desktop 1920</span></div>
     <div class="shot-cap"><strong>Current UI (reuse):</strong> the Pending page section counts used for the end-of-shift sweep.</div>
     <ul class="shot-cos"><li><span class="co">1</span> Due for Check-in (overdue)</li><li><span class="co">2</span> In Progress</li><li><span class="co">3</span> Due for Checkout (overdue)</li></ul>
   </div>
@@ -527,7 +528,7 @@
   </ul>
   <p>Below the tiles is the list of <strong>completed grooming bookings</strong> that make up the totals <span class="co">4</span>; a row tagged <em>Demat / Deshed</em> included one of those add-ons. Tap any row to open its drawer and verify the detail. Reports are read on screen — use the date range to scope a period, and capture/print the page if you need a copy.</p>
   <div class="shot actual" data-img="images/39-reports.png">
-    <div class="shot-top"><span class="cam">📷</span><span class="fname">39-reports.png</span><span class="vp desk">Desktop 1280</span></div>
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">39-reports.png</span><span class="vp desk">Desktop 1920</span></div>
     <div class="shot-cap"><strong>Current UI:</strong> Groomer Reports with From/To, groomer selector, four summary tiles, and completed-booking results area.</div>
     <ul class="shot-cos">
       <li><span class="co">1</span> From / To date pickers</li><li><span class="co">2</span> Groomer selector</li>
@@ -539,7 +540,7 @@
   <h3><span class="sub-n">9.2</span> Checking a Maya payment</h3>
   <p>Use <strong>Reports → Payment Status Check</strong> when a customer says Maya completed payment but the booking still looks unpaid or pending. Enter the Barkhaus reference (for example <code>BH-597A57</code>) and select <strong>Check Payment Status</strong>. The result shows each matching Maya transaction's status, amount, payment ID, method/fund source, and Maya timestamps.</p>
   <div class="shot actual" data-img="images/42-payment-status-check.png">
-    <div class="shot-top"><span class="cam">📷</span><span class="fname">42-payment-status-check.png</span><span class="vp desk">Desktop 1280</span></div>
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">42-payment-status-check.png</span><span class="vp desk">Desktop 1920</span></div>
     <div class="shot-cap"><strong>Current UI:</strong> Reports → Payment Status Check before a booking reference is submitted.</div>
     <ul class="shot-cos"><li><span class="co">1</span> Booking reference field</li><li><span class="co">2</span> Check Payment Status button</li></ul>
   </div>
@@ -673,7 +674,7 @@
   <div class="backtop"><a href="#top">↑ back to top</a></div>
 </section>
 
-<p style="text-align:center;color:var(--mid);font-size:11px;margin-top:40px">Barkhaus Admin Walkthrough Guide · v0.3 · July 2026 · live captures are privacy-reviewed; dashed frames remain annotated UI references</p>
+<p style="text-align:center;color:var(--mid);font-size:11px;margin-top:40px">Barkhaus Admin Walkthrough Guide · v0.3 · July 2026 · current captures are privacy-reviewed</p>
 
 </div>
 

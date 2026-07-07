@@ -13,6 +13,13 @@ teammates. Keep entries short and current.
 
 ## Handoffs
 
+- 2026-07-07 - Codex: replaced admin-guide mock/stale screenshots with current UI
+  captures. Desktop captures are now 1920px wide; mobile captures are 430px wide and
+  constrained in the guide so they do not stretch/pixelate. Drawer/payment/note shots
+  were cropped to avoid public contact/receipt details. `28-walkin-summary.png` now
+  uses the current Walk-in FAB entry point rather than a fake final summary; replace it
+  from a safe non-production walk-in flow when one is available. Validation: diff check,
+  image-reference check, dimensions, and PNG signatures pass.
 - 2026-07-07 - Codex: refreshed the admin guide to v0.3 against the current live
   admin. Updated Pending navigation, five-minute fallback refresh, drawer/history,
   membership CSV/type rules, pencil-booked status, runtime pricing language, and Maya
