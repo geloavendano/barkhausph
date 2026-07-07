@@ -13,6 +13,13 @@ teammates. Keep entries short and current.
 
 ## Handoffs
 
+- 2026-07-07 - Codex: refreshed the admin guide to v0.3 against the current live
+  admin. Updated Pending navigation, five-minute fallback refresh, drawer/history,
+  membership CSV/type rules, pencil-booked status, runtime pricing language, and Maya
+  payment-status checks. Added privacy-reviewed live captures for login, desktop
+  Calendar/branch state, mobile More, groomer schedules, collapsed Pending queues,
+  Groomer Reports, and Payment Status Check. Remaining dashed screenshots are annotated
+  references awaiting safe live replacements.
 - 2026-06-19 - Codex: date-specific groomer hours are implemented across public/admin
   slot selection and submit rechecks. Static code safely retains legacy hours only while
   the new table is absent. Authenticated drawer visual QA remains after the migration is

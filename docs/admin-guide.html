@@ -70,10 +70,10 @@
   .flow span{background:var(--raised);border:1px solid var(--border);border-radius:20px;padding:3px 11px;font-size:12px;font-weight:700;color:var(--cream);}
   .flow .arr{background:none;border:none;color:var(--mid);padding:0 2px;font-weight:400;}
 
-  /* Screenshot placeholder
-     Images are synthetic test-data mocks for now. Replace the PNGs in docs/images
-     with seeded-environment captures when the live admin screenshot pass is ready. */
+  /* Screenshots. Live captures are marked with .actual; remaining images are
+     annotated UI references that can be replaced without changing the guide. */
   .shot{border:2px dashed rgba(255,206,88,.45);background:rgba(255,206,88,.04);border-radius:12px;padding:18px;margin:16px 0 22px;}
+  .shot.actual{border-style:solid;border-color:rgba(107,203,119,.45);background:rgba(107,203,119,.035);}
   .shot-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;}
   .shot-top .cam{font-size:18px;}
   .shot-top .fname{font-family:"Fira Code",monospace;font-size:12px;color:var(--yellow);background:rgba(0,0,0,.3);padding:2px 8px;border-radius:5px;}
@@ -125,8 +125,8 @@
 
 <header id="top">
   <h1>Bark<span>haus</span> — Admin Walkthrough Guide</h1>
-  <span class="draft-badge">Draft · workflow edition</span>
-  <span class="meta">v0.2 · June 2026 · for branch staff &amp; managers</span>
+  <span class="draft-badge">Current workflow</span>
+  <span class="meta">v0.3 · July 2026 · for branch staff &amp; managers</span>
 </header>
 
 <nav class="sidenav" aria-label="Guide navigation">
@@ -174,7 +174,7 @@
   </div>
 </div>
 
-<div class="note">This guide follows the <strong>jobs you actually do during a shift</strong>, in roughly the order you do them. Chapter 0 covers the basics every task relies on; chapters 1–10 are the day's workflows; the appendices are quick reference. Every dashed box is a <strong>screenshot placeholder</strong> — it names the image file, the device size, and the numbered callouts <span class="co">1</span><span class="co">2</span> overlaid on the image. All screenshots must use seeded <strong>test data only</strong> — never real customer names, emails, or phone numbers.</div>
+<div class="note">This guide follows the <strong>jobs you actually do during a shift</strong>, in roughly the order you do them. Chapter 0 covers the basics every task relies on; chapters 1–10 are the day's workflows; the appendices are quick reference. Solid green screenshot frames are current live UI captures; dashed frames are annotated UI references still awaiting a safe live replacement. Because this file is publicly served, screenshots may show operational cards but must not expose customer contact details, medical notes, receipts, vaccine documents, or other sensitive drawer content.</div>
 
 <!-- ════════════ START HERE ════════════ -->
 <section class="chapter" id="start">
@@ -183,29 +183,29 @@
 
   <h3><span class="sub-n">0.1</span> Logging in</h3>
   <p>The admin portal lives at <code>barkhaus.ph/admin/</code>. There is no password — you sign in with your <strong>Google account</strong> <span class="co">1</span>. Access is an allow-list: only Google accounts registered as admins can get in (see <a href="#ch10" style="color:var(--blue)">Chapter 10</a> to request access).</p>
-  <div class="shot" data-img="images/01-login-gate.png">
+  <div class="shot actual" data-img="images/01-login-gate.png">
     <div class="shot-top"><span class="cam">📷</span><span class="fname">01-login-gate.png</span><span class="vp desk">Desktop 1280</span></div>
-    <div class="shot-cap"><strong>Capture:</strong> the Gate screen, logged out — Barkhaus logo, "Admin Portal", and the "Sign in with Google" button.</div>
+    <div class="shot-cap"><strong>Current UI:</strong> the logged-out gate — Barkhaus logo, “Admin Portal”, and the “Sign in with Google” button.</div>
     <ul class="shot-cos"><li><span class="co">1</span> Sign in with Google button</li></ul>
   </div>
   <div class="warn">If you sign in and land back on the sign-in screen, your Google account isn't on the admin list yet — see <a href="#ch10" style="color:var(--blue)">Chapter 10</a>.</div>
 
   <h3><span class="sub-n">0.2</span> The branch switcher — the most important control</h3>
   <p>The top bar has <strong>Estancia / Eastwood</strong> tabs <span class="co">1</span>. <em>Every page shows only the selected branch's data.</em> Switching jumps the Calendar back to <strong>today on the "All" tab</strong> and reloads bookings, the check-in queue, members, inventory and reports for that branch. If something you expect is "missing", the selected branch is the first thing to check.</p>
-  <div class="shot" data-img="images/04-branch-switch.png">
+  <div class="shot actual" data-img="images/04-branch-switch.png">
     <div class="shot-top"><span class="cam">📷</span><span class="fname">04-branch-switch.png</span><span class="vp desk">Desktop 1280</span></div>
-    <div class="shot-cap"><strong>Capture:</strong> close crop of the top bar with Eastwood selected (highlighted tab).</div>
+    <div class="shot-cap"><strong>Current UI:</strong> desktop Calendar with Estancia selected in the top bar.</div>
     <ul class="shot-cos"><li><span class="co">1</span> Active branch tab (highlighted border)</li></ul>
   </div>
 
   <h3><span class="sub-n">0.3</span> Layout &amp; navigation</h3>
-  <p><strong>Desktop:</strong> a left sidebar lists <strong>Calendar · Bookings · Check In · Members · Inventory · Reports</strong>; the top bar holds the branch tabs, your greeting, and <strong>Sign out (↪)</strong> — always sign out on shared devices.</p>
-  <p><strong>Mobile:</strong> the sidebar becomes a <strong>bottom bar</strong> — Calendar · Bookings · Check In · <strong>More</strong> <span class="co">1</span>. Tap <strong>More</strong> for Members, Inventory, Reports and this guide <span class="co">2</span>. The yellow <strong>＋ button (FAB)</strong> floats above the bar <span class="co">3</span> — that's where you create bookings, walk-ins, and blocks.</p>
-  <div class="shot" data-img="images/03-layout-mobile-more.png">
+  <p><strong>Desktop:</strong> a left sidebar lists <strong>Calendar · Bookings · Pending · Members · Inventory · Reports · Admin Guide</strong>; the top bar holds the branch tabs, your greeting, and <strong>Sign out (↪)</strong> — always sign out on shared devices.</p>
+  <p><strong>Mobile:</strong> the sidebar becomes a <strong>bottom bar</strong> — Calendar · Bookings · Pending · <strong>More</strong> <span class="co">1</span>. Tap <strong>More</strong> for Members, Inventory, Reports and this guide <span class="co">2</span>. The yellow <strong>＋ button (FAB)</strong> floats above the bar <span class="co">3</span> — that's where you create bookings, walk-ins, and blocks.</p>
+  <div class="shot actual" data-img="images/03-layout-mobile-more.png">
     <div class="shot-top"><span class="cam">📷</span><span class="fname">03-layout-mobile-more.png</span><span class="vp mob">Mobile 390</span></div>
-    <div class="shot-cap"><strong>Capture:</strong> mobile Calendar with the "More" sheet open (Members / Inventory / Reports above the bottom nav, FAB lifted above the sheet).</div>
+    <div class="shot-cap"><strong>Current UI:</strong> mobile Reports with the More sheet open above the bottom navigation.</div>
     <ul class="shot-cos">
-      <li><span class="co">1</span> Bottom nav: Calendar · Bookings · Check In · More</li>
+      <li><span class="co">1</span> Bottom nav: Calendar · Bookings · Pending · More</li>
       <li><span class="co">2</span> More sheet</li>
       <li><span class="co">3</span> The ＋ FAB</li>
     </ul>
@@ -220,9 +220,9 @@
     <li><strong>List</strong> — a simple agenda of the month's bookings grouped by day. Tap <strong>Today</strong> to jump to today.</li>
   </ul>
   <p>Reading a Day card: pet name with 🐶/🐱, the room/package, and owner when there's room. The card's color is the <strong>assigned room or groomer's color</strong> (set in Inventory). A small <strong>status dot</strong> shows the booking status (Appendix A), a <strong>★</strong> means a member discount, and a red <strong>"now" line</strong> marks the current time on today. The <strong>service tabs</strong> (All · Hotel · Grooming · Daycare · Studio) filter by service and show each day's count.</p>
-  <div class="shot" data-img="images/05-calendar-day.png">
+  <div class="shot actual" data-img="images/05-calendar-day.png">
     <div class="shot-top"><span class="cam">📷</span><span class="fname">05-calendar-day.png</span><span class="vp desk">Desktop 1280</span></div>
-    <div class="shot-cap"><strong>Capture:</strong> a busy seeded day with the view switch (Day/Week/Month/List) visible, mixed services, a member ★, and the now-line.</div>
+    <div class="shot-cap"><strong>Current UI:</strong> a live Day view with the view switch, service counts, resource sidebar, mixed bookings, and an unassigned-grooming alert.</div>
     <ul class="shot-cos">
       <li><span class="co">1</span> Day / Week / Month / List switch</li>
       <li><span class="co">2</span> A booking card (color = resource)</li>
@@ -231,9 +231,10 @@
     </ul>
   </div>
   <div class="tip">On desktop, the left sidebar lists every room/groomer with its color and count — click one to filter the calendar to it. On mobile, use the <strong>⊟</strong> filter button in the date bar. The list narrows to the relevant resources when a service tab is active.</div>
+  <div class="note">For a historical or hard-to-find record, use <strong>Bookings</strong>. In addition to the service tabs, it can filter by booking status, payment status, and source (online/admin/walk-in), and search by reference, owner name/email, or pet name.</div>
 
   <h3><span class="sub-n">0.5</span> The booking drawer — everything about one booking</h3>
-  <p>Click any booking — on the Calendar, Bookings, Check In, or Reports — and the <strong>same drawer</strong> opens. Top to bottom: reference &amp; source (Online / Admin / Walk-in) and <strong>✏ Edit booking</strong>; the pet header; <strong>status &amp; payment pills</strong>; a red <strong>medical-notes</strong> box (read it before handling the pet); temperament &amp; vaccines (✓/✕, plus any uploaded vaccine files); <strong>waivers</strong> (watch for "no media consent" / "no play-park consent"); <strong>service details</strong> with the <strong>Assign</strong> button for room/groomer; owner &amp; emergency/vet; <strong>Bill</strong> &amp; <strong>Payments (+ Record)</strong>; and a pinned <strong>sticky footer</strong> with the <strong>booking-status</strong> and <strong>payment-status</strong> dropdowns and the <strong>Update</strong> button. Changing status anywhere in the app happens in that footer.</p>
+  <p>Click any booking — on the Calendar, Bookings, Pending, or Reports — and the <strong>same drawer</strong> opens. Top to bottom: reference, booked time, source / creator, <strong>Print</strong>, and <strong>✏ Edit booking</strong>; the pet header; <strong>status &amp; payment pills</strong>; a red <strong>medical-notes</strong> box (read it before handling the pet); temperament, vaccines, waivers, and any uploaded vaccine or grooming-reference files; <strong>service details</strong> with the <strong>Assign</strong> button for room/groomer; owner &amp; emergency/vet; <strong>Bill</strong>, <strong>Payments (+ Record)</strong>, admin/check-in notes, and <strong>Change history</strong>. A pinned <strong>sticky footer</strong> holds the booking-status and payment-status dropdowns plus <strong>Update</strong>. Changing status anywhere in the app happens in that footer.</p>
   <div class="shot" data-img="images/15-drawer-top.png">
     <div class="shot-top"><span class="cam">📷</span><span class="fname">15-drawer-top.png</span><span class="vp mob">Mobile 390</span></div>
     <div class="shot-cap"><strong>Capture:</strong> top of a hotel drawer — ref/source, edit button, pet header, status pills, medical-notes box, vaccines.</div>
@@ -241,7 +242,7 @@
   </div>
 
   <h3><span class="sub-n">0.6</span> The app keeps itself fresh</h3>
-  <p>You rarely need to reload. The Calendar and Bookings update <strong>instantly</strong> on any change (including a customer booking online), <strong>refresh every minute</strong> as a safety net, and refresh whenever you <strong>return to the tab</strong>. Press <kbd>R</kbd> to refresh on demand; <kbd>Esc</kbd> closes whatever panel or drawer is open (full list in <a href="#appC" style="color:var(--blue)">Appendix C</a>).</p>
+  <p>You rarely need to reload. The Calendar and Bookings update <strong>instantly</strong> on database changes (including a customer booking online), use a <strong>five-minute fallback refresh</strong>, and refresh whenever you <strong>return to the tab</strong>. Press <kbd>R</kbd> to refresh on demand; <kbd>Esc</kbd> closes whatever panel or drawer is open (full list in <a href="#appC" style="color:var(--blue)">Appendix C</a>).</p>
   <div class="backtop"><a href="#top">↑ back to top</a></div>
 </section>
 
@@ -258,9 +259,9 @@
     <li>Pick a date and set the <strong>start &amp; end service hours</strong> and the <strong>last service time</strong> (the latest a new groom can begin that day) <span class="co">3</span>.</li>
     <li>To schedule many days at once, use <strong>Add in bulk</strong> — it overwrites the hours across all the dates you pick.</li>
   </ol>
-  <div class="shot" data-img="images/37-inventory.png">
+  <div class="shot actual" data-img="images/37-inventory.png">
     <div class="shot-top"><span class="cam">📷</span><span class="fname">37-inventory.png</span><span class="vp desk">Desktop 1280</span></div>
-    <div class="shot-cap"><strong>Capture:</strong> Inventory → Groomers, a groomer's month-schedule open with one date's hours + last-service time set, and the "Add in bulk" control.</div>
+    <div class="shot-cap"><strong>Current UI:</strong> Inventory → Groomers with a live month schedule, saved hours, last-service time, Add in bulk, and resource details.</div>
     <ul class="shot-cos"><li><span class="co">1</span> Groomers tab</li><li><span class="co">2</span> Month schedule on today</li><li><span class="co">3</span> Hours + last service time</li></ul>
   </div>
   <div class="warn">The dashboard shows an amber <strong>"Grooming availability needs attention"</strong> banner whenever any of the next <strong>14 days has no groomer hours</strong>. Use <strong>Fix in Inventory</strong> on the banner to fill them — otherwise customers can't book grooming on those days.</div>
@@ -291,11 +292,11 @@
   <p>Two quick reads:</p>
   <ul>
     <li><strong>Calendar → Today, All</strong> — the timeline shows the shape of the day (who's in which room/groomer, overlaps, blocked time). Switch to <strong>List</strong> view for a plain top-to-bottom agenda if you prefer a checklist.</li>
-    <li><strong>Check In (🐾)</strong> — the front-desk queue: who's <strong>arriving</strong>, who's <strong>here</strong>, and who's <strong>leaving</strong> (Chapter 3).</li>
+    <li><strong>Pending (🐾)</strong> — the front-desk queue: who's <strong>arriving</strong>, who's <strong>here</strong>, and who's <strong>leaving</strong> (Chapter 3).</li>
   </ul>
-  <div class="shot" data-img="images/05-calendar-day.png">
+  <div class="shot actual" data-img="images/05-calendar-day.png">
     <div class="shot-top"><span class="cam">📷</span><span class="fname">05-calendar-day.png</span><span class="vp desk">Desktop 1280</span></div>
-    <div class="shot-cap"><strong>Capture:</strong> today on the Calendar (reuse) — or the List view agenda if showing the checklist read.</div>
+    <div class="shot-cap"><strong>Current UI:</strong> today on the live Calendar Day view.</div>
     <ul class="shot-cos"><li><span class="co">1</span> Today's bookings</li></ul>
   </div>
 
@@ -326,7 +327,7 @@
   <div class="flow"><span>Find the booking</span><span class="arr">→</span><span>Confirm payment</span><span class="arr">→</span><span>Check-in notes</span><span class="arr">→</span><span>Status: Checked in</span></div>
 
   <h3><span class="sub-n">3.1</span> Finding the booking</h3>
-  <p>The <strong>Check In (🐾)</strong> page groups today's activity into sections:</p>
+  <p>The <strong>Pending (🐾)</strong> page groups today's activity into sections:</p>
   <ul>
     <li><span class="co">1</span> <strong>Due for Check-in</strong> — red, with a <strong>⚠ Overdue</strong> flag. These are bookings still marked <em>Confirmed</em> whose arrival time has already passed. Clear these first.</li>
     <li><span class="co">2</span> <strong>Awaiting Check-In</strong> — today's appointments and hotel arrivals that aren't overdue yet.</li>
@@ -334,9 +335,9 @@
     <li><span class="co">4</span> <strong>Due for Checkout</strong> — hotel guests leaving today; anything past its date shows ⚠ Overdue (Chapter 4).</li>
   </ul>
   <p>Each card shows service, reference, pet, owner and time. The <strong>search box</strong> here searches <em>all</em> bookings (not just today's) by reference, owner name/email, or pet name — handy when a guest arrives early or off-schedule.</p>
-  <div class="shot" data-img="images/41-checkin-overdue.png">
+  <div class="shot actual" data-img="images/41-checkin-overdue.png">
     <div class="shot-top"><span class="cam">📷</span><span class="fname">41-checkin-overdue.png</span><span class="vp desk">Desktop 1280</span></div>
-    <div class="shot-cap"><strong>Capture:</strong> Check In page showing the red "Due for Check-in (… overdue)" section at the top, then Awaiting Check-In, In Progress, Due for Checkout.</div>
+    <div class="shot-cap"><strong>Current UI:</strong> Pending page with customer rows collapsed, showing Pending Confirmation, Due for Check-in, Awaiting Check-In, In Progress, and Due for Checkout counts.</div>
     <ul class="shot-cos">
       <li><span class="co">1</span> Due for Check-in (red, overdue)</li><li><span class="co">2</span> Awaiting Check-In</li>
       <li><span class="co">3</span> In Progress</li><li><span class="co">4</span> Due for Checkout</li>
@@ -344,7 +345,7 @@
   </div>
 
   <h3><span class="sub-n">3.2</span> Confirming payment</h3>
-  <p>Open the card and check the <strong>payment pill</strong>. Online bookings paid by transfer arrive <strong>Paid</strong> (the customer's uploaded receipt shows under Payments). For walk-ins, phone bookings, or balances, collect now and record it: <strong>Payments → + Record</strong> → amount, type, method, reference, your name — then set the <strong>payment status</strong> in the sticky footer to match (partially paid / paid).</p>
+  <p>Open the card and check the <strong>payment pill</strong>. Successfully paid online bookings arrive <strong>Paid</strong>; when a manual-transfer receipt exists, it appears under Payments. For walk-ins, phone bookings, or balances, collect now and record it: <strong>Payments → + Record</strong> → amount, type, method, and reference — the signed-in admin is recorded automatically — then set the <strong>payment status</strong> in the sticky footer to match (partially paid / paid).</p>
   <div class="shot" data-img="images/33-record-payment.png">
     <div class="shot-top"><span class="cam">📷</span><span class="fname">33-record-payment.png</span><span class="vp mob">Mobile 390</span></div>
     <div class="shot-cap"><strong>Capture:</strong> Record Payment panel filled with a sample payment.</div>
@@ -377,7 +378,7 @@
   <div class="flow"><span>Find the booking</span><span class="arr">→</span><span>Settle extra charges</span><span class="arr">→</span><span>Status: Completed</span></div>
 
   <h3><span class="sub-n">4.1</span> Finding the booking</h3>
-  <p>Open the guest from <strong>Due for Checkout</strong> (hotel) or <strong>In Progress</strong> (grooming / daycare / studio) on the Check In page. If they're not where you expect, use the <strong>search box</strong>.</p>
+  <p>Open the guest from <strong>Due for Checkout</strong> (hotel) or <strong>In Progress</strong> (grooming / daycare / studio) on the Pending page. If they're not where you expect, use the <strong>search box</strong>.</p>
 
   <h3><span class="sub-n">4.2</span> Updating status to Completed</h3>
   <ol>
@@ -389,7 +390,7 @@
       </ul>
     </li>
     <li><strong>Collect the balance</strong> and record it (Payments → + Record); set payment status to <strong>paid</strong>.</li>
-    <li>Set booking status to <strong>completed</strong> → <strong>Update</strong>. The guest leaves the Check In page; the slot/room is free.</li>
+    <li>Set booking status to <strong>completed</strong> → <strong>Update</strong>. The guest leaves the Pending page; the slot/room is free.</li>
   </ol>
   <div class="shot" data-img="images/20-sticky-footer.png">
     <div class="shot-top"><span class="cam">📷</span><span class="fname">20-sticky-footer.png</span><span class="vp mob">Mobile 390</span></div>
@@ -405,7 +406,7 @@
   <p class="ch-intro">A customer arrives without a booking. Let them book themselves in on your device — fastest, and it captures their own waivers and details.</p>
 
   <p>Tap the <strong>＋ FAB → 🚶 Walk-in</strong>. This opens the <em>customer-facing</em> booking page in a new tab, secured by a one-time pass that only the admin app can create <span class="co">1</span>. Hand the customer the tablet/phone; they fill in pet, waivers and contact details themselves. Differences from an online booking: <strong>no convenience fee</strong>, no online payment — the final screen shows the <strong>amount to collect in-store</strong> <span class="co">2</span> — and the booking is tagged <strong>Walk-in</strong>.</p>
-  <p>It appears on the Calendar and Check In page <strong>instantly</strong>. Then: assign a room/groomer if needed (Chapter 2.2), collect payment and record it (Chapter 3.2), and check them in (Chapter 3.4).</p>
+  <p>It appears on the Calendar and Pending page <strong>instantly</strong>. Then: assign a room/groomer if needed (Chapter 2.2), collect payment and record it (Chapter 3.2), and check them in (Chapter 3.4).</p>
   <div class="shot" data-img="images/21-fab-open.png">
     <div class="shot-top"><span class="cam">📷</span><span class="fname">21-fab-open.png</span><span class="vp mob">Mobile 390</span></div>
     <div class="shot-cap"><strong>Capture:</strong> FAB expanded — Add Booking · Walk-in · Block Schedule.</div>
@@ -446,7 +447,8 @@
   <p>When a customer claims a membership, verify it on <strong>Members</strong>: enter the <strong>code</strong> and <strong>pet name</strong> and read the result — <em>✓ valid</em> (with tier, coverage and expiry), <em>pet name doesn't match</em>, <em>expired</em> (with the date), or <em>not found / inactive</em>.</p>
   <ul>
     <li><strong>Standard</strong> — valid at the <strong>home branch only</strong>.</li>
-    <li><strong>Passport</strong> — valid at <strong>both branches</strong>.</li>
+    <li><strong>Passport coverage</strong> — a member with no home branch is valid at <strong>both branches</strong>.</li>
+    <li><strong>Membership type</strong> is separate from coverage: <strong>Standard</strong> or <strong>Renewal</strong>, which determines the applicable discount rate.</li>
   </ul>
   <p>You can also just type the code on the booking <strong>Summary</strong> step (§6.1) and press Apply — a wrong-branch, expired, or inactive code is rejected with the reason.</p>
   <div class="shot" data-img="images/36-members.png">
@@ -464,7 +466,8 @@
 
   <h3><span class="sub-n">7.1</span> New member upload</h3>
   <p>On <strong>Members</strong>, use the <strong>CSV upload</strong> card. The file needs exactly these headers:</p>
-  <p><code>Membership ID</code> · <code>Pet Name</code> · <code>Breed</code> · <code>Valid Until Date</code> · <code>Branch</code></p>
+  <p><code>Membership ID</code> · <code>Pet Name</code> · <code>Breed</code> · <code>Valid Until Date</code> · <code>Branch</code> · <code>Membership Type</code></p>
+  <p><strong>Membership Type is required</strong> and must be <code>Standard</code> or <code>Renewal</code>. Leave Branch blank only for Passport coverage; otherwise use a recognized Barkhaus branch name.</p>
   <ol>
     <li>Choose the file, then review the <strong>filename and row count</strong> before importing.</li>
     <li>Proceed — progress shows while it runs.</li>
@@ -488,16 +491,16 @@
   <p class="ch-intro">Leave the board clean for the next shift: nothing should be sitting in the wrong status.</p>
 
   <h3><span class="sub-n">8.1</span> Updating bookings supposed to be checked in / completed</h3>
-  <p>Open <strong>Check In (🐾)</strong> and sweep the overdue groups top to bottom:</p>
+  <p>Open <strong>Pending (🐾)</strong> and sweep the overdue groups top to bottom:</p>
   <ul>
     <li><span class="co">1</span> <strong>Due for Check-in</strong> (red) — guests still <em>Confirmed</em> past their arrival time. For each: if they came, <strong>check them in</strong>; if they truly no-showed, follow your branch policy (call the owner, or <strong>cancel</strong> in the sticky footer so the slot frees).</li>
     <li><span class="co">2</span> <strong>In Progress</strong> — anyone who has actually left should be moved to <strong>completed</strong> (settle any balance first, Chapter 4).</li>
     <li><span class="co">3</span> <strong>Due for Checkout</strong> — hotel guests flagged <strong>⚠ Overdue</strong>: collect the late/extra charges and complete, or extend the stay (Edit booking) if they're staying another night.</li>
   </ul>
   <p>When all three are clear, the next shift opens to a queue that reflects reality.</p>
-  <div class="shot" data-img="images/41-checkin-overdue.png">
+  <div class="shot actual" data-img="images/41-checkin-overdue.png">
     <div class="shot-top"><span class="cam">📷</span><span class="fname">41-checkin-overdue.png</span><span class="vp desk">Desktop 1280</span></div>
-    <div class="shot-cap"><strong>Capture (reuse):</strong> the Check In page with overdue Due-for-Check-in and Due-for-Checkout sections to sweep.</div>
+    <div class="shot-cap"><strong>Current UI (reuse):</strong> the Pending page section counts used for the end-of-shift sweep.</div>
     <ul class="shot-cos"><li><span class="co">1</span> Due for Check-in (overdue)</li><li><span class="co">2</span> In Progress</li><li><span class="co">3</span> Due for Checkout (overdue)</li></ul>
   </div>
   <div class="tip">A booking is never deleted. <strong>Cancelling</strong> frees the slot and keeps the record (greyed + struck-through in history) — always prefer it over leaving a no-show sitting as Confirmed.</div>
@@ -523,15 +526,24 @@
     <li><strong>Demat / deshed add-ons</strong> — the de-matting / de-shedding portion, called out separately because it's commission-relevant.</li>
   </ul>
   <p>Below the tiles is the list of <strong>completed grooming bookings</strong> that make up the totals <span class="co">4</span>; a row tagged <em>Demat / Deshed</em> included one of those add-ons. Tap any row to open its drawer and verify the detail. Reports are read on screen — use the date range to scope a period, and capture/print the page if you need a copy.</p>
-  <div class="shot" data-img="images/39-reports.png">
+  <div class="shot actual" data-img="images/39-reports.png">
     <div class="shot-top"><span class="cam">📷</span><span class="fname">39-reports.png</span><span class="vp desk">Desktop 1280</span></div>
-    <div class="shot-cap"><strong>Capture:</strong> Reports page — From/To + Groomer set, the four summary tiles populated, and a few completed-grooming rows (one tagged Demat / Deshed).</div>
+    <div class="shot-cap"><strong>Current UI:</strong> Groomer Reports with From/To, groomer selector, four summary tiles, and completed-booking results area.</div>
     <ul class="shot-cos">
       <li><span class="co">1</span> From / To date pickers</li><li><span class="co">2</span> Groomer selector</li>
       <li><span class="co">3</span> Summary tiles</li><li><span class="co">4</span> Completed-grooming list</li>
     </ul>
   </div>
   <div class="note">Only bookings marked <strong>completed</strong> count toward the totals — so closing your shift cleanly (Chapter 8) keeps incentive numbers accurate.</div>
+
+  <h3><span class="sub-n">9.2</span> Checking a Maya payment</h3>
+  <p>Use <strong>Reports → Payment Status Check</strong> when a customer says Maya completed payment but the booking still looks unpaid or pending. Enter the Barkhaus reference (for example <code>BH-597A57</code>) and select <strong>Check Payment Status</strong>. The result shows each matching Maya transaction's status, amount, payment ID, method/fund source, and Maya timestamps.</p>
+  <div class="shot actual" data-img="images/42-payment-status-check.png">
+    <div class="shot-top"><span class="cam">📷</span><span class="fname">42-payment-status-check.png</span><span class="vp desk">Desktop 1280</span></div>
+    <div class="shot-cap"><strong>Current UI:</strong> Reports → Payment Status Check before a booking reference is submitted.</div>
+    <ul class="shot-cos"><li><span class="co">1</span> Booking reference field</li><li><span class="co">2</span> Check Payment Status button</li></ul>
+  </div>
+  <div class="warn">This is a read-only diagnostic. It does not change the booking or payment status. If Maya shows a successful payment but Barkhaus has not reconciled it, keep the reference and transaction details and escalate to the owner/technical contact before collecting a second payment.</div>
   <div class="backtop"><a href="#top">↑ back to top</a></div>
 </section>
 
@@ -568,11 +580,11 @@
   <table>
     <tr><th>Status</th><th>Meaning</th><th>Set by</th></tr>
     <tr><td>pending</td><td>Created but not confirmed — online bookings awaiting payment. Auto-cancelled after ~15 minutes if unpaid.</td><td>System</td></tr>
+    <tr><td>pencil-booked</td><td>Temporary or tentative reservation. Visible in operations but not yet a final confirmed booking.</td><td>Admin</td></tr>
     <tr><td>confirmed</td><td>Booked and expected. The normal state before arrival. (Past its time but still here = "Due for Check-in".)</td><td>Payment / admin</td></tr>
     <tr><td>checked in</td><td>The pet is on the premises.</td><td>Front desk</td></tr>
     <tr><td>completed</td><td>Service finished, guest gone, bill settled. Counts toward Reports.</td><td>Front desk</td></tr>
     <tr><td>cancelled</td><td>Called off — slot freed, kept in history (greyed + strikethrough).</td><td>Admin / customer / system</td></tr>
-    <tr><td>rejected</td><td>Declined by the branch.</td><td>Admin</td></tr>
   </table>
 
   <h3>Payment statuses</h3>
@@ -607,7 +619,7 @@
     <tr><td>Hotel</td><td><strong>Nightly rate by cage type</strong> — Small/Medium/Large Cage, Cat Cabin, Cat Villa — <strong>× day type</strong>: Fri/Sat/Sun nights bill at the weekend rate, Mon–Thu at the weekday rate. <em>+ late pick-up</em>: per-hour fee after 2 PM; &gt;6 h late = extra night; not collected by 8 PM = extra night.</td></tr>
     <tr><td>Daycare</td><td><strong>Base rate by pet size covers the first 3 hours</strong>; each additional hour adds a per-size hourly rate. Open-time = base now, extras settled at pickup.</td></tr>
     <tr><td>Studio</td><td>Session priced at the studio; settled at check-out.</td></tr>
-    <tr><td>Member discount</td><td>Percentage off the subtotal — currently <strong>10% grooming</strong>, <strong>20% hotel</strong>, <strong>20% daycare</strong>. Standard = home branch only; Passport = both branches.</td></tr>
+    <tr><td>Member discount</td><td>Percentage off eligible charges, hydrated from the pricing table at runtime. <strong>Standard</strong> and <strong>Renewal</strong> may have different rates; home-branch versus Passport coverage controls where the code is valid.</td></tr>
     <tr><td>Convenience fee</td><td>Online card/e-wallet bookings only. Never added to admin or walk-in bookings.</td></tr>
   </table>
 
@@ -632,7 +644,7 @@
     <tr><td>Tap a date group header</td><td>Collapses / expands that day in the Bookings list.</td></tr>
   </table>
   <ul>
-    <li><strong>Search beats scrolling</strong> — on Bookings and Check In, two characters of the pet's name is usually faster than hunting through the list. Search one name at a time (a full "First Last" returns nothing).</li>
+    <li><strong>Search beats scrolling</strong> — on Bookings and Pending, two characters of the pet's name is usually faster than hunting through the list. Search one name at a time (a full "First Last" returns nothing).</li>
     <li><strong>Always search for the owner first</strong> when creating bookings — duplicated owners fragment a customer's history.</li>
     <li><strong>Clear the ⚠ unassigned bookings early</strong> — check-in is blocked until a room/groomer is set.</li>
     <li><strong>Record payments the moment they happen.</strong> The drawer's payment list is the branch's money trail.</li>
@@ -652,7 +664,7 @@
     <tr><td>A guest sits in "Due for Check-in" (red)</td><td>They're past their arrival time but still Confirmed. Check them in if present, or cancel the no-show to free the slot (Chapter 8).</td></tr>
     <tr><td>An online booking shows <em>pending / unpaid</em></td><td>The customer hasn't completed payment. They have ~15 minutes; if it lapses, the system auto-cancels and frees the slot. No action needed.</td></tr>
     <tr><td>A grooming time slot is greyed out but the groomer "looks free"</td><td>The slot may be taken by an unassigned "Any available" booking, or by a block — or no groomer hours are set for that day (Chapter 1.1). Check the All view and any hatched blocks.</td></tr>
-    <tr><td>Data looks stale</td><td>Press <kbd>R</kbd>, or switch away from the tab and back. The page also self-refreshes every minute.</td></tr>
+    <tr><td>Data looks stale</td><td>Press <kbd>R</kbd>, or switch away from the tab and back. Realtime updates normally arrive immediately; a five-minute fallback refresh is also active.</td></tr>
     <tr><td>"Not authorized" after Google sign-in</td><td>Your Google account isn't on the admin list, or the email doesn't match — ask a manager (Chapter 10), then sign in again.</td></tr>
     <tr><td>A member code is rejected</td><td>Read the message: wrong branch (Standard codes are branch-locked), expired, inactive, or a typo. Verify on the Members page.</td></tr>
     <tr><td>Reports total looks low</td><td>Only <strong>completed</strong> grooming bookings count, for the selected <strong>groomer</strong> and <strong>date range</strong> at the selected <strong>branch</strong>. Mark finished guests completed (Chapter 8) and re-check the filters.</td></tr>
@@ -661,7 +673,7 @@
   <div class="backtop"><a href="#top">↑ back to top</a></div>
 </section>
 
-<p style="text-align:center;color:var(--mid);font-size:11px;margin-top:40px">Barkhaus Admin Walkthrough Guide · draft v0.2 (workflow edition) · screenshot mocks use synthetic test data only</p>
+<p style="text-align:center;color:var(--mid);font-size:11px;margin-top:40px">Barkhaus Admin Walkthrough Guide · v0.3 · July 2026 · live captures are privacy-reviewed; dashed frames remain annotated UI references</p>
 
 </div>
 
