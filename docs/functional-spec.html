@@ -511,6 +511,8 @@
   <h3>10.1 Analytics</h3>
   <ul>
     <li><strong>Google Analytics 4</strong> (<code>G-LBWQT2HSGQ</code>) via gtag.js on every public page: landing, booking, FAQ, and all blog posts. The admin app is not tracked.</li>
+    <li>The customer-booking funnel is <code>page_view</code> → <code>booking_start</code> → <code>booking_form_complete</code> → <code>purchase</code>. <code>begin_checkout</code> is also recorded between form completion and purchase for checkout diagnostics.</li>
+    <li><code>purchase</code> is emitted only after Barkhaus receives a successful booking/payment response, uses the booking reference as <code>transaction_id</code>, includes PHP value, service, and branch, and is deduplicated in the browser. Admin walk-ins and owner/pet PII are excluded.</li>
   </ul>
 
   <h3>10.2 SEO</h3>

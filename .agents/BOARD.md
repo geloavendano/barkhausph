@@ -32,6 +32,12 @@ teammates. Keep entries short and current.
   Calendar/branch state, mobile More, groomer schedules, collapsed Pending queues,
   Groomer Reports, and Payment Status Check. Remaining dashed screenshots are annotated
   references awaiting safe live replacements.
+- 2026-07-04 - Codex: added the public GA4 customer funnel (`booking_start`,
+  `booking_form_complete`, `begin_checkout`, `purchase`). Purchase fires only after
+  successful manual submission or confirmed hosted payment, uses the booking reference
+  for deduplication, excludes walk-ins/PII, and carries PHP value, branch, and service.
+  JavaScript syntax, diff checks, and local page loading pass. GA4 still needs `purchase`
+  marked as a key event and a Funnel exploration configured in the property.
 - 2026-06-19 - Codex: date-specific groomer hours are implemented across public/admin
   slot selection and submit rechecks. Static code safely retains legacy hours only while
   the new table is absent. Authenticated drawer visual QA remains after the migration is

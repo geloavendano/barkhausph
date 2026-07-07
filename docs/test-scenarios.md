@@ -227,6 +227,7 @@ For each **source** × **service** combination, a full happy-path create:
 
 ## Cross-cutting / non-functional
 
+- **GA4 funnel**: with a test `gtag` spy, verify an online flow emits `booking_start` once, `booking_form_complete` on first review, `begin_checkout` on payment entry/hosted submit, and one `purchase` only after a successful response. Verify `transaction_id`, `currency=PHP`, value, service, and branch; refresh/reconcile must not duplicate `purchase`; walk-in mode must emit none.
 - **Auth**: admin gate (admin_users table); sign-out; session refresh; token cache.
 - **Live updates**: realtime + 60s poll + visibilitychange on Calendar & Bookings.
 - **Pagination**: Bookings row-based offset; load-more loading + end states.

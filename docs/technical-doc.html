@@ -526,7 +526,7 @@ sequenceDiagram
     <tr><td>PayMongo</td><td>Retained, hidden hosted-checkout implementation with signature verification and duplicate-event handling for possible future fallback.</td></tr>
     <tr><td>Resend</td><td>Single branded HTML template family rendered inline in the edge functions (booking details / pet / health / owner / price sections vary by service). Sender domain configured in Resend; fire-and-forget with errors logged, never blocking the booking.</td></tr>
     <tr><td>Google OAuth</td><td>Supabase Auth provider; redirect back to <code>/admin/</code>; no separate Google Cloud session handling in app code.</td></tr>
-    <tr><td>Google Analytics 4</td><td>gtag.js snippet on all public pages (single property). Page-view based; no custom events wired yet — candidate enhancement: funnel events per booking step.</td></tr>
+    <tr><td>Google Analytics 4</td><td>gtag.js on all public pages (single property). The online booking funnel emits <code>booking_start</code>, <code>booking_form_complete</code>, <code>begin_checkout</code>, and the recommended ecommerce <code>purchase</code> event. Purchase carries a booking-reference transaction ID, PHP value, service, and branch; walk-ins and PII are excluded.</td></tr>
     <tr><td>Supabase Storage</td><td>Two uses: vaccine-document bucket (signed-URL uploads from the booking flow) and branch gallery buckets listed by the landing page at runtime so photo updates need no deploy.</td></tr>
   </table>
   <div class="backtop"><a href="#top">↑ top</a></div>
@@ -574,6 +574,7 @@ sequenceDiagram
     <tr><td>React nested components</td><td>Components defined inside a component remount per render (input focus loss). Hoist to module scope or call as plain functions.</td></tr>
     <tr><td>Committed bundles</td><td><code>/admin/</code> hashed assets churn every build and conflict across branches/bots; long-term fix is building in CI (Pages artifact) instead of committing output.</td></tr>
     <tr><td>Walk-in endpoint routing</td><td>Walk-ins must always post to <code>submit-booking</code>, even when <code>PAYMENT_GATEWAY_PROVIDER</code> is <code>maya</code> or another hosted provider. Hosted checkout functions create online bookings; routing walk-ins there stores <code>booking_source = online</code>.</td></tr>
+    <tr><td>Analytics conversion timing</td><td>Do not fire <code>purchase</code> on button click or hosted-checkout redirect. Fire it only after the booking endpoint succeeds (manual receipt flow) or payment-status reconciliation confirms the hosted payment. Use <code>ref_number</code> as <code>transaction_id</code> and deduplicate it so refreshes/return polling cannot inflate conversions.</td></tr>
   </table>
   <div class="backtop"><a href="#top">↑ top</a></div>
 </section>

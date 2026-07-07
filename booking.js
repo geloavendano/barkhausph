@@ -61,7 +61,69 @@ var BOOKING_PARAMS = new URLSearchParams(window.location.search);
 var IS_WALKIN = BOOKING_PARAMS.get('walkin') === '1';
 var WALKIN_TOKEN = BOOKING_PARAMS.get('token') || '';
 var TEST_PAYMENT_MODE = BOOKING_PARAMS.get('testPayment') === '1';
+var IS_PAYMENT_RETURN = BOOKING_PARAMS.has('payment');
 var _walkinGatePromise = null;
+
+// ── GA4 BOOKING FUNNEL ──
+// Public online bookings only. Never include owner/pet details or other PII.
+function gaBookingItem(state) {
+  var bk = state || booking || {};
+  return {
+    item_id: bk.service || 'booking',
+    item_name: (bk.service || 'Pet service') + ' booking',
+    item_category: 'Pet services',
+    affiliation: bk.location || 'Barkhaus',
+    price: Number(getRunningTotal ? getRunningTotal() + currentConvenienceFee() : 0),
+    quantity: 1,
+  };
+}
+
+function trackBookingEvent(name, params, onceKey) {
+  if (IS_WALKIN || typeof window.gtag !== 'function') return;
+  if (onceKey) {
+    try {
+      var key = 'barkhaus_ga_' + onceKey;
+      if (sessionStorage.getItem(key)) return;
+      sessionStorage.setItem(key, '1');
+    } catch(e) {}
+  }
+  window.gtag('event', name, params || {});
+}
+
+function bookingEventParams(total) {
+  var value = Number(total != null ? total : getRunningTotal() + currentConvenienceFee()) || 0;
+  return {
+    currency: 'PHP',
+    value: value,
+    booking_service: booking.service || 'not_selected',
+    booking_branch: booking.location || 'not_selected',
+    items: [gaBookingItem(booking)],
+  };
+}
+
+function trackPurchase(ref, total, state) {
+  if (IS_WALKIN || !ref) return;
+  var dedupeKey = 'barkhaus_ga_purchase_' + ref;
+  try {
+    if (localStorage.getItem(dedupeKey)) return;
+    localStorage.setItem(dedupeKey, '1');
+  } catch(e) {}
+  var params = bookingEventParams(total);
+  params.transaction_id = String(ref);
+  if (state) {
+    if (state.service) params.booking_service = state.service;
+    if (state.location) params.booking_branch = state.location;
+    params.items = [{
+      item_id: state.service || 'booking',
+      item_name: (state.service || 'Pet service') + ' booking',
+      item_category: 'Pet services',
+      affiliation: state.location || 'Barkhaus',
+      price: Number(total) || 0,
+      quantity: 1,
+    }];
+  }
+  trackBookingEvent('purchase', params);
+}
 
 if (IS_WALKIN) {
   CONVENIENCE_FEE = 0;
@@ -178,6 +240,12 @@ function localDateStr(d) {
         + '</div>';
       return;
     }
+  }
+  if (!IS_PAYMENT_RETURN) {
+    trackBookingEvent('booking_start', {
+      booking_source: 'online',
+      payment_provider: PAYMENT_GATEWAY_PROVIDER,
+    }, 'booking_start');
   }
   var today = localDateStr();
   ['groomDate','hotelCheckin','hotelCheckout','daycareDate','studioDate'].forEach(function(id) {
@@ -336,6 +404,7 @@ function goToStep(n) {
 function showPaymentPage() {
   if (!_pricingLoaded) { showToast('Pricing data is unavailable. Please refresh the page and try again.', 7000); return; }
   collectAllState();
+  trackBookingEvent('begin_checkout', bookingEventParams(), 'begin_checkout');
   onSummaryScreen = false;
   onPaymentScreen = true;
   var ss = document.getElementById('stepSummary'); if (ss) ss.classList.remove('active');
@@ -442,6 +511,7 @@ function showSummary() {
   document.getElementById('progressWrap').style.display = 'none';
   onSummaryScreen = true;
   buildSummary();
+  trackBookingEvent('booking_form_complete', bookingEventParams(), 'booking_form_complete');
   document.getElementById('stepSummary').classList.add('active');
   syncHostedCheckoutNotice();
   updateBottomNavForSummary();
@@ -2910,13 +2980,20 @@ function showHostedPaymentSuccess(ref) {
     ss.classList.add('active');
   }
   setSuccessTimestamp(ref);
+  var purchaseSnap = null;
   try {
     var snap = JSON.parse(sessionStorage.getItem('bk_snapshot') || 'null');
+    purchaseSnap = snap;
     if (snap) {
       renderSuccessDetails(snap, 'successDetails', 'successPriceBreakdown');
       sessionStorage.removeItem('bk_snapshot');
     }
   } catch(e) {}
+  trackPurchase(
+    ref,
+    purchaseSnap && purchaseSnap.total,
+    purchaseSnap && purchaseSnap.bookingState
+  );
   try { sessionStorage.removeItem('bk_pending_ref'); } catch(e) {}
 }
 
@@ -3091,6 +3168,8 @@ function confirmPaymentReturn(ref) {
   if (rb) rb.style.display = 'none';
   if (ss) { ss.style.display = ''; ss.classList.add('active'); }
   setSuccessTimestamp(ref);
+  var snap = window._payReturnSnap || null;
+  trackPurchase(ref, snap && snap.total, snap && snap.bookingState);
 }
 
 // ── PAYMENT RETURN SCREEN (CANCELLED / FAILED) ──
@@ -3548,6 +3627,9 @@ async function submitBooking() {
   var discAmt  = calculateMemberDiscount(svc, discountable, booking.memberValid, booking.membershipType);
   var fee      = currentConvenienceFee();
   var total    = subtotal - discAmt + fee;
+  if (!IS_WALKIN && PAYMENT_GATEWAY_PROVIDER !== 'manual') {
+    trackBookingEvent('begin_checkout', bookingEventParams(total), 'begin_checkout');
+  }
 
   var groomServiceName = '';
   if (booking.groomService) {
@@ -3886,6 +3968,7 @@ async function submitBooking() {
     var ssO = document.getElementById('successScreen');
     if (ssO) { ssO.style.display = ''; ssO.classList.add('active'); }
     setSuccessTimestamp(refNumOnline);
+    trackPurchase(refNumOnline, total, booking);
     var msgO = ssO ? ssO.querySelector('.success-msg') : null;
     if (msgO) msgO.textContent = 'Your booking is confirmed and your payment has been received. A confirmation email is on its way — please arrive 15 minutes early.';
     try {
