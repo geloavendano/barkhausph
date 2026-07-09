@@ -13,6 +13,18 @@ teammates. Keep entries short and current.
 
 ## Handoffs
 
+- 2026-07-09 - Claude: booking-info consistency audit + fixes. Root issue: online
+  bookings only got most child records from the full webhook, so recovered ones were
+  incomplete and online grooming pegs were dropped entirely; walk-ins had no
+  booking_charges. Fixes: (#1/#2) create-maya-checkout now persists pet_vaccines,
+  vaccine_documents, waivers, grooming_reference_images up front + webhook inserts made
+  idempotent (dd509bb); (#3) submit-booking builds booking_charges for public/walk-in
+  flows, gated by skipServerCharges which AddBookingPanel now sets to avoid duplicating
+  its own client-side charges (9416da5). HUMAN TODO: deploy create-maya-checkout,
+  handle-payment-webhook, submit-booking. Deferred: #4 webhook doesn't create *_details
+  (edge case, fallback path only); #5 merge the two buildEmailHtml — they intentionally
+  differ by payment state (pay-in-store notice vs already-paid), so not a mechanical
+  extract; do shared-helpers-only or a parameterized merge with per-path email testing.
 - 2026-07-09 - Claude: reconcile-with-Maya-before-cancel. New edge function
   `reconcile-maya-bookings` (token-gated via RECONCILE_TOKEN, deploy --no-verify-jwt):
   for each expiring pending Maya hold it checks Maya first — finalizes paid ones via the
