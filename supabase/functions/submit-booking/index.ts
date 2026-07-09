@@ -858,6 +858,20 @@ Deno.serve(async (req) => {
       if (error) throw new Error(`Addons insert failed: ${error.message}`);
     }
 
+    // 9b. Bill breakdown (booking_charges). The admin panel posts its own richer
+    // charges (per-night hotel, etc.) client-side and sets skipServerCharges, so we
+    // only build them here for the public flows (walk-in, online manual transfer) —
+    // previously walk-in bookings had no charges and fell back to a lumped bill.
+    if (!body.skipServerCharges) {
+      const chargeRows = chargesFromPayload(body, subtotal, discountAmt);
+      if (chargeRows.length > 0) {
+        const { error } = await supabase.from("booking_charges").insert(
+          chargeRows.map((c, i) => ({ ...c, booking_id: bookingId, sort_order: i }))
+        );
+        if (error) console.error("Booking charges insert failed (non-fatal):", error.message);
+      }
+    }
+
     // 10. Vaccine records
     if (body.vaccines && Object.keys(body.vaccines).length > 0) {
       const vaccineRows = Object.entries(body.vaccines).map(([name, confirmed]) => ({

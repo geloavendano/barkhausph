@@ -803,6 +803,9 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
           hotelLateTotal: late,
           hotelLateIsAdditionalNight: isHotelAdditionalNight(bk),
           adminCreated: true, booking_source: bk.mode || 'admin',
+          // The panel posts its own richer booking_charges below, so tell
+          // submit-booking not to also build a set (would duplicate).
+          skipServerCharges: true,
           createdBy: adminSnapshot(currentAdmin),
         }
         const { data: sess } = await supabase.auth.getSession()
