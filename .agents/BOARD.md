@@ -13,6 +13,18 @@ teammates. Keep entries short and current.
 
 ## Handoffs
 
+- 2026-07-09 - Claude: reconcile-with-Maya-before-cancel. New edge function
+  `reconcile-maya-bookings` (token-gated via RECONCILE_TOKEN, deploy --no-verify-jwt):
+  for each expiring pending Maya hold it checks Maya first — finalizes paid ones via the
+  webhook, cancels only when Maya is reachable and shows no matching success, and skips
+  when Maya is unreachable (never cancels a maybe-paid booking). Phase 2 recovers
+  already-cancelled unpaid online bookings Maya says are paid (mirrors get-payment-status
+  recovery); `?sweep=1&days=N&dry=1` runs the historical victim backfill as a preview.
+  Migration `2026-07-09_reconcile_before_cancel_cron.sql` repoints the cron to
+  net.http_post this function (needs pg_net + RECONCILE_TOKEN placeholder swapped);
+  expire_pending_bookings() kept as manual backstop. HUMAN TODO: set RECONCILE_TOKEN env,
+  deploy the function --no-verify-jwt, apply the migration with the real token, then run a
+  dry sweep. Root case: BH-E0D9B8 (QRPH paid, webhook never delivered, cron cancelled it).
 - 2026-07-08 - Codex: fixed walk-in bookings being created as online when
   `PAYMENT_GATEWAY_PROVIDER` is a hosted provider such as Maya. Walk-in submits now
   always route to `submit-booking`, so the edge function can validate the one-time
