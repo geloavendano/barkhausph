@@ -44,6 +44,23 @@ function serviceLineName(body: Record<string, unknown>): string {
     ?? "Barkhaus Booking";
 }
 
+// Add-on display names (mirror submit-booking / handle-payment-webhook) so the
+// breakdown reads the same regardless of booking source or finalization path.
+const ADDON_NAMES: Record<string, string> = {
+  nail_trim:       "Nail Trim and Filing",
+  ear_clean:       "Ear Cleaning",
+  teeth:           "Teeth Brushing",
+  sanitary:        "Sanitary Clean",
+  antitick:        "Anti-tick and Flea Bath",
+  whitening:       "Whitening Bath",
+  paw_pads:        "Paw Pads Trim",
+  anal_gland:      "Anal Gland Expression",
+  face_trim:       "Face Trim",
+  deshed:          "Deshedding",
+  demat:           "Dematting",
+  premium_shampoo: "Premium Shampoo",
+};
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -288,6 +305,20 @@ Deno.serve(async (req) => {
           special_requests: body.groomNotes || null,
       });
       if (error) throw new Error(`Grooming inventory hold failed: ${error.message}`);
+      // Persist add-ons up front so the itemised breakdown survives even if the
+      // booking is later finalized via a recovery path (not the full webhook).
+      // Mirrors submit-booking; the webhook re-establishes these idempotently on
+      // normal payment. Non-fatal so an add-on hiccup never blocks checkout.
+      if (body.addons && Object.keys(body.addons).length > 0) {
+        const { error: addonErr } = await supabase.from("booking_addons").insert(
+          Object.entries(body.addons as Record<string, unknown>).map(([key, price]) => ({
+            booking_id: bookingId, addon_key: key,
+            addon_name: ADDON_NAMES[key] ?? key.replace(/_/g, " "),
+            price: Number(price) || 0,
+          }))
+        );
+        if (addonErr) console.error("Add-on hold insert failed (non-fatal):", addonErr.message);
+      }
     } else if (body.service === "daycare") {
         const openTime = body.daycareOpenTime === true;
         const { error } = await supabase.from("daycare_details").insert({

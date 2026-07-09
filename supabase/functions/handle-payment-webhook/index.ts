@@ -1079,6 +1079,9 @@ Deno.serve(async (req) => {
 
     // ── 6. Add-ons, vaccines, waivers ──
     if (body.service === "grooming" && body.addons && Object.keys(body.addons).length > 0) {
+      // Idempotent: create-maya-checkout now pre-inserts these up front, so clear
+      // any existing rows before re-establishing from the authoritative payload.
+      await supabase.from("booking_addons").delete().eq("booking_id", bookingId!);
       await supabase.from("booking_addons").insert(
         Object.entries(body.addons as Record<string, number>).map(([key, price]) => ({
           booking_id: bookingId!, addon_key: key,
