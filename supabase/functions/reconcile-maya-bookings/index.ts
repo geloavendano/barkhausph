@@ -136,23 +136,42 @@ Deno.serve(async (req) => {
 
   try {
     // ── Phase 1: expiring pending holds — check Maya before cancelling ──
+    // pending_bookings has no FK to bookings, so we join the two in JS by ref_number.
     const nowIso = new Date().toISOString();
-    const { data: holds, error: holdErr } = await supabase
+    const { data: rawHolds, error: holdErr } = await supabase
       .from("pending_bookings")
-      .select("id, ref_number, bookings!inner(id, total, status, payment_status)")
+      .select("id, ref_number")
       .eq("payment_provider", "maya")
       .lte("expires_at", nowIso)
-      .eq("bookings.status", "pending")
-      .eq("bookings.payment_status", "unpaid")
       .limit(limit);
     if (holdErr) out.errors.push({ phase: "holds", error: holdErr.message });
 
-    for (const h of holds ?? []) {
-      const b = Array.isArray(h.bookings) ? h.bookings[0] : h.bookings;
-      const ref = String(h.ref_number).toUpperCase();
+    const pendingByRef = new Map<string, string[]>();
+    for (const h of rawHolds ?? []) {
+      const r = String(h.ref_number).toUpperCase();
+      if (!pendingByRef.has(r)) pendingByRef.set(r, []);
+      pendingByRef.get(r)!.push(h.id);
+    }
+    const holdRefs = [...pendingByRef.keys()];
+
+    let holdBookings: any[] = [];
+    if (holdRefs.length > 0) {
+      const { data: hb, error: hbErr } = await supabase
+        .from("bookings")
+        .select("id, ref_number, total, status, payment_status")
+        .in("ref_number", holdRefs)
+        .eq("status", "pending")
+        .eq("payment_status", "unpaid");
+      if (hbErr) out.errors.push({ phase: "holds_bookings", error: hbErr.message });
+      holdBookings = hb ?? [];
+    }
+
+    for (const b of holdBookings) {
+      const ref = String(b.ref_number).toUpperCase();
       const { reachable, payments } = await mayaRRN(ref);
       const paid = findSuccessfulPayment(ref, b.total, payments);
       if (paid) {
+        // Webhook re-invoke finds the still-present pending row and finalizes it (also deletes the hold).
         if (dry) out.finalized.push({ ref, payment_id: paid.id, would: true });
         else { const ok = await finalizeViaWebhook(ref, paid); out.finalized.push({ ref, payment_id: paid.id, ok }); }
       } else if (reachable) {
@@ -160,7 +179,7 @@ Deno.serve(async (req) => {
         else {
           await supabase.from("bookings").update({ status: "cancelled", cancellation_reason: "Payment window expired" })
             .eq("id", b.id).eq("status", "pending").eq("payment_status", "unpaid");
-          await supabase.from("pending_bookings").delete().eq("id", h.id);
+          for (const pid of pendingByRef.get(ref) ?? []) await supabase.from("pending_bookings").delete().eq("id", pid);
           out.cancelled.push({ ref });
         }
       } else {
