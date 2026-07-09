@@ -13,7 +13,9 @@
 --    the RECONCILE_TOKEN env var on the reconcile-maya-bookings function. Keep this
 --    file's committed copy as the placeholder — do NOT commit the real token.
 
-CREATE EXTENSION IF NOT EXISTS pg_net WITH SCHEMA extensions;
+-- Enable pg_net if it isn't already (provides net.http_post). If your project
+-- already has it enabled (Database → Extensions), this is a harmless no-op.
+CREATE EXTENSION IF NOT EXISTS pg_net;
 
 DO $$
 DECLARE existing_job record;
