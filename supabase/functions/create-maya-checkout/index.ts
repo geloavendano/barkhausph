@@ -319,6 +319,17 @@ Deno.serve(async (req) => {
         );
         if (addonErr) console.error("Add-on hold insert failed (non-fatal):", addonErr.message);
       }
+      // Grooming reference photos ("pegs") — online never persisted these before,
+      // so the customer's uploads were silently dropped. Save them up front.
+      if (body.groomReferenceImages && Object.keys(body.groomReferenceImages).length > 0) {
+        const { error: pegErr } = await supabase.from("grooming_reference_images").insert(
+          Object.entries(body.groomReferenceImages as Record<string, unknown>).map(([key, path]) => ({
+            booking_id: bookingId, file_path: path as string,
+            file_name: (body.groomReferenceFileNames && body.groomReferenceFileNames[key]) || String(path).split("/").pop(),
+          }))
+        );
+        if (pegErr) console.error("Grooming reference images hold insert failed (non-fatal):", pegErr.message);
+      }
     } else if (body.service === "daycare") {
         const openTime = body.daycareOpenTime === true;
         const { error } = await supabase.from("daycare_details").insert({
@@ -336,6 +347,44 @@ Deno.serve(async (req) => {
           timeslot: body.studioSlot || "", studio_id: body._reservedStudioId || null,
       });
       if (error) throw new Error(`Studio inventory hold failed: ${error.message}`);
+    }
+
+    // Persist declared vaccines, uploaded documents, and waivers up front (same as
+    // submit-booking) so they survive even if the booking is finalized via a recovery
+    // path. The webhook re-establishes these idempotently on normal payment. Non-fatal.
+    if (body.vaccines && Object.keys(body.vaccines).length > 0) {
+      const { error: vErr } = await supabase.from("pet_vaccines").insert(
+        Object.entries(body.vaccines as Record<string, unknown>).map(([name, confirmed]) => ({
+          booking_id: bookingId, vaccine_name: name.replace(/_/g, " "),
+          confirmed: confirmed === true || confirmed === "true",
+        }))
+      );
+      if (vErr) console.error("Vaccines hold insert failed (non-fatal):", vErr.message);
+    }
+    if (body.vaccineDocuments && Object.keys(body.vaccineDocuments).length > 0) {
+      const { error: dErr } = await supabase.from("vaccine_documents").insert(
+        Object.entries(body.vaccineDocuments as Record<string, unknown>).map(([key, path]) => ({
+          booking_id: bookingId, file_path: path as string,
+          file_name: (body.vaccineFileNames && body.vaccineFileNames[key]) || String(path).split("/").pop(),
+        }))
+      );
+      if (dErr) console.error("Vaccine documents hold insert failed (non-fatal):", dErr.message);
+    }
+    {
+      const { error: wErr } = await supabase.from("waivers").insert({
+        booking_id:                bookingId,
+        general_terms:             body.waiverGeneral === true,
+        house_rules_accepted:      accepted(body.waiverHouseRules),
+        grooming_booking_policy:   body.service === "grooming" ? accepted(body.waiverGroomingPolicy) : null,
+        hotel_cancellation_policy: body.service === "hotel" ? accepted(body.waiverHotelCancellation) : null,
+        health_declaration:        body.waiverVaccine === true,
+        senior_medical_waiver:     body.waiverSeniorMedical === true,
+        studio_agreement:          body.waiverStudio === true,
+        media_consent:             body.waiverMedia === true,
+        waiver_texts:              body.waiverTexts || null,
+        waiver_version:            "2.0",
+      });
+      if (wErr) console.error("Waiver hold insert failed (non-fatal):", wErr.message);
     }
 
     // ── 5. Store full payload in pending_bookings (webhook uses this to create child records) ──

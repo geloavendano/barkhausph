@@ -1090,7 +1090,10 @@ Deno.serve(async (req) => {
         }))
       );
     }
+    // These may have been pre-inserted up front by create-maya-checkout, so each
+    // clears existing rows before re-establishing from the authoritative payload.
     if (body.vaccines && Object.keys(body.vaccines).length > 0) {
+      await supabase.from("pet_vaccines").delete().eq("booking_id", bookingId!);
       await supabase.from("pet_vaccines").insert(
         Object.entries(body.vaccines as Record<string, boolean>).map(([name, confirmed]) => ({
           booking_id: bookingId!, vaccine_name: name.replace(/_/g, " "), confirmed,
@@ -1099,6 +1102,7 @@ Deno.serve(async (req) => {
     }
     // Vaccine document uploads (paths from get-upload-url, carried in the payload)
     if (body.vaccineDocuments && Object.keys(body.vaccineDocuments).length > 0) {
+      await supabase.from("vaccine_documents").delete().eq("booking_id", bookingId!);
       const { error: docErr } = await supabase.from("vaccine_documents").insert(
         Object.entries(body.vaccineDocuments as Record<string, string>).map(([key, path]) => ({
           booking_id: bookingId!,
@@ -1108,6 +1112,19 @@ Deno.serve(async (req) => {
       );
       if (docErr) console.error("Vaccine documents insert failed (non-fatal):", docErr.message);
     }
+    // Grooming reference photos ("pegs")
+    if (body.service === "grooming" && body.groomReferenceImages && Object.keys(body.groomReferenceImages).length > 0) {
+      await supabase.from("grooming_reference_images").delete().eq("booking_id", bookingId!);
+      const { error: pegErr } = await supabase.from("grooming_reference_images").insert(
+        Object.entries(body.groomReferenceImages as Record<string, string>).map(([key, path]) => ({
+          booking_id: bookingId!,
+          file_path:  path,
+          file_name:  (body.groomReferenceFileNames && body.groomReferenceFileNames[key]) || path.split("/").pop(),
+        }))
+      );
+      if (pegErr) console.error("Grooming reference images insert failed (non-fatal):", pegErr.message);
+    }
+    await supabase.from("waivers").delete().eq("booking_id", bookingId!);
     await supabase.from("waivers").insert({
       booking_id:            bookingId!,
       general_terms:         body.waiverGeneral        === true,
