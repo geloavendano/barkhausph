@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { supabase, sbGet, sbPatch, sbPost, sbSignedUrl } from '../../lib/supabase'
+import { supabase, sbFunction, sbGet, sbPatch, sbPost } from '../../lib/supabase'
 import {
   STATUS_COLORS, STATUS_LABELS, PAY_COLORS, SVC_LABELS, SIZE_LABELS,
   SRC_LABELS, first, fmtDate, fmtTime, hexBg, esc,
@@ -130,52 +130,38 @@ export default function BookingDrawer({ booking: b, rooms, groomers, currentAdmi
     loadGroomRefs()
   }, [b.id])
 
-  // Generate 1-hour signed read URLs for vaccine documents whenever they load
+  // Generate 1-hour signed read URLs for private booking attachments.
   useEffect(() => {
-    if (vaccDocs.length === 0) return
-    let cancelled = false
-    async function loadDocUrls() {
-      const urls = {}
-      for (const doc of vaccDocs) {
-        const signed = await sbSignedUrl('vaccine-docs', doc.file_path, 3600)
-        if (signed) urls[doc.file_path] = signed
-      }
-      if (!cancelled) setDocUrls(urls)
-    }
-    loadDocUrls()
-    return () => { cancelled = true }
-  }, [vaccDocs])
-
-  // Sign grooming reference photos (same private bucket as vaccine docs)
-  useEffect(() => {
-    if (groomRefs.length === 0) return
-    let cancelled = false
-    ;(async () => {
-      const urls = {}
-      for (const ref of groomRefs) {
-        const signed = await sbSignedUrl('vaccine-docs', ref.file_path, 3600)
-        if (signed) urls[ref.file_path] = signed
-      }
-      if (!cancelled) setGroomRefUrls(urls)
-    })()
-    return () => { cancelled = true }
-  }, [groomRefs])
-
-  // Sign payment-receipt images (stored in the same private bucket)
-  useEffect(() => {
-    const paths = (payments ?? []).map(p => p.receipt_path).filter(Boolean)
+    const paths = [
+      ...vaccDocs.map(doc => doc.file_path),
+      ...groomRefs.map(ref => ref.file_path),
+      ...((payments ?? []).map(p => p.receipt_path)),
+    ].filter(Boolean)
     if (paths.length === 0) return
     let cancelled = false
     ;(async () => {
-      const urls = {}
-      for (const path of paths) {
-        const signed = await sbSignedUrl('vaccine-docs', path, 3600)
-        if (signed) urls[path] = signed
+      try {
+        const data = await sbFunction('admin-sign-storage-urls', {
+          bookingId: b.id,
+          paths,
+          expiresIn: 3600,
+        })
+        if (cancelled) return
+        const urls = data?.urls ?? {}
+        setDocUrls(urls)
+        setGroomRefUrls(urls)
+        setReceiptUrls(urls)
+      } catch (e) {
+        console.error('Attachment signing failed:', e)
+        if (!cancelled) {
+          setDocUrls({})
+          setGroomRefUrls({})
+          setReceiptUrls({})
+        }
       }
-      if (!cancelled) setReceiptUrls(urls)
     })()
     return () => { cancelled = true }
-  }, [payments])
+  }, [b.id, vaccDocs, groomRefs, payments])
 
   async function loadPayments() {
     try {
