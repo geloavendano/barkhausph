@@ -132,7 +132,12 @@ export async function sbSignedUrl(bucket, path, expiresIn = 3600) {
     })
     if (!res.ok) { console.error('sbSignedUrl', bucket, path, res.status, await res.text()); return null }
     const data = await res.json()
-    return data?.signedURL ? `${SUPABASE_URL}/storage/v1${data.signedURL}` : null
+    const signedPath = data?.signedURL || data?.signedUrl || data?.signed_url
+    if (!signedPath) {
+      console.error('sbSignedUrl missing signed URL in response:', bucket, path, data)
+      return null
+    }
+    return signedPath.startsWith('http') ? signedPath : `${SUPABASE_URL}/storage/v1${signedPath}`
   } catch (e) {
     console.error('sbSignedUrl error:', e)
     return null
