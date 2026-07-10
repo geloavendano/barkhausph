@@ -740,15 +740,30 @@ export default function BookingDrawer({ booking: b, rooms, groomers, currentAdmi
           {/* Grooming reference photos ("pegs") */}
           {groomRefs.length > 0 && (
             <Section title="Reference photos">
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
                 {groomRefs.map((ref, i) => {
                   const url = groomRefUrls[ref.file_path]
                   const name = ref.file_name || `Photo ${i + 1}`
                   return url
-                    ? <a key={ref.id ?? i} href={url} target="_blank" rel="noreferrer" title={name} style={{ display: 'block' }}>
-                        <img src={url} alt={name} style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--border)' }} />
+                    ? <a
+                        key={ref.id ?? i}
+                        href={url}
+                        target="_blank"
+                        rel="noreferrer"
+                        title={`Open ${name}`}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 8,
+                          maxWidth: 220,
+                          color: 'var(--blue)',
+                          textDecoration: 'none',
+                        }}
+                      >
+                        <img src={url} alt={name} style={{ width: 52, height: 52, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--border)', flex: '0 0 auto' }} />
+                        <span style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
                       </a>
-                    : <span key={ref.id ?? i} style={{ fontSize: 12, color: 'var(--mid)' }}>⏳ {name}</span>
+                    : <span key={ref.id ?? i} style={{ fontSize: 12, color: 'var(--mid)' }}>Preparing link: {name}</span>
                 })}
               </div>
             </Section>
