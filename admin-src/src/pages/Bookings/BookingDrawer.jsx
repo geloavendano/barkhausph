@@ -103,6 +103,8 @@ export default function BookingDrawer({ booking: b, rooms, groomers, currentAdmi
   const [err,         setErr]         = useState('')
   const [docUrls,     setDocUrls]     = useState({})
   const [receiptUrls, setReceiptUrls] = useState({})
+  const [missingAttachmentPaths, setMissingAttachmentPaths] = useState(new Set())
+  const [attachmentSignError, setAttachmentSignError] = useState('')
   const [auditRows,    setAuditRows]    = useState(null)
 
   const pet    = first(b.pets)    ?? {}
@@ -148,12 +150,16 @@ export default function BookingDrawer({ booking: b, rooms, groomers, currentAdmi
         })
         if (cancelled) return
         const urls = data?.urls ?? {}
+        setAttachmentSignError('')
+        setMissingAttachmentPaths(new Set(data?.missing ?? []))
         setDocUrls(urls)
         setGroomRefUrls(urls)
         setReceiptUrls(urls)
       } catch (e) {
         console.error('Attachment signing failed:', e)
         if (!cancelled) {
+          setAttachmentSignError(e.message || 'Unable to prepare attachment links.')
+          setMissingAttachmentPaths(new Set())
           setDocUrls({})
           setGroomRefUrls({})
           setReceiptUrls({})
@@ -697,12 +703,14 @@ export default function BookingDrawer({ booking: b, rooms, groomers, currentAdmi
           {/* Vaccine documents */}
           {vaccDocs.length > 0 && (
             <Section title="Vaccine documents">
+              {attachmentSignError && <p className={styles.muted}>{attachmentSignError}</p>}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {vaccDocs.map((doc, i) => {
                   const url = docUrls[doc.file_path]
                   const name = doc.file_name || `Document ${i + 1}`
                   const ext  = doc.file_path?.split('.').pop()?.toLowerCase() ?? ''
                   const isImg = ['jpg','jpeg','png','webp','heic','heif'].includes(ext)
+                  const missing = missingAttachmentPaths.has(doc.file_path)
                   return (
                     <div key={doc.id ?? i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       {url && isImg
@@ -714,7 +722,7 @@ export default function BookingDrawer({ booking: b, rooms, groomers, currentAdmi
                           ? <a href={url} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: 'var(--blue)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6 }}>
                               📄 {name}
                             </a>
-                          : <span style={{ fontSize: 12, color: 'var(--mid)' }}>⏳ {name}</span>
+                          : <span style={{ fontSize: 12, color: missing ? 'var(--error)' : 'var(--mid)' }}>{missing ? 'File missing from storage: ' : 'Preparing link: '}{name}</span>
                       }
                     </div>
                   )
@@ -726,10 +734,12 @@ export default function BookingDrawer({ booking: b, rooms, groomers, currentAdmi
           {/* Grooming reference photos ("pegs") */}
           {groomRefs.length > 0 && (
             <Section title="Reference photos">
+              {attachmentSignError && <p className={styles.muted}>{attachmentSignError}</p>}
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
                 {groomRefs.map((ref, i) => {
                   const url = groomRefUrls[ref.file_path]
                   const name = ref.file_name || `Photo ${i + 1}`
+                  const missing = missingAttachmentPaths.has(ref.file_path)
                   return url
                     ? <a
                         key={ref.id ?? i}
@@ -749,7 +759,7 @@ export default function BookingDrawer({ booking: b, rooms, groomers, currentAdmi
                         <img src={url} alt={name} style={{ width: 52, height: 52, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--border)', flex: '0 0 auto' }} />
                         <span style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
                       </a>
-                    : <span key={ref.id ?? i} style={{ fontSize: 12, color: 'var(--mid)' }}>Preparing link: {name}</span>
+                    : <span key={ref.id ?? i} style={{ fontSize: 12, color: missing ? 'var(--error)' : 'var(--mid)' }}>{missing ? 'File missing from storage: ' : 'Preparing link: '}{name}</span>
                 })}
               </div>
             </Section>

@@ -3664,7 +3664,8 @@ async function submitBooking() {
         });
         var _vUrlData = await _vUrlRes.json();
         if (_vUrlData.uploadUrl && _vUrlData.path) {
-          await fetch(_vUrlData.uploadUrl, { method: 'PUT', body: _vf, headers: { 'Content-Type': _vf.type } });
+          var _vPutRes = await fetch(_vUrlData.uploadUrl, { method: 'PUT', body: _vf, headers: { 'Content-Type': _vf.type } });
+          if (!_vPutRes.ok) throw new Error('Upload failed with status ' + _vPutRes.status);
           vaccineDocuments[_vKey] = _vUrlData.path;
           vaccineFileNames[_vKey] = _vf.name;
         }
@@ -3701,7 +3702,8 @@ async function submitBooking() {
         });
         var _pUrlData = await _pUrlRes.json();
         if (_pUrlData.uploadUrl && _pUrlData.path) {
-          await fetch(_pUrlData.uploadUrl, { method: 'PUT', body: _pf, headers: { 'Content-Type': _pf.type } });
+          var _pPutRes = await fetch(_pUrlData.uploadUrl, { method: 'PUT', body: _pf, headers: { 'Content-Type': _pf.type } });
+          if (!_pPutRes.ok) throw new Error('Upload failed with status ' + _pPutRes.status);
           groomReferenceImages[_pKey] = _pUrlData.path;
           groomReferenceFileNames[_pKey] = _pf.name;
         }

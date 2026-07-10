@@ -75,19 +75,26 @@ Deno.serve(async (req) => {
     ]);
 
     const urls: Record<string, string> = {};
+    const denied: string[] = [];
+    const missing: string[] = [];
     for (const path of requestedPaths) {
-      if (!allowed.has(path)) continue;
+      if (!allowed.has(path)) {
+        denied.push(path);
+        continue;
+      }
       const { data, error } = await supabase.storage
         .from(BUCKET)
         .createSignedUrl(path, expiresIn);
       if (error) {
         console.error("Admin storage sign failed:", path, error.message);
+        missing.push(path);
         continue;
       }
       if (data?.signedUrl) urls[path] = data.signedUrl;
+      else missing.push(path);
     }
 
-    return json({ urls });
+    return json({ urls, missing, denied });
   } catch (err) {
     console.error("admin-sign-storage-urls error:", err instanceof Error ? err.message : err);
     const message = err instanceof Error ? err.message : "Unexpected error";
