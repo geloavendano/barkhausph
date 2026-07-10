@@ -146,6 +146,89 @@ async function markPaymentEventAlerted(supabase: any, eventId: string | null, al
   if (error) console.error("Payment event alert audit update failed:", error.message);
 }
 
+function paymentAlertKey(details: {
+  provider: string;
+  eventType?: string | null;
+  paymentId?: string | null;
+  checkoutId?: string | null;
+  refNumber?: string | null;
+}): string {
+  const identity = details.paymentId || details.checkoutId || details.refNumber || "unknown";
+  return [
+    details.provider || "unknown",
+    details.eventType || "unknown",
+    identity,
+  ].map((part) => String(part).trim().toLowerCase()).join(":");
+}
+
+async function claimPaymentAlertLock(supabase: any, details: {
+  provider: string;
+  eventType?: string | null;
+  refNumber?: string | null;
+  paymentId?: string | null;
+  checkoutId?: string | null;
+  paymentEventId?: string | null;
+}) {
+  const alertKey = paymentAlertKey(details);
+  const payload = {
+    provider: details.provider,
+    alert_key: alertKey,
+    ref_number: details.refNumber || null,
+    event_type: details.eventType || null,
+    gateway_payment_id: details.paymentId || null,
+    gateway_checkout_id: details.checkoutId || null,
+    first_payment_event_id: details.paymentEventId || null,
+    last_payment_event_id: details.paymentEventId || null,
+  };
+
+  const { data, error } = await supabase
+    .from("payment_alert_locks")
+    .insert(payload)
+    .select("id, alert_key")
+    .single();
+
+  if (!error) return { claimed: true, id: data?.id ?? null, alertKey };
+
+  if (error.code !== "23505") {
+    console.error("Payment alert lock insert failed:", error.message);
+    return { claimed: true, id: null, alertKey };
+  }
+
+  const { data: existing } = await supabase.from("payment_alert_locks")
+    .update({
+      updated_at: new Date().toISOString(),
+      last_payment_event_id: details.paymentEventId || null,
+    })
+    .eq("alert_key", alertKey)
+    .select("id, alert_sent, alert_error")
+    .maybeSingle();
+
+  if (existing && !existing.alert_sent && existing.alert_error) {
+    console.log("Retrying previously failed payment alert:", alertKey);
+    return { claimed: true, id: existing.id ?? null, alertKey };
+  }
+
+  return { claimed: false, id: null, alertKey };
+}
+
+async function markPaymentAlertLockSent(supabase: any, lockId: string | null, alertError?: string | null) {
+  if (!lockId) return;
+  const payload = alertError
+    ? {
+        updated_at: new Date().toISOString(),
+        alert_sent: false,
+        alert_error: alertError.slice(0, 500),
+      }
+    : {
+        updated_at: new Date().toISOString(),
+        alert_sent: true,
+        alert_error: null,
+        send_count: 1,
+      };
+  const { error } = await supabase.from("payment_alert_locks").update(payload).eq("id", lockId);
+  if (error) console.error("Payment alert lock update failed:", error.message);
+}
+
 async function sendPaymentFailureAlert(details: Record<string, any>) {
   const apiKey = Deno.env.get("RESEND_API_KEY");
   if (!apiKey) throw new Error("RESEND_API_KEY not set");
@@ -800,20 +883,38 @@ Deno.serve(async (req) => {
     // success event follows, so keep those holds until retry/edit or the
     // 15-minute expiry job releases them.
     if (isMaya && !paidEvent) {
-      try {
-        await sendPaymentFailureAlert({
-          ...(pending.payload || {}),
-          eventType,
-          refNumber: pending.ref_number || refNumber,
-          amount: paidAmount || pending.amount,
-          paymentId,
-          checkoutId: mayaCheckoutId(eventData) || pending.gateway_checkout_id,
-        });
-        await markPaymentEventAlerted(supabase, paymentEventId);
-      } catch (alertErr) {
-        const message = alertErr instanceof Error ? alertErr.message : String(alertErr);
-        console.error("Maya payment alert failed:", message);
-        await markPaymentEventAlerted(supabase, paymentEventId, message);
+      const alertRef = pending.ref_number || refNumber;
+      const alertCheckoutId = mayaCheckoutId(eventData) || pending.gateway_checkout_id;
+      const alertLock = await claimPaymentAlertLock(supabase, {
+        provider,
+        eventType,
+        refNumber: alertRef,
+        paymentId,
+        checkoutId: alertCheckoutId,
+        paymentEventId,
+      });
+
+      if (!alertLock.claimed) {
+        console.log("Duplicate Maya payment alert suppressed:", alertLock.alertKey);
+        await markPaymentEventAlerted(supabase, paymentEventId, `Duplicate alert suppressed: ${alertLock.alertKey}`);
+      } else {
+        try {
+          await sendPaymentFailureAlert({
+            ...(pending.payload || {}),
+            eventType,
+            refNumber: alertRef,
+            amount: paidAmount || pending.amount,
+            paymentId,
+            checkoutId: alertCheckoutId,
+          });
+          await markPaymentEventAlerted(supabase, paymentEventId);
+          await markPaymentAlertLockSent(supabase, alertLock.id);
+        } catch (alertErr) {
+          const message = alertErr instanceof Error ? alertErr.message : String(alertErr);
+          console.error("Maya payment alert failed:", message);
+          await markPaymentEventAlerted(supabase, paymentEventId, message);
+          await markPaymentAlertLockSent(supabase, alertLock.id, message);
+        }
       }
       if (eventType === "PAYMENT_EXPIRED") {
         await supabase.from("bookings").update({ status: "cancelled" })
