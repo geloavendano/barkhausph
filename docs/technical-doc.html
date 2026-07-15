@@ -575,6 +575,7 @@ sequenceDiagram
     <tr><td>Committed bundles</td><td><code>/admin/</code> hashed assets churn every build and conflict across branches/bots; long-term fix is building in CI (Pages artifact) instead of committing output.</td></tr>
     <tr><td>Walk-in endpoint routing</td><td>Walk-ins must always post to <code>submit-booking</code>, even when <code>PAYMENT_GATEWAY_PROVIDER</code> is <code>maya</code> or another hosted provider. Hosted checkout functions create online bookings; routing walk-ins there stores <code>booking_source = online</code>.</td></tr>
     <tr><td>Analytics conversion timing</td><td>Do not fire <code>purchase</code> on button click or hosted-checkout redirect. Fire it only after the booking endpoint succeeds (manual receipt flow) or payment-status reconciliation confirms the hosted payment. Use <code>ref_number</code> as <code>transaction_id</code> and deduplicate it so refreshes/return polling cannot inflate conversions.</td></tr>
+    <tr><td>Upload retention</td><td>Do not auto-delete files from the private <code>vaccine-docs</code> bucket from request-time cleanup. Vaccine records, grooming pegs, and payment receipts are booking records and must remain available even for cancelled bookings. Reduce storage pressure with client-side compression and explicit retention/admin cleanup only.</td></tr>
   </table>
   <div class="backtop"><a href="#top">↑ top</a></div>
 </section>

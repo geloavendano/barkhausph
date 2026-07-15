@@ -25,6 +25,71 @@ function currentConvenienceFee() {
   return IS_WALKIN || (booking && booking.simulatePayment) ? 0 : CONVENIENCE_FEE;
 }
 
+// ── Upload size control ──
+// Browser-safe compressor for customer-uploaded images. PDFs and HEIC/HEIF are
+// left untouched because canvas cannot reliably decode them across browsers.
+var IMAGE_UPLOAD_MAX_EDGE = 1600;
+var IMAGE_UPLOAD_QUALITY = 0.78;
+var IMAGE_UPLOAD_MIN_BYTES = 350 * 1024;
+var IMAGE_UPLOAD_TYPES = { 'image/jpeg': true, 'image/jpg': true, 'image/png': true, 'image/webp': true };
+
+function isCompressibleImage(file) {
+  return !!(file && file.type && IMAGE_UPLOAD_TYPES[String(file.type).toLowerCase()]);
+}
+
+function canvasToBlob(canvas, type, quality) {
+  return new Promise(function(resolve) {
+    if (!canvas.toBlob) return resolve(null);
+    canvas.toBlob(function(blob) { resolve(blob); }, type, quality);
+  });
+}
+
+function loadImageFromFile(file) {
+  return new Promise(function(resolve, reject) {
+    var url = URL.createObjectURL(file);
+    var img = new Image();
+    img.onload = function() {
+      URL.revokeObjectURL(url);
+      resolve(img);
+    };
+    img.onerror = function() {
+      URL.revokeObjectURL(url);
+      reject(new Error('Could not read image'));
+    };
+    img.src = url;
+  });
+}
+
+async function compressImageForUpload(file) {
+  if (!isCompressibleImage(file) || file.size < IMAGE_UPLOAD_MIN_BYTES) return file;
+  try {
+    var img = await loadImageFromFile(file);
+    var width = img.naturalWidth || img.width;
+    var height = img.naturalHeight || img.height;
+    if (!width || !height) return file;
+
+    var scale = Math.min(1, IMAGE_UPLOAD_MAX_EDGE / Math.max(width, height));
+    var targetWidth = Math.max(1, Math.round(width * scale));
+    var targetHeight = Math.max(1, Math.round(height * scale));
+    var canvas = document.createElement('canvas');
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+    var ctx = canvas.getContext('2d');
+    if (!ctx) return file;
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, targetWidth, targetHeight);
+    ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+
+    var blob = await canvasToBlob(canvas, 'image/jpeg', IMAGE_UPLOAD_QUALITY);
+    if (!blob || blob.size <= 0 || blob.size >= file.size) return file;
+    var compressedName = String(file.name || 'upload.jpg').replace(/\.[^.]+$/, '') + '.jpg';
+    return new File([blob], compressedName, { type: 'image/jpeg', lastModified: file.lastModified || Date.now() });
+  } catch (err) {
+    console.warn('Image compression skipped:', file && file.name, err);
+    return file;
+  }
+}
+
 // ── PRICING TABLES ──
 // GROOM_PRICES, FACE_TRIM_PRICES, ADDONS, HOTEL_RATES, DAYCARE_RATES,
 // DAYCARE_EXTRA_RATES, HOTEL_LATE_RATE, MEMBER_DISCOUNT, CONVENIENCE_FEE
@@ -3650,6 +3715,7 @@ async function submitBooking() {
       var _vf = uploadedVaccineFiles[_vi];
       var _vKey = 'vaccine_' + _vi;
       try {
+        var _vUploadFile = await compressImageForUpload(_vf);
         var _vUrlRes = await fetch(GET_UPLOAD_URL, {
           method: 'POST',
           headers: {
@@ -3658,13 +3724,13 @@ async function submitBooking() {
             'apikey':        SUPABASE_ANON_KEY,
           },
           body: JSON.stringify({
-            uploadId: uploadId, fileName: _vf.name, contentType: _vf.type,
-            fileSize: _vf.size, purpose: 'vaccine_document', vaccineKey: _vKey
+            uploadId: uploadId, fileName: _vf.name, contentType: _vUploadFile.type,
+            fileSize: _vUploadFile.size, purpose: 'vaccine_document', vaccineKey: _vKey
           }),
         });
         var _vUrlData = await _vUrlRes.json();
         if (_vUrlData.uploadUrl && _vUrlData.path) {
-          var _vPutRes = await fetch(_vUrlData.uploadUrl, { method: 'PUT', body: _vf, headers: { 'Content-Type': _vf.type } });
+          var _vPutRes = await fetch(_vUrlData.uploadUrl, { method: 'PUT', body: _vUploadFile, headers: { 'Content-Type': _vUploadFile.type } });
           if (!_vPutRes.ok) throw new Error('Upload failed with status ' + _vPutRes.status);
           vaccineDocuments[_vKey] = _vUrlData.path;
           vaccineFileNames[_vKey] = _vf.name;
@@ -3688,6 +3754,7 @@ async function submitBooking() {
       var _pf = uploadedGroomPegs[_pi];
       var _pKey = 'peg_' + _pi;
       try {
+        var _pUploadFile = await compressImageForUpload(_pf);
         var _pUrlRes = await fetch(GET_UPLOAD_URL, {
           method: 'POST',
           headers: {
@@ -3696,13 +3763,13 @@ async function submitBooking() {
             'apikey':        SUPABASE_ANON_KEY,
           },
           body: JSON.stringify({
-            uploadId: pegUploadId, fileName: _pf.name, contentType: _pf.type,
-            fileSize: _pf.size, purpose: 'grooming_reference', vaccineKey: _pKey
+            uploadId: pegUploadId, fileName: _pf.name, contentType: _pUploadFile.type,
+            fileSize: _pUploadFile.size, purpose: 'grooming_reference', vaccineKey: _pKey
           }),
         });
         var _pUrlData = await _pUrlRes.json();
         if (_pUrlData.uploadUrl && _pUrlData.path) {
-          var _pPutRes = await fetch(_pUrlData.uploadUrl, { method: 'PUT', body: _pf, headers: { 'Content-Type': _pf.type } });
+          var _pPutRes = await fetch(_pUrlData.uploadUrl, { method: 'PUT', body: _pUploadFile, headers: { 'Content-Type': _pUploadFile.type } });
           if (!_pPutRes.ok) throw new Error('Upload failed with status ' + _pPutRes.status);
           groomReferenceImages[_pKey] = _pUrlData.path;
           groomReferenceFileNames[_pKey] = _pf.name;
@@ -3717,19 +3784,20 @@ async function submitBooking() {
   var paymentReceiptPath = null, paymentReceiptName = null, paymentReceiptUploadToken = null;
   if (!IS_WALKIN && PAYMENT_GATEWAY_PROVIDER === 'manual' && paymentReceiptFile) {
     try {
+      var _receiptUploadFile = await compressImageForUpload(paymentReceiptFile);
       var _rId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : 'receipt-' + Date.now();
       var _rRes = await fetch(GET_UPLOAD_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SUPABASE_ANON_KEY, 'apikey': SUPABASE_ANON_KEY },
         body: JSON.stringify({
           uploadId: _rId, fileName: paymentReceiptFile.name,
-          contentType: paymentReceiptFile.type, fileSize: paymentReceiptFile.size,
+          contentType: _receiptUploadFile.type, fileSize: _receiptUploadFile.size,
           purpose: 'manual_payment_receipt', vaccineKey: 'receipt'
         }),
       });
       var _rData = await _rRes.json();
       if (_rData.uploadUrl && _rData.path) {
-        await fetch(_rData.uploadUrl, { method: 'PUT', body: paymentReceiptFile, headers: { 'Content-Type': paymentReceiptFile.type } });
+        await fetch(_rData.uploadUrl, { method: 'PUT', body: _receiptUploadFile, headers: { 'Content-Type': _receiptUploadFile.type } });
         paymentReceiptPath = _rData.path;
         paymentReceiptName = paymentReceiptFile.name;
         paymentReceiptUploadToken = _rData.authorizationToken || null;

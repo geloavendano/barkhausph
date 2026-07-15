@@ -13,6 +13,13 @@ teammates. Keep entries short and current.
 
 ## Handoffs
 
+- 2026-07-15 - Codex: stopped destructive upload cleanup in `get-upload-url` so
+  booking attachments in the `vaccine-docs` bucket are not auto-deleted just because
+  their upload authorization expired. Added browser-side compression for JPEG/PNG/WEBP
+  vaccine records, grooming pegs, and manual receipts before upload; PDFs and HEIC/HEIF
+  intentionally remain untouched. HUMAN TODO: push/static publish for `booking.js`, then
+  manually deploy `supabase functions deploy get-upload-url`. No DDL and no PostgREST
+  schema reload needed.
 - 2026-07-09 - Claude: booking-info consistency audit + fixes. Root issue: online
   bookings only got most child records from the full webhook, so recovered ones were
   incomplete and online grooming pegs were dropped entirely; walk-ins had no

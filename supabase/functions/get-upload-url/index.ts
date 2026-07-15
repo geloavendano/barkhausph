@@ -1,8 +1,13 @@
 // get-upload-url
 // Called by the booking form before submit-booking is invoked.
 // The client generates a random uploadId (UUID), uploads files here,
-// then passes the resulting paths to submit-booking, which inserts
-// vaccine_documents rows and, for manual transfer receipts, a payments row.
+// then passes the resulting paths to submit-booking/create-maya-checkout, which
+// inserts vaccine_documents, grooming_reference_images, and payment rows.
+//
+// Important: this function must not delete storage objects. Booking attachments
+// are part of the customer record, including cancelled bookings. Unclaimed
+// pending_uploads rows may expire as authorizations, but uploaded files should
+// only be removed by an explicit human/admin retention workflow.
 //
 // Request body:
 //   { uploadId: string, fileName: string, contentType: string, vaccineKey?: string }
@@ -51,21 +56,6 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
-    const now = new Date().toISOString();
-    const { data: expiredUploads } = await supabase.from("pending_uploads")
-      .select("id,bucket_id,object_path")
-      .lt("expires_at", now)
-      .is("consumed_at", null)
-      .limit(50);
-    for (const upload of expiredUploads ?? []) {
-      await supabase.storage.from(upload.bucket_id).remove([upload.object_path]);
-    }
-    if (expiredUploads?.length) {
-      await supabase.from("pending_uploads")
-        .delete()
-        .in("id", expiredUploads.map((upload: any) => upload.id));
-    }
-
     const { uploadId, fileName, contentType, fileSize, purpose, vaccineKey } = await req.json();
 
     // ── Validate inputs ──
