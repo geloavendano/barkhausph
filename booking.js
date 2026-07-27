@@ -1398,8 +1398,16 @@ async function renderGroomSlots() {
     return ranges;
   }
 
+  // Public site: when booking for today, hide slots whose start time has already
+  // passed. Walk-in (admin) is exempt — staff may log a booking after the service
+  // was rendered.
+  var _todayStr      = localDateStr();
+  var _nowMins       = (function(){ var n = new Date(); return n.getHours() * 60 + n.getMinutes(); })();
+  var _hidePastSlots = !IS_WALKIN && booking.groomDate === _todayStr;
+
   var availableSlots = ALL_SLOTS.filter(function(slot) {
     var candStart = slotToMins(slot);
+    if (_hidePastSlots && candStart <= _nowMins) return false;
     var candEnd   = candStart + myDuration;
     function canServe(groomer) {
       var window = serviceWindowForGroomer(serviceHours, groomer.id);
