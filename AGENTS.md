@@ -102,8 +102,9 @@ avoid a follow-up bot commit.
   input focus loss). Hoist to module scope or call step renderers as plain functions.
 - **Pricing**: every rate lives in the `pricing` DB table; both frontends hydrate at
   runtime (`pricing.js`, `admin-src/src/lib/pricing.js` - keep their logic in sync!).
-  Hotel price key = **cage type x weekday/weekend** (Fri/Sat/Sun = weekend), not pet
-  size. Daycare = base (first 3 h) + per-size hourly extras.
+  Hotel price key = **cage type x weekday/weekend**, not pet size. Fri/Sat/Sun are
+  weekend by default, and active rows in `rate_calendar` can override holidays to the
+  weekend rate. Daycare = base (first 3 h) + per-size hourly extras.
 - **Soft deletes everywhere**: resources/blocks via `active=false`, bookings via
   status `cancelled`. Inactive resources must vanish from pickers but historical
   bookings still render their names.

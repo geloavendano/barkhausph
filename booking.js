@@ -362,6 +362,13 @@ async function loadPricing() {
   try {
     var rows = await sbFetchPublic('pricing', 'select=category,service_key,size_key,day_type,membership_type,price');
     loadPricingData(rows);
+    try {
+      var calendarRows = await sbFetchPublic('rate_calendar', 'select=rate_date,label,holiday_type,rate_day_type,active&active=eq.true');
+      loadRateCalendarData(calendarRows);
+    } catch(calendarErr) {
+      console.warn('Rate calendar fetch failed; using weekday/weekend defaults:', calendarErr);
+      loadRateCalendarData([]);
+    }
     // Manual transfer charges no convenience fee. Hosted providers use the
     // configured pricing-table fee when enabled later.
     if (IS_WALKIN || PAYMENT_GATEWAY_PROVIDER === 'manual') CONVENIENCE_FEE = 0;
@@ -1863,9 +1870,7 @@ function buildPickupTimeOptions() {
 function hotelLateCharge(pickupHour, checkoutDate, rateSize) {
   var hour = parseInt(pickupHour) || 14;
   if (hour > 20) {
-    var checkout = checkoutDate ? new Date(checkoutDate + ' 00:00:00') : null;
-    var dow = checkout && !isNaN(checkout.getTime()) ? checkout.getDay() : 1;
-    var dayType = (dow === 0 || dow === 5 || dow === 6) ? 'weekend' : 'weekday';
+    var dayType = hotelDayType(checkoutDate);
     return {
       amount: (HOTEL_RATES[dayType] && HOTEL_RATES[dayType][rateSize]) || 0,
       additionalNight: true,
@@ -1901,11 +1906,9 @@ function calcHotelTotal() {
 
   var wdCount = 0, weCount = 0, wdTotal = 0, weTotal = 0;
   for (var i = 0; i < nights; i++) {
-    var d   = new Date(cin + ' 00:00:00'); d.setDate(d.getDate() + i);
-    var dow = d.getDay();
-    var isWe = (dow === 0 || dow === 5 || dow === 6);
-    if (isWe) { weCount++; weTotal += HOTEL_RATES.weekend[rateSize]||0; }
-    else       { wdCount++; wdTotal += HOTEL_RATES.weekday[rateSize]||0; }
+    var dayType = hotelDayType(hotelDatePlusDays(cin, i));
+    if (dayType === 'weekend') { weCount++; weTotal += HOTEL_RATES.weekend[rateSize]||0; }
+    else                       { wdCount++; wdTotal += HOTEL_RATES.weekday[rateSize]||0; }
   }
   var baseTotal = wdTotal + weTotal;
   booking.hotelBaseTotal = baseTotal;
@@ -2697,11 +2700,9 @@ function buildSummary() {
       var totalNights = Math.round((new Date(cout+' 00:00:00') - new Date(cin+' 00:00:00')) / 86400000);
       var wdCount = 0, weCount = 0, wdTotal = 0, weTotal = 0;
       for (var i = 0; i < totalNights; i++) {
-        var d = new Date(cin + ' 00:00:00'); d.setDate(d.getDate() + i);
-        var dow = d.getDay();
-        var isWe = (dow === 0 || dow === 5 || dow === 6);
-        if (isWe) { weCount++; weTotal += HOTEL_RATES.weekend[rateSize]||0; }
-        else       { wdCount++; wdTotal += HOTEL_RATES.weekday[rateSize]||0; }
+        var dayType = hotelDayType(hotelDatePlusDays(cin, i));
+        if (dayType === 'weekend') { weCount++; weTotal += HOTEL_RATES.weekend[rateSize]||0; }
+        else                       { wdCount++; wdTotal += HOTEL_RATES.weekday[rateSize]||0; }
       }
       if (wdCount > 0) {
         var wdRate = HOTEL_RATES.weekday[rateSize]||0;
@@ -2916,10 +2917,9 @@ function renderSuccessDetails(snap, detailsId, priceId) {
       var nights   = Math.round((new Date(cout+' 00:00:00') - new Date(cin+' 00:00:00')) / 86400000);
       var wdCnt=0, weCnt=0, wdTot=0, weTot=0;
       for (var ni=0; ni<nights; ni++) {
-        var nd = new Date(cin+' 00:00:00'); nd.setDate(nd.getDate()+ni);
-        var dow = nd.getDay(); var isWe = (dow===0||dow===5||dow===6);
-        if (isWe) { weCnt++; weTot += (HOTEL_RATES&&HOTEL_RATES.weekend&&HOTEL_RATES.weekend[rateSize])||0; }
-        else      { wdCnt++; wdTot += (HOTEL_RATES&&HOTEL_RATES.weekday&&HOTEL_RATES.weekday[rateSize])||0; }
+        var dayType = hotelDayType(hotelDatePlusDays(cin, ni));
+        if (dayType === 'weekend') { weCnt++; weTot += (HOTEL_RATES&&HOTEL_RATES.weekend&&HOTEL_RATES.weekend[rateSize])||0; }
+        else                       { wdCnt++; wdTot += (HOTEL_RATES&&HOTEL_RATES.weekday&&HOTEL_RATES.weekday[rateSize])||0; }
       }
       if (wdCnt > 0) {
         var wdRate = (HOTEL_RATES&&HOTEL_RATES.weekday&&HOTEL_RATES.weekday[rateSize])||0;

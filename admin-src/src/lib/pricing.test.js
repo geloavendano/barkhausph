@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { calcLate, calcTotal, emptyPricing, isHotelAdditionalNight, parsePricing } from './pricing.js'
+import { calcLate, calcTotal, emptyPricing, isHotelAdditionalNight, parsePricing, parseRateCalendar } from './pricing.js'
 
 function hotelBooking(overrides = {}) {
   return {
@@ -19,6 +19,14 @@ const pricing = parsePricing([
   { category: 'hotel', service_key: null, size_key: 'small_dog', day_type: 'weekend', price: 800 },
 ], emptyPricing())
 
+function pricingWithCalendar(rows) {
+  return parseRateCalendar(rows, parsePricing([
+    { category: 'hotel', service_key: 'late_pickup', size_key: null, day_type: null, price: 100 },
+    { category: 'hotel', service_key: null, size_key: 'small_dog', day_type: 'weekday', price: 700 },
+    { category: 'hotel', service_key: null, size_key: 'small_dog', day_type: 'weekend', price: 800 },
+  ], emptyPricing()))
+}
+
 test('hotel pickup through 8 PM remains hourly', () => {
   const booking = hotelBooking({ hpickHour: 20 })
   assert.equal(calcLate(booking, pricing), 600)
@@ -31,6 +39,29 @@ test('hotel pickup after 8 PM uses the checkout-date nightly rate', () => {
   assert.equal(calcLate(weekday, pricing), 700)
   assert.equal(calcLate(weekend, pricing), 800)
   assert.equal(isHotelAdditionalNight(weekday), true)
+})
+
+test('hotel pricing treats configured holidays as weekend-rate nights', () => {
+  const holidayPricing = pricingWithCalendar([
+    { rate_date: '2026-07-01', label: 'Sample weekday holiday', holiday_type: 'regular_holiday', rate_day_type: 'weekend', active: true },
+  ])
+  const booking = hotelBooking({
+    hcin: '2026-07-01',
+    hcout: '2026-07-02',
+    hpickHour: 14,
+  })
+  assert.equal(calcTotal(booking, holidayPricing).base, 800)
+})
+
+test('hotel pickup after 8 PM uses holiday rate on checkout date', () => {
+  const holidayPricing = pricingWithCalendar([
+    { rate_date: '2026-07-01', label: 'Sample weekday holiday', holiday_type: 'regular_holiday', rate_day_type: 'weekend', active: true },
+  ])
+  const booking = hotelBooking({
+    hcout: '2026-07-01',
+    hpickHour: 21,
+  })
+  assert.equal(calcLate(booking, holidayPricing), 800)
 })
 
 test('hotel membership discount excludes late pickup', () => {

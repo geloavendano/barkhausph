@@ -10,7 +10,7 @@ import {
   sbPatchAudit,
   sbPostAudit,
 } from '../../lib/adminAudit'
-import { parsePricing, emptyPricing, calcBase, calcLate, calcTotal, calcNights, calcHotelBreakdown, calcDaycare, hotelSizeKey, isHotelAdditionalNight } from '../../lib/pricing'
+import { parsePricing, parseRateCalendar, emptyPricing, calcBase, calcLate, calcTotal, calcNights, calcHotelBreakdown, calcDaycare, hotelSizeKey, isHotelAdditionalNight } from '../../lib/pricing'
 import { groomDurationMins } from '../../lib/grooming'
 import { availableGroomingSlots, availableHotelRooms, availableStudioSlots, buildGroomingSlots } from '../../lib/availability'
 import styles from './AddBookingPanel.module.css'
@@ -247,8 +247,11 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
 
   // Load pricing once
   useEffect(() => {
-    sbGet('pricing', 'select=category,service_key,size_key,day_type,membership_type,price')
-      .then(rows => setPricing(parsePricing(rows)))
+    Promise.all([
+      sbGet('pricing', 'select=category,service_key,size_key,day_type,membership_type,price'),
+      sbGet('rate_calendar', 'select=rate_date,label,holiday_type,rate_day_type,active&active=eq.true').catch(() => []),
+    ])
+      .then(([pricingRows, calendarRows]) => setPricing(parseRateCalendar(calendarRows, parsePricing(pricingRows))))
       .catch(() => {})
   }, [])
 
@@ -1005,9 +1008,8 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
           </FG>
         </div>
         {nights > 0 && (() => {
-          const sk      = hotelSizeKey(bk)
-          const wdRate  = pricing.hotel['weekday']?.[sk] ?? 0
-          const estBase = wdRate * nights
+          const bd      = calcHotelBreakdown(bk, pricing)
+          const estBase = (bd?.weekday.total ?? 0) + (bd?.weekend.total ?? 0)
           const late    = calcLate(bk, pricing)
           const roomLabelMap = {
             small_cage: 'Small Cage rate', medium_cage: 'Medium Cage rate',
@@ -1019,7 +1021,7 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
           return (
             <IBox>
               {nights} night{nights !== 1 ? 's' : ''} — est. {fmt(estBase + late)}
-              <span style={{ fontSize: 10, opacity: 0.65, marginLeft: 6 }}>({basisLbl}; weekday)</span>
+              <span style={{ fontSize: 10, opacity: 0.65, marginLeft: 6 }}>({basisLbl}; actual day rates)</span>
             </IBox>
           )
         })()}
@@ -1349,7 +1351,7 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
           if (!bd) return null
           return <>
             {bd.weekday.count > 0 && <SRow k={`Weekday (${bd.weekday.count} night${bd.weekday.count !== 1 ? 's' : ''})`} v={fmt(bd.weekday.total)} />}
-            {bd.weekend.count > 0 && <SRow k={`Weekend (${bd.weekend.count} night${bd.weekend.count !== 1 ? 's' : ''})`} v={fmt(bd.weekend.total)} />}
+            {bd.weekend.count > 0 && <SRow k={`Weekend/Holiday (${bd.weekend.count} night${bd.weekend.count !== 1 ? 's' : ''})`} v={fmt(bd.weekend.total)} />}
             {late > 0 && <SRow k={isHotelAdditionalNight(bk) ? 'Additional night (pickup after 8 PM)' : 'Late pickup fee'} v={fmt(late)} />}
           </>
         })()}

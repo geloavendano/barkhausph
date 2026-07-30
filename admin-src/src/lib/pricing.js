@@ -28,6 +28,7 @@ export function emptyPricing() {
     disc:    { grooming:0, hotel:0, daycare:0 },
     renewalDisc: {},
     fee:     0,
+    rateCalendar: {},
     loaded:  false,
   }
 }
@@ -63,11 +64,55 @@ export function parsePricing(rows, base = null) {
   return p
 }
 
+export function parseRateCalendar(rows, base = null) {
+  const p = base ?? emptyPricing()
+  p.rateCalendar = {}
+  for (const r of (rows ?? [])) {
+    if (!r?.rate_date || r.active === false) continue
+    p.rateCalendar[String(r.rate_date).slice(0, 10)] = {
+      label: r.label ?? '',
+      holidayType: r.holiday_type ?? '',
+      rateDayType: r.rate_day_type ?? 'weekend',
+    }
+  }
+  return p
+}
+
 // ── Cost helpers ──
 
 export function calcNights(bk) {
   if (!bk.hcin || !bk.hcout) return 0
   return Math.max(0, Math.round((new Date(bk.hcout) - new Date(bk.hcin)) / 86400000))
+}
+
+function hotelDate(value) {
+  if (value instanceof Date) return new Date(value.getFullYear(), value.getMonth(), value.getDate())
+  const [year, month, day] = String(value ?? '').slice(0, 10).split('-').map(Number)
+  if (!year || !month || !day) return null
+  return new Date(year, month - 1, day)
+}
+
+function hotelDateKey(value) {
+  if (typeof value === 'string') return value.slice(0, 10)
+  const d = hotelDate(value)
+  if (!d || Number.isNaN(d.getTime())) return ''
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function hotelDatePlusDays(value, days) {
+  const d = hotelDate(value)
+  if (!d || Number.isNaN(d.getTime())) return null
+  d.setDate(d.getDate() + days)
+  return d
+}
+
+export function hotelDayType(value, p = null) {
+  const key = hotelDateKey(value)
+  const override = key ? p?.rateCalendar?.[key] : null
+  if (override?.rateDayType) return override.rateDayType
+  const d = hotelDate(value)
+  const dw = d && !Number.isNaN(d.getTime()) ? d.getDay() : 1
+  return dw === 0 || dw === 5 || dw === 6 ? 'weekend' : 'weekday'
 }
 
 // Hotel pricing key is determined by ROOM TYPE, mirroring the public booking flow.
@@ -93,11 +138,8 @@ export function calcHotelBreakdown(bk, p) {
   const wdRate = p.hotel['weekday']?.[sk] ?? 0
   const weRate = p.hotel['weekend']?.[sk] ?? 0
   let wdCount = 0, weCount = 0
-  const d0 = new Date(bk.hcin)
   for (let i = 0; i < n; i++) {
-    const d = new Date(d0); d.setDate(d.getDate() + i)
-    const dw = d.getDay()
-    if (dw === 0 || dw === 5 || dw === 6) weCount++
+    if (hotelDayType(hotelDatePlusDays(bk.hcin, i), p) === 'weekend') weCount++
     else wdCount++
   }
   return {
@@ -111,11 +153,8 @@ export function calcHotel(bk, p) {
   if (!n) return 0
   const sk = hotelSizeKey(bk)
   let tot = 0
-  const d0 = new Date(bk.hcin)
   for (let i = 0; i < n; i++) {
-    const d = new Date(d0); d.setDate(d.getDate() + i)
-    const dw = d.getDay()
-    tot += (p.hotel[dw === 0 || dw === 5 || dw === 6 ? 'weekend' : 'weekday']?.[sk]) ?? 0
+    tot += (p.hotel[hotelDayType(hotelDatePlusDays(bk.hcin, i), p)]?.[sk]) ?? 0
   }
   return tot
 }
@@ -124,9 +163,7 @@ export function calcLate(bk, p) {
   if (bk.svc !== 'hotel') return 0
   const pickupHour = parseInt(bk.hpickHour) || 14
   if (pickupHour > 20) {
-    const checkout = bk.hcout ? new Date(`${bk.hcout}T00:00:00`) : null
-    const day = checkout && !Number.isNaN(checkout.getTime()) ? checkout.getDay() : 1
-    const dayType = day === 0 || day === 5 || day === 6 ? 'weekend' : 'weekday'
+    const dayType = hotelDayType(bk.hcout, p)
     return p.hotel[dayType]?.[hotelSizeKey(bk)] ?? 0
   }
   return Math.max(0, pickupHour - 14) * (p.lateRate ?? 0)

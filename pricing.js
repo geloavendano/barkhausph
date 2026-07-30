@@ -38,6 +38,7 @@ var HOTEL_LATE_RATE     = 0;
 var MEMBER_DISCOUNT     = { grooming:0, hotel:0, daycare:0 };
 var RENEWAL_MEMBER_DISCOUNT = {};
 var CONVENIENCE_FEE     = 0;
+var HOTEL_RATE_CALENDAR = {};
 
 /**
  * True once loadPricingData() has successfully processed at least one row.
@@ -82,6 +83,50 @@ function loadPricingData(rows) {
     }
   });
   _pricingLoaded = true;
+}
+
+function loadRateCalendarData(rows) {
+  HOTEL_RATE_CALENDAR = {};
+  (rows || []).forEach(function(r) {
+    if (!r || !r.rate_date || r.active === false) return;
+    HOTEL_RATE_CALENDAR[String(r.rate_date).slice(0, 10)] = {
+      label: r.label || '',
+      holidayType: r.holiday_type || '',
+      rateDayType: r.rate_day_type || 'weekend'
+    };
+  });
+}
+
+function hotelDate(dateValue) {
+  if (dateValue instanceof Date) return new Date(dateValue.getFullYear(), dateValue.getMonth(), dateValue.getDate());
+  var parts = String(dateValue || '').slice(0, 10).split('-').map(function(part) { return parseInt(part, 10); });
+  if (parts.length !== 3 || parts.some(function(part) { return isNaN(part); })) return null;
+  return new Date(parts[0], parts[1] - 1, parts[2]);
+}
+
+function hotelDateKey(dateValue) {
+  if (typeof dateValue === 'string') return dateValue.slice(0, 10);
+  var d = hotelDate(dateValue);
+  if (!d || isNaN(d.getTime())) return '';
+  var m = String(d.getMonth() + 1).padStart(2, '0');
+  var day = String(d.getDate()).padStart(2, '0');
+  return d.getFullYear() + '-' + m + '-' + day;
+}
+
+function hotelDatePlusDays(dateValue, days) {
+  var d = hotelDate(dateValue);
+  if (!d || isNaN(d.getTime())) return null;
+  d.setDate(d.getDate() + days);
+  return d;
+}
+
+function hotelDayType(dateValue) {
+  var key = hotelDateKey(dateValue);
+  var override = key ? HOTEL_RATE_CALENDAR[key] : null;
+  if (override && override.rateDayType) return override.rateDayType;
+  var d = hotelDate(dateValue);
+  var dow = d && !isNaN(d.getTime()) ? d.getDay() : 1;
+  return (dow === 0 || dow === 5 || dow === 6) ? 'weekend' : 'weekday';
 }
 
 function memberDiscountRate(service, membershipType) {
