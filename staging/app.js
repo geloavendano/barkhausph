@@ -11,8 +11,10 @@
   var accountForm = document.getElementById('stagingAccountForm');
   var entryTitle = document.getElementById('stagingEntryTitle');
   var entryIntro = document.getElementById('stagingEntryIntro');
+  var signinNote = document.querySelector('.staging-account-signin-note');
   var accountDraft = null;
   var petDocumentsDraft = [];
+  var verifiedMembership = null;
 
   function readCustomer() {
     return CustomerApi && CustomerApi.profile ? CustomerApi.profile() : null;
@@ -75,6 +77,7 @@
     accountForm.hidden = true;
     accountForm.innerHTML = '';
     if (entryIntro) entryIntro.hidden = false;
+    if (signinNote) signinNote.hidden = false;
     entryTitle.textContent = isAccountPage ? 'Create your account' : 'How would you like to continue?';
     modalCard(entryModal).classList.remove('staging-modal--wide');
     accountDraft = null;
@@ -119,6 +122,7 @@
     choices.hidden = true;
     accountForm.hidden = false;
     if (entryIntro) entryIntro.hidden = true;
+    if (signinNote) signinNote.hidden = true;
     entryTitle.textContent = isAccountPage ? 'Create an account with email' : 'Sign in with email';
     accountForm.innerHTML =
       '<p class="staging-modal-copy">Enter your email and we’ll send you a secure one-time code.</p>' +
@@ -129,10 +133,12 @@
   }
 
   function showOtpForm(email) {
+    choices.hidden = true;
+    if (signinNote) signinNote.hidden = true;
     entryTitle.textContent = isAccountPage ? 'Verify your email' : 'Enter your code';
     accountForm.innerHTML =
-      '<p class="staging-modal-copy">Enter the six-digit code we sent to <strong>' + escapeHtml(email) + '</strong>.</p>' +
-      '<label class="staging-field-label">One-time code<input class="staging-field" id="stagingOtp" inputmode="numeric" autocomplete="one-time-code" value="" maxlength="6"></label>' +
+      '<p class="staging-modal-copy">Enter the one-time code we sent to <strong>' + escapeHtml(email) + '</strong>.</p>' +
+      '<label class="staging-field-label">One-time code<input class="staging-field staging-otp-field" id="stagingOtp" inputmode="numeric" autocomplete="one-time-code" value="" minlength="6" maxlength="10"></label>' +
       '<div class="staging-form-error" id="entryFormError" hidden></div>' +
       '<button class="staging-primary" type="button" data-verify-otp data-email="' + escapeHtml(email) + '">Verify code</button>' +
       '<button class="staging-secondary" type="button" data-entry-back>Back</button>';
@@ -143,6 +149,7 @@
     choices.hidden = true;
     accountForm.hidden = false;
     if (entryIntro) entryIntro.hidden = true;
+    if (signinNote) signinNote.hidden = true;
     modalCard(entryModal).classList.add('staging-modal--wide');
     showOwnerSetup();
   }
@@ -191,7 +198,7 @@
       '<p class="staging-modal-copy">Add your pet once, then choose them during future bookings and we’ll fill in their details for you.</p>' +
       petEditorMarkup(defaultPet(), 'Create account') +
       '<div class="staging-form-actions"><button class="staging-secondary" type="button" data-owner-back>Back</button><button class="staging-primary" type="button" data-complete-account>Create account</button></div>';
-    renderProfileVaccineGrid('dog', {});
+    renderProfileVaccineGrid('dog', {}, {});
     renderDocumentList();
   }
 
@@ -200,7 +207,7 @@
       id: '', name: '', animal: 'dog', breed: '',
       gender: 'female', size: 'small_dog', age: '', ageUnit: 'years',
       temperament: 'friendly_all', medical: '', feeding: '', medications: '',
-      membershipId: '', vaccineValidUntil: '', vaccines: {}, vaccineDocuments: [],
+      membershipId: '', vaccines: {}, vaccineValidity: {}, vaccineDocuments: [],
       bringRecords: false, vetClinic: '', vetContact: '', vetAddress: '',
       emergencyName: '', emergencyPhone: ''
     };
@@ -217,6 +224,7 @@
   }
 
   function petEditorMarkup(pet) {
+    verifiedMembership = null;
     petDocumentsDraft = (pet.vaccineDocuments || []).map(function (document) {
       if (typeof document === 'string') return { id: null, name: document, file: null };
       return { id: document.id || null, name: document.name || 'Vaccine document', file: null };
@@ -240,16 +248,16 @@
         '</div>' +
       '</div>' +
       '<div class="staging-profile-section"><p class="staging-profile-section-title">Vaccination record</p>' +
-        '<p class="staging-profile-help">Mark every vaccine that is currently up to date.</p>' +
+        '<p class="staging-profile-help">Mark every vaccine that is current and add its own valid-until date.</p>' +
         '<div class="staging-check-grid" id="profileVaccineGrid"></div>' +
-        field('Record valid until', 'profileVaccineValidUntil', pet.vaccineValidUntil, 'date', false) +
         '<label class="staging-document-upload">📎 <strong>Add vaccine documents</strong><span>JPG, PNG, WEBP, PDF or HEIC · up to 10 MB each</span><input type="file" data-profile-docs multiple accept="image/*,.pdf,.heic,.heif"></label>' +
         '<div class="staging-document-list" id="profileDocumentList"></div>' +
         '<label class="staging-inline-check"><input type="checkbox" id="profileBringRecords" ' + (pet.bringRecords ? 'checked' : '') + '><span>I will bring the original vaccination record to Barkhaus.</span></label>' +
       '</div>' +
       '<div class="staging-profile-section"><p class="staging-profile-section-title">Membership</p>' +
-        field('Barkhaus membership code', 'profileMembershipId', pet.membershipId, 'text', false) +
-        '<p class="staging-profile-help">The code will be checked against the selected branch during booking.</p>' +
+        '<div class="staging-membership-check">' + field('Barkhaus membership code', 'profileMembershipId', pet.membershipId, 'text', false, 'autocomplete="off"') +
+        '<button class="staging-secondary" type="button" data-validate-profile-membership>Validate code</button></div>' +
+        '<p class="staging-profile-help" id="profileMembershipStatus">We’ll verify that the code is active and belongs to this pet. Branch eligibility is checked when you book.</p>' +
       '</div>' +
       '<div class="staging-profile-section"><p class="staging-profile-section-title">Veterinary &amp; emergency contacts</p>' +
         '<div class="staging-field-grid">' +
@@ -279,11 +287,25 @@
     return checks;
   }
 
-  function renderProfileVaccineGrid(animal, saved) {
+  function currentVaccineValidity() {
+    var validity = {};
+    document.querySelectorAll('#profileVaccineGrid [data-vaccine-validity]').forEach(function (input) {
+      validity[input.getAttribute('data-vaccine-validity')] = String(input.value || '').trim();
+    });
+    return validity;
+  }
+
+  function renderProfileVaccineGrid(animal, saved, savedValidity) {
     var grid = document.getElementById('profileVaccineGrid');
     if (!grid) return;
+    saved = saved || {};
+    savedValidity = savedValidity || {};
     grid.innerHTML = vaccineDefinitions(animal).map(function (vaccine) {
-      return '<label class="staging-vaccine-check"><input type="checkbox" data-vaccine-key="' + vaccine.key + '" ' + (saved[vaccine.key] ? 'checked' : '') + '><span>' + escapeHtml(vaccine.label) + '</span></label>';
+      var checked = saved[vaccine.key] === true;
+      return '<div class="staging-vaccine-row">' +
+        '<label class="staging-vaccine-check"><input type="checkbox" data-vaccine-key="' + vaccine.key + '" ' + (checked ? 'checked' : '') + '><span>' + escapeHtml(vaccine.label) + '</span></label>' +
+        '<label class="staging-vaccine-validity"><span>Valid until</span><input class="staging-field" type="date" data-vaccine-validity="' + vaccine.key + '" value="' + escapeHtml(savedValidity[vaccine.key] || '') + '" ' + (checked ? '' : 'disabled') + '></label>' +
+      '</div>';
     }).join('');
   }
 
@@ -301,7 +323,7 @@
     document.getElementById('profilePetSize').value = pet.size || (pet.animal === 'cat' ? 'cat' : 'small_dog');
     document.getElementById('profilePetAgeUnit').value = pet.ageUnit || 'years';
     document.getElementById('profilePetTemperament').value = pet.temperament || 'friendly_all';
-    renderProfileVaccineGrid(pet.animal || 'dog', pet.vaccines || {});
+    renderProfileVaccineGrid(pet.animal || 'dog', pet.vaccines || {}, pet.vaccineValidity || {});
     renderDocumentList();
   }
 
@@ -317,14 +339,30 @@
     }
     var size = value('profilePetSize');
     if (animal === 'cat') size = 'cat';
+    var vaccines = currentVaccineChecks();
+    var vaccineValidity = currentVaccineValidity();
+    var missingVaccineDate = Object.keys(vaccines).some(function (key) {
+      return vaccines[key] && !vaccineValidity[key];
+    });
+    if (missingVaccineDate) {
+      showPetFormError('Add a valid-until date for every vaccine marked as current.');
+      return null;
+    }
+    var expiredVaccine = Object.keys(vaccines).some(function (key) {
+      return vaccines[key] && vaccineValidity[key] && new Date(vaccineValidity[key] + 'T23:59:59') < new Date();
+    });
+    if (expiredVaccine) {
+      showPetFormError('A vaccine marked as current has already expired. Update its valid-until date.');
+      return null;
+    }
     return {
       id: existing && existing.id ? existing.id : null,
       name: name, animal: animal, breed: breed,
       gender: value('profilePetGender'), size: size, age: age,
       ageUnit: value('profilePetAgeUnit'), temperament: temperament,
       medical: value('profilePetMedical'), feeding: value('profilePetFeeding'),
-      medications: value('profilePetMedications'), vaccines: currentVaccineChecks(),
-      vaccineValidUntil: value('profileVaccineValidUntil'),
+      medications: value('profilePetMedications'), vaccines: vaccines,
+      vaccineValidity: vaccineValidity,
       vaccineDocuments: petDocumentsDraft.filter(function (document) { return document.id; }).map(function (document) {
         return { id: document.id, name: document.name };
       }),
@@ -336,9 +374,64 @@
     };
   }
 
+  function normalizedProfilePetName(name) {
+    return String(name || '').trim().replace(/\s+/g, ' ').toLowerCase();
+  }
+
+  function setMembershipStatus(message, state) {
+    var status = document.getElementById('profileMembershipStatus');
+    if (!status) return;
+    status.textContent = message;
+    status.setAttribute('data-state', state || 'neutral');
+  }
+
+  async function validateProfileMembership(pet) {
+    var code = String((pet && pet.membershipId) || '').trim().toUpperCase();
+    var petName = String((pet && pet.name) || '').trim();
+    if (!code) {
+      verifiedMembership = null;
+      setMembershipStatus('Membership is optional. You can add a code later from your account.', 'neutral');
+      return true;
+    }
+    if (code.length < 4) {
+      setMembershipStatus('Enter the complete Barkhaus membership code.', 'error');
+      return false;
+    }
+    if (!petName) {
+      setMembershipStatus('Enter the pet name before validating the membership code.', 'error');
+      return false;
+    }
+
+    var normalizedName = normalizedProfilePetName(petName);
+    if (verifiedMembership && verifiedMembership.code === code && verifiedMembership.petName === normalizedName) return true;
+
+    var button = document.querySelector('[data-validate-profile-membership]');
+    if (button) { button.disabled = true; button.textContent = 'Checking…'; }
+    setMembershipStatus('Checking this membership…', 'checking');
+    try {
+      var membership = await requireCustomerApi().validateMembership(code, petName);
+      if (!membership || !membership.code) throw new Error('This Barkhaus membership code could not be verified.');
+      pet.membershipId = membership.code;
+      var input = document.getElementById('profileMembershipId');
+      if (input) input.value = membership.code;
+      verifiedMembership = { code: membership.code, petName: normalizedName };
+      setMembershipStatus('Membership verified for ' + petName + (membership.validUntil ? ' · valid until ' + membership.validUntil : '') + ' ✓', 'success');
+      return true;
+    } catch (error) {
+      verifiedMembership = null;
+      setMembershipStatus(error.message || 'We could not validate this membership. Please try again.', 'error');
+      var status = document.getElementById('profileMembershipStatus');
+      if (status) status.scrollIntoView({ behavior:'smooth', block:'center' });
+      return false;
+    } finally {
+      if (button) { button.disabled = false; button.textContent = 'Validate code'; }
+    }
+  }
+
   async function finishAccount() {
     var pet = collectPetForm(null);
     if (!pet) return;
+    if (!(await validateProfileMembership(pet))) return;
     var owner = accountDraft.owner;
     var button = document.querySelector('[data-complete-account]');
     if (button) { button.disabled = true; button.textContent = 'Creating account…'; }
@@ -346,7 +439,7 @@
       var api = requireCustomerApi();
       await api.saveOwner(owner);
       var result = await api.savePet(pet);
-      await api.uploadDocuments(result.petId, petDocumentsDraft, pet.vaccineValidUntil);
+      await api.uploadDocuments(result.petId, petDocumentsDraft);
       localStorage.setItem(MODE_KEY, 'account');
       window.location.href = '/staging/?account=created';
     } catch (error) {
@@ -428,11 +521,12 @@
     var existing = (customer.pets || []).find(function (item) { return item.id === id; });
     var pet = collectPetForm(existing || null);
     if (!pet) return;
+    if (!(await validateProfileMembership(pet))) return;
     var button = document.querySelector('[data-save-pet]');
     if (button) { button.disabled = true; button.textContent = 'Saving…'; }
     try {
       var result = await requireCustomerApi().savePet(pet);
-      await requireCustomerApi().uploadDocuments(result.petId, petDocumentsDraft, pet.vaccineValidUntil);
+      await requireCustomerApi().uploadDocuments(result.petId, petDocumentsDraft);
       renderManage();
     } catch (error) {
       showPetFormError(error.message || 'We could not save this pet.');
@@ -540,8 +634,8 @@
     }
     var verify = event.target.closest('[data-verify-otp]');
     if (verify) {
-      var otp = value('stagingOtp');
-      if (otp.length !== 6) showFormError('Enter the six-digit one-time code.');
+      var otp = value('stagingOtp').replace(/\D/g, '');
+      if (!/^\d{6,10}$/.test(otp)) showFormError('Enter the complete one-time code from your email.');
       else {
         try {
           verify.disabled = true;
@@ -558,6 +652,12 @@
           showFormError(error.message || 'That code could not be verified.');
         }
       }
+    }
+    if (event.target.closest('[data-validate-profile-membership]')) {
+      await validateProfileMembership({
+        name: value('profilePetName'),
+        membershipId: value('profileMembershipId')
+      });
     }
     if (event.target.closest('[data-owner-next]')) showPetSetup();
     if (event.target.closest('[data-owner-back]')) showOwnerSetup();
@@ -605,9 +705,18 @@
   document.addEventListener('change', function (event) {
     if (event.target.matches('[data-profile-animal]')) {
       var existing = currentVaccineChecks();
+      var existingValidity = currentVaccineValidity();
       if (event.target.value === 'cat') document.getElementById('profilePetSize').value = 'cat';
       else if (document.getElementById('profilePetSize').value === 'cat') document.getElementById('profilePetSize').value = 'small_dog';
-      renderProfileVaccineGrid(event.target.value, existing);
+      renderProfileVaccineGrid(event.target.value, existing, existingValidity);
+    }
+    if (event.target.matches('[data-vaccine-key]')) {
+      var row = event.target.closest('.staging-vaccine-row');
+      var dateInput = row && row.querySelector('[data-vaccine-validity]');
+      if (dateInput) {
+        dateInput.disabled = !event.target.checked;
+        if (!event.target.checked) dateInput.value = '';
+      }
     }
     if (event.target.matches('[data-profile-docs]')) {
       Array.from(event.target.files || []).forEach(function (file) {
@@ -616,6 +725,17 @@
       });
       event.target.value = '';
       renderDocumentList();
+    }
+  });
+
+  document.addEventListener('input', function (event) {
+    if (event.target.id === 'profileMembershipId') {
+      var upper = event.target.value.toUpperCase();
+      if (event.target.value !== upper) event.target.value = upper;
+    }
+    if (event.target.id === 'profileMembershipId' || event.target.id === 'profilePetName') {
+      verifiedMembership = null;
+      setMembershipStatus('Validate the code after entering the pet name.', 'neutral');
     }
   });
 

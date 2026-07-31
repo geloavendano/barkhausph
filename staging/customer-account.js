@@ -181,7 +181,7 @@
     return { petId: data.petId, profile: data.profile || null };
   }
 
-  async function uploadDocument(petId, file, validUntil) {
+  async function uploadDocument(petId, file) {
     var authorization = await invoke({
       action: 'create_document_upload',
       petId: petId,
@@ -200,17 +200,25 @@
       petId: petId,
       path: authorization.path,
       fileName: file.name,
-      contentType: file.type,
-      validUntil: validUntil || null
+      contentType: file.type
     });
   }
 
-  async function uploadDocuments(petId, drafts, validUntil) {
+  async function uploadDocuments(petId, drafts) {
     var uploads = (drafts || []).filter(function (draft) { return draft && draft.file; });
     for (var index = 0; index < uploads.length; index++) {
-      await uploadDocument(petId, uploads[index].file, validUntil);
+      await uploadDocument(petId, uploads[index].file);
     }
     return refreshProfile();
+  }
+
+  async function validateMembership(code, petName) {
+    var data = await invoke({
+      action: 'validate_membership',
+      code: String(code || '').trim().toUpperCase(),
+      petName: String(petName || '').trim()
+    });
+    return data.membership || null;
   }
 
   async function archivePet(petId) {
@@ -241,6 +249,7 @@
     refreshProfile: refreshProfile,
     saveOwner: saveOwner,
     savePet: savePet,
+    validateMembership: validateMembership,
     uploadDocuments: uploadDocuments,
     archivePet: archivePet,
     archiveDocument: archiveDocument

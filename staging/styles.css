@@ -109,6 +109,13 @@
   box-shadow: 0 24px 80px rgba(0, 0, 0, .42);
 }
 
+.staging-modal,
+.staging-modal *,
+.staging-modal *::before,
+.staging-modal *::after {
+  box-sizing: border-box;
+}
+
 .staging-modal h1,
 .staging-modal h2 {
   margin: 0 0 9px;
@@ -149,6 +156,11 @@
 .staging-choice-list {
   display: grid;
   gap: 10px;
+}
+
+.staging-choice-list[hidden],
+.staging-account-signin-note[hidden] {
+  display: none;
 }
 
 .staging-choice {
@@ -210,6 +222,7 @@
 
 .staging-field-label {
   display: grid;
+  min-width: 0;
   gap: 6px;
   color: var(--staging-muted);
   font-size: 11px;
@@ -218,12 +231,22 @@
 
 .staging-field {
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
   border: 1px solid var(--staging-border);
   border-radius: 11px;
   background: var(--staging-surface);
   color: var(--staging-cream);
   padding: 12px 13px;
   font: 600 13px/1.3 "Nunito", sans-serif;
+}
+
+.staging-otp-field {
+  max-width: 260px;
+  font-size: 20px;
+  letter-spacing: .18em;
+  text-align: center;
 }
 
 .staging-primary,
@@ -495,6 +518,10 @@ body:has(.staging-ribbon-booking) .booking-header {
   gap: 12px;
 }
 
+.staging-field-grid > * {
+  min-width: 0;
+}
+
 .staging-field-label em {
   color: var(--staging-yellow);
   font-style: normal;
@@ -545,8 +572,15 @@ select.staging-field {
 
 .staging-check-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 8px;
+}
+
+.staging-vaccine-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(150px, .72fr);
+  gap: 8px;
+  align-items: stretch;
 }
 
 .staging-vaccine-check,
@@ -566,6 +600,56 @@ select.staging-field {
   border: 1px solid var(--staging-border);
   border-radius: 11px;
   background: var(--staging-surface);
+}
+
+.staging-vaccine-validity {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  padding: 7px 8px 7px 11px;
+  border: 1px solid var(--staging-border);
+  border-radius: 11px;
+  background: var(--staging-surface);
+  color: var(--staging-muted);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.staging-vaccine-validity .staging-field {
+  padding: 7px 8px;
+  font-size: 10px;
+}
+
+.staging-vaccine-validity .staging-field:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+.staging-membership-check {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 9px;
+  align-items: end;
+}
+
+.staging-membership-check .staging-secondary {
+  min-height: 43px;
+  white-space: nowrap;
+}
+
+#profileMembershipStatus[data-state="checking"] {
+  color: var(--staging-yellow);
+}
+
+#profileMembershipStatus[data-state="success"] {
+  color: #8de19a;
+  font-weight: 800;
+}
+
+#profileMembershipStatus[data-state="error"] {
+  color: #ffaaaa;
+  font-weight: 800;
 }
 
 .staging-vaccine-check input,
@@ -711,6 +795,11 @@ select.staging-field {
     grid-template-columns: 1fr;
   }
 
+  .staging-vaccine-row,
+  .staging-membership-check {
+    grid-template-columns: 1fr;
+  }
+
   .staging-profile-section {
     padding: 14px;
   }
@@ -731,7 +820,7 @@ body.staging-account-body {
 }
 
 .staging-account-main {
-  width: min(calc(100% - 32px), 760px);
+  width: min(calc(100% - 32px), 680px);
   margin: 0 auto;
   padding: 74px 0 60px;
 }
@@ -762,7 +851,7 @@ body.staging-account-body {
   width: 100%;
   max-height: none;
   overflow: visible;
-  padding: 38px;
+  padding: 34px;
   border-radius: 24px;
 }
 

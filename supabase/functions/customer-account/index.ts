@@ -74,6 +74,49 @@ function authProvider(user: any): string | null {
   return cleanText(user?.app_metadata?.provider || user?.app_metadata?.providers?.[0], 40) || null;
 }
 
+function normalizedPetName(value: unknown): string {
+  return cleanText(value, 200).replace(/\s+/g, " ").toLowerCase();
+}
+
+function dateHasPassed(value: unknown): boolean {
+  const date = cleanDate(value);
+  return !!date && new Date(`${date}T23:59:59+08:00`) < new Date();
+}
+
+async function validateMembership(supabase: any, codeValue: unknown, petNameValue: unknown): Promise<Record<string, unknown> | null> {
+  const code = cleanText(codeValue, 100).toUpperCase();
+  if (!code) return null;
+  if (code.length < 4) throw new ApiError("Enter the complete Barkhaus membership code.");
+
+  const petName = normalizedPetName(petNameValue);
+  if (!petName) throw new ApiError("Enter the pet name before validating the membership code.");
+
+  const { data, error } = await supabase.rpc("validate_member", { p_code: code });
+  if (error) throw new Error(`Membership validation failed: ${error.message}`);
+  const member: Record<string, any> | null = data && typeof data === "object"
+    ? data as Record<string, any>
+    : null;
+  if (!member?.member_code) throw new ApiError("This Barkhaus membership code was not found.");
+  if (member.active === false) throw new ApiError("This Barkhaus membership is inactive.");
+  if (dateHasPassed(member.valid_until)) {
+    throw new ApiError(`This Barkhaus membership expired on ${member.valid_until}.`);
+  }
+
+  const registeredNames = Array.isArray(member.pet_names)
+    ? member.pet_names.map(normalizedPetName)
+    : [normalizedPetName(member.pet_name)].filter(Boolean);
+  if (!registeredNames.includes(petName)) {
+    throw new ApiError("The pet name does not match this Barkhaus membership.");
+  }
+
+  return {
+    code: cleanText(member.member_code, 100).toUpperCase(),
+    tier: nullableText(member.tier, 40),
+    membershipType: nullableText(member.membership_type, 40) || "standard",
+    validUntil: cleanDate(member.valid_until),
+  };
+}
+
 function fileNameOnly(value: unknown): string {
   const name = cleanText(value, 180).replace(/[\\/]/g, "_");
   return name || "vaccine-document";
@@ -160,8 +203,10 @@ async function loadProfile(supabase: any, user: any): Promise<Record<string, unk
 
   const mappedPets = (pets ?? []).map((pet: any) => {
     const vaccineMap: Record<string, boolean> = {};
+    const vaccineValidity: Record<string, string> = {};
     vaccines.filter((row: any) => row.pet_id === pet.id).forEach((row: any) => {
       vaccineMap[row.vaccine_key] = row.confirmed === true;
+      vaccineValidity[row.vaccine_key] = row.valid_until || pet.vaccine_valid_until || "";
     });
     return {
       id: pet.id,
@@ -182,9 +227,9 @@ async function loadProfile(supabase: any, user: any): Promise<Record<string, unk
       emergencyName: pet.emergency_name || "",
       emergencyPhone: pet.emergency_phone || "",
       membershipId: pet.membership_code || "",
-      vaccineValidUntil: pet.vaccine_valid_until || "",
       bringRecords: pet.bring_vaccine_records === true,
       vaccines: vaccineMap,
+      vaccineValidity,
       vaccineDocuments: documents.filter((row: any) => row.pet_id === pet.id).map((row: any) => ({
         id: row.id,
         name: row.file_name,
@@ -273,6 +318,28 @@ async function savePet(supabase: any, user: any, body: any): Promise<string> {
   if (!name || !["dog", "cat"].includes(animal) || !breed || ageValue == null || !Number.isFinite(ageValue) || ageValue < 0 || ageValue > 99) {
     throw new ApiError("Complete the required pet name, animal, breed, and age fields.");
   }
+  const validatedMembership = await validateMembership(supabase, pet.membershipId, name);
+  const vaccineEntries = pet.vaccines && typeof pet.vaccines === "object"
+    ? Object.entries(pet.vaccines).slice(0, 20)
+    : [];
+  const vaccineValidity = pet.vaccineValidity && typeof pet.vaccineValidity === "object"
+    ? pet.vaccineValidity
+    : {};
+  const vaccineRows = vaccineEntries.map(([key, confirmed]) => {
+    const validUntil = cleanDate(vaccineValidity[key]);
+    if (confirmed === true && !validUntil) {
+      throw new ApiError("Add a valid-until date for every vaccine marked as current.");
+    }
+    if (confirmed === true && dateHasPassed(validUntil)) {
+      throw new ApiError("A vaccine marked as current has already expired. Update its valid-until date.");
+    }
+    return {
+      vaccine_key: cleanText(key, 100),
+      confirmed: confirmed === true,
+      valid_until: confirmed === true ? validUntil : null,
+      updated_at: new Date().toISOString(),
+    };
+  }).filter((row) => row.vaccine_key);
 
   const petRow = {
     owner_id: account.owner_id,
@@ -292,8 +359,8 @@ async function savePet(supabase: any, user: any, body: any): Promise<string> {
     vet_address: nullableText(pet.vetAddress, 500),
     emergency_name: nullableText(pet.emergencyName, 200),
     emergency_phone: nullableText(pet.emergencyPhone, 80),
-    membership_code: nullableText(cleanText(pet.membershipId, 100).toUpperCase(), 100),
-    vaccine_valid_until: cleanDate(pet.vaccineValidUntil),
+    membership_code: validatedMembership ? validatedMembership.code : null,
+    vaccine_valid_until: null,
     bring_vaccine_records: pet.bringRecords === true,
     customer_archived_at: null,
     customer_updated_at: new Date().toISOString(),
@@ -310,21 +377,12 @@ async function savePet(supabase: any, user: any, body: any): Promise<string> {
     petId = data.id;
   }
 
-  const vaccineEntries = pet.vaccines && typeof pet.vaccines === "object"
-    ? Object.entries(pet.vaccines).slice(0, 20)
-    : [];
   const { error: clearError } = await supabase.from("pet_profile_vaccines").delete().eq("pet_id", petId);
   if (clearError) throw new Error(`Vaccine profile reset failed: ${clearError.message}`);
-  if (vaccineEntries.length) {
-    const rows = vaccineEntries.map(([key, confirmed]) => ({
-      pet_id: petId,
-      vaccine_key: cleanText(key, 100),
-      confirmed: confirmed === true,
-      valid_until: cleanDate(pet.vaccineValidUntil),
-      updated_at: new Date().toISOString(),
-    })).filter((row) => row.vaccine_key);
-    if (rows.length) {
-      const { error } = await supabase.from("pet_profile_vaccines").insert(rows);
+  if (vaccineRows.length) {
+    const rowsWithPet = vaccineRows.map((row) => ({ ...row, pet_id: petId }));
+    if (rowsWithPet.length) {
+      const { error } = await supabase.from("pet_profile_vaccines").insert(rowsWithPet);
       if (error) throw new Error(`Vaccine profile save failed: ${error.message}`);
     }
   }
@@ -447,6 +505,9 @@ Deno.serve(async (req) => {
     if (action === "save_owner") {
       await saveOwner(supabase, user, body);
       return json(req, { profile: await loadProfile(supabase, user) });
+    }
+    if (action === "validate_membership") {
+      return json(req, { membership: await validateMembership(supabase, body?.code, body?.petName) });
     }
     if (action === "save_pet") {
       const petId = await savePet(supabase, user, body);

@@ -13,6 +13,19 @@ teammates. Keep entries short and current.
 
 ## Handoffs
 
+- 2026-07-31 - Codex: corrected the staged customer-account flow after live
+  setup testing. Email OTP now accepts the configured 6-10 digit code instead
+  of assuming six; account fields use border-box sizing and a narrower shell;
+  provider choices/sign-in copy are explicitly hidden after auth; each current
+  vaccine has its own required, non-expired date stored in the existing
+  `pet_profile_vaccines.valid_until`; and add/edit pet validates membership
+  code, activity, expiry, and pet name in the UI and again in
+  `customer-account` before saving. The booking preview shows the saved date per
+  vaccine. HUMAN TODO: deploy the updated `customer-account` function with
+  default JWT verification after the existing customer-account migration is
+  present. No new DDL or schema reload is needed. Static JS checks, Edge Function
+  bundling, local layout measurements, 8-digit entry, vaccine-date enablement,
+  hidden setup choices, and membership success feedback pass.
 - 2026-07-31 - Codex: added the dashboard-ready Supabase customer Auth email at
   `supabase/templates/customer-auth-otp.html`, visually adapted from the current
   booking confirmation. It includes both `{{ .Token }}` for six-digit entry and
@@ -163,6 +176,10 @@ reloads the human needs to apply manually.
   `supabase/templates/customer-auth-otp.html` into the template body. Verify both
   six-digit entry and fallback-link sign-in at `/staging/account/`; no schema
   reload is needed.
+- Deploy the updated authenticated account API with
+  `supabase functions deploy customer-account --project-ref dxttnbtfhpanyiyduevn`.
+  Keep default JWT verification. This activates server-side membership checks
+  and per-vaccine validity persistence; no DDL or schema-cache reload is needed.
 - Apply `supabase/migrations/2026-06-19_resource_service_hours.sql` to production. It
   creates/RLS-enables the table, seeds 90 days at 09:00-19:00 with a 17:00 cutoff,
   converts matching legacy weekday blocks to explicit dates, retires legacy rows, and

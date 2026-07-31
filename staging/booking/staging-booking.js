@@ -222,9 +222,19 @@ function hostedPaymentEndpoint() {
       vaccineList.innerHTML = uploadedVaccineFiles.map(function(file) {
         return '<div class="file-item">📁 ' + escapeHtml(file.name) + '<span style="color:var(--success);font-weight:700">Saved to profile</span></div>';
       }).join('');
-      if (pet.vaccineValidUntil) {
-        vaccineList.insertAdjacentHTML('beforeend', '<div class="file-item">Vaccine record valid until <strong>' + escapeHtml(pet.vaccineValidUntil) + '</strong></div>');
-      }
+      var vaccineLabels = {
+        Anti_rabies:'Anti-rabies',
+        '5_6_8_in_1_shot':'5/6/8-in-1 shot',
+        Kennel_Cough___Bordetella:'Kennel Cough / Bordetella',
+        Tick_and_Flea_treatment:'Tick and Flea treatment',
+        All_in_1_shot:'All-in-1 shot',
+        Anti_parasitic:'Anti-parasitic'
+      };
+      Object.keys(pet.vaccineValidity || {}).forEach(function(key) {
+        if (pet.vaccines && pet.vaccines[key] && pet.vaccineValidity[key]) {
+          vaccineList.insertAdjacentHTML('beforeend', '<div class="file-item"><span>' + escapeHtml(vaccineLabels[key] || key) + '</span><strong>Valid until ' + escapeHtml(pet.vaccineValidity[key]) + '</strong></div>');
+        }
+      });
     }
     var bringRecords = document.getElementById('bringVaccines');
     if (bringRecords) bringRecords.classList.toggle('checked', !!pet.bringRecords);
