@@ -13,6 +13,12 @@ teammates. Keep entries short and current.
 
 ## Handoffs
 
+- 2026-07-31 - Codex: rewrote staging-only visible copy in customer language,
+  removing references to Admin, production/frontend mechanics, write guards, and
+  technical preview behavior. The landing account greeting is now positioned at
+  the top of the page (not fixed), uses plain underlined text, and reveals Manage
+  account + Log out only when clicked. The booking header now says My account rather
+  than repeating a sticky Hi-name control. No Supabase action is needed.
 - 2026-07-31 - Codex: expanded the staging customer account into a two-step
   owner + full pet-profile setup and reused the same full form for add/edit pet.
   Profiles now cover species, sex, size, breed, age, temperament, medical/care

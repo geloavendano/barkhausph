@@ -89,8 +89,20 @@
       return;
     }
     accountNav.innerHTML =
-      '<button type="button" class="staging-account-pill" data-open-manage>Hi, ' + escapeHtml(customer.firstName) + '</button>' +
-      '<button type="button" class="staging-account-action" data-logout>Log out</button>';
+      '<div class="staging-account-menu">' +
+        '<button type="button" class="staging-account-pill" data-toggle-account aria-expanded="false">Hi, ' + escapeHtml(customer.firstName) + '</button>' +
+        '<div class="staging-account-menu-options" hidden>' +
+          '<button type="button" class="staging-account-action" data-open-manage>Manage account</button>' +
+          '<button type="button" class="staging-account-action" data-logout>Log out</button>' +
+        '</div>' +
+      '</div>';
+  }
+
+  function closeAccountMenu() {
+    var toggle = accountNav.querySelector('[data-toggle-account]');
+    var options = accountNav.querySelector('.staging-account-menu-options');
+    if (toggle) toggle.setAttribute('aria-expanded', 'false');
+    if (options) options.hidden = true;
   }
 
   function showEmailForm() {
@@ -98,7 +110,7 @@
     accountForm.hidden = false;
     entryTitle.textContent = 'Sign in with email';
     accountForm.innerHTML =
-      '<p class="staging-modal-copy">Enter your email to preview the one-time-code sign-in.</p>' +
+      '<p class="staging-modal-copy">Enter your email and we’ll help you sign in securely.</p>' +
       '<label class="staging-field-label">Email address<input class="staging-field" id="stagingEmail" type="email" value="gelo@example.com" autocomplete="email"></label>' +
       '<div class="staging-form-error" id="entryFormError" hidden></div>' +
       '<button class="staging-primary" type="button" data-send-otp>Send one-time code</button>' +
@@ -108,7 +120,7 @@
   function showOtpForm(email) {
     entryTitle.textContent = 'Enter your code';
     accountForm.innerHTML =
-      '<p class="staging-modal-copy">A preview code was sent to <strong>' + escapeHtml(email) + '</strong>.</p>' +
+      '<p class="staging-modal-copy">For this test, use code <strong>123456</strong> to continue as <strong>' + escapeHtml(email) + '</strong>.</p>' +
       '<label class="staging-field-label">One-time code<input class="staging-field" id="stagingOtp" inputmode="numeric" value="123456" maxlength="6"></label>' +
       '<div class="staging-form-error" id="entryFormError" hidden></div>' +
       '<button class="staging-primary" type="button" data-verify-otp data-email="' + escapeHtml(email) + '">Verify code</button>' +
@@ -132,7 +144,7 @@
     entryTitle.textContent = 'Create your account';
     var owner = accountDraft.owner || {};
     accountForm.innerHTML = setupProgress(1) +
-      '<p class="staging-modal-copy">Tell us who owns the account. Your verified sign-in email stays separate from Barkhaus Admin.</p>' +
+      '<p class="staging-modal-copy">Tell us how to contact you about your pet and upcoming visits.</p>' +
       '<div class="staging-field-grid">' +
         field('First name', 'setupFirst', owner.firstName || 'Gelo', 'text', true) +
         field('Last name', 'setupLast', owner.lastName || 'Avendaño', 'text', true) +
@@ -164,7 +176,7 @@
     entryTitle.textContent = 'Add your first pet';
     petDocumentsDraft = [];
     accountForm.innerHTML = setupProgress(2) +
-      '<p class="staging-modal-copy">This complete pet profile will populate the matching fields when you select the pet during booking.</p>' +
+      '<p class="staging-modal-copy">Add your pet once, then choose them during future bookings and we’ll fill in their details for you.</p>' +
       petEditorMarkup(defaultPet(), 'Create account') +
       '<div class="staging-form-actions"><button class="staging-secondary" type="button" data-owner-back>Back</button><button class="staging-primary" type="button" data-complete-account>Create account</button></div>';
     renderProfileVaccineGrid('dog', {});
@@ -213,10 +225,10 @@
         '</div>' +
       '</div>' +
       '<div class="staging-profile-section"><p class="staging-profile-section-title">Vaccination record</p>' +
-        '<p class="staging-profile-help">Mark every current vaccine. Saved records will appear on the pet profile during booking.</p>' +
+        '<p class="staging-profile-help">Mark every vaccine that is currently up to date.</p>' +
         '<div class="staging-check-grid" id="profileVaccineGrid"></div>' +
         field('Record valid until', 'profileVaccineValidUntil', pet.vaccineValidUntil, 'date', false) +
-        '<label class="staging-document-upload">📎 <strong>Add vaccine documents</strong><span>JPG, PNG, PDF or HEIC · stored as filenames in this frontend preview</span><input type="file" data-profile-docs multiple accept="image/*,.pdf,.heic,.heif"></label>' +
+        '<label class="staging-document-upload">📎 <strong>Add vaccine documents</strong><span>JPG, PNG, PDF or HEIC · files won’t be uploaded yet, but we’ll remember what you selected</span><input type="file" data-profile-docs multiple accept="image/*,.pdf,.heic,.heif"></label>' +
         '<div class="staging-document-list" id="profileDocumentList"></div>' +
         '<label class="staging-inline-check"><input type="checkbox" id="profileBringRecords" ' + (pet.bringRecords ? 'checked' : '') + '><span>I will bring the original vaccination record to Barkhaus.</span></label>' +
       '</div>' +
@@ -379,7 +391,7 @@
     modalCard(manageModal).classList.add('staging-modal--wide');
     document.getElementById('stagingManageTitle').textContent = petId ? 'Edit ' + pet.name : 'Add a pet';
     document.getElementById('stagingManageContent').innerHTML =
-      '<p class="staging-modal-copy">The complete profile below will populate matching booking fields.</p>' +
+      '<p class="staging-modal-copy">Keep this information up to date so we can prepare the right care for your pet.</p>' +
       petEditorMarkup(pet) +
       '<div class="staging-form-actions"><button class="staging-secondary" type="button" data-manage-back>Back</button><button class="staging-primary" type="button" data-save-pet="' + escapeHtml(pet.id) + '">Save pet</button></div>';
     hydratePetEditor(pet);
@@ -439,9 +451,17 @@
       return;
     }
     if (event.target.closest('[data-open-entry]')) openModal(entryModal);
+    var accountToggle = event.target.closest('[data-toggle-account]');
+    if (accountToggle) {
+      var options = accountNav.querySelector('.staging-account-menu-options');
+      var willOpen = options.hidden;
+      options.hidden = !willOpen;
+      accountToggle.setAttribute('aria-expanded', String(willOpen));
+      return;
+    }
     if (event.target.closest('[data-close-staging]') || event.target === entryModal) closeModal(entryModal);
     if (event.target.closest('[data-close-manage]') || event.target === manageModal) closeModal(manageModal);
-    if (event.target.closest('[data-open-manage]')) { renderManage(); openModal(manageModal); }
+    if (event.target.closest('[data-open-manage]')) { closeAccountMenu(); renderManage(); openModal(manageModal); }
     if (event.target.closest('[data-logout]')) {
       localStorage.removeItem(SESSION_KEY);
       localStorage.setItem(MODE_KEY, 'guest');
@@ -483,7 +503,7 @@
     if (remove) {
       var current = readCustomer();
       var pet = (current.pets || []).find(function (item) { return item.id === remove.getAttribute('data-delete-pet'); });
-      if (pet && window.confirm('Delete ' + pet.name + ' from this staging account?')) {
+      if (pet && window.confirm('Delete ' + pet.name + ' from your account?')) {
         current.pets = current.pets.filter(function (item) { return item.id !== pet.id; });
         writeCustomer(current);
         renderManage();
@@ -495,6 +515,7 @@
       petDocumentsDraft = petDocumentsDraft.filter(function (doc) { return doc !== name; });
       renderDocumentList();
     }
+    if (!event.target.closest('.staging-account-menu')) closeAccountMenu();
   });
 
   document.addEventListener('change', function (event) {

@@ -33,7 +33,7 @@
 }
 
 .staging-account-nav {
-  position: fixed;
+  position: absolute;
   top: 48px;
   right: 18px;
   z-index: 11000;
@@ -43,21 +43,42 @@
 }
 
 .staging-account-pill,
-.staging-account-action,
-.staging-booking-account {
-  border: 1px solid var(--staging-border);
-  background: rgba(15, 28, 38, .86);
+.staging-account-action {
+  border: 0;
+  background: transparent;
   color: var(--staging-cream);
   font: 700 11px/1 "Nunito", sans-serif;
-  padding: 10px 14px;
-  border-radius: 999px;
+  padding: 3px 0;
   cursor: pointer;
-  backdrop-filter: blur(12px);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
 }
 
 .staging-account-action {
   color: var(--staging-yellow);
-  padding-inline: 12px;
+}
+
+.staging-account-menu {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.staging-account-menu-options {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.staging-account-menu-options[hidden] {
+  display: none;
+}
+
+.staging-account-pill:hover,
+.staging-account-action:hover {
+  color: var(--staging-yellow);
 }
 
 .staging-modal-overlay {
@@ -267,11 +288,18 @@ body:has(.staging-ribbon-booking) .booking-header {
 }
 
 .staging-booking-account {
+  border: 0;
+  background: transparent;
+  color: var(--staging-muted);
+  font: 700 11px/1 "Nunito", sans-serif;
   padding: 8px 10px;
   max-width: 120px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .staging-flow-note {

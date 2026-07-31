@@ -15,7 +15,7 @@ window.fetch = function(input, init) {
   var isSafeGet = method === 'GET' || method === 'HEAD';
   var isReadOnlyRpc = method === 'POST' && /\/rest\/v1\/rpc\/(get_grooming_occupancy|get_hotel_occupancy|get_studio_occupancy|validate_member)(?:\?|$)/.test(url);
   if (/\/functions\/v1\//.test(url) || /\/storage\/v1\//.test(url) || (!isSafeGet && !isReadOnlyRpc)) {
-    return Promise.reject(new Error('Staging preview blocked a write request.'));
+    return Promise.reject(new Error('This action is not available on this page yet.'));
   }
   return _stagingNativeFetch(input, init);
 };
@@ -125,7 +125,7 @@ function hostedPaymentEndpoint() {
     var mode = localStorage.getItem(MODE_KEY) || 'guest';
     var accountButton = document.getElementById('stagingBookingAccount');
     if (accountButton) {
-      accountButton.textContent = profile && mode === 'account' ? 'Hi, ' + profile.firstName : 'Guest';
+      accountButton.textContent = profile && mode === 'account' ? 'My account' : 'Guest';
       accountButton.onclick = function() { window.location.href = '/staging/'; };
     }
     if (!profile || mode !== 'account') return;
@@ -140,14 +140,14 @@ function hostedPaymentEndpoint() {
 
     var petsPanel = document.getElementById('stagingSavedPets');
     petsPanel.hidden = false;
-    petsPanel.innerHTML = '<p class="staging-saved-title">Choose a registered pet</p><div class="staging-pet-chips">' +
+    petsPanel.innerHTML = '<p class="staging-saved-title">Choose one of your pets</p><div class="staging-pet-chips">' +
       (profile.pets || []).map(function(pet) {
         return '<button type="button" class="staging-pet-chip" data-staging-pet="' + escapeHtml(pet.id) + '">🐾 ' + escapeHtml(pet.name) + ' · ' + escapeHtml(pet.breed || pet.animal) + '</button>';
       }).join('') + '</div>';
 
     var ownerPanel = document.getElementById('stagingSavedOwner');
     ownerPanel.hidden = false;
-    ownerPanel.innerHTML = '<p class="staging-saved-title">Using your Barkhaus customer profile</p><div style="font-size:12px;color:var(--mid);line-height:1.55">' +
+    ownerPanel.innerHTML = '<p class="staging-saved-title">Your contact details are ready</p><div style="font-size:12px;color:var(--mid);line-height:1.55">' +
       escapeHtml(profile.firstName + ' ' + profile.lastName) + '<br>' + escapeHtml(profile.email) + ' · ' + escapeHtml(profile.phone) + '</div>';
   }
 
@@ -269,7 +269,7 @@ function hostedPaymentEndpoint() {
     var notice = document.getElementById('hostedCheckoutNotice');
     if (notice) {
       notice.style.display = '';
-      notice.innerHTML = '<p><strong>Preview only — one Maya checkout for the whole order</strong></p><p>Each child booking keeps its own allocation and reference. No checkout, upload, booking, email, or payment request can run from this staging page.</p>';
+      notice.innerHTML = '<p><strong>One payment for all your bookings</strong></p><p>When online booking is available, you’ll pay once and receive a separate reference for each service or pet.</p>';
     }
   }
 
@@ -280,12 +280,12 @@ function hostedPaymentEndpoint() {
     document.getElementById('bottomNav').style.display = 'none';
     _redirectingToPayment = true;
     summary.innerHTML = '<div class="staging-preview-screen">' +
-      '<p class="step-eyebrow">Order preview complete</p>' +
-      '<h2>This is how the combined order will look</h2>' +
-      '<p>One payment confirmation email would list the order reference, every child booking, schedule, pet, and allocated amount.</p>' +
+      '<p class="step-eyebrow">Your order</p>' +
+      '<h2>Everything looks ready</h2>' +
+      '<p>Your confirmation email will include the order number, each booking reference, schedule, pet, and amount.</p>' +
       renderOrderPanel(items) +
-      '<div class="info-box" style="text-align:left"><strong>Email confirmation preview</strong><br>Subject: Barkhaus order ' + ORDER_REF + ' confirmed<br><br>Your payment covers ' + items.length + ' booking' + (items.length === 1 ? '' : 's') + '. Each booking reference and amount is shown above.</div>' +
-      '<a class="btn-home" href="/staging/" style="margin-top:12px">Back to staging home</a>' +
+      '<div class="info-box" style="text-align:left"><strong>What your confirmation email will include</strong><br>Subject: Barkhaus order ' + ORDER_REF + ' confirmed<br><br>Your payment covers ' + items.length + ' booking' + (items.length === 1 ? '' : 's') + '. Each booking reference and amount is shown above.</div>' +
+      '<a class="btn-home" href="/staging/" style="margin-top:12px">Back to Barkhaus</a>' +
     '</div>';
     summary.classList.add('active');
     window.scrollTo(0, 0);
@@ -328,7 +328,7 @@ function hostedPaymentEndpoint() {
   updateBottomNavForSummary = function() {
     productionUpdateSummaryNav();
     var button = document.getElementById('btnNext');
-    button.textContent = 'Preview combined order';
+    button.textContent = 'Review complete order';
     button.onclick = showPreview;
   };
 
@@ -651,7 +651,7 @@ function localDateStr(d) {
       document.body.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;font-family:sans-serif;background:#1a1a1a;color:#fff;text-align:center;padding:24px">'
         + '<div style="font-size:48px;margin-bottom:16px">🔒</div>'
         + '<h2 style="margin:0 0 8px">Access Restricted</h2>'
-        + '<p style="color:#aaa;margin:0 0 24px">Walk-in bookings must be started from the admin panel.</p>'
+        + '<p style="color:#aaa;margin:0 0 24px">This booking link is no longer available. Please return to the Barkhaus home page to start again.</p>'
         + '<a href="index.html" style="background:#FFCE58;color:#1a1a1a;padding:10px 24px;border-radius:20px;text-decoration:none;font-weight:700">Go to Home</a>'
         + '</div>';
       return;
