@@ -47,6 +47,7 @@ function hostedPaymentEndpoint() {
   var CONTEXT_KEY = 'barkhaus_staging_context';
   var ORDER_REF = 'BH-3CE089';
   var isAdditional = new URLSearchParams(window.location.search).get('additional') === '1';
+  var currentReviewSnapshot = null;
 
   function readJson(storage, key, fallback) {
     try { return JSON.parse(storage.getItem(key) || JSON.stringify(fallback)); }
@@ -85,6 +86,18 @@ function hostedPaymentEndpoint() {
 
   function snapshotCurrent() {
     collectAllState();
+    var details = document.getElementById('bookingDetailsSummary');
+    var price = document.getElementById('priceBreakdown');
+    var priceComponents = '';
+    if (price && !price.hasAttribute('data-staging-order-total')) {
+      var clone = price.cloneNode(true);
+      clone.querySelectorAll('.subtotal-line, .total-line').forEach(function(line) { line.remove(); });
+      clone.querySelectorAll('.price-line').forEach(function(line) {
+        var label = line.querySelector('.price-line-label');
+        if (label && /convenience fee/i.test(label.textContent || '')) line.remove();
+      });
+      priceComponents = clone.innerHTML;
+    }
     return {
       location: booking.location,
       service: booking.service,
@@ -94,18 +107,27 @@ function hostedPaymentEndpoint() {
       ownerFirst: booking.ownerFirst,
       ownerLast: booking.ownerLast,
       ownerEmail: booking.ownerEmail,
-      ownerPhone: booking.ownerPhone
+      ownerPhone: booking.ownerPhone,
+      bookingState: JSON.parse(JSON.stringify(booking)),
+      detailsHtml: details && !details.classList.contains('staging-all-bookings') ? details.innerHTML : '',
+      priceComponentsHtml: priceComponents
     };
   }
 
   function orderItems(includeCurrent) {
     var items = cart().slice();
-    if (includeCurrent && booking.service) items.push(snapshotCurrent());
+    if (includeCurrent && booking.service) items.push(currentReviewSnapshot || snapshotCurrent());
     return items;
   }
 
+  function orderAmounts(items) {
+    var allocations = items.reduce(function(sum, item) { return sum + (Number(item.total) || 0); }, 0);
+    var fee = allocations > 0 ? currentConvenienceFee() : 0;
+    return { allocations:allocations, fee:fee, total:allocations + fee };
+  }
+
   function renderOrderPanel(items) {
-    var total = items.reduce(function(sum, item) { return sum + (Number(item.total) || 0); }, 0);
+    var amounts = orderAmounts(items);
     var rows = items.map(function(item, index) {
       var suffix = String.fromCharCode(65 + index);
       return '<div class="staging-order-item">' +
@@ -116,8 +138,51 @@ function hostedPaymentEndpoint() {
     return '<div class="staging-order-panel">' +
       '<div class="staging-order-head"><strong>Order ' + ORDER_REF + '</strong><span>' + items.length + ' booking' + (items.length === 1 ? '' : 's') + ' · ' + escapeHtml(locationLabel(items[0] && items[0].location)) + '</span></div>' +
       rows +
-      '<div class="staging-order-total"><span>One payment</span><span>₱' + total.toLocaleString() + '</span></div>' +
+      (amounts.fee ? '<div class="staging-order-fee"><span>Online payment fee</span><span>₱' + amounts.fee.toLocaleString() + '</span></div>' : '') +
+      '<div class="staging-order-total"><span>One payment</span><span>₱' + amounts.total.toLocaleString() + '</span></div>' +
     '</div>';
+  }
+
+  function fallbackDetails(item) {
+    return '<div class="summary-group"><div class="summary-group-title">Booking</div>' +
+      '<div class="summary-row"><span class="summary-key">Branch</span><span class="summary-val">' + escapeHtml(locationLabel(item.location)) + '</span></div>' +
+      '<div class="summary-row"><span class="summary-key">Service</span><span class="summary-val">' + escapeHtml(serviceLabel(item.service)) + '</span></div>' +
+      '<div class="summary-row"><span class="summary-key">Schedule</span><span class="summary-val">' + escapeHtml(item.schedule) + '</span></div></div>' +
+      '<div class="summary-group"><div class="summary-group-title">Pet details</div>' +
+      '<div class="summary-row"><span class="summary-key">Name</span><span class="summary-val">' + escapeHtml(item.petName) + '</span></div></div>';
+  }
+
+  function renderDetailedBookings(items) {
+    return items.map(function(item, index) {
+      var reference = ORDER_REF + '-' + String.fromCharCode(65 + index);
+      return '<section class="staging-booking-review-card">' +
+        '<div class="staging-booking-review-head"><span><strong>' + escapeHtml(reference) + '</strong><small>' + escapeHtml(item.petName) + ' · ' + escapeHtml(serviceLabel(item.service)) + '</small></span><strong>₱' + (Number(item.total) || 0).toLocaleString() + '</strong></div>' +
+        '<div class="staging-booking-review-details">' + (item.detailsHtml || fallbackDetails(item)) + '</div>' +
+        '<div class="staging-booking-review-price"><p class="summary-group-title">Price breakdown</p>' +
+          (item.priceComponentsHtml || '') +
+          '<div class="price-line total-line"><span class="price-line-label">Booking allocation</span><span class="price-line-val">₱' + (Number(item.total) || 0).toLocaleString() + '</span></div>' +
+        '</div>' +
+      '</section>';
+    }).join('');
+  }
+
+  function renderOrderTotal(items) {
+    var amounts = orderAmounts(items);
+    var lines = items.map(function(item, index) {
+      return '<div class="price-line"><span class="price-line-label">' + escapeHtml(ORDER_REF + '-' + String.fromCharCode(65 + index)) + ' · ' + escapeHtml(item.petName) + ' · ' + escapeHtml(serviceLabel(item.service)) + '</span><span class="price-line-val">₱' + (Number(item.total) || 0).toLocaleString() + '</span></div>';
+    }).join('');
+    if (amounts.fee) lines += '<div class="price-line"><span class="price-line-label">Online payment fee</span><span class="price-line-val">₱' + amounts.fee.toLocaleString() + '</span></div>';
+    return lines + '<div class="price-line total-line"><span class="price-line-label">One payment</span><span class="price-line-val">₱' + amounts.total.toLocaleString() + '</span></div>';
+  }
+
+  function updateOrderNavTotal(items) {
+    var amounts = orderAmounts(items);
+    var nav = document.getElementById('navTotal');
+    var value = document.getElementById('navTotalVal');
+    if (nav && value && amounts.total > 0) {
+      value.textContent = '₱' + amounts.total.toLocaleString();
+      nav.style.display = 'flex';
+    }
   }
 
   function renderProfiles() {
@@ -145,13 +210,21 @@ function hostedPaymentEndpoint() {
         return '<button type="button" class="staging-pet-chip" data-staging-pet="' + escapeHtml(pet.id) + '">🐾 ' + escapeHtml(pet.name) + ' · ' + escapeHtml(pet.breed || pet.animal) + '</button>';
       }).join('') + '</div>';
 
+    document.querySelectorAll('[data-staging-service-pets]').forEach(function(panel) {
+      panel.hidden = false;
+      panel.innerHTML = '<p class="staging-saved-title">Which pet is this booking for?</p><p class="staging-saved-copy">Choose a saved pet to use their size and profile details.</p><div class="staging-pet-chips">' +
+        (profile.pets || []).map(function(pet) {
+          return '<button type="button" class="staging-pet-chip" data-staging-pet="' + escapeHtml(pet.id) + '">🐾 ' + escapeHtml(pet.name) + '<small>' + escapeHtml(pet.breed || pet.animal) + ' · ' + escapeHtml(PET_SIZE_LABELS[pet.size] || pet.size || '') + '</small></button>';
+        }).join('') + '</div>';
+    });
+
     var ownerPanel = document.getElementById('stagingSavedOwner');
     ownerPanel.hidden = false;
     ownerPanel.innerHTML = '<p class="staging-saved-title">Your contact details are ready</p><div style="font-size:12px;color:var(--mid);line-height:1.55">' +
       escapeHtml(profile.firstName + ' ' + profile.lastName) + '<br>' + escapeHtml(profile.email) + ' · ' + escapeHtml(profile.phone) + '</div>';
   }
 
-  function applyPet(petId) {
+  function applyPet(petId, selectServiceSize) {
     var profile = customer();
     var pet = profile && (profile.pets || []).find(function(item) { return item.id === petId; });
     if (!pet) return;
@@ -250,8 +323,16 @@ function hostedPaymentEndpoint() {
     if (booking.service === 'grooming') updateGroomTotal();
     if (booking.service === 'hotel') calcHotelTotal();
     if (booking.service === 'daycare') calcDaycareTotal();
-    if (previousSize && pet.size && previousSize !== pet.size) {
-      showToast('We updated the booking size to match ' + pet.name + '’s saved profile. Please review the service details if needed.', 7000);
+    var sizeChangedOnPetStep = currentStep === 5 && previousSize && pet.size && previousSize !== pet.size;
+    if ((selectServiceSize || sizeChangedOnPetStep) && pet.size) {
+      var gridId = { grooming:'groomSizeGrid', hotel:'hotelSizeGrid', daycare:'daycareSizeGrid' }[booking.service];
+      var selector = gridId && Array.from(document.querySelectorAll('#' + gridId + ' .pet-type-btn')).find(function(button) {
+        return (button.getAttribute('onclick') || '').indexOf("'" + pet.size + "'") !== -1;
+      });
+      if (selector && booking.service === 'grooming') selectGroomSize(selector, pet.size);
+      if (selector && booking.service === 'hotel') selectHotelSize(selector, pet.size);
+      if (selector && booking.service === 'daycare') selectDaycareSize(selector, pet.size);
+      if (sizeChangedOnPetStep) goToStep(3);
     }
     checkSeniorWaiver();
     refreshContinueBtn();
@@ -259,7 +340,7 @@ function hostedPaymentEndpoint() {
 
   function addAnother() {
     var items = cart();
-    var current = snapshotCurrent();
+    var current = currentReviewSnapshot || snapshotCurrent();
     items.push(current);
     sessionStorage.setItem(CART_KEY, JSON.stringify(items));
     sessionStorage.setItem(CONTEXT_KEY, JSON.stringify({
@@ -280,7 +361,9 @@ function hostedPaymentEndpoint() {
     if (existing) existing.remove();
     var oldAdd = summary.querySelector('.staging-add-booking');
     if (oldAdd) oldAdd.remove();
-    var items = orderItems(true);
+    currentReviewSnapshot = snapshotCurrent();
+    var items = cart().slice();
+    items.push(currentReviewSnapshot);
     summary.insertAdjacentHTML('afterbegin', renderOrderPanel(items));
     summary.insertAdjacentHTML('beforeend', '<button type="button" class="staging-add-booking" onclick="addAnotherStagingBooking()">+ Add another service or pet at ' + escapeHtml(locationLabel(booking.location)) + '</button>');
     var notice = document.getElementById('hostedCheckoutNotice');
@@ -288,6 +371,19 @@ function hostedPaymentEndpoint() {
       notice.style.display = '';
       notice.innerHTML = '<p><strong>One payment for all your bookings</strong></p><p>When online booking is available, you’ll pay once and receive a separate reference for each service or pet.</p>';
     }
+    var details = document.getElementById('bookingDetailsSummary');
+    if (details) {
+      details.className = 'staging-all-bookings';
+      details.innerHTML = renderDetailedBookings(items);
+    }
+    var price = document.getElementById('priceBreakdown');
+    if (price) {
+      price.setAttribute('data-staging-order-total', '');
+      price.innerHTML = renderOrderTotal(items);
+      var label = price.previousElementSibling;
+      if (label && label.classList.contains('section-label')) label.textContent = 'Order total';
+    }
+    updateOrderNavTotal(items);
   }
 
   function showPreview() {
@@ -332,11 +428,18 @@ function hostedPaymentEndpoint() {
   var productionShowSummary = showSummary;
   showSummary = function() {
     productionShowSummary();
-    renderCombinedReview();
   };
 
   var productionBuildSummary = buildSummary;
   buildSummary = function() {
+    var details = document.getElementById('bookingDetailsSummary');
+    if (details) details.className = 'summary-card';
+    var price = document.getElementById('priceBreakdown');
+    if (price) {
+      price.removeAttribute('data-staging-order-total');
+      var label = price.previousElementSibling;
+      if (label && label.classList.contains('section-label')) label.textContent = 'Price breakdown';
+    }
     productionBuildSummary();
     if (onSummaryScreen) renderCombinedReview();
   };
@@ -347,6 +450,7 @@ function hostedPaymentEndpoint() {
     var button = document.getElementById('btnNext');
     button.textContent = 'Review complete order';
     button.onclick = showPreview;
+    updateOrderNavTotal(orderItems(true));
   };
 
   submitBooking = function() {
@@ -377,7 +481,7 @@ function hostedPaymentEndpoint() {
 
   document.addEventListener('click', function(event) {
     var petButton = event.target.closest('[data-staging-pet]');
-    if (petButton) applyPet(petButton.getAttribute('data-staging-pet'));
+    if (petButton) applyPet(petButton.getAttribute('data-staging-pet'), !!petButton.closest('[data-staging-service-pets]'));
   });
 
   function initialize() {

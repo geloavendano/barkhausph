@@ -13,6 +13,20 @@ teammates. Keep entries short and current.
 
 ## Handoffs
 
+- 2026-08-01 - Codex: refined the staged customer account and multi-booking
+  flow. OTP is full-width and has a 60-second resend cooldown; pet age/unit are
+  grouped; landing account actions use a contained dropdown; every vaccine has
+  its own keyed upload; saved pets can be selected before size/service choices;
+  the size-change toast is gone; and combined review retains every child detail
+  card while one shared calculation reconciles allocations, the single
+  order-level fee, total, and sticky footer. HUMAN TODO: apply
+  `supabase/migrations/20260801090000_pet_vaccine_document_types.sql` (it adds
+  `pet_vaccine_documents.vaccine_key` and runs the schema-cache NOTIFY), then
+  deploy `customer-account` with default JWT verification. Apply the migration
+  before deploying the function because its profile query selects the new
+  column. Syntax checks, Edge Function bundling, responsive layout measurements,
+  and one-/two-child mobile review checks pass; the static commit should be
+  pushed only after the Supabase steps succeed.
 - 2026-07-31 - Codex: corrected the staged customer-account flow after live
   setup testing. Email OTP now accepts the configured 6-10 digit code instead
   of assuming six; account fields use border-box sizing and a narrower shell;
@@ -171,6 +185,14 @@ teammates. Keep entries short and current.
 Record any edge function deploys, table/schema changes, RLS policy changes, or schema-cache
 reloads the human needs to apply manually.
 
+- Apply `supabase/migrations/20260801090000_pet_vaccine_document_types.sql`.
+  It adds the nullable, constrained/indexed `pet_vaccine_documents.vaccine_key`
+  column and already runs `NOTIFY pgrst, 'reload schema';`. Existing documents
+  remain valid as unclassified legacy records.
+- After that migration succeeds, deploy the updated authenticated account API:
+  `supabase functions deploy customer-account --project-ref dxttnbtfhpanyiyduevn`.
+  Keep default JWT verification. Verify add/edit pet uploads one document under
+  each vaccine type and a returning account receives `vaccineKey` per document.
 - Configure Resend as Supabase Auth custom SMTP, then set the hosted Magic Link
   email subject to `Your Barkhaus sign-in code` and paste
   `supabase/templates/customer-auth-otp.html` into the template body. Verify both

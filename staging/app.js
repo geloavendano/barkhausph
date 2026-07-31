@@ -15,6 +15,8 @@
   var accountDraft = null;
   var petDocumentsDraft = [];
   var verifiedMembership = null;
+  var otpResendTimer = null;
+  var otpResendAvailableAt = 0;
 
   function readCustomer() {
     return CustomerApi && CustomerApi.profile ? CustomerApi.profile() : null;
@@ -73,6 +75,7 @@
   }
 
   function resetEntryModal() {
+    clearOtpResendTimer();
     choices.hidden = false;
     accountForm.hidden = true;
     accountForm.innerHTML = '';
@@ -102,7 +105,7 @@
     }
     accountNav.innerHTML =
       '<div class="staging-account-menu">' +
-        '<button type="button" class="staging-account-pill" data-toggle-account aria-expanded="false">Hi, ' + escapeHtml(customer.firstName) + '</button>' +
+        '<button type="button" class="staging-account-pill" data-toggle-account aria-expanded="false">Hi, ' + escapeHtml(customer.firstName) + '<span class="staging-account-chevron" aria-hidden="true">⌄</span></button>' +
         '<div class="staging-account-menu-options" hidden>' +
           '<button type="button" class="staging-account-action" data-open-manage>Manage account</button>' +
           '<button type="button" class="staging-account-action" data-logout>Log out</button>' +
@@ -141,7 +144,30 @@
       '<label class="staging-field-label">One-time code<input class="staging-field staging-otp-field" id="stagingOtp" inputmode="numeric" autocomplete="one-time-code" value="" minlength="6" maxlength="10"></label>' +
       '<div class="staging-form-error" id="entryFormError" hidden></div>' +
       '<button class="staging-primary" type="button" data-verify-otp data-email="' + escapeHtml(email) + '">Verify code</button>' +
+      '<div class="staging-otp-resend"><span data-otp-delivery-status>Didn’t receive the email?</span><button type="button" data-resend-otp data-email="' + escapeHtml(email) + '" disabled>Resend code</button></div>' +
       '<button class="staging-secondary" type="button" data-entry-back>Back</button>';
+    beginOtpResendCooldown();
+  }
+
+  function clearOtpResendTimer() {
+    if (otpResendTimer) window.clearInterval(otpResendTimer);
+    otpResendTimer = null;
+  }
+
+  function updateOtpResendButton() {
+    var button = document.querySelector('[data-resend-otp]');
+    if (!button) return clearOtpResendTimer();
+    var seconds = Math.max(0, Math.ceil((otpResendAvailableAt - Date.now()) / 1000));
+    button.disabled = seconds > 0;
+    button.textContent = seconds > 0 ? 'Resend code in ' + seconds + 's' : 'Resend code';
+    if (!seconds) clearOtpResendTimer();
+  }
+
+  function beginOtpResendCooldown() {
+    clearOtpResendTimer();
+    otpResendAvailableAt = Date.now() + 60000;
+    updateOtpResendButton();
+    otpResendTimer = window.setInterval(updateOtpResendButton, 1000);
   }
 
   function beginAccountSetup(provider, email, ownerDefaults) {
@@ -226,8 +252,8 @@
   function petEditorMarkup(pet) {
     verifiedMembership = null;
     petDocumentsDraft = (pet.vaccineDocuments || []).map(function (document) {
-      if (typeof document === 'string') return { id: null, name: document, file: null };
-      return { id: document.id || null, name: document.name || 'Vaccine document', file: null };
+      if (typeof document === 'string') return { id: null, name: document, file: null, vaccineKey: null };
+      return { id: document.id || null, name: document.name || 'Vaccine document', file: null, vaccineKey: document.vaccineKey || null };
     });
     return '<div class="staging-profile-section"><p class="staging-profile-section-title">Basic details</p>' +
       '<div class="staging-field-grid">' +
@@ -236,9 +262,8 @@
         field('Breed', 'profilePetBreed', pet.breed, 'text', true) +
         '<label class="staging-field-label">Sex <em>*</em><select class="staging-field" id="profilePetGender"><option value="female">Female</option><option value="male">Male</option></select></label>' +
         '<label class="staging-field-label">Size <em>*</em><select class="staging-field" id="profilePetSize"><option value="small_dog">Small dog — up to 6 kg</option><option value="medium_dog">Medium dog — up to 15 kg</option><option value="large_dog">Large dog — up to 30 kg</option><option value="giant_dog">Giant dog — over 30 kg</option><option value="cat">Cat</option></select></label>' +
-        field('Age', 'profilePetAge', pet.age, 'number', true, 'min="0" max="30"') +
-        '<label class="staging-field-label">Age unit<select class="staging-field" id="profilePetAgeUnit"><option value="years">Years</option><option value="months">Months</option></select></label>' +
-        '<label class="staging-field-label">Temperament <em>*</em><select class="staging-field" id="profilePetTemperament"><option value="friendly_all">Friendly with all</option><option value="friendly_shy">Friendly but shy</option><option value="selective">Selective</option><option value="reactive">Reactive</option><option value="first_time">First time in group care</option></select></label>' +
+        '<label class="staging-field-label">Age <em>*</em><span class="staging-age-fields"><input class="staging-field" id="profilePetAge" type="number" value="' + escapeHtml(pet.age || '') + '" min="0" max="30"><select class="staging-field" id="profilePetAgeUnit" aria-label="Age unit"><option value="years">Years</option><option value="months">Months</option></select></span></label>' +
+        '<label class="staging-field-label staging-field-label--wide">Temperament <em>*</em><select class="staging-field" id="profilePetTemperament"><option value="friendly_all">Friendly with all</option><option value="friendly_shy">Friendly but shy</option><option value="selective">Selective</option><option value="reactive">Reactive</option><option value="first_time">First time in group care</option></select></label>' +
       '</div></div>' +
       '<div class="staging-profile-section"><p class="staging-profile-section-title">Health &amp; care</p>' +
         textarea('Medical conditions or allergies', 'profilePetMedical', pet.medical, 'Leave blank if none') +
@@ -250,8 +275,7 @@
       '<div class="staging-profile-section"><p class="staging-profile-section-title">Vaccination record</p>' +
         '<p class="staging-profile-help">Mark every vaccine that is current and add its own valid-until date.</p>' +
         '<div class="staging-check-grid" id="profileVaccineGrid"></div>' +
-        '<label class="staging-document-upload">📎 <strong>Add vaccine documents</strong><span>JPG, PNG, WEBP, PDF or HEIC · up to 10 MB each</span><input type="file" data-profile-docs multiple accept="image/*,.pdf,.heic,.heif"></label>' +
-        '<div class="staging-document-list" id="profileDocumentList"></div>' +
+        '<div class="staging-legacy-documents" id="profileLegacyDocuments" hidden><p class="staging-profile-help"><strong>Other saved vaccine documents</strong></p><div class="staging-document-list" id="profileLegacyDocumentList"></div></div>' +
         '<label class="staging-inline-check"><input type="checkbox" id="profileBringRecords" ' + (pet.bringRecords ? 'checked' : '') + '><span>I will bring the original vaccination record to Barkhaus.</span></label>' +
       '</div>' +
       '<div class="staging-profile-section"><p class="staging-profile-section-title">Membership</p>' +
@@ -303,18 +327,35 @@
     grid.innerHTML = vaccineDefinitions(animal).map(function (vaccine) {
       var checked = saved[vaccine.key] === true;
       return '<div class="staging-vaccine-row">' +
-        '<label class="staging-vaccine-check"><input type="checkbox" data-vaccine-key="' + vaccine.key + '" ' + (checked ? 'checked' : '') + '><span>' + escapeHtml(vaccine.label) + '</span></label>' +
-        '<label class="staging-vaccine-validity"><span>Valid until</span><input class="staging-field" type="date" data-vaccine-validity="' + vaccine.key + '" value="' + escapeHtml(savedValidity[vaccine.key] || '') + '" ' + (checked ? '' : 'disabled') + '></label>' +
+        '<div class="staging-vaccine-row-fields"><label class="staging-vaccine-check"><input type="checkbox" data-vaccine-key="' + vaccine.key + '" ' + (checked ? 'checked' : '') + '><span>' + escapeHtml(vaccine.label) + '</span></label>' +
+        '<label class="staging-vaccine-validity"><span>Valid until</span><input class="staging-field" type="date" data-vaccine-validity="' + vaccine.key + '" value="' + escapeHtml(savedValidity[vaccine.key] || '') + '" ' + (checked ? '' : 'disabled') + '></label></div>' +
+        '<label class="staging-vaccine-document-upload">📎 <strong>Add record for ' + escapeHtml(vaccine.label) + '</strong><span>JPG, PNG, WEBP, PDF or HEIC · up to 10 MB</span><input type="file" data-profile-vaccine-docs="' + vaccine.key + '" multiple accept="image/*,.pdf,.heic,.heif"></label>' +
+        '<div class="staging-document-list" data-vaccine-document-list="' + vaccine.key + '"></div>' +
       '</div>';
     }).join('');
+    renderDocumentList();
   }
 
   function renderDocumentList() {
-    var list = document.getElementById('profileDocumentList');
-    if (!list) return;
-    list.innerHTML = petDocumentsDraft.length ? petDocumentsDraft.map(function (document, index) {
-      return '<div class="staging-document-item"><span>📄 ' + escapeHtml(document.name) + '</span><button type="button" data-remove-profile-doc-index="' + index + '" aria-label="Remove ' + escapeHtml(document.name) + '">&times;</button></div>';
-    }).join('') : '<p class="staging-profile-help">No document added yet.</p>';
+    var visibleKeys = [];
+    document.querySelectorAll('[data-vaccine-document-list]').forEach(function (list) {
+      var vaccineKey = list.getAttribute('data-vaccine-document-list');
+      visibleKeys.push(vaccineKey);
+      var documents = petDocumentsDraft.map(function (document, index) { return { document:document, index:index }; })
+        .filter(function (item) { return item.document.vaccineKey === vaccineKey; });
+      list.innerHTML = documents.length ? documents.map(renderDocumentItem).join('') : '<p class="staging-profile-help">No file added.</p>';
+    });
+    var legacyWrap = document.getElementById('profileLegacyDocuments');
+    var legacyList = document.getElementById('profileLegacyDocumentList');
+    if (!legacyWrap || !legacyList) return;
+    var legacy = petDocumentsDraft.map(function (document, index) { return { document:document, index:index }; })
+      .filter(function (item) { return !item.document.vaccineKey || visibleKeys.indexOf(item.document.vaccineKey) === -1; });
+    legacyWrap.hidden = !legacy.length;
+    legacyList.innerHTML = legacy.map(renderDocumentItem).join('');
+  }
+
+  function renderDocumentItem(item) {
+    return '<div class="staging-document-item"><span>📄 ' + escapeHtml(item.document.name) + '</span><button type="button" data-remove-profile-doc-index="' + item.index + '" aria-label="Remove ' + escapeHtml(item.document.name) + '">&times;</button></div>';
   }
 
   function hydratePetEditor(pet) {
@@ -364,7 +405,7 @@
       medications: value('profilePetMedications'), vaccines: vaccines,
       vaccineValidity: vaccineValidity,
       vaccineDocuments: petDocumentsDraft.filter(function (document) { return document.id; }).map(function (document) {
-        return { id: document.id, name: document.name };
+        return { id: document.id, name: document.name, vaccineKey: document.vaccineKey || null };
       }),
       bringRecords: document.getElementById('profileBringRecords').checked,
       membershipId: value('profileMembershipId').toUpperCase(),
@@ -632,6 +673,21 @@
         }
       }
     }
+    var resend = event.target.closest('[data-resend-otp]');
+    if (resend) {
+      var deliveryStatus = document.querySelector('[data-otp-delivery-status]');
+      try {
+        resend.disabled = true;
+        resend.textContent = 'Sending…';
+        await requireCustomerApi().sendEmailOtp(resend.getAttribute('data-email'));
+        if (deliveryStatus) deliveryStatus.textContent = 'A new code was sent. You can also check your spam folder.';
+        beginOtpResendCooldown();
+      } catch (error) {
+        resend.disabled = false;
+        resend.textContent = 'Resend code';
+        showFormError(error.message || 'We could not resend the code. Please try again.');
+      }
+    }
     var verify = event.target.closest('[data-verify-otp]');
     if (verify) {
       var otp = value('stagingOtp').replace(/\D/g, '');
@@ -718,10 +774,11 @@
         if (!event.target.checked) dateInput.value = '';
       }
     }
-    if (event.target.matches('[data-profile-docs]')) {
+    if (event.target.matches('[data-profile-vaccine-docs]')) {
+      var vaccineKey = event.target.getAttribute('data-profile-vaccine-docs');
       Array.from(event.target.files || []).forEach(function (file) {
-        var duplicate = petDocumentsDraft.some(function (document) { return document.name === file.name; });
-        if (!duplicate) petDocumentsDraft.push({ id: null, name: file.name, file: file });
+        var duplicate = petDocumentsDraft.some(function (document) { return document.name === file.name && document.vaccineKey === vaccineKey; });
+        if (!duplicate) petDocumentsDraft.push({ id: null, name: file.name, file: file, vaccineKey: vaccineKey });
       });
       event.target.value = '';
       renderDocumentList();

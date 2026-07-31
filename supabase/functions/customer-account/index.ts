@@ -66,6 +66,13 @@ function cleanDate(value: unknown): string | null {
   return /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null;
 }
 
+function cleanVaccineKey(value: unknown): string | null {
+  const key = cleanText(value, 100);
+  if (!key) return null;
+  if (!/^[A-Za-z0-9_]+$/.test(key)) throw new ApiError("Invalid vaccine record type.");
+  return key;
+}
+
 function cleanEmail(value: unknown): string {
   return cleanText(value, 320).toLowerCase();
 }
@@ -190,7 +197,7 @@ async function loadProfile(supabase: any, user: any): Promise<Record<string, unk
         .select("pet_id,vaccine_key,confirmed,valid_until")
         .in("pet_id", petIds),
       supabase.from("pet_vaccine_documents")
-        .select("id,pet_id,file_name,content_type,file_size_bytes,valid_until,created_at")
+        .select("id,pet_id,vaccine_key,file_name,content_type,file_size_bytes,valid_until,created_at")
         .in("pet_id", petIds)
         .eq("active", true)
         .order("created_at", { ascending: false }),
@@ -232,6 +239,7 @@ async function loadProfile(supabase: any, user: any): Promise<Record<string, unk
       vaccineValidity,
       vaccineDocuments: documents.filter((row: any) => row.pet_id === pet.id).map((row: any) => ({
         id: row.id,
+        vaccineKey: row.vaccine_key,
         name: row.file_name,
         contentType: row.content_type,
         size: row.file_size_bytes,
@@ -393,6 +401,8 @@ async function createDocumentUpload(supabase: any, user: any, body: any): Promis
   const account = await requireAccount(supabase, user.id);
   const petId = cleanText(body?.petId, 80);
   await requireOwnedPet(supabase, account.owner_id, petId);
+  const vaccineKey = cleanVaccineKey(body?.vaccineKey);
+  if (!vaccineKey) throw new ApiError("Choose which vaccine this document belongs to.");
 
   const contentType = cleanText(body?.contentType, 100).toLowerCase();
   const declaredSize = Number(body?.fileSize);
@@ -416,6 +426,7 @@ async function createDocumentUpload(supabase: any, user: any, body: any): Promis
   return {
     uploadUrl: data.signedUrl,
     path,
+    vaccineKey,
     fileName: fileNameOnly(body?.fileName),
     contentType,
     maxSize: MAX_DOCUMENT_BYTES,
@@ -426,6 +437,8 @@ async function registerDocument(supabase: any, user: any, body: any): Promise<vo
   const account = await requireAccount(supabase, user.id);
   const petId = cleanText(body?.petId, 80);
   await requireOwnedPet(supabase, account.owner_id, petId);
+  const vaccineKey = cleanVaccineKey(body?.vaccineKey);
+  if (!vaccineKey) throw new ApiError("Choose which vaccine this document belongs to.");
   const path = cleanText(body?.path, 700);
   const expectedPrefix = `uploads/vaccine_document/accounts/${user.id}/${petId}/`;
   if (!path.startsWith(expectedPrefix) || path.includes("..")) throw new ApiError("Invalid vaccine document path.");
@@ -444,6 +457,7 @@ async function registerDocument(supabase: any, user: any, body: any): Promise<vo
 
   const { error } = await supabase.from("pet_vaccine_documents").upsert({
     pet_id: petId,
+    vaccine_key: vaccineKey,
     file_path: path,
     file_name: fileNameOnly(body?.fileName),
     content_type: nullableText(body?.contentType, 100),

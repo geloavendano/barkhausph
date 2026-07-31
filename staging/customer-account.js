@@ -181,10 +181,11 @@
     return { petId: data.petId, profile: data.profile || null };
   }
 
-  async function uploadDocument(petId, file) {
+  async function uploadDocument(petId, file, vaccineKey) {
     var authorization = await invoke({
       action: 'create_document_upload',
       petId: petId,
+      vaccineKey: vaccineKey,
       fileName: file.name,
       contentType: file.type,
       fileSize: file.size
@@ -198,6 +199,7 @@
     await invoke({
       action: 'register_document',
       petId: petId,
+      vaccineKey: vaccineKey,
       path: authorization.path,
       fileName: file.name,
       contentType: file.type
@@ -207,7 +209,7 @@
   async function uploadDocuments(petId, drafts) {
     var uploads = (drafts || []).filter(function (draft) { return draft && draft.file; });
     for (var index = 0; index < uploads.length; index++) {
-      await uploadDocument(petId, uploads[index].file);
+      await uploadDocument(petId, uploads[index].file, uploads[index].vaccineKey);
     }
     return refreshProfile();
   }

@@ -303,7 +303,7 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Book Your Pet's Stay, Daycare, or Grooming at Barkhaus">
 <meta name="twitter:description" content="Easy online booking for Barkhaus pet hotel, daycare, grooming, and indoor play. Reserve your pet's stay or visit with a few simple steps.">
-<link rel="stylesheet" href="/staging/styles.css?v=20260731-account-fixes">
+<link rel="stylesheet" href="/staging/styles.css?v=20260801-account-order">
 </head>
 <body>
 
@@ -444,6 +444,7 @@
 
   <!-- GROOMING SPECS -->
   <div id="groomSpecsSection" style="display:none">
+    <div class="staging-saved-panel staging-service-pets" data-staging-service-pets hidden></div>
     <p class="section-label">Pet size</p>
     <div class="pet-type-grid" id="groomSizeGrid">
       <div class="pet-type-btn" onclick="selectGroomSize(this,'small_dog')">
@@ -514,6 +515,7 @@
 
   <!-- HOTEL DATES -->
   <div id="hotelDatesSection" style="display:none">
+    <div class="staging-saved-panel staging-service-pets" data-staging-service-pets hidden></div>
     <p class="section-label">Pet size</p>
     <div class="pet-type-grid" id="hotelSizeGrid">
       <div class="pet-type-btn" onclick="selectHotelSize(this,'small_dog')">
@@ -577,6 +579,7 @@
 
   <!-- DAYCARE SCHEDULE -->
   <div id="daycareScheduleSection" style="display:none">
+    <div class="staging-saved-panel staging-service-pets" data-staging-service-pets hidden></div>
     <p class="section-label">Pet size</p>
     <div class="pet-type-grid" id="daycareSizeGrid">
       <div class="pet-type-btn" onclick="selectDaycareSize(this,'small_dog')">
@@ -1340,7 +1343,7 @@
 
 <script src="pricing.js?v=20260701-membership-types"></script>
 <script src="validation.js"></script>
-<script src="/staging/booking/staging-booking.js?v=20260731-account-fixes"></script>
+<script src="/staging/booking/staging-booking.js?v=20260801-account-order"></script>
 
 <div id="contactModalOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:1000;align-items:center;justify-content:center;padding:24px" onclick="if(event.target===this)closeContactModal()">
   <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:20px;padding:28px 24px;max-width:340px;width:100%;text-align:center">
