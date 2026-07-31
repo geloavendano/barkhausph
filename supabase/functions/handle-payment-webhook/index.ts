@@ -3,6 +3,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { createHmac } from "https://deno.land/std@0.168.0/node/crypto.ts";
+import { attachmentEntries, verifyAttachments } from "../_shared/attachments.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -1204,26 +1205,58 @@ Deno.serve(async (req) => {
     // Vaccine document uploads (paths from get-upload-url, carried in the payload)
     if (body.vaccineDocuments && Object.keys(body.vaccineDocuments).length > 0) {
       await supabase.from("vaccine_documents").delete().eq("booking_id", bookingId!);
-      const { error: docErr } = await supabase.from("vaccine_documents").insert(
-        Object.entries(body.vaccineDocuments as Record<string, string>).map(([key, path]) => ({
-          booking_id: bookingId!,
-          file_path:  path,
-          file_name:  (body.vaccineFileNames && body.vaccineFileNames[key]) || path.split("/").pop(),
-        }))
-      );
-      if (docErr) console.error("Vaccine documents insert failed (non-fatal):", docErr.message);
+      try {
+        const { valid: vaccineAttachmentEntries, missing } = await verifyAttachments(
+          supabase,
+          attachmentEntries(body.vaccineDocuments, body.vaccineFileNames),
+        );
+        if (missing.length) {
+          console.error("Skipping missing vaccine document rows:", missing.map((entry) => entry.rawPath || entry.path).join(", "));
+        }
+        if (vaccineAttachmentEntries.length) {
+          const { error: docErr } = await supabase.from("vaccine_documents").insert(
+            vaccineAttachmentEntries.map(({ path, fileName }) => ({
+              booking_id: bookingId!,
+              file_path:  path,
+              file_name:  fileName,
+            }))
+          );
+          if (docErr) console.error("Vaccine documents insert failed (non-fatal):", docErr.message);
+        }
+      } catch (attachmentErr) {
+        console.error(
+          "Vaccine document verification failed; skipping attachment rows (non-fatal):",
+          attachmentErr instanceof Error ? attachmentErr.message : attachmentErr,
+        );
+      }
     }
     // Grooming reference photos ("pegs")
     if (body.service === "grooming" && body.groomReferenceImages && Object.keys(body.groomReferenceImages).length > 0) {
       await supabase.from("grooming_reference_images").delete().eq("booking_id", bookingId!);
-      const { error: pegErr } = await supabase.from("grooming_reference_images").insert(
-        Object.entries(body.groomReferenceImages as Record<string, string>).map(([key, path]) => ({
-          booking_id: bookingId!,
-          file_path:  path,
-          file_name:  (body.groomReferenceFileNames && body.groomReferenceFileNames[key]) || path.split("/").pop(),
-        }))
-      );
-      if (pegErr) console.error("Grooming reference images insert failed (non-fatal):", pegErr.message);
+      try {
+        const { valid: groomReferenceEntries, missing } = await verifyAttachments(
+          supabase,
+          attachmentEntries(body.groomReferenceImages, body.groomReferenceFileNames),
+        );
+        if (missing.length) {
+          console.error("Skipping missing grooming reference rows:", missing.map((entry) => entry.rawPath || entry.path).join(", "));
+        }
+        if (groomReferenceEntries.length) {
+          const { error: pegErr } = await supabase.from("grooming_reference_images").insert(
+            groomReferenceEntries.map(({ path, fileName }) => ({
+              booking_id: bookingId!,
+              file_path:  path,
+              file_name:  fileName,
+            }))
+          );
+          if (pegErr) console.error("Grooming reference images insert failed (non-fatal):", pegErr.message);
+        }
+      } catch (attachmentErr) {
+        console.error(
+          "Grooming reference verification failed; skipping attachment rows (non-fatal):",
+          attachmentErr instanceof Error ? attachmentErr.message : attachmentErr,
+        );
+      }
     }
     await supabase.from("waivers").delete().eq("booking_id", bookingId!);
     await supabase.from("waivers").insert({

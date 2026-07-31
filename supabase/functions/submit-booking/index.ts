@@ -8,6 +8,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { requireAdmin, sha256 } from "../_shared/security.ts";
+import { assertAttachmentsExist, attachmentEntries } from "../_shared/attachments.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -582,6 +583,10 @@ Deno.serve(async (req) => {
       }
     }
     const manual = body.manualPayment?.receiptPath ? body.manualPayment : null;
+    const vaccineAttachmentEntries = attachmentEntries(body.vaccineDocuments, body.vaccineFileNames);
+    const groomReferenceEntries = body.service === "grooming"
+      ? attachmentEntries(body.groomReferenceImages, body.groomReferenceFileNames)
+      : [];
     if (!isAdminCreated && !isWalkin) {
       if (!manual || configuredProvider !== "manual") {
         return new Response(JSON.stringify({ error: "Direct public booking submission is not enabled." }), {
@@ -595,6 +600,7 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    await assertAttachmentsExist(supabase, [...vaccineAttachmentEntries, ...groomReferenceEntries]);
 
     // Validate required fields
     const required = ["location", "service", "petName", "petAnimal", "petGender",
@@ -885,10 +891,10 @@ Deno.serve(async (req) => {
 
     // 10b. Vaccine document uploads (paths produced by get-upload-url, passed in payload)
     if (body.vaccineDocuments && Object.keys(body.vaccineDocuments).length > 0) {
-      const docRows = Object.entries(body.vaccineDocuments).map(([key, path]) => ({
+      const docRows = vaccineAttachmentEntries.map(({ path, fileName }) => ({
         booking_id: bookingId,
-        file_path:  path as string,
-        file_name:  (body.vaccineFileNames && body.vaccineFileNames[key]) || (path as string).split("/").pop(),
+        file_path:  path,
+        file_name:  fileName,
       }));
       const { error } = await supabase.from("vaccine_documents").insert(docRows);
       if (error) console.error("Vaccine documents insert failed (non-fatal):", error.message);
@@ -896,10 +902,10 @@ Deno.serve(async (req) => {
 
     // 10c. Grooming reference photos ("pegs") — paths produced by get-upload-url
     if (body.service === "grooming" && body.groomReferenceImages && Object.keys(body.groomReferenceImages).length > 0) {
-      const pegRows = Object.entries(body.groomReferenceImages).map(([key, path]) => ({
+      const pegRows = groomReferenceEntries.map(({ path, fileName }) => ({
         booking_id: bookingId,
-        file_path:  path as string,
-        file_name:  (body.groomReferenceFileNames && body.groomReferenceFileNames[key]) || (path as string).split("/").pop(),
+        file_path:  path,
+        file_name:  fileName,
       }));
       const { error } = await supabase.from("grooming_reference_images").insert(pegRows);
       if (error) console.error("Grooming reference images insert failed (non-fatal):", error.message);
@@ -1040,6 +1046,8 @@ Deno.serve(async (req) => {
 
   } catch (err) {
     console.error("submit-booking error:", err);
+    const message = err instanceof Error ? err.message : "Unexpected error";
+    const status = /^Uploaded file could not be verified/i.test(message) ? 400 : 500;
 
     // Rollback: delete the booking row if detail inserts failed after it was created
     if (bookingId) {
@@ -1080,8 +1088,8 @@ Deno.serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ error: err instanceof Error ? err.message : "Unexpected error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({ error: message }),
+      { status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });

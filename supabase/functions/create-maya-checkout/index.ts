@@ -5,6 +5,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { randomToken, sha256 } from "../_shared/security.ts";
 import { assertHostedInventory, inventoryLockKey } from "../_shared/inventory.ts";
+import { assertAttachmentsExist, attachmentEntries } from "../_shared/attachments.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -82,6 +83,10 @@ Deno.serve(async (req) => {
     if (!publicKey) throw new Error("MAYA_PUBLIC_KEY not configured");
 
     const body = await req.json();
+    const vaccineAttachmentEntries = attachmentEntries(body.vaccineDocuments, body.vaccineFileNames);
+    const groomReferenceEntries = body.service === "grooming"
+      ? attachmentEntries(body.groomReferenceImages, body.groomReferenceFileNames)
+      : [];
     const accepted = (value: unknown) => value === true || value === "true";
     if (!accepted(body.waiverHouseRules)) {
       return new Response(JSON.stringify({ error: "General House Rules acceptance is required." }), {
@@ -116,6 +121,7 @@ Deno.serve(async (req) => {
       JSON.stringify({ error: "Invalid payment amount" }),
       { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
+    await assertAttachmentsExist(supabase, [...vaccineAttachmentEntries, ...groomReferenceEntries]);
 
     // ── 1. Resolve branch ──
     const branchName = LOCATION_MAP[body.location as string];
@@ -323,9 +329,9 @@ Deno.serve(async (req) => {
       // so the customer's uploads were silently dropped. Save them up front.
       if (body.groomReferenceImages && Object.keys(body.groomReferenceImages).length > 0) {
         const { error: pegErr } = await supabase.from("grooming_reference_images").insert(
-          Object.entries(body.groomReferenceImages as Record<string, unknown>).map(([key, path]) => ({
-            booking_id: bookingId, file_path: path as string,
-            file_name: (body.groomReferenceFileNames && body.groomReferenceFileNames[key]) || String(path).split("/").pop(),
+          groomReferenceEntries.map(({ path, fileName }) => ({
+            booking_id: bookingId, file_path: path,
+            file_name: fileName,
           }))
         );
         if (pegErr) console.error("Grooming reference images hold insert failed (non-fatal):", pegErr.message);
@@ -363,9 +369,9 @@ Deno.serve(async (req) => {
     }
     if (body.vaccineDocuments && Object.keys(body.vaccineDocuments).length > 0) {
       const { error: dErr } = await supabase.from("vaccine_documents").insert(
-        Object.entries(body.vaccineDocuments as Record<string, unknown>).map(([key, path]) => ({
-          booking_id: bookingId, file_path: path as string,
-          file_name: (body.vaccineFileNames && body.vaccineFileNames[key]) || String(path).split("/").pop(),
+        vaccineAttachmentEntries.map(({ path, fileName }) => ({
+          booking_id: bookingId, file_path: path,
+          file_name: fileName,
         }))
       );
       if (dErr) console.error("Vaccine documents hold insert failed (non-fatal):", dErr.message);
@@ -523,9 +529,11 @@ Deno.serve(async (req) => {
       } catch {}
     }
     console.error("create-maya-checkout error:", err instanceof Error ? err.message : err);
+    const message = err instanceof Error ? err.message : "Unexpected error";
+    const status = /^Uploaded file could not be verified/i.test(message) ? 400 : 500;
     return new Response(
-      JSON.stringify({ error: err instanceof Error ? err.message : "Unexpected error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({ error: message }),
+      { status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });
