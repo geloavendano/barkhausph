@@ -13,6 +13,14 @@ teammates. Keep entries short and current.
 
 ## Handoffs
 
+- 2026-07-31 - Codex: expanded the staging customer account into a two-step
+  owner + full pet-profile setup and reused the same full form for add/edit pet.
+  Profiles now cover species, sex, size, breed, age, temperament, medical/care
+  notes, vaccines, record validity, local-only document filenames, membership,
+  vet, and emergency contacts. Account creation redirects to `/staging/` signed
+  in; it no longer starts a booking. Selecting a saved pet populates compatible
+  booking, vaccine, document, membership, care, vet, and emergency fields. This
+  remains browser-local mock data; no Supabase action or schema reload is needed.
 - 2026-07-31 - Codex: replaced the standalone staging prototype with copies of the
   actual Barkhaus landing page and full booking wizard. The staging-only insertions
   are customer-account entry/profile and pet selection, same-branch add-another

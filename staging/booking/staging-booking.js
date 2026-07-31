@@ -135,12 +135,14 @@ function hostedPaymentEndpoint() {
       var values = { ownerFirst:profile.firstName, ownerLast:profile.lastName, ownerEmail:profile.email, ownerPhone:profile.phone };
       if (field) field.value = values[id] || '';
     });
+    var ownerSource = document.getElementById('ownerSource');
+    if (ownerSource && profile.source) ownerSource.value = profile.source;
 
     var petsPanel = document.getElementById('stagingSavedPets');
     petsPanel.hidden = false;
     petsPanel.innerHTML = '<p class="staging-saved-title">Choose a registered pet</p><div class="staging-pet-chips">' +
       (profile.pets || []).map(function(pet) {
-        return '<button type="button" class="staging-pet-chip" data-staging-pet="' + escapeHtml(pet.id) + '">🐾 ' + escapeHtml(pet.name) + '</button>';
+        return '<button type="button" class="staging-pet-chip" data-staging-pet="' + escapeHtml(pet.id) + '">🐾 ' + escapeHtml(pet.name) + ' · ' + escapeHtml(pet.breed || pet.animal) + '</button>';
       }).join('') + '</div>';
 
     var ownerPanel = document.getElementById('stagingSavedOwner');
@@ -156,6 +158,9 @@ function hostedPaymentEndpoint() {
     document.querySelectorAll('[data-staging-pet]').forEach(function(button) {
       button.classList.toggle('selected', button.getAttribute('data-staging-pet') === petId);
     });
+    var previousSize = booking.petSize;
+    booking.vaccines = Object.assign({}, pet.vaccines || {});
+    booking.petSize = pet.size || booking.petSize;
     document.getElementById('petName').value = pet.name || '';
     document.getElementById('petBreed').value = pet.breed || '';
     document.getElementById('petAgeNum').value = pet.age || '';
@@ -176,7 +181,61 @@ function hostedPaymentEndpoint() {
     booking.petAge = pet.age;
     booking.petAgeUnit = pet.ageUnit;
     booking.petMedical = pet.medical;
-    if (!booking.petSize) booking.petSize = pet.size;
+    booking.petTemperament = pet.temperament;
+
+    var sizeDisplay = document.getElementById('petSizeDisplay');
+    if (sizeDisplay && booking.petSize) sizeDisplay.value = PET_SIZE_LABELS[booking.petSize] || booking.petSize;
+    var sizeSelect = document.getElementById('petSizeSelect');
+    if (sizeSelect && booking.petSize) sizeSelect.value = booking.petSize;
+
+    function setProfileValue(id, profileValue) {
+      var field = document.getElementById(id);
+      if (field) field.value = profileValue || '';
+    }
+    setProfileValue('hotelFeeding', pet.feeding);
+    setProfileValue('hotelMeds', pet.medications);
+    setProfileValue('vetClinic', pet.vetClinic);
+    setProfileValue('vetContact', pet.vetContact);
+    setProfileValue('vetAddress', pet.vetAddress);
+    setProfileValue('emergencyName', pet.emergencyName);
+    setProfileValue('emergencyPhone', pet.emergencyPhone);
+    booking.hotelFeeding = pet.feeding || '';
+    booking.hotelMeds = pet.medications || '';
+    booking.vetClinic = pet.vetClinic || '';
+    booking.vetContact = pet.vetContact || '';
+    booking.vetAddress = pet.vetAddress || '';
+    booking.emergencyName = pet.emergencyName || '';
+    booking.emergencyPhone = pet.emergencyPhone || '';
+
+    uploadedVaccineFiles = (pet.vaccineDocuments || []).map(function(name) {
+      return { name:name, type:'application/octet-stream', size:0, savedProfileDocument:true };
+    });
+    var vaccineList = document.getElementById('vaccineFileList');
+    if (vaccineList) {
+      vaccineList.innerHTML = uploadedVaccineFiles.map(function(file) {
+        return '<div class="file-item">📁 ' + escapeHtml(file.name) + '<span style="color:var(--success);font-weight:700">Saved to profile</span></div>';
+      }).join('');
+      if (pet.vaccineValidUntil) {
+        vaccineList.insertAdjacentHTML('beforeend', '<div class="file-item">Vaccine record valid until <strong>' + escapeHtml(pet.vaccineValidUntil) + '</strong></div>');
+      }
+    }
+    var bringRecords = document.getElementById('bringVaccines');
+    if (bringRecords) bringRecords.classList.toggle('checked', !!pet.bringRecords);
+
+    if (pet.membershipId) {
+      setMembership(true);
+      document.getElementById('membershipId').value = pet.membershipId;
+      onMembershipIdInput();
+    } else {
+      setMembership(false);
+    }
+
+    if (booking.service === 'grooming') updateGroomTotal();
+    if (booking.service === 'hotel') calcHotelTotal();
+    if (booking.service === 'daycare') calcDaycareTotal();
+    if (previousSize && pet.size && previousSize !== pet.size) {
+      showToast('We updated the booking size to match ' + pet.name + '’s saved profile. Please review the service details if needed.', 7000);
+    }
     checkSeniorWaiver();
     refreshContinueBtn();
   }
