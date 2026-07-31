@@ -13,6 +13,13 @@ teammates. Keep entries short and current.
 
 ## Handoffs
 
+- 2026-07-31 - Codex: published a private frontend-only booking redesign prototype
+  at `https://barkhaus-booking-staging.geloavendano.chatgpt.site`. It demonstrates
+  guest/Google/OTP entry, saved pet profiles, availability-first selection, same-branch
+  multi-service cart, `BH-XXXXXX-A/B` child references, one mock Maya payment with child
+  allocations, account pet management, and a combined confirmation email. Source lives
+  in `/Users/gelo/Projects/barkhaus-booking-staging`; production Barkhaus, Supabase,
+  Maya, Edge Functions, customer data, uploads, and email were not touched.
 - 2026-07-15 - Codex: stopped destructive upload cleanup in `get-upload-url` so
   booking attachments in the `vaccine-docs` bucket are not auto-deleted just because
   their upload authorization expired. Added browser-side compression for JPEG/PNG/WEBP
