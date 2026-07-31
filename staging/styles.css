@@ -109,6 +109,7 @@
   box-shadow: 0 24px 80px rgba(0, 0, 0, .42);
 }
 
+.staging-modal h1,
 .staging-modal h2 {
   margin: 0 0 9px;
   color: var(--staging-cream);
@@ -164,6 +165,7 @@
   color: var(--staging-cream);
   font-family: "Nunito", sans-serif;
   cursor: pointer;
+  text-decoration: none;
 }
 
 .staging-choice:hover {
@@ -715,5 +717,88 @@ select.staging-field {
 
   .staging-form-actions {
     bottom: -30px;
+  }
+}
+
+body.staging-account-body {
+  min-height: 100svh;
+  margin: 0;
+  background:
+    radial-gradient(circle at 15% 10%, rgba(77, 150, 185, .18), transparent 32rem),
+    var(--staging-bg);
+  color: var(--staging-cream);
+  font-family: "Nunito", sans-serif;
+}
+
+.staging-account-main {
+  width: min(calc(100% - 32px), 760px);
+  margin: 0 auto;
+  padding: 74px 0 60px;
+}
+
+.staging-account-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 22px;
+}
+
+.staging-account-logo img {
+  display: block;
+  width: auto;
+  height: 32px;
+}
+
+.staging-account-back {
+  color: var(--staging-muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.staging-account-shell .staging-modal {
+  width: 100%;
+  max-height: none;
+  overflow: visible;
+  padding: 38px;
+  border-radius: 24px;
+}
+
+.staging-account-shell .staging-modal--wide {
+  width: 100%;
+}
+
+.staging-account-shell .staging-form-actions {
+  bottom: 0;
+}
+
+.staging-account-signin-note {
+  margin: 18px 0 0;
+  color: var(--staging-muted);
+  font-size: 11px;
+  line-height: 1.6;
+  text-align: center;
+}
+
+.staging-account-signin-note a {
+  color: var(--staging-yellow);
+  font-weight: 800;
+}
+
+@media (max-width: 560px) {
+  .staging-account-main {
+    width: min(calc(100% - 24px), 760px);
+    padding-top: 66px;
+  }
+
+  .staging-account-header {
+    align-items: flex-start;
+  }
+
+  .staging-account-shell .staging-modal {
+    padding: 26px 18px 30px;
+    border-radius: 20px;
   }
 }

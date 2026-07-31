@@ -897,20 +897,24 @@
     <button class="staging-modal-close" type="button" data-close-staging aria-label="Close">&times;</button>
     <p class="staging-kicker">Before you book</p>
     <h2 id="stagingEntryTitle">How would you like to continue?</h2>
-    <p class="staging-modal-copy">You can check availability as a guest. Signing in lets Barkhaus fill in your owner and pet details.</p>
+    <p class="staging-modal-copy" id="stagingEntryIntro">You can check availability as a guest. Signing in lets Barkhaus fill in your owner and pet details.</p>
     <div class="staging-choice-list" id="stagingEntryChoices">
       <button class="staging-choice" type="button" data-staging-action="google">
         <span class="staging-choice-icon">G</span>
-        <span><strong>Continue with Google</strong><small>Sign in or create your Barkhaus account</small></span>
+        <span><strong>Sign in with Google</strong><small>Use your existing Barkhaus account</small></span>
       </button>
       <button class="staging-choice" type="button" data-staging-action="email">
         <span class="staging-choice-icon">@</span>
-        <span><strong>Continue with email</strong><small>Sign in securely with a one-time code</small></span>
+        <span><strong>Sign in with email</strong><small>Use a one-time code for your existing account</small></span>
       </button>
       <button class="staging-choice" type="button" data-staging-action="guest">
         <span class="staging-choice-icon">🐾</span>
         <span><strong>Continue as a guest</strong><small>View schedules without creating an account</small></span>
       </button>
+      <a class="staging-choice" href="/staging/account/">
+        <span class="staging-choice-icon">＋</span>
+        <span><strong>Create an account</strong><small>Save your owner, pet, and vaccine details for future visits</small></span>
+      </a>
     </div>
     <div class="staging-account-form" id="stagingAccountForm" hidden></div>
   </div>

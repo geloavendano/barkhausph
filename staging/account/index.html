@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <base href="/">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Create your Barkhaus account</title>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&amp;family=Nunito:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/staging/styles.css?v=20260731-account-page">
+</head>
+<body class="staging-account-body" data-staging-account-page>
+  <div class="staging-ribbon" role="status">
+    <strong>STAGING</strong>
+    <span>Account details stay in this browser for this preview.</span>
+  </div>
+
+  <main class="staging-account-main">
+    <header class="staging-account-header">
+      <a class="staging-account-logo" href="/staging/" aria-label="Back to Barkhaus home">
+        <img src="/images/Barkhaus%20Pet%20Hotel%20Logo.png" alt="Barkhaus Pet Services">
+      </a>
+      <a class="staging-account-back" href="/staging/">Back to home</a>
+    </header>
+
+    <section class="staging-account-shell open" id="stagingEntryModal" aria-hidden="false">
+      <div class="staging-modal" aria-labelledby="stagingEntryTitle">
+        <p class="staging-kicker">Your Barkhaus account</p>
+        <h1 id="stagingEntryTitle">Create your account</h1>
+        <p class="staging-modal-copy" id="stagingEntryIntro">Save your details once so future bookings are faster. You’ll add your contact information, your first pet, and their care and vaccine records.</p>
+
+        <div class="staging-choice-list" id="stagingEntryChoices">
+          <button class="staging-choice" type="button" data-staging-action="google">
+            <span class="staging-choice-icon">G</span>
+            <span><strong>Create with Google</strong><small>Use your Google email for your Barkhaus account</small></span>
+          </button>
+          <button class="staging-choice" type="button" data-staging-action="email">
+            <span class="staging-choice-icon">@</span>
+            <span><strong>Create with email</strong><small>Verify your email with a one-time code</small></span>
+          </button>
+        </div>
+
+        <div class="staging-account-form" id="stagingAccountForm" hidden></div>
+        <p class="staging-account-signin-note">Already have an account? <a href="/staging/">Return home to sign in.</a></p>
+      </div>
+    </section>
+  </main>
+
+  <script src="/staging/app.js?v=20260731-account-page"></script>
+</body>
+</html>

@@ -4,12 +4,14 @@
   var SESSION_KEY = 'barkhaus_staging_customer';
   var PROFILE_KEY = 'barkhaus_staging_registered_profile';
   var MODE_KEY = 'barkhaus_staging_mode';
+  var isAccountPage = document.body.hasAttribute('data-staging-account-page');
   var entryModal = document.getElementById('stagingEntryModal');
   var manageModal = document.getElementById('stagingManageModal');
   var accountNav = document.getElementById('stagingAccountNav');
   var choices = document.getElementById('stagingEntryChoices');
   var accountForm = document.getElementById('stagingAccountForm');
   var entryTitle = document.getElementById('stagingEntryTitle');
+  var entryIntro = document.getElementById('stagingEntryIntro');
   var accountDraft = null;
   var petDocumentsDraft = [];
 
@@ -34,9 +36,18 @@
     if (stored && String(stored.email).toLowerCase() === String(email).toLowerCase()) {
       localStorage.setItem(SESSION_KEY, JSON.stringify(stored));
       localStorage.setItem(MODE_KEY, 'account');
+      if (isAccountPage) {
+        window.location.href = '/staging/?account=signed-in';
+        return;
+      }
       closeModal(entryModal);
       renderAccountNav();
       showLandingNotice('Welcome back, ' + stored.firstName + '. You’re signed in.');
+      return;
+    }
+    if (!isAccountPage) {
+      var params = new URLSearchParams({ provider: provider, email: email });
+      window.location.href = '/staging/account/?' + params.toString();
       return;
     }
     beginAccountSetup(provider, email);
@@ -69,7 +80,8 @@
     choices.hidden = false;
     accountForm.hidden = true;
     accountForm.innerHTML = '';
-    entryTitle.textContent = 'How would you like to continue?';
+    if (entryIntro) entryIntro.hidden = false;
+    entryTitle.textContent = isAccountPage ? 'Create your account' : 'How would you like to continue?';
     modalCard(entryModal).classList.remove('staging-modal--wide');
     accountDraft = null;
     petDocumentsDraft = [];
@@ -83,6 +95,7 @@
   }
 
   function renderAccountNav() {
+    if (!accountNav) return;
     var customer = readCustomer();
     if (!customer) {
       accountNav.innerHTML = '<button type="button" class="staging-account-pill" data-open-entry>Sign in</button>';
@@ -99,6 +112,7 @@
   }
 
   function closeAccountMenu() {
+    if (!accountNav) return;
     var toggle = accountNav.querySelector('[data-toggle-account]');
     var options = accountNav.querySelector('.staging-account-menu-options');
     if (toggle) toggle.setAttribute('aria-expanded', 'false');
@@ -108,9 +122,10 @@
   function showEmailForm() {
     choices.hidden = true;
     accountForm.hidden = false;
-    entryTitle.textContent = 'Sign in with email';
+    if (entryIntro) entryIntro.hidden = true;
+    entryTitle.textContent = isAccountPage ? 'Create an account with email' : 'Sign in with email';
     accountForm.innerHTML =
-      '<p class="staging-modal-copy">Enter your email and we’ll help you sign in securely.</p>' +
+      '<p class="staging-modal-copy">Enter your email and we’ll send you a secure one-time code.</p>' +
       '<label class="staging-field-label">Email address<input class="staging-field" id="stagingEmail" type="email" value="gelo@example.com" autocomplete="email"></label>' +
       '<div class="staging-form-error" id="entryFormError" hidden></div>' +
       '<button class="staging-primary" type="button" data-send-otp>Send one-time code</button>' +
@@ -118,7 +133,7 @@
   }
 
   function showOtpForm(email) {
-    entryTitle.textContent = 'Enter your code';
+    entryTitle.textContent = isAccountPage ? 'Verify your email' : 'Enter your code';
     accountForm.innerHTML =
       '<p class="staging-modal-copy">For this test, use code <strong>123456</strong> to continue as <strong>' + escapeHtml(email) + '</strong>.</p>' +
       '<label class="staging-field-label">One-time code<input class="staging-field" id="stagingOtp" inputmode="numeric" value="123456" maxlength="6"></label>' +
@@ -131,6 +146,7 @@
     accountDraft = { provider: provider, email: email, owner: {} };
     choices.hidden = true;
     accountForm.hidden = false;
+    if (entryIntro) entryIntro.hidden = true;
     modalCard(entryModal).classList.add('staging-modal--wide');
     showOwnerSetup();
   }
@@ -459,7 +475,7 @@
       accountToggle.setAttribute('aria-expanded', String(willOpen));
       return;
     }
-    if (event.target.closest('[data-close-staging]') || event.target === entryModal) closeModal(entryModal);
+    if (!isAccountPage && (event.target.closest('[data-close-staging]') || event.target === entryModal)) closeModal(entryModal);
     if (event.target.closest('[data-close-manage]') || event.target === manageModal) closeModal(manageModal);
     if (event.target.closest('[data-open-manage]')) { closeAccountMenu(); renderManage(); openModal(manageModal); }
     if (event.target.closest('[data-logout]')) {
@@ -536,12 +552,20 @@
 
   document.addEventListener('keydown', function (event) {
     if (event.key === 'Escape') {
-      if (entryModal.classList.contains('open')) closeModal(entryModal);
-      if (manageModal.classList.contains('open')) closeModal(manageModal);
+      if (!isAccountPage && entryModal && entryModal.classList.contains('open')) closeModal(entryModal);
+      if (manageModal && manageModal.classList.contains('open')) closeModal(manageModal);
     }
   });
 
-  renderAccountNav();
+  if (isAccountPage) {
+    var accountParams = new URLSearchParams(window.location.search);
+    var accountProvider = accountParams.get('provider');
+    var accountEmail = accountParams.get('email');
+    if (accountProvider && accountEmail) beginAccountSetup(accountProvider, accountEmail);
+    else resetEntryModal();
+  } else {
+    renderAccountNav();
+  }
   if (readCustomer() && !readStoredProfile()) localStorage.setItem(PROFILE_KEY, JSON.stringify(readCustomer()));
   if (new URLSearchParams(window.location.search).get('account') === 'created') {
     var signedInCustomer = readCustomer();

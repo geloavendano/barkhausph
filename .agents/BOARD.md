@@ -13,6 +13,13 @@ teammates. Keep entries short and current.
 
 ## Handoffs
 
+- 2026-07-31 - Codex: moved staging account registration out of the landing
+  modal and into `/staging/account/`. The landing choice now separates existing
+  account sign-in, guest booking, and account creation; unmatched sign-ins route
+  to the standalone page instead of expanding the modal. The dedicated page
+  reuses the complete owner + pet profile setup and still returns to `/staging/`
+  signed in after creation. This creates a stable URL for future post-booking or
+  campaign prompts. No Supabase action is needed.
 - 2026-07-31 - Codex: rewrote staging-only visible copy in customer language,
   removing references to Admin, production/frontend mechanics, write guards, and
   technical preview behavior. The landing account greeting is now positioned at
