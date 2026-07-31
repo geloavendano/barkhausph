@@ -13,6 +13,13 @@ teammates. Keep entries short and current.
 
 ## Handoffs
 
+- 2026-07-31 - Codex: added the dashboard-ready Supabase customer Auth email at
+  `supabase/templates/customer-auth-otp.html`, visually adapted from the current
+  booking confirmation. It includes both `{{ .Token }}` for six-digit entry and
+  `{{ .ConfirmationURL }}` as the fallback sign-in link. HUMAN TODO: in hosted
+  Supabase, set the Magic Link template subject to `Your Barkhaus sign-in code`,
+  replace its body with this file, and send an OTP to a test inbox after Resend
+  SMTP is configured. No Edge Function deploy, DDL, or schema reload is needed.
 - 2026-07-31 - Codex: implemented real staging customer accounts in the repo:
   Google SSO + email OTP with a customer-only Auth storage key, persistent
   operational owner/pet profiles, per-pet vaccine declarations, and reusable
@@ -151,6 +158,11 @@ teammates. Keep entries short and current.
 Record any edge function deploys, table/schema changes, RLS policy changes, or schema-cache
 reloads the human needs to apply manually.
 
+- Configure Resend as Supabase Auth custom SMTP, then set the hosted Magic Link
+  email subject to `Your Barkhaus sign-in code` and paste
+  `supabase/templates/customer-auth-otp.html` into the template body. Verify both
+  six-digit entry and fallback-link sign-in at `/staging/account/`; no schema
+  reload is needed.
 - Apply `supabase/migrations/2026-06-19_resource_service_hours.sql` to production. It
   creates/RLS-enables the table, seeds 90 days at 09:00-19:00 with a 17:00 cutoff,
   converts matching legacy weekday blocks to explicit dates, retires legacy rows, and
