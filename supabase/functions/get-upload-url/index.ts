@@ -1,4 +1,4 @@
-// get-upload-url
+// get-upload-url v2: purpose/date/randomized attachment paths
 // Called by the booking form before submit-booking is invoked.
 // The client generates a random uploadId (UUID), uploads files here,
 // then passes the resulting paths to submit-booking/create-maya-checkout, which
@@ -100,11 +100,17 @@ Deno.serve(async (req) => {
     }
 
     // ── Build storage path ──
-    // uploads/{uploadId}/{vaccineKey}-{timestamp}.{ext}
-    // submit-booking uses these paths when inserting vaccine/payment rows.
+    // uploads/{purpose}/{yyyy}/{mm}/{dd}/{uploadId}/{key}-{timestamp}-{random}.{ext}
+    // Purpose/date/upload-id folders keep vaccine docs, grooming pegs, and receipts
+    // separate while the random suffix removes any practical overwrite risk.
     const safeUploadId = String(uploadId).replace(/[^a-z0-9_-]/gi, "_").slice(0, 80);
     const safeKey  = (vaccineKey ?? "vaccine").replace(/[^a-z0-9_-]/gi, "_").toLowerCase();
-    const path     = `uploads/${purpose}/${safeUploadId}/${safeKey}-${Date.now()}.${ext}`;
+    const now = new Date();
+    const yyyy = String(now.getUTCFullYear());
+    const mm = String(now.getUTCMonth() + 1).padStart(2, "0");
+    const dd = String(now.getUTCDate()).padStart(2, "0");
+    const nonce = randomToken(8);
+    const path = `uploads/${purpose}/${yyyy}/${mm}/${dd}/${safeUploadId}/${safeKey}-${Date.now()}-${nonce}.${ext}`;
 
     // ── Create signed upload URL (expires in 5 minutes) ──
     const authorizationToken = randomToken();

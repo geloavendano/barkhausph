@@ -583,9 +583,13 @@ Deno.serve(async (req) => {
       }
     }
     const manual = body.manualPayment?.receiptPath ? body.manualPayment : null;
-    const vaccineAttachmentEntries = attachmentEntries(body.vaccineDocuments, body.vaccineFileNames);
+    const vaccineAttachmentEntries = attachmentEntries(
+      body.vaccineDocuments,
+      body.vaccineFileNames,
+      "vaccine_document",
+    );
     const groomReferenceEntries = body.service === "grooming"
-      ? attachmentEntries(body.groomReferenceImages, body.groomReferenceFileNames)
+      ? attachmentEntries(body.groomReferenceImages, body.groomReferenceFileNames, "grooming_reference")
       : [];
     if (!isAdminCreated && !isWalkin) {
       if (!manual || configuredProvider !== "manual") {

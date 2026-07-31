@@ -1,5 +1,7 @@
 const ATTACHMENT_BUCKET = "vaccine-docs";
 
+export type AttachmentPurpose = "vaccine_document" | "grooming_reference";
+
 export type AttachmentEntry = {
   key: string;
   path: string;
@@ -18,11 +20,20 @@ function safePath(value: unknown): string {
   return path;
 }
 
-export function attachmentEntries(paths: unknown, fileNames: unknown): AttachmentEntry[] {
+function expectedPrefix(purpose: AttachmentPurpose): string {
+  return `uploads/${purpose}/`;
+}
+
+export function attachmentEntries(
+  paths: unknown,
+  fileNames: unknown,
+  purpose: AttachmentPurpose,
+): AttachmentEntry[] {
   if (!paths || typeof paths !== "object") return [];
   const names = fileNames && typeof fileNames === "object"
     ? fileNames as Record<string, unknown>
     : {};
+  const prefix = expectedPrefix(purpose);
 
   return Object.entries(paths as Record<string, unknown>)
     .map(([key, rawPath]) => {
@@ -30,7 +41,7 @@ export function attachmentEntries(paths: unknown, fileNames: unknown): Attachmen
       const path = safePath(rawPath);
       return {
         key,
-        path,
+        path: path.startsWith(prefix) ? path : "",
         rawPath: raw,
         fileName: String(names[key] || raw.split("/").pop() || key),
       };

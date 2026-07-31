@@ -1208,7 +1208,7 @@ Deno.serve(async (req) => {
       try {
         const { valid: vaccineAttachmentEntries, missing } = await verifyAttachments(
           supabase,
-          attachmentEntries(body.vaccineDocuments, body.vaccineFileNames),
+          attachmentEntries(body.vaccineDocuments, body.vaccineFileNames, "vaccine_document"),
         );
         if (missing.length) {
           console.error("Skipping missing vaccine document rows:", missing.map((entry) => entry.rawPath || entry.path).join(", "));
@@ -1236,7 +1236,7 @@ Deno.serve(async (req) => {
       try {
         const { valid: groomReferenceEntries, missing } = await verifyAttachments(
           supabase,
-          attachmentEntries(body.groomReferenceImages, body.groomReferenceFileNames),
+          attachmentEntries(body.groomReferenceImages, body.groomReferenceFileNames, "grooming_reference"),
         );
         if (missing.length) {
           console.error("Skipping missing grooming reference rows:", missing.map((entry) => entry.rawPath || entry.path).join(", "));

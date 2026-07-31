@@ -83,9 +83,13 @@ Deno.serve(async (req) => {
     if (!publicKey) throw new Error("MAYA_PUBLIC_KEY not configured");
 
     const body = await req.json();
-    const vaccineAttachmentEntries = attachmentEntries(body.vaccineDocuments, body.vaccineFileNames);
+    const vaccineAttachmentEntries = attachmentEntries(
+      body.vaccineDocuments,
+      body.vaccineFileNames,
+      "vaccine_document",
+    );
     const groomReferenceEntries = body.service === "grooming"
-      ? attachmentEntries(body.groomReferenceImages, body.groomReferenceFileNames)
+      ? attachmentEntries(body.groomReferenceImages, body.groomReferenceFileNames, "grooming_reference")
       : [];
     const accepted = (value: unknown) => value === true || value === "true";
     if (!accepted(body.waiverHouseRules)) {
