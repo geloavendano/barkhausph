@@ -21,6 +21,20 @@
 
 ---
 
+## 0. Customer Account Scenarios
+
+- Google SSO: new customer → verified session → owner/pet setup; returning customer → landing signed in.
+- Email OTP: valid six-digit code; invalid/expired code; resend; magic-link fallback to `/staging/account/`.
+- Admin separation: an email in `admin_users` gains no customer profile automatically; a customer email gains no admin access; the same email can intentionally have both independent roles.
+- Session isolation: customer logout uses local scope and does not sign out an open admin session.
+- Existing owner claim: verified email reuses the matching operational owner rather than creating a duplicate.
+- Pet CRUD: add/edit; soft-delete; multiple pets; required-field and maximum-length validation.
+- Vaccine profile: declarations and record validity persist per pet and pre-populate booking.
+- Vaccine documents: authenticated signed upload; allowed/blocked MIME types; 10 MB limit; object verification; soft-archive; one stored object referenced by future child bookings without re-upload.
+- RLS/API: anonymous and ordinary authenticated users cannot query customer account tables directly; the account function rejects access to another owner's pet/document IDs.
+
+---
+
 ## 1. Create-Booking Scenarios
 
 ### 1A. Source × Service grid (the core matrix)

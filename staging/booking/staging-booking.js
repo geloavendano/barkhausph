@@ -207,8 +207,15 @@ function hostedPaymentEndpoint() {
     booking.emergencyName = pet.emergencyName || '';
     booking.emergencyPhone = pet.emergencyPhone || '';
 
-    uploadedVaccineFiles = (pet.vaccineDocuments || []).map(function(name) {
-      return { name:name, type:'application/octet-stream', size:0, savedProfileDocument:true };
+    uploadedVaccineFiles = (pet.vaccineDocuments || []).map(function(document) {
+      var name = typeof document === 'string' ? document : document.name;
+      return {
+        name:name || 'Vaccine document',
+        type:'application/octet-stream',
+        size:0,
+        savedProfileDocument:true,
+        profileDocumentId:typeof document === 'object' ? document.id || null : null
+      };
     });
     var vaccineList = document.getElementById('vaccineFileList');
     if (vaccineList) {

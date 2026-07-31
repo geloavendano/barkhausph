@@ -1,9 +1,8 @@
 (function () {
   'use strict';
 
-  var SESSION_KEY = 'barkhaus_staging_customer';
-  var PROFILE_KEY = 'barkhaus_staging_registered_profile';
   var MODE_KEY = 'barkhaus_staging_mode';
+  var CustomerApi = window.BarkhausCustomerAccount;
   var isAccountPage = document.body.hasAttribute('data-staging-account-page');
   var entryModal = document.getElementById('stagingEntryModal');
   var manageModal = document.getElementById('stagingManageModal');
@@ -16,41 +15,36 @@
   var petDocumentsDraft = [];
 
   function readCustomer() {
-    try { return JSON.parse(localStorage.getItem(SESSION_KEY) || 'null'); }
-    catch (error) { return null; }
+    return CustomerApi && CustomerApi.profile ? CustomerApi.profile() : null;
   }
 
-  function readStoredProfile() {
-    try { return JSON.parse(localStorage.getItem(PROFILE_KEY) || 'null'); }
-    catch (error) { return null; }
+  function requireCustomerApi() {
+    if (!CustomerApi || !CustomerApi.initialize) throw new Error('Customer sign-in could not be loaded. Please refresh and try again.');
+    return CustomerApi;
   }
 
-  function writeCustomer(customer) {
-    localStorage.setItem(SESSION_KEY, JSON.stringify(customer));
-    localStorage.setItem(PROFILE_KEY, JSON.stringify(customer));
-    localStorage.setItem(MODE_KEY, 'account');
+  function sessionOwnerDefaults() {
+    var metadata = CustomerApi && CustomerApi.userMetadata ? CustomerApi.userMetadata() : {};
+    var fullName = String(metadata.full_name || metadata.name || '').trim();
+    var parts = fullName ? fullName.split(/\s+/) : [];
+    return {
+      firstName: metadata.given_name || parts.shift() || '',
+      lastName: metadata.family_name || parts.join(' ') || '',
+      phone: metadata.phone || '',
+      source: ''
+    };
   }
 
-  function finishIdentity(provider, email) {
-    var stored = readStoredProfile();
-    if (stored && String(stored.email).toLowerCase() === String(email).toLowerCase()) {
-      localStorage.setItem(SESSION_KEY, JSON.stringify(stored));
-      localStorage.setItem(MODE_KEY, 'account');
-      if (isAccountPage) {
-        window.location.href = '/staging/?account=signed-in';
-        return;
-      }
-      closeModal(entryModal);
-      renderAccountNav();
-      showLandingNotice('Welcome back, ' + stored.firstName + '. You’re signed in.');
-      return;
-    }
-    if (!isAccountPage) {
-      var params = new URLSearchParams({ provider: provider, email: email });
-      window.location.href = '/staging/account/?' + params.toString();
-      return;
-    }
-    beginAccountSetup(provider, email);
+  function beginSetupFromSession() {
+    var api = requireCustomerApi();
+    var session = api.session && api.session();
+    if (!session || !session.user) return false;
+    beginAccountSetup(
+      (session.user.app_metadata && session.user.app_metadata.provider) || 'email',
+      session.user.email || '',
+      sessionOwnerDefaults()
+    );
+    return true;
   }
 
   function escapeHtml(value) {
@@ -98,7 +92,9 @@
     if (!accountNav) return;
     var customer = readCustomer();
     if (!customer) {
-      accountNav.innerHTML = '<button type="button" class="staging-account-pill" data-open-entry>Sign in</button>';
+      accountNav.innerHTML = CustomerApi && CustomerApi.hasSession && CustomerApi.hasSession()
+        ? '<a class="staging-account-pill" href="/staging/account/">Finish creating your account</a>'
+        : '<button type="button" class="staging-account-pill" data-open-entry>Sign in</button>';
       return;
     }
     accountNav.innerHTML =
@@ -126,7 +122,7 @@
     entryTitle.textContent = isAccountPage ? 'Create an account with email' : 'Sign in with email';
     accountForm.innerHTML =
       '<p class="staging-modal-copy">Enter your email and we’ll send you a secure one-time code.</p>' +
-      '<label class="staging-field-label">Email address<input class="staging-field" id="stagingEmail" type="email" value="gelo@example.com" autocomplete="email"></label>' +
+      '<label class="staging-field-label">Email address<input class="staging-field" id="stagingEmail" type="email" value="" autocomplete="email"></label>' +
       '<div class="staging-form-error" id="entryFormError" hidden></div>' +
       '<button class="staging-primary" type="button" data-send-otp>Send one-time code</button>' +
       '<button class="staging-secondary" type="button" data-entry-back>Back</button>';
@@ -135,15 +131,15 @@
   function showOtpForm(email) {
     entryTitle.textContent = isAccountPage ? 'Verify your email' : 'Enter your code';
     accountForm.innerHTML =
-      '<p class="staging-modal-copy">For this test, use code <strong>123456</strong> to continue as <strong>' + escapeHtml(email) + '</strong>.</p>' +
-      '<label class="staging-field-label">One-time code<input class="staging-field" id="stagingOtp" inputmode="numeric" value="123456" maxlength="6"></label>' +
+      '<p class="staging-modal-copy">Enter the six-digit code we sent to <strong>' + escapeHtml(email) + '</strong>.</p>' +
+      '<label class="staging-field-label">One-time code<input class="staging-field" id="stagingOtp" inputmode="numeric" autocomplete="one-time-code" value="" maxlength="6"></label>' +
       '<div class="staging-form-error" id="entryFormError" hidden></div>' +
       '<button class="staging-primary" type="button" data-verify-otp data-email="' + escapeHtml(email) + '">Verify code</button>' +
       '<button class="staging-secondary" type="button" data-entry-back>Back</button>';
   }
 
-  function beginAccountSetup(provider, email) {
-    accountDraft = { provider: provider, email: email, owner: {} };
+  function beginAccountSetup(provider, email, ownerDefaults) {
+    accountDraft = { provider: provider, email: email, owner: ownerDefaults || {} };
     choices.hidden = true;
     accountForm.hidden = false;
     if (entryIntro) entryIntro.hidden = true;
@@ -162,11 +158,11 @@
     accountForm.innerHTML = setupProgress(1) +
       '<p class="staging-modal-copy">Tell us how to contact you about your pet and upcoming visits.</p>' +
       '<div class="staging-field-grid">' +
-        field('First name', 'setupFirst', owner.firstName || 'Gelo', 'text', true) +
-        field('Last name', 'setupLast', owner.lastName || 'Avendaño', 'text', true) +
+        field('First name', 'setupFirst', owner.firstName || '', 'text', true) +
+        field('Last name', 'setupLast', owner.lastName || '', 'text', true) +
       '</div>' +
       field('Verified email', 'setupEmail', accountDraft.email, 'email', true, 'readonly') +
-      field('Mobile number', 'setupPhone', owner.phone || '+63 917 123 4567', 'tel', true) +
+      field('Mobile number', 'setupPhone', owner.phone || '', 'tel', true) +
       '<label class="staging-field-label">How did you hear about us?<select class="staging-field" id="setupSource">' +
         '<option value="">Select…</option><option>Instagram</option><option>Facebook</option><option>TikTok</option><option>Friend or family referral</option><option>Walk-in / saw the branch</option><option>Google search</option><option>Other</option>' +
       '</select></label>' +
@@ -201,8 +197,8 @@
 
   function defaultPet() {
     return {
-      id: 'pet-' + Date.now(), name: 'Mochi', animal: 'dog', breed: 'Shih Tzu',
-      gender: 'female', size: 'small_dog', age: '2', ageUnit: 'years',
+      id: '', name: '', animal: 'dog', breed: '',
+      gender: 'female', size: 'small_dog', age: '', ageUnit: 'years',
       temperament: 'friendly_all', medical: '', feeding: '', medications: '',
       membershipId: '', vaccineValidUntil: '', vaccines: {}, vaccineDocuments: [],
       bringRecords: false, vetClinic: '', vetContact: '', vetAddress: '',
@@ -221,7 +217,10 @@
   }
 
   function petEditorMarkup(pet) {
-    petDocumentsDraft = (pet.vaccineDocuments || []).slice();
+    petDocumentsDraft = (pet.vaccineDocuments || []).map(function (document) {
+      if (typeof document === 'string') return { id: null, name: document, file: null };
+      return { id: document.id || null, name: document.name || 'Vaccine document', file: null };
+    });
     return '<div class="staging-profile-section"><p class="staging-profile-section-title">Basic details</p>' +
       '<div class="staging-field-grid">' +
         field('Pet name', 'profilePetName', pet.name, 'text', true) +
@@ -244,7 +243,7 @@
         '<p class="staging-profile-help">Mark every vaccine that is currently up to date.</p>' +
         '<div class="staging-check-grid" id="profileVaccineGrid"></div>' +
         field('Record valid until', 'profileVaccineValidUntil', pet.vaccineValidUntil, 'date', false) +
-        '<label class="staging-document-upload">📎 <strong>Add vaccine documents</strong><span>JPG, PNG, PDF or HEIC · files won’t be uploaded yet, but we’ll remember what you selected</span><input type="file" data-profile-docs multiple accept="image/*,.pdf,.heic,.heif"></label>' +
+        '<label class="staging-document-upload">📎 <strong>Add vaccine documents</strong><span>JPG, PNG, WEBP, PDF or HEIC · up to 10 MB each</span><input type="file" data-profile-docs multiple accept="image/*,.pdf,.heic,.heif"></label>' +
         '<div class="staging-document-list" id="profileDocumentList"></div>' +
         '<label class="staging-inline-check"><input type="checkbox" id="profileBringRecords" ' + (pet.bringRecords ? 'checked' : '') + '><span>I will bring the original vaccination record to Barkhaus.</span></label>' +
       '</div>' +
@@ -291,8 +290,8 @@
   function renderDocumentList() {
     var list = document.getElementById('profileDocumentList');
     if (!list) return;
-    list.innerHTML = petDocumentsDraft.length ? petDocumentsDraft.map(function (name) {
-      return '<div class="staging-document-item"><span>📄 ' + escapeHtml(name) + '</span><button type="button" data-remove-profile-doc="' + escapeHtml(name) + '" aria-label="Remove ' + escapeHtml(name) + '">&times;</button></div>';
+    list.innerHTML = petDocumentsDraft.length ? petDocumentsDraft.map(function (document, index) {
+      return '<div class="staging-document-item"><span>📄 ' + escapeHtml(document.name) + '</span><button type="button" data-remove-profile-doc-index="' + index + '" aria-label="Remove ' + escapeHtml(document.name) + '">&times;</button></div>';
     }).join('') : '<p class="staging-profile-help">No document added yet.</p>';
   }
 
@@ -319,14 +318,16 @@
     var size = value('profilePetSize');
     if (animal === 'cat') size = 'cat';
     return {
-      id: existing && existing.id ? existing.id : 'pet-' + Date.now(),
+      id: existing && existing.id ? existing.id : null,
       name: name, animal: animal, breed: breed,
       gender: value('profilePetGender'), size: size, age: age,
       ageUnit: value('profilePetAgeUnit'), temperament: temperament,
       medical: value('profilePetMedical'), feeding: value('profilePetFeeding'),
       medications: value('profilePetMedications'), vaccines: currentVaccineChecks(),
       vaccineValidUntil: value('profileVaccineValidUntil'),
-      vaccineDocuments: petDocumentsDraft.slice(),
+      vaccineDocuments: petDocumentsDraft.filter(function (document) { return document.id; }).map(function (document) {
+        return { id: document.id, name: document.name };
+      }),
       bringRecords: document.getElementById('profileBringRecords').checked,
       membershipId: value('profileMembershipId').toUpperCase(),
       vetClinic: value('profileVetClinic'), vetContact: value('profileVetContact'),
@@ -335,20 +336,23 @@
     };
   }
 
-  function finishAccount() {
+  async function finishAccount() {
     var pet = collectPetForm(null);
     if (!pet) return;
     var owner = accountDraft.owner;
-    writeCustomer({
-      provider: accountDraft.provider,
-      firstName: owner.firstName,
-      lastName: owner.lastName,
-      email: accountDraft.email,
-      phone: owner.phone,
-      source: owner.source,
-      pets: [pet]
-    });
-    window.location.href = '/staging/?account=created';
+    var button = document.querySelector('[data-complete-account]');
+    if (button) { button.disabled = true; button.textContent = 'Creating account…'; }
+    try {
+      var api = requireCustomerApi();
+      await api.saveOwner(owner);
+      var result = await api.savePet(pet);
+      await api.uploadDocuments(result.petId, petDocumentsDraft, pet.vaccineValidUntil);
+      localStorage.setItem(MODE_KEY, 'account');
+      window.location.href = '/staging/?account=created';
+    } catch (error) {
+      showPetFormError(error.message || 'We could not create your account. Please try again.');
+      if (button) { button.disabled = false; button.textContent = 'Create account'; }
+    }
   }
 
   function renderManage() {
@@ -384,7 +388,7 @@
       '<div class="staging-form-actions"><button class="staging-secondary" type="button" data-manage-back>Back</button><button class="staging-primary" type="button" data-save-owner>Save owner</button></div>';
   }
 
-  function saveOwner() {
+  async function saveOwner() {
     var customer = readCustomer();
     var first = value('manageOwnerFirst');
     var last = value('manageOwnerLast');
@@ -393,12 +397,18 @@
       showNamedError('manageFormError', 'Please complete the required owner details.');
       return;
     }
-    customer.firstName = first;
-    customer.lastName = last;
-    customer.phone = phone;
-    writeCustomer(customer);
-    renderAccountNav();
-    renderManage();
+    try {
+      await requireCustomerApi().saveOwner({
+        firstName: first,
+        lastName: last,
+        phone: phone,
+        source: customer.source || ''
+      });
+      renderAccountNav();
+      renderManage();
+    } catch (error) {
+      showNamedError('manageFormError', error.message || 'We could not save your details.');
+    }
   }
 
   function showPetEditor(petId) {
@@ -413,15 +423,21 @@
     hydratePetEditor(pet);
   }
 
-  function savePet(id) {
+  async function savePet(id) {
     var customer = readCustomer();
     var existing = (customer.pets || []).find(function (item) { return item.id === id; });
-    var pet = collectPetForm(existing || { id: id });
+    var pet = collectPetForm(existing || null);
     if (!pet) return;
-    if (existing) customer.pets = customer.pets.map(function (item) { return item.id === id ? pet : item; });
-    else customer.pets.push(pet);
-    writeCustomer(customer);
-    renderManage();
+    var button = document.querySelector('[data-save-pet]');
+    if (button) { button.disabled = true; button.textContent = 'Saving…'; }
+    try {
+      var result = await requireCustomerApi().savePet(pet);
+      await requireCustomerApi().uploadDocuments(result.petId, petDocumentsDraft, pet.vaccineValidUntil);
+      renderManage();
+    } catch (error) {
+      showPetFormError(error.message || 'We could not save this pet.');
+      if (button) { button.disabled = false; button.textContent = 'Save pet'; }
+    }
   }
 
   function value(id) {
@@ -458,11 +474,12 @@
     return ({ friendly_all:'Friendly with all', friendly_shy:'Friendly but shy', selective:'Selective', reactive:'Reactive', first_time:'First time' })[value] || value || '';
   }
 
-  document.addEventListener('click', function (event) {
+  document.addEventListener('click', async function (event) {
     var bookingLink = event.target.closest('a[href="booking.html"], a[href="/booking.html"]');
     if (bookingLink) {
       event.preventDefault();
       if (readCustomer()) continueToBooking('account');
+      else if (CustomerApi && CustomerApi.hasSession && CustomerApi.hasSession()) window.location.href = '/staging/account/';
       else openModal(entryModal);
       return;
     }
@@ -479,28 +496,68 @@
     if (event.target.closest('[data-close-manage]') || event.target === manageModal) closeModal(manageModal);
     if (event.target.closest('[data-open-manage]')) { closeAccountMenu(); renderManage(); openModal(manageModal); }
     if (event.target.closest('[data-logout]')) {
-      localStorage.removeItem(SESSION_KEY);
-      localStorage.setItem(MODE_KEY, 'guest');
-      renderAccountNav();
-      showLandingNotice('You’re now logged out.');
+      try {
+        await requireCustomerApi().signOut();
+        localStorage.setItem(MODE_KEY, 'guest');
+        renderAccountNav();
+        showLandingNotice('You’re now logged out.');
+      } catch (error) {
+        showLandingNotice(error.message || 'We could not log you out. Please try again.');
+      }
     }
 
     var action = event.target.closest('[data-staging-action]');
     if (action) {
       var type = action.getAttribute('data-staging-action');
       if (type === 'guest') continueToBooking('guest');
-      if (type === 'google') finishIdentity('google', 'gelo@gmail.com');
+      if (type === 'google') {
+        try {
+          action.disabled = true;
+          await requireCustomerApi().signInWithGoogle();
+        } catch (error) {
+          action.disabled = false;
+          showLandingNotice(error.message || 'Google sign-in could not be started.');
+        }
+      }
       if (type === 'email') showEmailForm();
     }
     if (event.target.closest('[data-send-otp]')) {
       var email = value('stagingEmail');
-      if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) showOtpForm(email);
-      else showFormError('Enter a valid email address.');
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) showFormError('Enter a valid email address.');
+      else {
+        var sendButton = event.target.closest('[data-send-otp]');
+        try {
+          sendButton.disabled = true;
+          sendButton.textContent = 'Sending code…';
+          await requireCustomerApi().sendEmailOtp(email);
+          showOtpForm(email);
+        } catch (error) {
+          sendButton.disabled = false;
+          sendButton.textContent = 'Send one-time code';
+          showFormError(error.message || 'We could not send a code. Please try again.');
+        }
+      }
     }
     var verify = event.target.closest('[data-verify-otp]');
     if (verify) {
-      if (value('stagingOtp').length === 6) finishIdentity('email_otp', verify.getAttribute('data-email'));
-      else showFormError('Enter the six-digit one-time code.');
+      var otp = value('stagingOtp');
+      if (otp.length !== 6) showFormError('Enter the six-digit one-time code.');
+      else {
+        try {
+          verify.disabled = true;
+          verify.textContent = 'Verifying…';
+          var verified = await requireCustomerApi().verifyEmailOtp(verify.getAttribute('data-email'), otp);
+          if (verified.profile && (verified.profile.pets || []).length) {
+            localStorage.setItem(MODE_KEY, 'account');
+            window.location.href = '/staging/?account=signed-in';
+          } else if (isAccountPage) beginSetupFromSession();
+          else window.location.href = '/staging/account/';
+        } catch (error) {
+          verify.disabled = false;
+          verify.textContent = 'Verify code';
+          showFormError(error.message || 'That code could not be verified.');
+        }
+      }
     }
     if (event.target.closest('[data-owner-next]')) showPetSetup();
     if (event.target.closest('[data-owner-back]')) showOwnerSetup();
@@ -520,16 +577,27 @@
       var current = readCustomer();
       var pet = (current.pets || []).find(function (item) { return item.id === remove.getAttribute('data-delete-pet'); });
       if (pet && window.confirm('Delete ' + pet.name + ' from your account?')) {
-        current.pets = current.pets.filter(function (item) { return item.id !== pet.id; });
-        writeCustomer(current);
-        renderManage();
+        try {
+          await requireCustomerApi().archivePet(pet.id);
+          renderManage();
+        } catch (error) {
+          showLandingNotice(error.message || 'We could not remove this pet.');
+        }
       }
     }
-    var removeDoc = event.target.closest('[data-remove-profile-doc]');
+    var removeDoc = event.target.closest('[data-remove-profile-doc-index]');
     if (removeDoc) {
-      var name = removeDoc.getAttribute('data-remove-profile-doc');
-      petDocumentsDraft = petDocumentsDraft.filter(function (doc) { return doc !== name; });
-      renderDocumentList();
+      var documentIndex = Number(removeDoc.getAttribute('data-remove-profile-doc-index'));
+      var documentDraft = petDocumentsDraft[documentIndex];
+      if (documentDraft) {
+        try {
+          if (documentDraft.id) await requireCustomerApi().archiveDocument(documentDraft.id);
+          petDocumentsDraft.splice(documentIndex, 1);
+          renderDocumentList();
+        } catch (error) {
+          showPetFormError(error.message || 'We could not remove this document.');
+        }
+      }
     }
     if (!event.target.closest('.staging-account-menu')) closeAccountMenu();
   });
@@ -543,7 +611,8 @@
     }
     if (event.target.matches('[data-profile-docs]')) {
       Array.from(event.target.files || []).forEach(function (file) {
-        if (petDocumentsDraft.indexOf(file.name) === -1) petDocumentsDraft.push(file.name);
+        var duplicate = petDocumentsDraft.some(function (document) { return document.name === file.name; });
+        if (!duplicate) petDocumentsDraft.push({ id: null, name: file.name, file: file });
       });
       event.target.value = '';
       renderDocumentList();
@@ -557,19 +626,54 @@
     }
   });
 
-  if (isAccountPage) {
-    var accountParams = new URLSearchParams(window.location.search);
-    var accountProvider = accountParams.get('provider');
-    var accountEmail = accountParams.get('email');
-    if (accountProvider && accountEmail) beginAccountSetup(accountProvider, accountEmail);
-    else resetEntryModal();
-  } else {
-    renderAccountNav();
+  async function initializeAccountExperience() {
+    try {
+      var state = await requireCustomerApi().initialize();
+      if (isAccountPage) {
+        if (state.session && state.profile && (state.profile.pets || []).length) {
+          localStorage.setItem(MODE_KEY, 'account');
+          window.location.replace('/staging/?account=signed-in');
+          return;
+        }
+        if (state.session) {
+          var ownerDefaults = state.profile ? {
+            firstName: state.profile.firstName,
+            lastName: state.profile.lastName,
+            phone: state.profile.phone,
+            source: state.profile.source
+          } : sessionOwnerDefaults();
+          beginAccountSetup(
+            (state.session.user.app_metadata && state.session.user.app_metadata.provider) || 'email',
+            state.session.user.email || '',
+            ownerDefaults
+          );
+        } else resetEntryModal();
+      } else {
+        if (state.profile) localStorage.setItem(MODE_KEY, 'account');
+        renderAccountNav();
+        var params = new URLSearchParams(window.location.search);
+        if (params.get('account') === 'created' && state.profile) {
+          showLandingNotice('Account created. You’re signed in as ' + state.profile.firstName + '. Press Book Now whenever you’re ready.');
+          window.history.replaceState({}, '', '/staging/');
+        } else if (params.get('account') === 'signed-in' && state.profile) {
+          showLandingNotice('Welcome back, ' + state.profile.firstName + '. You’re signed in.');
+          window.history.replaceState({}, '', '/staging/');
+        }
+      }
+    } catch (error) {
+      console.error('Customer account initialization failed:', error);
+      if (isAccountPage) {
+        resetEntryModal();
+        showLandingNotice(error.message || 'Customer accounts are temporarily unavailable.');
+      } else {
+        renderAccountNav();
+        showLandingNotice(error.message || 'Customer sign-in is temporarily unavailable.');
+      }
+    }
   }
-  if (readCustomer() && !readStoredProfile()) localStorage.setItem(PROFILE_KEY, JSON.stringify(readCustomer()));
-  if (new URLSearchParams(window.location.search).get('account') === 'created') {
-    var signedInCustomer = readCustomer();
-    if (signedInCustomer) showLandingNotice('Account created. You’re signed in as ' + signedInCustomer.firstName + '. Press Book Now whenever you’re ready.');
-    window.history.replaceState({}, '', '/staging/');
+
+  if (CustomerApi && CustomerApi.onChange && !isAccountPage) {
+    CustomerApi.onChange(function () { renderAccountNav(); });
   }
+  initializeAccountExperience();
 })();

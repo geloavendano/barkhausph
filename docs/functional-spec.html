@@ -195,7 +195,7 @@
   <table>
     <tr><th>Actor</th><th>Capabilities</th></tr>
     <tr><td>Visitor</td><td>Browses landing page, services, locations, membership info, blog, FAQ. No account needed.</td></tr>
-    <tr><td>Customer (online)</td><td>Books a service end-to-end and pays online via card / e-wallet. No account — identified per-booking by contact details; repeat customers are matched by email/phone.</td></tr>
+    <tr><td>Customer (online)</td><td>May book as a guest or sign in with Google/email OTP. A signed-in customer can save owner details, multiple full pet profiles, vaccine declarations, and reusable private vaccine documents for booking pre-population.</td></tr>
     <tr><td>Customer (walk-in)</td><td>Completes the same booking form on a staff device at the counter, without online payment (pays in store).</td></tr>
     <tr><td>Branch staff / Admin</td><td>Signs in with Google. Full admin dashboard: calendar, bookings, check-in/out, payments, members, inventory, blocked schedules. Access controlled by an allow-list (<code>admin_users</code>).</td></tr>
     <tr><td>System</td><td>Automated behaviors: payment webhooks, confirmation emails, 15-minute pending-booking auto-cancel, live data refresh.</td></tr>
@@ -206,6 +206,7 @@
     <tr><th>Module</th><th>Surface</th><th>Spec section</th></tr>
     <tr><td>Landing page</td><td><code>barkhaus.ph/</code> (+ blog, FAQ)</td><td>§2, §10</td></tr>
     <tr><td>Booking system</td><td><code>/booking.html</code></td><td>§3–§5</td></tr>
+    <tr><td>Customer account</td><td><code>/staging/account/</code> during rollout</td><td>Google/email OTP, owner and pet profiles, vaccine documents</td></tr>
     <tr><td>Admin dashboard</td><td><code>/admin/</code> (React SPA)</td><td>§6</td></tr>
     <tr><td>Emails</td><td>Resend (transactional)</td><td>§7</td></tr>
     <tr><td>Memberships</td><td>Booking flow + admin Members page</td><td>§8</td></tr>
@@ -575,7 +576,7 @@
   <div class="gap">Per-member create/edit UI — memberships are CSV-managed by design.</div>
   <div class="gap">Automated payment-gateway refunds — refunds are recorded manually after money moves outside the system.</div>
   <div class="gap">Vaccine file upload from the admin wizard (declarations only; uploads are an online-customer feature).</div>
-  <div class="gap">Combined cancel-and-refund action; reminder / cancellation emails; customer accounts &amp; booking self-management; full-name ("First Last") search matching.</div>
+  <div class="gap">Combined cancel-and-refund action; reminder / cancellation emails; customer booking-history self-management; full-name ("First Last") search matching.</div>
   <p style="margin-top:14px">Scenario-level acceptance criteria for everything above are maintained in <code>docs/test-scenarios.md</code>, with executable checks in the internal test suite.</p>
   <div class="backtop"><a href="#top">↑ top</a></div>
 </section>

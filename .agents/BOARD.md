@@ -13,6 +13,21 @@ teammates. Keep entries short and current.
 
 ## Handoffs
 
+- 2026-07-31 - Codex: implemented real staging customer accounts in the repo:
+  Google SSO + email OTP with a customer-only Auth storage key, persistent
+  operational owner/pet profiles, per-pet vaccine declarations, and reusable
+  private vaccine-document uploads through a new authenticated
+  `customer-account` Edge Function. Customer and admin authorization remain
+  independent; customer logout uses local scope so it does not revoke a separate
+  admin session. HUMAN TODO: apply
+  `supabase/migrations/20260731223000_customer_accounts.sql` (it already runs
+  `NOTIFY pgrst, 'reload schema';`), deploy with
+  `supabase functions deploy customer-account` using default JWT verification,
+  add `https://barkhaus.ph/staging/account/` to Supabase Auth redirect URLs, and
+  update the Magic Link email template to display `{{ .Token }}` for six-digit
+  OTP entry (keep `{{ .ConfirmationURL }}` as a fallback link). Google and email
+  providers are already enabled. Verify new/returning Google, OTP, account CRUD,
+  document upload, and same-email admin/customer session isolation afterward.
 - 2026-07-31 - Codex: moved staging account registration out of the landing
   modal and into `/staging/account/`. The landing choice now separates existing
   account sign-in, guest booking, and account creation; unmatched sign-ins route
