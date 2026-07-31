@@ -1,271 +1,4414 @@
-(function () {
-  'use strict';
+/* ═══════════════════════════════════════════════════════════
+   Barkhaus — booking.js
+   Booking flow: config, state, UI, collect, submit
+   Depends on: pricing.js, validation.js
+   ═══════════════════════════════════════════════════════════ */
 
-  // This staging client is intentionally read-only. Its only network requests are
-  // public REST reads and privacy-safe RPCs that already power booking.html.
-  var SUPABASE_URL = 'https://dxttnbtfhpanyiyduevn.supabase.co';
-  var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4dHRuYnRmaHBhbnlpeWR1ZXZuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY1MjkyNDcsImV4cCI6MjA5MjEwNTI0N30.jrMk8-_Ga01TydNPUwCzlymf1W44PjaXXIUjCLALb2s';
-  var app = document.getElementById('bookingApp');
-  var toast = document.getElementById('toast');
-  var mode = sessionStorage.getItem('barkhaus_staging_mode') || 'guest';
-  var savedPets = [
-    { id:'demo-mochi', name:'Mochi', animal:'dog', size:'medium_dog', gender:'male', breed:'Shiba Inu', age:'3', ageUnit:'years', temperament:'friendly_shy', medical:'Sensitive to loud dryers.', vaccines:['anti_rabies','combo','bordetella','tick_flea'] },
-    { id:'demo-luna', name:'Luna', animal:'cat', size:'cat', gender:'female', breed:'Domestic Shorthair', age:'2', ageUnit:'years', temperament:'friendly_all', medical:'', vaccines:['anti_rabies','all_in_one','anti_parasitic'] }
-  ];
-  var state = {
-    step:'branch', branch:null, branchId:null, service:null, cart:[], draft:{},
-    owner: mode === 'account' ? { first:'Gelo', last:'Endicio', email:'gelo@example.com', phone:'+63 917 123 4567', source:'Website' } : {},
-    rooms:[], groomers:[], pricingReady:false, availabilityBusy:false, slots:[],
-    member:null, memberStatus:'', files:{ vaccines:[], pegs:[] }
-  };
-  var stepOrder = ['branch','service','availability','details','health','owner','waiver','review'];
-  var stepNames = {branch:'Branch',service:'Service',availability:'Availability',details:'Pet details',health:'Health & records',owner:'Owner',waiver:'Waivers',review:'Review',checkout:'Checkout preview'};
+// Staging is deliberately read-only. Preserve production GETs and the small
+// set of read-only RPC POSTs used for availability/membership, and reject every
+// edge-function, Storage, or data-write request before it leaves the browser.
+var STAGING_PREVIEW = true;
+var _stagingNativeFetch = window.fetch.bind(window);
+window.fetch = function(input, init) {
+  var url = typeof input === 'string' ? input : (input && input.url) || '';
+  var method = String((init && init.method) || (input && input.method) || 'GET').toUpperCase();
+  var isSafeGet = method === 'GET' || method === 'HEAD';
+  var isReadOnlyRpc = method === 'POST' && /\/rest\/v1\/rpc\/(get_grooming_occupancy|get_hotel_occupancy|get_studio_occupancy|validate_member)(?:\?|$)/.test(url);
+  if (/\/functions\/v1\//.test(url) || /\/storage\/v1\//.test(url) || (!isSafeGet && !isReadOnlyRpc)) {
+    return Promise.reject(new Error('Staging preview blocked a write request.'));
+  }
+  return _stagingNativeFetch(input, init);
+};
 
-  function esc(value) { return String(value == null ? '' : value).replace(/[&<>'"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]; }); }
-  function peso(value) { return '₱' + Math.round(Number(value)||0).toLocaleString('en-PH'); }
-  function dateToday() { var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
-  function alpha(index) { var n=index+1,s=''; while(n>0){n--;s=String.fromCharCode(65+(n%26))+s;n=Math.floor(n/26);} return s; }
-  function labelSize(key) { return {small_dog:'Small Dog',medium_dog:'Medium Dog',large_dog:'Large Dog',giant_dog:'Giant Dog',cat:'Cat'}[key]||key||''; }
-  function serviceLabel(key) { return key==='hotel'?'Pet Hotel':'Grooming'; }
-  function showToast(message) { toast.textContent=message; toast.hidden=false; clearTimeout(showToast.timer); showToast.timer=setTimeout(function(){toast.hidden=true;},4500); }
 
-  async function apiFetch(table, query) {
-    var response = await fetch(SUPABASE_URL + '/rest/v1/' + table + (query ? '?' + query : ''), { headers:{ apikey:SUPABASE_ANON_KEY, Authorization:'Bearer '+SUPABASE_ANON_KEY, 'Content-Type':'application/json' } });
-    if (!response.ok) throw new Error('Read failed ('+response.status+')');
-    return response.json();
-  }
-  async function rpc(name, params) {
-    var response = await fetch(SUPABASE_URL + '/rest/v1/rpc/' + name, { method:'POST', headers:{ apikey:SUPABASE_ANON_KEY, Authorization:'Bearer '+SUPABASE_ANON_KEY, 'Content-Type':'application/json' }, body:JSON.stringify(params||{}) });
-    if (!response.ok) throw new Error('Availability read failed ('+response.status+')');
-    return response.json();
-  }
+// ── CONFIG ──
+var SUPABASE_URL        = 'https://dxttnbtfhpanyiyduevn.supabase.co';
+var CREATE_PAYMENT_URL  = SUPABASE_URL + '/functions/v1/create-payment';
+var CREATE_MAYA_CHECKOUT_URL = SUPABASE_URL + '/functions/v1/create-maya-checkout';
+var PAYMENT_STATUS_URL  = SUPABASE_URL + '/functions/v1/get-payment-status';
+var GET_UPLOAD_URL      = SUPABASE_URL + '/functions/v1/get-upload-url';
+var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4dHRuYnRmaHBhbnlpeWR1ZXZuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY1MjkyNDcsImV4cCI6MjA5MjEwNTI0N30.jrMk8-_Ga01TydNPUwCzlymf1W44PjaXXIUjCLALb2s';
+var EDGE_FN_URL       = SUPABASE_URL + '/functions/v1/submit-booking';
 
-  function setStep(step) { state.step=step; window.scrollTo(0,0); render(); }
-  function backButton(target) { return '<button class="back-btn" data-back="'+target+'">← Back</button>'; }
-  function heading(title, subtitle) { return '<p class="eyebrow">Barkhaus booking · read-only</p><h1>'+title+'</h1><p class="step-subtitle">'+subtitle+'</p>'; }
-  function updateProgress() {
-    var index = state.step === 'checkout' ? 8 : stepOrder.indexOf(state.step)+1;
-    index=Math.max(1,index);
-    document.getElementById('progressName').textContent=stepNames[state.step]||'Booking';
-    document.getElementById('progressCount').textContent=index+' of 8';
-    document.getElementById('progressFill').style.width=(index/8*100)+'%';
-  }
-  function bindCommon() {
-    app.querySelectorAll('[data-back]').forEach(function(button){button.onclick=function(){setStep(button.getAttribute('data-back'));};});
-  }
-  function field(label,id,value,type,placeholder,extra) { return '<label><span class="field-label">'+label+'</span><input class="form-control" id="'+id+'" type="'+(type||'text')+'" value="'+esc(value||'')+'" placeholder="'+esc(placeholder||'')+'" '+(extra||'')+'></label>'; }
+// Customer-facing payment provider. Alternatives: "manual", "maya", and "paymongo".
+var PAYMENT_GATEWAY_PROVIDER = 'maya';
 
-  async function initReads() {
-    try {
-      var values = await Promise.all([
-        apiFetch('pricing','select=category,service_key,size_key,day_type,membership_type,price'),
-        apiFetch('rate_calendar','select=rate_date,label,holiday_type,rate_day_type,active&active=eq.true'),
-        apiFetch('branches','select=id,name&order=created_at')
-      ]);
-      loadPricingData(values[0]); loadRateCalendarData(values[1]); state.pricingReady=true; state.branches=values[2];
-    } catch (error) { state.readError='Live production data could not be loaded. Refresh to retry.'; }
-    render();
-  }
-  async function loadResources() {
-    if (!state.branchId) return;
-    try {
-      var values=await Promise.all([
-        apiFetch('rooms','select=id,name,color,room_type,pet_type,allowed_sizes,is_locked&branch_id=eq.'+state.branchId+'&active=eq.true&order=sort_order.asc.nullslast,name.asc'),
-        apiFetch('groomers','select=id,name,color,is_unavailable&branch_id=eq.'+state.branchId+'&active=eq.true&is_unavailable=eq.false&order=sort_order.asc.nullslast,name.asc')
-      ]);
-      state.rooms=values[0]||[]; state.groomers=values[1]||[];
-    } catch(error) { showToast('Could not load branch resources. Please retry.'); }
+function hostedPaymentEndpoint() {
+  return PAYMENT_GATEWAY_PROVIDER === 'maya' ? CREATE_MAYA_CHECKOUT_URL : CREATE_PAYMENT_URL;
+}
+
+// ═══════════════════════════════════════════════════════════
+// STAGING INSERTIONS — customer profiles + multi-booking order
+// ═══════════════════════════════════════════════════════════
+(function installStagingBookingInsertions() {
+  var CUSTOMER_KEY = 'barkhaus_staging_customer';
+  var MODE_KEY = 'barkhaus_staging_mode';
+  var CART_KEY = 'barkhaus_staging_cart';
+  var CONTEXT_KEY = 'barkhaus_staging_context';
+  var ORDER_REF = 'BH-3CE089';
+  var isAdditional = new URLSearchParams(window.location.search).get('additional') === '1';
+
+  function readJson(storage, key, fallback) {
+    try { return JSON.parse(storage.getItem(key) || JSON.stringify(fallback)); }
+    catch (error) { return fallback; }
   }
 
-  function render() {
-    updateProgress();
-    if (state.step==='branch') renderBranch();
-    else if (state.step==='service') renderService();
-    else if (state.step==='availability') renderAvailability();
-    else if (state.step==='details') renderDetails();
-    else if (state.step==='health') renderHealth();
-    else if (state.step==='owner') renderOwner();
-    else if (state.step==='waiver') renderWaiver();
-    else if (state.step==='review') renderReview();
-    else renderCheckout();
-    bindCommon();
+  function customer() {
+    return readJson(localStorage, CUSTOMER_KEY, null);
   }
 
-  function renderBranch() {
-    var cards=(state.branches||[]).map(function(branch){
-      var key=branch.name.toLowerCase().includes('estancia')?'estancia':branch.name.toLowerCase().includes('eastwood')?'eastwood':'';
-      if(!key)return '';
-      var detail=key==='estancia'?'Capitol Commons, Pasig · Mon–Thu 11AM–9PM':'Eastwood Mall, Quezon City · Open daily 10AM–10PM';
-      return '<button class="choice-card" data-branch="'+key+'" data-id="'+branch.id+'"><span class="radio"></span><span><strong>'+esc(branch.name)+'</strong><small>'+detail+'</small></span><b>→</b></button>';
-    }).join('');
-    app.innerHTML=heading('Choose a branch','Every service in this combined checkout will use the same Barkhaus location.')+(state.readError?'<div class="warn-note">'+state.readError+'</div>':'')+'<div class="card-stack">'+(cards||'<div class="info-note">Loading live branches…</div>')+'</div>';
-    app.querySelectorAll('[data-branch]').forEach(function(button){button.onclick=async function(){state.branch=button.dataset.branch;state.branchId=button.dataset.id;await loadResources();setStep('service');};});
+  function cart() {
+    return readJson(sessionStorage, CART_KEY, []);
   }
 
-  function renderService() {
-    var branchName=state.branch==='estancia'?'Estancia':'Eastwood';
-    app.innerHTML=backButton(state.cart.length?'review':'branch')+heading(state.cart.length?'Add another service':'What would you like to book?',branchName+' · Availability is shown before owner, health, document and waiver fields.')+
-      (state.cart.length?'<div class="success-note"><strong>Same order</strong><span>'+state.cart.length+' service'+(state.cart.length>1?'s':'')+' already added. Branch and owner details will be reused.</span></div>':'')+
-      '<div class="service-stack"><button class="service-card" data-service="grooming"><span>✂️</span><span><strong>Grooming</strong><small>Package, add-ons, groomer preference and live time slots</small></span><b>Choose</b></button><button class="service-card" data-service="hotel"><span>🏠</span><span><strong>Pet Hotel</strong><small>Dates, compatible rooms and live occupancy</small></span><b>Choose</b></button><button class="service-card disabled" disabled><span>☀️</span><span><strong>Daycare</strong><small>Walk-in at the selected branch</small></span><b>Walk-in</b></button></div>';
-    app.querySelectorAll('[data-service]').forEach(function(button){button.onclick=function(){state.service=button.dataset.service;state.draft={service:state.service,addons:{},vaccines:{}};state.slots=[];state.member=null;state.memberStatus='';state.files={vaccines:[],pegs:[]};setStep('availability');};});
+  function escapeHtml(value) {
+    return String(value == null ? '' : value).replace(/[&<>'"]/g, function(char) {
+      return ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' })[char];
+    });
   }
 
-  function petChooserHtml() {
-    var saved=mode==='account'?'<p class="section-label">Saved pets</p><div class="card-stack">'+savedPets.map(function(p){return '<button class="pet-card '+(state.draft.petId===p.id?'selected':'')+'" data-pet="'+p.id+'"><span>'+(p.animal==='cat'?'🐈':'🐕')+'</span><span><strong>'+p.name+'</strong><small>'+p.breed+' · '+labelSize(p.size)+'</small></span><b>Use</b></button>';}).join('')+'</div>':'';
-    var sizes=['small_dog','medium_dog','large_dog','giant_dog','cat'];
-    return saved+'<p class="section-label">'+(mode==='account'?'Or choose another pet size':'Pet type and size')+'</p><div class="size-grid">'+sizes.map(function(key){return '<button class="size-btn '+(state.draft.petSize===key?'selected':'')+'" data-size="'+key+'"><span>'+(key==='cat'?'🐈':'🐕')+'</span>'+labelSize(key)+'</button>';}).join('')+'</div>';
-  }
-  function groomPrice() { return state.pricingReady && state.draft.groomPackage && state.draft.petSize ? Number((GROOM_PRICES[state.draft.groomPackage]||{})[state.draft.petSize]||0) : 0; }
-  function selectedAddonTotal() { return Object.keys(state.draft.addons||{}).reduce(function(total,key){var addon=ADDONS.find(function(a){return a.key===key;}); return total+Number(addon&&!addon.assessment?state.draft.addons[key]||0:0);},0); }
-  function groomDuration() { var base={bath_dry:45,basic:75,premium:120,ala_carte:60}[state.draft.groomPackage]||60; return base+((state.draft.addons||{}).demat|| (state.draft.addons||{}).deshed?30:0); }
-  function parseSlot(slot){var m=String(slot).match(/(\d+):(\d+)\s*(AM|PM)/i);if(!m)return-1;var h=+m[1],min=+m[2],ap=m[3].toUpperCase();if(ap==='PM'&&h!==12)h+=12;if(ap==='AM'&&h===12)h=0;return h*60+min;}
-  function formatSlot(mins){var h=Math.floor(mins/60),m=mins%60,ap=h>=12?'PM':'AM',display=h%12||12;return display+':'+String(m).padStart(2,'0')+' '+ap;}
-
-  function renderAvailability() {
-    var content=backButton('service')+heading(state.service==='hotel'?'Find an available room':'Find an available grooming slot','Only service and pet attributes needed for pricing and availability are asked here.');
-    content+=petChooserHtml();
-    if(state.draft.petSize){
-      if(state.service==='grooming') content+=groomAvailabilityHtml(); else content+=hotelAvailabilityHtml();
-    } else content+='<div class="info-note">Choose a saved pet or pet size to continue.</div>';
-    app.innerHTML=content;
-    bindPetChoices();
-    if(state.service==='grooming') bindGroomAvailability(); else bindHotelAvailability();
-  }
-  function bindPetChoices(){
-    app.querySelectorAll('[data-pet]').forEach(function(button){button.onclick=function(){var p=savedPets.find(function(x){return x.id===button.dataset.pet;});Object.assign(state.draft,{petId:p.id,petName:p.name,petAnimal:p.animal,petSize:p.size,petGender:p.gender,petBreed:p.breed,petAge:p.age,petAgeUnit:p.ageUnit,petTemperament:p.temperament,petMedical:p.medical,vaccines:Object.fromEntries(p.vaccines.map(function(v){return[v,true];}))});state.slots=[];render();};});
-    app.querySelectorAll('[data-size]').forEach(function(button){button.onclick=function(){Object.assign(state.draft,{petId:null,petSize:button.dataset.size,petAnimal:button.dataset.size==='cat'?'cat':'dog'});state.slots=[];render();};});
-  }
-  function groomAvailabilityHtml(){
-    var packages=[['bath_dry','Bath & Dry','30–45 min'],['basic','Basic Groom','60–75 min'],['premium','Premium Groom','90–120 min'],['ala_carte','Ala Carte','Choose individual services']];
-    var html='<p class="section-label">Grooming package</p><div class="package-stack">'+packages.map(function(p){var price=state.pricingReady?Number((GROOM_PRICES[p[0]]||{})[state.draft.petSize]||0):0;return '<button class="package-card '+(state.draft.groomPackage===p[0]?'selected':'')+'" data-package="'+p[0]+'"><span><strong>'+p[1]+'</strong><small>'+p[2]+'</small></span><b>'+(price?peso(price):'Live price')+'</b></button>';}).join('')+'</div>';
-    if(state.draft.groomPackage){
-      html+='<p class="section-label">Add-ons <span style="color:var(--cream-m)">(optional)</span></p><div class="option-grid">'+ADDONS.map(function(a){var price=a.assessment?'Assessed':a.sizeDependent?Number(FACE_TRIM_PRICES[state.draft.petSize]||0):Number(a.price||0);var on=Object.prototype.hasOwnProperty.call(state.draft.addons||{},a.key);return '<button class="mini-btn '+(on?'selected':'')+'" data-addon="'+a.key+'" data-price="'+(typeof price==='number'?price:0)+'">'+esc(a.name)+'<small style="display:block">'+(typeof price==='number'?peso(price):price)+'</small></button>';}).join('')+'</div>'+
-        '<div class="two-col"><label><span class="field-label">Preferred groomer</span><select class="form-control" id="groomerSelect"><option value="">Any available</option>'+state.groomers.map(function(g){return '<option value="'+g.id+'" '+(state.draft.groomerId===g.id?'selected':'')+'>'+esc(g.name)+'</option>';}).join('')+'</select></label><label><span class="field-label">Date</span><input class="form-control" id="groomDate" type="date" min="'+dateToday()+'" value="'+esc(state.draft.groomDate||'')+'"></label></div>';
-    }
-    if(state.availabilityBusy) html+='<div class="info-note">Checking production grooming availability…</div>';
-    else if(state.draft.groomDate && state.slots.length) html+='<div class="live-note"><strong>Live availability</strong> · '+state.slots.length+' slots currently available</div><div class="slot-grid">'+state.slots.map(function(slot){return '<button class="slot-btn '+(state.draft.groomSlot===slot?'selected':'')+'" data-slot="'+slot+'">'+slot+'<small>Available</small></button>';}).join('')+'</div>';
-    else if(state.draft.groomDate && state.slotsLoaded) html+='<div class="warn-note">No verified slots are available for this selection. Try another date, package, or groomer.</div>';
-    if(state.draft.groomSlot) html+='<div class="price-panel" style="margin-top:16px"><div class="price-row"><span>Grooming package</span><b>'+peso(groomPrice())+'</b></div><div class="price-row"><span>Selected priced add-ons</span><b>'+peso(selectedAddonTotal())+'</b></div><div class="price-row total"><span>Estimated service total</span><b>'+peso(groomPrice()+selectedAddonTotal())+'</b></div></div><div class="sticky-action"><button class="pill-btn wide" id="availabilityContinue">Continue with this schedule</button><small>Live availability will be checked again before a future real checkout.</small></div>';
-    return html;
-  }
-  function bindGroomAvailability(){
-    app.querySelectorAll('[data-package]').forEach(function(button){button.onclick=function(){state.draft.groomPackage=button.dataset.package;state.draft.groomSlot=null;state.slots=[];state.draft.addons={};render();};});
-    app.querySelectorAll('[data-addon]').forEach(function(button){button.onclick=function(){var key=button.dataset.addon;if(Object.prototype.hasOwnProperty.call(state.draft.addons,key))delete state.draft.addons[key];else state.draft.addons[key]=Number(button.dataset.price||0);state.draft.groomSlot=null;if(state.draft.groomDate)loadGroomSlots();else render();};});
-    var groomer=document.getElementById('groomerSelect');if(groomer)groomer.onchange=function(){state.draft.groomerId=groomer.value||null;state.draft.groomSlot=null;if(state.draft.groomDate)loadGroomSlots();};
-    var date=document.getElementById('groomDate');if(date)date.onchange=function(){state.draft.groomDate=date.value;state.draft.groomSlot=null;loadGroomSlots();};
-    app.querySelectorAll('[data-slot]').forEach(function(button){button.onclick=function(){state.draft.groomSlot=button.dataset.slot;render();};});
-    var next=document.getElementById('availabilityContinue');if(next)next.onclick=function(){setStep('details');};
-  }
-  async function loadGroomSlots(){
-    if(!state.draft.groomDate||!state.draft.groomPackage||!state.branchId)return;
-    state.availabilityBusy=true;state.slots=[];state.slotsLoaded=false;render();
-    try{
-      var values=await Promise.all([
-        rpc('get_grooming_occupancy',{p_branch_id:state.branchId,p_service_date:state.draft.groomDate}),
-        apiFetch('blocked_schedules','select=resource_id,start_time,end_time&resource_type=eq.groomer&active=eq.true&dates=cs.{'+state.draft.groomDate+'}')
-      ]);
-      var hours=[];
-      try{hours=await apiFetch('resource_service_hours','select=resource_id,start_time,end_time,last_service_time,active&branch_id=eq.'+state.branchId+'&resource_type=eq.groomer&service_date=eq.'+state.draft.groomDate+'&active=eq.true');}catch(hoursError){hours=[];}
-      var bookings=values[0]||[],blocks=values[1]||[],duration=groomDuration();
-      var pool=state.draft.groomerId?state.groomers.filter(function(g){return g.id===state.draft.groomerId;}):state.groomers;
-      var candidates=[];for(var min=9*60;min<=19*60;min+=30)candidates.push(formatSlot(min));
-      function toMin(value){var p=String(value||'').split(':');return Number(p[0])*60+Number(p[1]||0);}
-      function canServe(g,slot){var start=parseSlot(slot),end=start+duration,window=hours.find(function(h){return h.resource_id===g.id;});if(window){var open=toMin(window.start_time),close=toMin(window.end_time),last=toMin(window.last_service_time);if(start<open||start>last||end>close)return false;}var booked=bookings.filter(function(b){return b.groomer_id===g.id&&b.timeslot;}).some(function(b){var s=parseSlot(b.timeslot),d={bath_dry:45,basic:75,premium:120}[b.groom_service_key]||60;return start<s+d&&end>s;});if(booked)return false;return !blocks.filter(function(b){return b.resource_id===g.id;}).some(function(b){return start<toMin(b.end_time)&&end>toMin(b.start_time);});}
-      state.slots=candidates.filter(function(slot){var start=parseSlot(slot);if(state.draft.groomDate===dateToday()&&start<=new Date().getHours()*60+new Date().getMinutes())return false;var free=pool.filter(function(g){return canServe(g,slot);}).length;var unassigned=bookings.filter(function(b){if(b.groomer_id||!b.timeslot)return false;var s=parseSlot(b.timeslot),d={bath_dry:45,basic:75,premium:120}[b.groom_service_key]||60;return start<s+d&&start+duration>s;}).length;return free>unassigned;});
-    }catch(error){state.slots=[];showToast('Could not verify grooming availability. Try again.');}
-    state.availabilityBusy=false;state.slotsLoaded=true;render();
+  function serviceLabel(value) {
+    return ({ grooming:'Grooming', hotel:'Pet Hotel', daycare:'Daycare', studio:'BarkStudio' })[value] || value || 'Service';
   }
 
-  function hotelRateKey(room){return {small_cage:'small_dog',medium_cage:'medium_dog',large_cage:'large_dog',single_cabin:'cat_single_cabin',villa:'cat_villa'}[room.room_type]||state.draft.petSize;}
-  function hotelTotal(room){if(!room||!state.draft.hotelCheckin||!state.draft.hotelCheckout)return 0;var total=0,d=new Date(state.draft.hotelCheckin+'T12:00:00'),end=new Date(state.draft.hotelCheckout+'T12:00:00'),key=hotelRateKey(room);while(d<end){var type=hotelDayType(d);total+=Number((HOTEL_RATES[type]||{})[key]||0);d.setDate(d.getDate()+1);}return total;}
-  function hotelAvailabilityHtml(){
-    var html='<div class="two-col"><label><span class="field-label">Check-in</span><input class="form-control" id="hotelCheckin" type="date" min="'+dateToday()+'" value="'+esc(state.draft.hotelCheckin||'')+'"></label><label><span class="field-label">Check-out</span><input class="form-control" id="hotelCheckout" type="date" min="'+esc(state.draft.hotelCheckin||dateToday())+'" value="'+esc(state.draft.hotelCheckout||'')+'"></label></div>';
-    if(state.availabilityBusy)html+='<div class="info-note">Checking production room occupancy…</div>';
-    else if(state.draft.hotelCheckin&&state.draft.hotelCheckout&&state.roomsLoaded){
-      var available=state.availableRooms||[];html+='<div class="live-note"><strong>Live availability</strong> · '+available.length+' compatible room'+(available.length===1?'':'s')+' currently available</div><div class="room-stack">'+available.map(function(room){return '<button class="room-card '+(state.draft.roomId===room.id?'selected':'')+'" data-room="'+room.id+'"><span>🛏️</span><span><strong>'+esc(room.name)+'</strong><small>'+esc(room.room_type.replace(/_/g,' '))+' · compatible with '+labelSize(state.draft.petSize)+'</small></span><b>'+peso(hotelTotal(room))+'</b></button>';}).join('')+'</div>'+(available.length?'':'<div class="warn-note">No verified compatible rooms are available for these dates.</div>');
-    }
-    if(state.draft.roomId){var selected=state.rooms.find(function(r){return r.id===state.draft.roomId;});html+='<div class="price-panel" style="margin-top:16px"><div class="price-row"><span>'+esc(selected.name)+'</span><b>'+peso(hotelTotal(selected))+'</b></div><div class="price-row total"><span>Estimated stay total</span><b>'+peso(hotelTotal(selected))+'</b></div></div><div class="sticky-action"><button class="pill-btn wide" id="availabilityContinue">Continue with this room</button><small>Occupancy will be checked again before a future real checkout.</small></div>';}
-    return html;
-  }
-  function bindHotelAvailability(){
-    var cin=document.getElementById('hotelCheckin'),cout=document.getElementById('hotelCheckout');
-    if(cin)cin.onchange=function(){state.draft.hotelCheckin=cin.value;state.draft.hotelCheckout='';state.draft.roomId=null;render();};
-    if(cout)cout.onchange=function(){state.draft.hotelCheckout=cout.value;state.draft.roomId=null;loadHotelRooms();};
-    app.querySelectorAll('[data-room]').forEach(function(button){button.onclick=function(){state.draft.roomId=button.dataset.room;render();};});
-    var next=document.getElementById('availabilityContinue');if(next)next.onclick=function(){setStep('details');};
-  }
-  async function loadHotelRooms(){
-    if(!state.draft.hotelCheckin||!state.draft.hotelCheckout)return;
-    if(state.draft.hotelCheckout<=state.draft.hotelCheckin){showToast('Checkout must be after check-in.');return;}
-    state.availabilityBusy=true;state.roomsLoaded=false;render();
-    try{var occupied=await rpc('get_hotel_occupancy',{p_branch_id:state.branchId,p_checkin:state.draft.hotelCheckin,p_checkout:state.draft.hotelCheckout});var ids=new Set((occupied||[]).map(function(r){return r.room_id;}).filter(Boolean)),types=new Set((occupied||[]).filter(function(r){return !r.room_id&&r.room_type;}).map(function(r){return r.room_type;}));state.availableRooms=state.rooms.filter(function(r){return !r.is_locked&&Array.isArray(r.allowed_sizes)&&r.allowed_sizes.includes(state.draft.petSize)&&!ids.has(r.id)&&!types.has(r.room_type);});}
-    catch(error){state.availableRooms=[];showToast('Could not verify hotel occupancy. Try again.');}
-    state.availabilityBusy=false;state.roomsLoaded=true;render();
+  function locationLabel(value) {
+    return ({ estancia:'Estancia', eastwood:'Eastwood' })[value] || value || 'Branch';
   }
 
-  function renderDetails(){
-    var d=state.draft,profile=d.petId?'<div class="success-note"><strong>Filled from saved pet</strong><span>Confirm or update anything that changed for this visit.</span></div>':'';
-    app.innerHTML=backButton('availability')+heading(d.petId?'Confirm '+esc(d.petName)+'’s details':'Tell us about your pet','The selected price and availability are already known. These fields support safe admission and care.')+profile+
-      '<div class="two-col">'+field('Pet name','petName',d.petName,'text','e.g. Mochi')+field('Size used for availability','petSize',labelSize(d.petSize),'text','', 'readonly')+'</div><div class="two-col"><label><span class="field-label">Animal type</span><select class="form-control" id="petAnimal"><option value="dog" '+(d.petAnimal==='dog'?'selected':'')+'>Dog</option><option value="cat" '+(d.petAnimal==='cat'?'selected':'')+'>Cat</option></select></label><label><span class="field-label">Sex</span><select class="form-control" id="petGender"><option value="">Select</option><option value="male" '+(d.petGender==='male'?'selected':'')+'>Male</option><option value="female" '+(d.petGender==='female'?'selected':'')+'>Female</option></select></label></div>'+
-      field('Breed','petBreed',d.petBreed,'text','e.g. Shiba Inu')+'<div class="two-col">'+field('Age','petAge',d.petAge,'number','2','min="0" max="30"')+'<label><span class="field-label">Age unit</span><select class="form-control" id="petAgeUnit"><option value="years" '+(d.petAgeUnit==='years'?'selected':'')+'>Years</option><option value="months" '+(d.petAgeUnit==='months'?'selected':'')+'>Months</option></select></label></div>'+
-      '<label><span class="field-label">Known medical issues or allergies</span><textarea class="form-control" id="petMedical" placeholder="Leave blank if none">'+esc(d.petMedical||'')+'</textarea></label><label><span class="field-label">Temperament</span><select class="form-control" id="petTemperament"><option value="">Select temperament</option><option value="friendly_all" '+(d.petTemperament==='friendly_all'?'selected':'')+'>Friendly with all</option><option value="friendly_shy" '+(d.petTemperament==='friendly_shy'?'selected':'')+'>Friendly but shy</option><option value="selective">Selective</option><option value="reactive">Reactive</option><option value="first_time">First time</option></select></label>'+
-      (state.service==='grooming'?'<label><span class="field-label">Grooming special requests</span><textarea class="form-control" id="serviceNotes" placeholder="Style, sensitivities, handling notes">'+esc(d.serviceNotes||'')+'</textarea></label>':'')+
-      (state.service==='hotel'?'<label><span class="field-label">Feeding instructions</span><textarea class="form-control" id="hotelFeeding">'+esc(d.hotelFeeding||'')+'</textarea></label><label><span class="field-label">Medications / special care</span><textarea class="form-control" id="hotelMeds">'+esc(d.hotelMeds||'')+'</textarea></label><div class="two-col">'+field('Drop-off time','hotelDropoff',d.hotelDropoff,'time','')+field('Pickup time','hotelPickup',d.hotelPickup,'time','')+'</div><label><span class="field-label">Play park consent</span><select class="form-control" id="playparkConsent"><option value="">Select</option><option value="yes">Yes, please</option><option value="no">No thanks</option></select></label>':'')+
-      '<button class="pill-btn wide" id="detailsContinue">Continue to health & records</button>';
-    document.getElementById('detailsContinue').onclick=function(){
-      var required=['petName','petGender','petBreed','petAge','petTemperament'];for(var i=0;i<required.length;i++){if(!document.getElementById(required[i]).value){showToast('Please complete all required pet details.');return;}}
-      Object.assign(d,{petName:document.getElementById('petName').value.trim(),petAnimal:document.getElementById('petAnimal').value,petGender:document.getElementById('petGender').value,petBreed:document.getElementById('petBreed').value.trim(),petAge:document.getElementById('petAge').value,petAgeUnit:document.getElementById('petAgeUnit').value,petMedical:document.getElementById('petMedical').value,petTemperament:document.getElementById('petTemperament').value});
-      if(state.service==='grooming')d.serviceNotes=document.getElementById('serviceNotes').value;else Object.assign(d,{hotelFeeding:document.getElementById('hotelFeeding').value,hotelMeds:document.getElementById('hotelMeds').value,hotelDropoff:document.getElementById('hotelDropoff').value,hotelPickup:document.getElementById('hotelPickup').value,playparkConsent:document.getElementById('playparkConsent').value});
-      setStep('health');
+  function itemSchedule(state) {
+    if (state.service === 'grooming') return (state.groomDate || 'Date not set') + (state.groomSlot ? ' · ' + state.groomSlot : '');
+    if (state.service === 'hotel') return (state.hotelCheckin || 'Check-in') + ' → ' + (state.hotelCheckout || 'Check-out');
+    if (state.service === 'daycare') return state.daycareDate || 'Date not set';
+    if (state.service === 'studio') return (state.studioDate || 'Date not set') + (state.studioSlot ? ' · ' + state.studioSlot : '');
+    return 'Schedule not set';
+  }
+
+  function snapshotCurrent() {
+    collectAllState();
+    return {
+      location: booking.location,
+      service: booking.service,
+      petName: booking.petName || 'Pet',
+      schedule: itemSchedule(booking),
+      total: getRunningTotal(),
+      ownerFirst: booking.ownerFirst,
+      ownerLast: booking.ownerLast,
+      ownerEmail: booking.ownerEmail,
+      ownerPhone: booking.ownerPhone
     };
   }
 
-  function vaccineList(){return state.draft.petAnimal==='cat'?[['anti_rabies','Anti-rabies'],['all_in_one','All-in-1 shot'],['anti_parasitic','Anti-parasitic']]:[['anti_rabies','Anti-rabies'],['combo','5/6/8-in-1 shot'],['bordetella','Kennel Cough / Bordetella'],['tick_flea','Tick and Flea treatment']];}
-  function renderHealth(){
-    var d=state.draft,vaccines=vaccineList();
-    app.innerHTML=backButton('details')+heading('Health, records and membership','Files stay only in this browser preview. Membership validation uses the existing production read-only check.')+
-      '<p class="section-label">Vaccine declarations</p><div class="option-grid">'+vaccines.map(function(v){return '<button class="mini-btn '+(d.vaccines[v[0]]?'selected':'')+'" data-vaccine="'+v[0]+'">'+v[1]+'</button>';}).join('')+'</div>'+
-      '<label class="file-box" style="margin-top:14px"><input id="vaccineFiles" type="file" multiple accept="image/*,.pdf"><strong>Upload vaccine records</strong><small>JPG, PNG or PDF · selected locally only on staging</small></label><div class="file-list" id="vaccineFileList">'+state.files.vaccines.map(function(f){return '<span>📎 '+esc(f.name)+'</span>';}).join('')+'</div>'+
-      '<label class="checkbox-card"><input id="bringVaccines" type="checkbox" '+(d.bringVaccines?'checked':'')+'><span><strong>I will bring vaccine records to the venue</strong><small>Required when no document is selected.</small></span></label>'+
-      (state.service==='grooming'?'<label class="file-box" style="margin-top:14px"><input id="pegFiles" type="file" multiple accept="image/*"><strong>Upload grooming reference photos</strong><small>Optional style pegs · selected locally only</small></label><div class="file-list" id="pegFileList">'+state.files.pegs.map(function(f){return '<span>📎 '+esc(f.name)+'</span>';}).join('')+'</div>':'')+
-      '<p class="section-label">Barkhaus membership</p><label><span class="field-label">Is this pet a registered member?</span><select class="form-control" id="memberChoice"><option value="no">No</option><option value="yes" '+(d.isMember?'selected':'')+'>Yes</option></select></label><div id="memberFields" '+(d.isMember?'':'hidden')+'>'+field('Membership ID','memberCode',d.memberCode,'text','BH-M001')+'<button class="outline-btn wide" id="validateMember" style="margin-top:9px">Validate production membership</button><div class="inline-status '+(state.member?'good':state.memberStatus?'bad':'')+'" id="memberStatus">'+esc(state.memberStatus)+'</div></div>'+
-      (state.service==='hotel'?'<p class="section-label">Veterinary & emergency contacts</p>'+field('Veterinary clinic','vetClinic',d.vetClinic,'text','Clinic name')+field('Clinic contact','vetContact',d.vetContact,'tel','Phone number')+field('Clinic address','vetAddress',d.vetAddress,'text','Street, city')+'<div class="two-col">'+field('Emergency contact','emergencyName',d.emergencyName,'text','Full name')+field('Emergency phone','emergencyPhone',d.emergencyPhone,'tel','+63 9XX XXX XXXX')+'</div>':'')+
-      '<button class="pill-btn wide" id="healthContinue">Continue</button>';
-    app.querySelectorAll('[data-vaccine]').forEach(function(button){button.onclick=function(){var key=button.dataset.vaccine;d.vaccines[key]=!d.vaccines[key];render();};});
-    document.getElementById('vaccineFiles').onchange=function(e){state.files.vaccines=Array.from(e.target.files||[]);render();};
-    if(document.getElementById('pegFiles'))document.getElementById('pegFiles').onchange=function(e){state.files.pegs=Array.from(e.target.files||[]);render();};
-    document.getElementById('memberChoice').onchange=function(e){d.isMember=e.target.value==='yes';state.member=null;state.memberStatus='';render();};
-    if(document.getElementById('validateMember'))document.getElementById('validateMember').onclick=validateMembership;
-    document.getElementById('healthContinue').onclick=function(){d.bringVaccines=document.getElementById('bringVaccines').checked;if(!state.files.vaccines.length&&!d.bringVaccines){showToast('Select vaccine documents or confirm you will bring them.');return;}if(d.isMember&&!state.member){showToast('Validate the membership or select No.');return;}if(state.service==='hotel'){['vetClinic','vetContact','vetAddress','emergencyName','emergencyPhone'].forEach(function(id){d[id]=document.getElementById(id).value;});}if(mode==='guest'&&!state.owner.email&&state.cart.length===0)setStep('owner');else setStep('waiver');};
-  }
-  async function validateMembership(){
-    var code=document.getElementById('memberCode').value.trim().toUpperCase();state.draft.memberCode=code;state.memberStatus='Validating production membership…';render();
-    try{var member=await rpc('validate_member',{p_code:code});if(!member||!member.member_code)throw new Error('Membership ID not found.');if(member.active===false)throw new Error('This membership is inactive.');if(member.valid_until&&new Date(member.valid_until+'T23:59:59')<new Date())throw new Error('This membership is expired.');var petNames=Array.isArray(member.pet_names)?member.pet_names:[member.pet_name];if(petNames.filter(Boolean).map(function(n){return n.trim().toLowerCase();}).indexOf(state.draft.petName.trim().toLowerCase())<0)throw new Error('Pet name does not match this membership.');if(member.tier!=='passport'&&member.branch_id&&member.branch_id!==state.branchId)throw new Error('Membership is valid only at its home branch.');state.member=member;state.memberStatus='Member verified · discount will be applied in Review.';}
-    catch(error){state.member=null;state.memberStatus=error.message||'Could not validate membership.';}render();
+  function orderItems(includeCurrent) {
+    var items = cart().slice();
+    if (includeCurrent && booking.service) items.push(snapshotCurrent());
+    return items;
   }
 
-  function renderOwner(){
-    var o=state.owner;
-    app.innerHTML=backButton('health')+heading(mode==='account'?'Confirm your contact details':'Who should we contact?','Owner information is collected once and reused for every service in this order.')+(mode==='account'?'<div class="mock-profile"><span class="avatar">GE</span><div><strong>Saved customer profile</strong><small>Authentication remains simulated in this read-only staging version.</small></div></div>':'')+
-      '<div class="two-col">'+field('First name','ownerFirst',o.first,'text','Juan')+field('Last name','ownerLast',o.last,'text','Dela Cruz')+'</div>'+field('Email','ownerEmail',o.email,'email','juan@example.com')+field('Mobile','ownerPhone',o.phone,'tel','+63 9XX XXX XXXX')+'<label><span class="field-label">How did you hear about us?</span><select class="form-control" id="ownerSource"><option>Website</option><option>Instagram</option><option>Facebook</option><option>TikTok</option><option>Friend or family referral</option><option>Walk-in / saw the branch</option><option>Google search</option><option>Other</option></select></label><button class="pill-btn wide" id="ownerContinue">Continue to waivers</button>';
-    document.getElementById('ownerContinue').onclick=function(){var ids=['ownerFirst','ownerLast','ownerEmail','ownerPhone'];for(var i=0;i<ids.length;i++){if(!document.getElementById(ids[i]).value.trim()){showToast('Please complete all owner contact fields.');return;}}state.owner={first:document.getElementById('ownerFirst').value.trim(),last:document.getElementById('ownerLast').value.trim(),email:document.getElementById('ownerEmail').value.trim(),phone:document.getElementById('ownerPhone').value.trim(),source:document.getElementById('ownerSource').value};setStep('waiver');};
+  function renderOrderPanel(items) {
+    var total = items.reduce(function(sum, item) { return sum + (Number(item.total) || 0); }, 0);
+    var rows = items.map(function(item, index) {
+      var suffix = String.fromCharCode(65 + index);
+      return '<div class="staging-order-item">' +
+        '<span><strong>' + escapeHtml(ORDER_REF + '-' + suffix) + '</strong><small>' + escapeHtml(item.petName) + ' · ' + escapeHtml(serviceLabel(item.service)) + '<br>' + escapeHtml(item.schedule) + '</small></span>' +
+        '<span>₱' + (Number(item.total) || 0).toLocaleString() + '</span>' +
+      '</div>';
+    }).join('');
+    return '<div class="staging-order-panel">' +
+      '<div class="staging-order-head"><strong>Order ' + ORDER_REF + '</strong><span>' + items.length + ' booking' + (items.length === 1 ? '' : 's') + ' · ' + escapeHtml(locationLabel(items[0] && items[0].location)) + '</span></div>' +
+      rows +
+      '<div class="staging-order-total"><span>One payment</span><span>₱' + total.toLocaleString() + '</span></div>' +
+    '</div>';
   }
 
-  function renderWaiver(){
-    var serviceText=state.service==='hotel'?'<strong>Pet Hotel General Terms and Liability Waiver</strong><p>I authorize Barkhaus to provide boarding and routine care for my pet. I have disclosed relevant medical, behavioral, feeding and medication information. I understand that room assignment, handling and group activity may be adjusted for safety.</p><p>I understand the hotel rescheduling, cancellation, no-show, late pickup and emergency-care policies, and that approved refunds are processed according to Barkhaus policy.</p>':'<strong>Grooming General Terms and Liability Waiver</strong><p>I authorize Barkhaus to perform the requested grooming services. I have disclosed medical, behavioral, allergy and sensitivity information that may affect the grooming process.</p><p>I acknowledge the risks related to matting, skin sensitivity, young or senior pets, and understand that Barkhaus may modify or stop service when needed for safety.</p>';
-    var senior=(state.draft.petAgeUnit==='years'&&Number(state.draft.petAge)>=6)||String(state.draft.petMedical||'').trim();
-    app.innerHTML=backButton(mode==='guest'&&!state.owner.email?'owner':'health')+heading('Review and accept waivers','Required acknowledgments are recorded per applicable pet and service in the future order implementation.')+'<div class="waiver-box">'+serviceText+'</div><label class="checkbox-card"><input id="generalWaiver" type="checkbox"><span><strong>I agree to the service terms and liability waiver.</strong></span></label><div class="waiver-box" style="margin-top:14px"><strong>Vaccine & Health Declaration</strong><p>I confirm that declared vaccines are current and effective before admission. I understand Barkhaus may refuse service when records are incomplete, expired, or not yet effective.</p></div><label class="checkbox-card"><input id="vaccineWaiver" type="checkbox"><span><strong>I agree to the Vaccine & Health Declaration.</strong></span></label>'+(senior?'<div class="waiver-box" style="margin-top:14px"><strong>Senior & Pre-existing Conditions</strong><p>I acknowledge that senior pets and pets with known medical conditions may face additional risk during service.</p></div><label class="checkbox-card"><input id="seniorWaiver" type="checkbox"><span><strong>I agree to the Senior & Pre-existing Conditions Waiver.</strong></span></label>':'')+'<label class="checkbox-card"><input id="mediaConsent" type="checkbox"><span><strong>Optional media consent</strong><small>I consent to photos and videos of my pet being used by Barkhaus.</small></span></label><button class="pill-btn wide" id="addToOrder">Add service to Review</button>';
-    document.getElementById('addToOrder').onclick=function(){if(!document.getElementById('generalWaiver').checked||!document.getElementById('vaccineWaiver').checked||(senior&&!document.getElementById('seniorWaiver').checked)){showToast('Please accept all required waivers.');return;}state.draft.waivers={general:true,vaccine:true,senior:senior,media:document.getElementById('mediaConsent').checked};addItem();};
+  function renderProfiles() {
+    var profile = customer();
+    var mode = localStorage.getItem(MODE_KEY) || 'guest';
+    var accountButton = document.getElementById('stagingBookingAccount');
+    if (accountButton) {
+      accountButton.textContent = profile && mode === 'account' ? 'Hi, ' + profile.firstName : 'Guest';
+      accountButton.onclick = function() { window.location.href = '/staging/'; };
+    }
+    if (!profile || mode !== 'account') return;
+
+    ['ownerFirst','ownerLast','ownerEmail','ownerPhone'].forEach(function(id) {
+      var field = document.getElementById(id);
+      var values = { ownerFirst:profile.firstName, ownerLast:profile.lastName, ownerEmail:profile.email, ownerPhone:profile.phone };
+      if (field) field.value = values[id] || '';
+    });
+
+    var petsPanel = document.getElementById('stagingSavedPets');
+    petsPanel.hidden = false;
+    petsPanel.innerHTML = '<p class="staging-saved-title">Choose a registered pet</p><div class="staging-pet-chips">' +
+      (profile.pets || []).map(function(pet) {
+        return '<button type="button" class="staging-pet-chip" data-staging-pet="' + escapeHtml(pet.id) + '">🐾 ' + escapeHtml(pet.name) + '</button>';
+      }).join('') + '</div>';
+
+    var ownerPanel = document.getElementById('stagingSavedOwner');
+    ownerPanel.hidden = false;
+    ownerPanel.innerHTML = '<p class="staging-saved-title">Using your Barkhaus customer profile</p><div style="font-size:12px;color:var(--mid);line-height:1.55">' +
+      escapeHtml(profile.firstName + ' ' + profile.lastName) + '<br>' + escapeHtml(profile.email) + ' · ' + escapeHtml(profile.phone) + '</div>';
   }
-  function itemPrice(){if(state.service==='grooming')return groomPrice()+selectedAddonTotal();var room=state.rooms.find(function(r){return r.id===state.draft.roomId;});return hotelTotal(room);}
-  function addItem(){var raw=itemPrice(),rate=state.member?memberDiscountRate(state.service,state.member.membership_type||'standard'):0,discount=Math.round(raw*rate),d=JSON.parse(JSON.stringify(state.draft));state.cart.push({service:state.service,petName:d.petName,petSize:d.petSize,title:serviceLabel(state.service),schedule:state.service==='grooming'?d.groomDate+' · '+d.groomSlot:d.hotelCheckin+' → '+d.hotelCheckout,detail:state.service==='grooming'?({bath_dry:'Bath & Dry',basic:'Basic Groom',premium:'Premium Groom',ala_carte:'Ala Carte'}[d.groomPackage]):esc((state.rooms.find(function(r){return r.id===d.roomId;})||{}).name||'Selected room'),subtotal:raw,discount:discount,total:raw-discount,data:d,files:{vaccines:state.files.vaccines.map(function(f){return f.name;}),pegs:state.files.pegs.map(function(f){return f.name;})}});state.draft={};state.service=null;state.member=null;state.memberStatus='';state.files={vaccines:[],pegs:[]};setStep('review');}
 
-  function totals(){var subtotal=state.cart.reduce(function(t,i){return t+i.subtotal;},0),discount=state.cart.reduce(function(t,i){return t+i.discount;},0),fee=Number(CONVENIENCE_FEE||0);return{subtotal:subtotal,discount:discount,fee:fee,total:subtotal-discount+fee};}
-  function renderReview(){var t=totals();app.innerHTML=backButton('service')+heading('Review your Barkhaus order',(state.branch==='estancia'?'Estancia':'Eastwood')+' · '+state.cart.length+' service'+(state.cart.length===1?'':'s')+' · one future payment')+'<div class="mock-profile"><span class="avatar">'+esc((state.owner.first||'G')[0]+(state.owner.last||'E')[0])+'</span><div><strong>'+esc((state.owner.first||'Guest')+' '+(state.owner.last||'customer'))+'</strong><small>'+esc(state.owner.email||'Owner details collected during first service')+'</small></div></div><div class="cart-stack">'+state.cart.map(function(item,index){return '<article class="cart-card"><span class="item-letter">'+alpha(index)+'</span><div><div class="cart-title"><span><strong>'+esc(item.petName)+'</strong><small>'+item.title+'</small></span><b>'+peso(item.total)+'</b></div><p>'+item.detail+'<br>'+item.schedule+'</p><p>'+item.files.vaccines.length+' vaccine document'+(item.files.vaccines.length===1?'':'s')+' selected · required waivers accepted</p><div class="cart-actions"><button data-remove="'+index+'">Remove</button></div></div></article>';}).join('')+'</div><button class="add-service" id="addService"><strong>＋ Add another service</strong><br><small>Same branch and owner · choose any saved or new pet</small></button><div class="price-panel"><div class="price-row"><span>Services subtotal</span><b>'+peso(t.subtotal)+'</b></div>'+(t.discount?'<div class="price-row discount"><span>Membership savings</span><b>−'+peso(t.discount)+'</b></div>':'')+'<div class="price-row"><span>Future online checkout fee</span><b>'+peso(t.fee)+'</b></div><div class="price-row total"><span>Future order payment</span><b>'+peso(t.total)+'</b></div></div><button class="pill-btn wide" id="previewCheckout" '+(state.cart.length?'':'disabled')+'>Preview combined checkout</button>';
-    app.querySelectorAll('[data-remove]').forEach(function(button){button.onclick=function(){state.cart.splice(Number(button.dataset.remove),1);render();};});document.getElementById('addService').onclick=function(){setStep('service');};document.getElementById('previewCheckout').onclick=function(){setStep('checkout');};}
-  function renderCheckout(){var t=totals(),order='BH-3CE089';app.innerHTML=backButton('review')+heading('Combined checkout preview','This is the exact handoff shape planned for the future order Edge Function and separate Maya webhook.')+'<div class="preview-order"><small>ORDER REFERENCE</small><strong>'+order+'</strong><span>'+peso(t.total)+' future Maya payment</span></div><div class="cart-stack">'+state.cart.map(function(item,index){return '<article class="cart-card"><span class="item-letter">'+alpha(index)+'</span><div><div class="cart-title"><span><strong>'+order+'-'+alpha(index)+'</strong><small>'+esc(item.petName)+' · '+item.title+'</small></span><b>'+peso(item.total)+'</b></div><p>Child allocation · '+item.schedule+'</p></div></article>';}).join('')+'</div><div class="warn-note"><strong>Submission is disabled.</strong><br>No booking, pending hold, Storage upload, Maya checkout, webhook, payment record, or email will be created from this staging page.</div><button class="pill-btn wide" id="disabledSubmit" disabled>Real checkout not enabled yet</button><button class="outline-btn wide" id="emailPreview" style="margin-top:10px">Preview combined email summary</button><div id="emailSummary"></div>';
-    document.getElementById('emailPreview').onclick=function(){document.getElementById('emailSummary').innerHTML='<div class="info-note"><strong>Confirmation email preview</strong><br>Subject: Your Barkhaus order is confirmed · '+order+'<br><br>'+state.cart.map(function(item,index){return order+'-'+alpha(index)+' · '+esc(item.petName)+' · '+item.title+' · '+item.schedule+' · '+peso(item.total);}).join('<br>')+'<br><br><strong>Total paid: '+peso(t.total)+'</strong></div>';};}
+  function applyPet(petId) {
+    var profile = customer();
+    var pet = profile && (profile.pets || []).find(function(item) { return item.id === petId; });
+    if (!pet) return;
+    document.querySelectorAll('[data-staging-pet]').forEach(function(button) {
+      button.classList.toggle('selected', button.getAttribute('data-staging-pet') === petId);
+    });
+    document.getElementById('petName').value = pet.name || '';
+    document.getElementById('petBreed').value = pet.breed || '';
+    document.getElementById('petAgeNum').value = pet.age || '';
+    document.getElementById('petAgeUnit').value = pet.ageUnit || 'years';
+    document.getElementById('petMedical').value = pet.medical || '';
+    var animalButton = document.getElementById(pet.animal === 'cat' ? 'petTypeCat' : 'petTypeDog');
+    if (animalButton) selectAnimalType(animalButton, pet.animal || 'dog');
+    var genderButton = Array.from(document.querySelectorAll('#petGenderGrid .gender-btn')).find(function(button) {
+      return button.getAttribute('onclick').indexOf("'" + pet.gender + "'") !== -1;
+    });
+    if (genderButton) selectGender(genderButton, pet.gender);
+    var tempButton = Array.from(document.querySelectorAll('.temp-btn')).find(function(button) {
+      return button.getAttribute('onclick').indexOf("'" + pet.temperament + "'") !== -1;
+    });
+    if (tempButton) selectTemperament(tempButton, pet.temperament);
+    booking.petName = pet.name;
+    booking.petBreed = pet.breed;
+    booking.petAge = pet.age;
+    booking.petAgeUnit = pet.ageUnit;
+    booking.petMedical = pet.medical;
+    if (!booking.petSize) booking.petSize = pet.size;
+    checkSeniorWaiver();
+    refreshContinueBtn();
+  }
 
-  document.getElementById('restartBtn').onclick=function(){if(confirm('Clear this staging order and restart?')){state.cart=[];state.branch=null;state.branchId=null;state.draft={};state.service=null;setStep('branch');}};
-  initReads();
+  function addAnother() {
+    var items = cart();
+    var current = snapshotCurrent();
+    items.push(current);
+    sessionStorage.setItem(CART_KEY, JSON.stringify(items));
+    sessionStorage.setItem(CONTEXT_KEY, JSON.stringify({
+      location: current.location,
+      ownerFirst: current.ownerFirst,
+      ownerLast: current.ownerLast,
+      ownerEmail: current.ownerEmail,
+      ownerPhone: current.ownerPhone
+    }));
+    _redirectingToPayment = true;
+    window.location.href = '/staging/booking/?additional=1';
+  }
+
+  function renderCombinedReview() {
+    var summary = document.getElementById('stepSummary');
+    if (!summary || !document.getElementById('bookingDetailsSummary')) return;
+    var existing = summary.querySelector('.staging-order-panel');
+    if (existing) existing.remove();
+    var oldAdd = summary.querySelector('.staging-add-booking');
+    if (oldAdd) oldAdd.remove();
+    var items = orderItems(true);
+    summary.insertAdjacentHTML('afterbegin', renderOrderPanel(items));
+    summary.insertAdjacentHTML('beforeend', '<button type="button" class="staging-add-booking" onclick="addAnotherStagingBooking()">+ Add another service or pet at ' + escapeHtml(locationLabel(booking.location)) + '</button>');
+    var notice = document.getElementById('hostedCheckoutNotice');
+    if (notice) {
+      notice.style.display = '';
+      notice.innerHTML = '<p><strong>Preview only — one Maya checkout for the whole order</strong></p><p>Each child booking keeps its own allocation and reference. No checkout, upload, booking, email, or payment request can run from this staging page.</p>';
+    }
+  }
+
+  function showPreview() {
+    var items = orderItems(true);
+    var summary = document.getElementById('stepSummary');
+    document.getElementById('progressWrap').style.display = 'none';
+    document.getElementById('bottomNav').style.display = 'none';
+    _redirectingToPayment = true;
+    summary.innerHTML = '<div class="staging-preview-screen">' +
+      '<p class="step-eyebrow">Order preview complete</p>' +
+      '<h2>This is how the combined order will look</h2>' +
+      '<p>One payment confirmation email would list the order reference, every child booking, schedule, pet, and allocated amount.</p>' +
+      renderOrderPanel(items) +
+      '<div class="info-box" style="text-align:left"><strong>Email confirmation preview</strong><br>Subject: Barkhaus order ' + ORDER_REF + ' confirmed<br><br>Your payment covers ' + items.length + ' booking' + (items.length === 1 ? '' : 's') + '. Each booking reference and amount is shown above.</div>' +
+      '<a class="btn-home" href="/staging/" style="margin-top:12px">Back to staging home</a>' +
+    '</div>';
+    summary.classList.add('active');
+    window.scrollTo(0, 0);
+  }
+
+  function restoreAdditionalContext() {
+    if (!isAdditional) return;
+    var context = readJson(sessionStorage, CONTEXT_KEY, null);
+    if (!context || !context.location) return;
+    ['ownerFirst','ownerLast','ownerEmail','ownerPhone'].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) el.value = context[id] || '';
+    });
+    booking.ownerFirst = context.ownerFirst || '';
+    booking.ownerLast = context.ownerLast || '';
+    booking.ownerEmail = context.ownerEmail || '';
+    booking.ownerPhone = context.ownerPhone || '';
+    var locationCard = Array.from(document.querySelectorAll('#step1 .option-card')).find(function(card) {
+      return (card.getAttribute('onclick') || '').indexOf("'" + context.location + "'") !== -1;
+    });
+    if (locationCard) selectLocation(locationCard, context.location);
+    goToStep(2);
+    var note = document.querySelector('.staging-flow-note');
+    if (note) note.innerHTML = '<strong>Adding another booking to ' + escapeHtml(locationLabel(context.location)) + '</strong>Owner details are already attached to this order, so this pass skips the owner step.';
+  }
+
+  var productionShowSummary = showSummary;
+  showSummary = function() {
+    productionShowSummary();
+    renderCombinedReview();
+  };
+
+  var productionBuildSummary = buildSummary;
+  buildSummary = function() {
+    productionBuildSummary();
+    if (onSummaryScreen) renderCombinedReview();
+  };
+
+  var productionUpdateSummaryNav = updateBottomNavForSummary;
+  updateBottomNavForSummary = function() {
+    productionUpdateSummaryNav();
+    var button = document.getElementById('btnNext');
+    button.textContent = 'Preview combined order';
+    button.onclick = showPreview;
+  };
+
+  submitBooking = function() {
+    showPreview();
+  };
+
+  var productionNextStep = nextStep;
+  nextStep = function() {
+    if (isAdditional && currentStep === 5) {
+      if (!validateStep(5)) return;
+      collectStep(5);
+      goToStep(7);
+      return;
+    }
+    productionNextStep();
+  };
+
+  var productionPrevStep = prevStep;
+  prevStep = function() {
+    if (isAdditional && !onSummaryScreen && !onPaymentScreen && currentStep === 7) {
+      goToStep(5);
+      return;
+    }
+    productionPrevStep();
+  };
+
+  window.addAnotherStagingBooking = addAnother;
+
+  document.addEventListener('click', function(event) {
+    var petButton = event.target.closest('[data-staging-pet]');
+    if (petButton) applyPet(petButton.getAttribute('data-staging-pet'));
+  });
+
+  function initialize() {
+    renderProfiles();
+    setTimeout(restoreAdditionalContext, 250);
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initialize);
+  else initialize();
 })();
+
+function currentConvenienceFee() {
+  return IS_WALKIN || (booking && booking.simulatePayment) ? 0 : CONVENIENCE_FEE;
+}
+
+// ── Upload size control ──
+// Browser-safe compressor for customer-uploaded images. PDFs and HEIC/HEIF are
+// left untouched because canvas cannot reliably decode them across browsers.
+var IMAGE_UPLOAD_MAX_EDGE = 1600;
+var IMAGE_UPLOAD_QUALITY = 0.78;
+var IMAGE_UPLOAD_MIN_BYTES = 350 * 1024;
+var IMAGE_UPLOAD_TYPES = { 'image/jpeg': true, 'image/jpg': true, 'image/png': true, 'image/webp': true };
+
+function isCompressibleImage(file) {
+  return !!(file && file.type && IMAGE_UPLOAD_TYPES[String(file.type).toLowerCase()]);
+}
+
+function canvasToBlob(canvas, type, quality) {
+  return new Promise(function(resolve) {
+    if (!canvas.toBlob) return resolve(null);
+    canvas.toBlob(function(blob) { resolve(blob); }, type, quality);
+  });
+}
+
+function loadImageFromFile(file) {
+  return new Promise(function(resolve, reject) {
+    var url = URL.createObjectURL(file);
+    var img = new Image();
+    img.onload = function() {
+      URL.revokeObjectURL(url);
+      resolve(img);
+    };
+    img.onerror = function() {
+      URL.revokeObjectURL(url);
+      reject(new Error('Could not read image'));
+    };
+    img.src = url;
+  });
+}
+
+async function compressImageForUpload(file) {
+  if (!isCompressibleImage(file) || file.size < IMAGE_UPLOAD_MIN_BYTES) return file;
+  try {
+    var img = await loadImageFromFile(file);
+    var width = img.naturalWidth || img.width;
+    var height = img.naturalHeight || img.height;
+    if (!width || !height) return file;
+
+    var scale = Math.min(1, IMAGE_UPLOAD_MAX_EDGE / Math.max(width, height));
+    var targetWidth = Math.max(1, Math.round(width * scale));
+    var targetHeight = Math.max(1, Math.round(height * scale));
+    var canvas = document.createElement('canvas');
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+    var ctx = canvas.getContext('2d');
+    if (!ctx) return file;
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, targetWidth, targetHeight);
+    ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+
+    var blob = await canvasToBlob(canvas, 'image/jpeg', IMAGE_UPLOAD_QUALITY);
+    if (!blob || blob.size <= 0 || blob.size >= file.size) return file;
+    var compressedName = String(file.name || 'upload.jpg').replace(/\.[^.]+$/, '') + '.jpg';
+    return new File([blob], compressedName, { type: 'image/jpeg', lastModified: file.lastModified || Date.now() });
+  } catch (err) {
+    console.warn('Image compression skipped:', file && file.name, err);
+    return file;
+  }
+}
+
+// ── PRICING TABLES ──
+// GROOM_PRICES, FACE_TRIM_PRICES, ADDONS, HOTEL_RATES, DAYCARE_RATES,
+// DAYCARE_EXTRA_RATES, HOTEL_LATE_RATE, MEMBER_DISCOUNT, CONVENIENCE_FEE
+// are declared and zeroed in pricing.js (loaded above). loadPricingData()
+// populates them from Supabase at runtime.
+
+var GROOM_SERVICES = [
+  { key:'bath_dry',  name:'Bath and Dry',   duration:'30 minutes', desc:'Bath, Blow Dry and Brush Out' },
+  { key:'basic',     name:'Basic Groom',     duration:'1 hour',     desc:'Shampoo, Blow Dry, Brush Out, Teeth Brushing, Sanitary Clean, Paw Pad Trim, Nail Trim and Filing, Ear Cleaning, Anal Gland Expression' },
+  { key:'premium',   name:'Premium Groom',   duration:'2 hours',    desc:'Customized Haircut, Face Trim, Shampoo, Blow Dry, Brush Out, Teeth Brushing, Sanitary Clean, Paw Pad Trim, Nail Trim and Filing, Ear Cleaning, Anal Gland Expression' },
+  { key:'ala_carte', name:'Ala Carte',       duration:'varies',     desc:'Choose individual services below' }
+];
+// Add-ons enabled per service (null = all enabled)
+var ADDON_ENABLED = {
+  bath_dry:  null,
+  basic:     ['face_trim','antitick','whitening','demat','deshed','premium_shampoo'],
+  premium:   ['face_trim','antitick','whitening','demat','deshed','premium_shampoo'],
+  ala_carte: null
+};
+// Rate key is determined by the cage selected, not the pet's own size category
+var CAGE_RATE_SIZE = {
+  small_cage:   'small_dog',
+  medium_cage:  'medium_dog',
+  large_cage:   'large_dog',
+  single_cabin: 'cat_single_cabin',
+  villa:        'cat_villa'
+};
+var PET_SIZE_LABELS = {
+  small_dog:'Small Dog', medium_dog:'Medium Dog', large_dog:'Large Dog',
+  giant_dog:'Giant Dog', cat:'Cat'
+};
+// VALID_MEMBER_IDS removed — membership validated via Supabase
+var BOOKING_PARAMS = new URLSearchParams(window.location.search);
+var IS_WALKIN = BOOKING_PARAMS.get('walkin') === '1';
+var WALKIN_TOKEN = BOOKING_PARAMS.get('token') || '';
+var TEST_PAYMENT_MODE = BOOKING_PARAMS.get('testPayment') === '1';
+var IS_PAYMENT_RETURN = BOOKING_PARAMS.has('payment');
+var _walkinGatePromise = null;
+
+// ── GA4 BOOKING FUNNEL ──
+// Public online bookings only. Never include owner/pet details or other PII.
+function gaBookingItem(state) {
+  var bk = state || booking || {};
+  return {
+    item_id: bk.service || 'booking',
+    item_name: (bk.service || 'Pet service') + ' booking',
+    item_category: 'Pet services',
+    affiliation: bk.location || 'Barkhaus',
+    price: Number(getRunningTotal ? getRunningTotal() + currentConvenienceFee() : 0),
+    quantity: 1,
+  };
+}
+
+function trackBookingEvent(name, params, onceKey) {
+  if (IS_WALKIN || typeof window.gtag !== 'function') return;
+  if (onceKey) {
+    try {
+      var key = 'barkhaus_ga_' + onceKey;
+      if (sessionStorage.getItem(key)) return;
+      sessionStorage.setItem(key, '1');
+    } catch(e) {}
+  }
+  window.gtag('event', name, params || {});
+}
+
+function bookingEventParams(total) {
+  var value = Number(total != null ? total : getRunningTotal() + currentConvenienceFee()) || 0;
+  return {
+    currency: 'PHP',
+    value: value,
+    booking_service: booking.service || 'not_selected',
+    booking_branch: booking.location || 'not_selected',
+    items: [gaBookingItem(booking)],
+  };
+}
+
+function trackPurchase(ref, total, state) {
+  if (IS_WALKIN || !ref) return;
+  var dedupeKey = 'barkhaus_ga_purchase_' + ref;
+  try {
+    if (localStorage.getItem(dedupeKey)) return;
+    localStorage.setItem(dedupeKey, '1');
+  } catch(e) {}
+  var params = bookingEventParams(total);
+  params.transaction_id = String(ref);
+  if (state) {
+    if (state.service) params.booking_service = state.service;
+    if (state.location) params.booking_branch = state.location;
+    params.items = [{
+      item_id: state.service || 'booking',
+      item_name: (state.service || 'Pet service') + ' booking',
+      item_category: 'Pet services',
+      affiliation: state.location || 'Barkhaus',
+      price: Number(total) || 0,
+      quantity: 1,
+    }];
+  }
+  trackBookingEvent('purchase', params);
+}
+
+if (IS_WALKIN) {
+  CONVENIENCE_FEE = 0;
+  // The Edge Function validates and consumes this single-use token on submit.
+  _walkinGatePromise = Promise.resolve(!!WALKIN_TOKEN);
+}
+
+// ── STATE ──
+// Live data from DB (populated on init)
+var liveRooms    = [];   // rooms[] from Supabase for current branch
+var liveGroomers = [];   // groomers[] from Supabase for current branch
+var liveStudios      = [];   // studios[] from Supabase for current branch
+var liveStudioBlocks = [];   // studio_blocks[] for current branch studios
+
+var booking = {
+  location:null, service:null,
+  // Grooming
+  petSize:null, groomService:null, groomServicePrice:0, selectedAddons:{},
+  groomDate:null, groomSlot:null, preferredStylist:null, preferredStylistId:null, groomNotes:'',
+  // Hotel
+  hotelCheckin:null, hotelCheckout:null, hotelRoomType:null, hotelRoomId:null, hotelRoomName:null,
+  hotelBaseTotal:0, hotelLateTotal:0, hotelLateIsAdditionalNight:false,
+  hotelDropoffTime:'', hotelPickupTime:'', hotelPickupHour:14,
+  hotelFeeding:'', hotelMeds:'', playparkConsent:null,
+  vetClinic:'', vetContact:'', vetAddress:'',
+  emergencyName:'', emergencyPhone:'',
+  // Daycare
+  daycareDate:null, daycareBaseRate:0, daycareTotal:0, daycareOpenTime:false,
+  daycareDropoffHour:0, daycarePickupHour:0, daycareDropoffText:'', daycarePickupText:'',
+  daycareNotes:'',
+  // Studio
+  studioDate:null, studioSlot:null,
+  // Pet
+  petName:null, petAnimal:null, petGender:null, petBreed:null,
+  petAge:null, petAgeUnit:null, petMedical:null, petTemperament:null, vaccines:{},
+  // Owner
+  ownerFirst:'', ownerLast:'', ownerEmail:'', ownerPhone:'', ownerSource:'',
+  // Membership
+  isMember:null, membershipId:null, memberValid:false, membershipType:'standard',
+  // Test-only checkout shortcut
+  simulatePayment:false,
+};
+var currentStep = 1;
+var saveDetails = false;
+var uploadedVaccineFiles = [];
+var uploadedGroomPegs = [];   // grooming reference photos ("pegs")
+var secondCatVisible = false;
+
+// ── Manual transfer payment (active while hosted gateways remain dormant) ──
+var onPaymentScreen     = false;
+var paymentReceiptFile  = null;   // the single uploaded receipt File
+var selectedPaymentBank = 'gcash';
+var ACCOUNT_NAME = 'Jayson E. Endicio';
+var PAYMENT_METHODS = {
+  gcash: { label: 'GCash', account: '0917 1468032',  raw: '09171468032',  name: 'GCash account', qr: 'images/payment/gcash-qr.png' },
+  bpi:   { label: 'BPI',   account: '3509 005841',   raw: '3509005841',   name: 'BPI account',   qr: 'images/payment/bpi-qr.png' },
+  bdo:   { label: 'BDO',   account: '0035 2034 7924', raw: '003520347924', name: 'BDO account',   qr: null },
+};
+
+var SERVICE_CONFIG = {
+  grooming: {
+    step3: { sectionId:'groomSpecsSection',     title:'Grooming specs',      subtitle:'Choose your service and any add-ons.' },
+    step4: { sectionId:'groomSchedSection',     title:'Pick a schedule',     subtitle:'Choose your preferred date and time.' },
+    waiverSectionId: 'groomingWaivers',
+    generalWaiverId: 'waiverGeneralGrooming',
+  },
+  hotel: {
+    step3: { sectionId:'hotelDatesSection',     title:'Stay details',        subtitle:'When will your pet be staying with us?' },
+    step4: { sectionId:'hotelDetailsSection',   title:'Room & care details', subtitle:'Help our team prepare for your pet.' },
+    waiverSectionId: 'hotelWaivers',
+    generalWaiverId: 'waiverGeneralHotel',
+  },
+  daycare: {
+    step3: { sectionId:'daycareScheduleSection',title:'Daycare details',     subtitle:'Choose a date and time for your pet.' },
+    step4: { sectionId:'daycareDetailsSection', title:'Service notes',       subtitle:'Help our staff give your pet the best day.' },
+    waiverSectionId: 'daycareWaivers',
+    generalWaiverId: 'waiverGeneralDaycare',
+  },
+  studio: {
+    step3: { sectionId:'studioSlotSection',     title:'Pick a slot',         subtitle:'Choose your date and time at Barkhaus Studio.' },
+    step4: null,
+    waiverSectionId: 'studioWaiver',
+    generalWaiverId: null,
+  },
+};
+
+var FLOWS = {
+  grooming: { steps:['Location','Service','Specs','Schedule','Pet','You','Waiver'] },
+  hotel:    { steps:['Location','Service','Dates','Details','Pet','You','Waiver'] },
+  daycare:  { steps:['Location','Service','Schedule','Details','Pet','You','Waiver'] },
+  studio:   { steps:['Location','Service','Slot','Pet','You','Waiver'] },
+  events:   { steps:[] }
+};
+
+// ── LOCAL DATE HELPER (avoids UTC-offset causing wrong day) ──
+function localDateStr(d) {
+  var dt = d || new Date();
+  return dt.getFullYear() + '-' +
+    String(dt.getMonth() + 1).padStart(2, '0') + '-' +
+    String(dt.getDate()).padStart(2, '0');
+}
+
+// ── INIT ──
+(async function init() {
+  // Walk-in gate — must pass before any rendering
+  if (IS_WALKIN && _walkinGatePromise) {
+    var _walkinAllowed = await _walkinGatePromise;
+    if (!_walkinAllowed) {
+      document.body.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;font-family:sans-serif;background:#1a1a1a;color:#fff;text-align:center;padding:24px">'
+        + '<div style="font-size:48px;margin-bottom:16px">🔒</div>'
+        + '<h2 style="margin:0 0 8px">Access Restricted</h2>'
+        + '<p style="color:#aaa;margin:0 0 24px">Walk-in bookings must be started from the admin panel.</p>'
+        + '<a href="index.html" style="background:#FFCE58;color:#1a1a1a;padding:10px 24px;border-radius:20px;text-decoration:none;font-weight:700">Go to Home</a>'
+        + '</div>';
+      return;
+    }
+  }
+  if (!IS_PAYMENT_RETURN) {
+    trackBookingEvent('booking_start', {
+      booking_source: 'online',
+      payment_provider: PAYMENT_GATEWAY_PROVIDER,
+    }, 'booking_start');
+  }
+  var today = localDateStr();
+  ['groomDate','hotelCheckin','hotelCheckout','daycareDate','studioDate'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.min = today;
+  });
+  try {
+    var saved = localStorage.getItem('barkhaus_owner');
+    if (saved) {
+      var d = JSON.parse(saved);
+      if (d.first) document.getElementById('ownerFirst').value = d.first;
+      if (d.last)  document.getElementById('ownerLast').value  = d.last;
+      if (d.email) document.getElementById('ownerEmail').value = d.email;
+      if (d.phone) document.getElementById('ownerPhone').value = d.phone;
+      saveDetails = true;
+      document.getElementById('saveToggle').classList.add('on');
+    }
+  } catch(e) {}
+  await loadPricing();
+  buildPickupTimeOptions();
+  renderProgress();
+  if (TEST_PAYMENT_MODE) {
+    var simCard = document.getElementById('simulatePaymentCard');
+    if (simCard) simCard.style.display = '';
+  }
+  if (IS_WALKIN) {
+    var banner = document.createElement('div');
+    banner.style.cssText = 'background:rgba(107,203,119,0.15);border-bottom:0.5px solid rgba(107,203,119,0.3);padding:8px 16px;font-size:12px;color:#6BCB77;font-weight:600;text-align:center;';
+    banner.textContent = '🚶 Walk-in booking — payment collected at counter';
+    document.body.insertBefore(banner, document.body.firstChild);
+  }
+  var paymentPreparationNotice = document.getElementById('paymentPreparationNotice');
+  if (paymentPreparationNotice && (IS_WALKIN || PAYMENT_GATEWAY_PROVIDER === 'manual')) {
+    paymentPreparationNotice.style.display = 'none';
+  }
+  // Warn before unload once the user has made meaningful progress
+  window.addEventListener('beforeunload', function(e) {
+    if (_redirectingToPayment) return; // intentional redirect — no warning
+    var ss = document.getElementById('successScreen');
+    if (ss && ss.classList.contains('active')) return; // booking already done
+    if (currentStep > 1 || onSummaryScreen) {
+      e.preventDefault();
+      e.returnValue = ''; // required for Chrome
+    }
+  });
+})();
+
+async function loadPricing() {
+  try {
+    var rows = await sbFetchPublic('pricing', 'select=category,service_key,size_key,day_type,membership_type,price');
+    loadPricingData(rows);
+    try {
+      var calendarRows = await sbFetchPublic('rate_calendar', 'select=rate_date,label,holiday_type,rate_day_type,active&active=eq.true');
+      loadRateCalendarData(calendarRows);
+    } catch(calendarErr) {
+      console.warn('Rate calendar fetch failed; using weekday/weekend defaults:', calendarErr);
+      loadRateCalendarData([]);
+    }
+    // Manual transfer charges no convenience fee. Hosted providers use the
+    // configured pricing-table fee when enabled later.
+    if (IS_WALKIN || PAYMENT_GATEWAY_PROVIDER === 'manual') CONVENIENCE_FEE = 0;
+  } catch(e) {
+    console.warn('Pricing fetch failed:', e);
+    // Show a persistent banner — pricing failure is not a recoverable state without a refresh
+    var bar = document.createElement('div');
+    bar.id = 'pricingErrorBar';
+    bar.style.cssText = 'position:sticky;top:0;z-index:999;background:#FF6B6B;color:#fff;font-family:"Nunito",sans-serif;font-size:13px;font-weight:700;text-align:center;padding:10px 16px;line-height:1.4';
+    bar.innerHTML = '⚠️ Pricing unavailable — please <a href="" style="color:#fff;text-decoration:underline">refresh the page</a> before booking. If this persists, call us to book.';
+    document.body.insertBefore(bar, document.body.firstChild);
+  }
+}
+
+// ── PROGRESS ──
+// Studio skips HTML step4 (Details), so HTML steps 5-7 map to logical steps 4-6.
+// This helper converts the HTML panel index to a logical step number for the progress bar.
+function htmlToLogicalStep(htmlStep) {
+  if (booking.service === 'studio' && htmlStep >= 5) return htmlStep - 1;
+  return htmlStep;
+}
+// For navigation: studio uses HTML panels 1,2,3,5,6,7 — last panel is 7, not 6.
+function navMaxStep() {
+  if (booking.service === 'studio') return 7;
+  var flow = booking.service ? FLOWS[booking.service] : null;
+  return flow ? flow.steps.length : 7;
+}
+function renderProgress() {
+  var svc      = booking.service;
+  var flow     = (svc && FLOWS[svc]) ? FLOWS[svc] : FLOWS.grooming;
+  var steps    = flow.steps;
+  var total    = steps.length;
+  var logStep  = htmlToLogicalStep(currentStep);
+  var pct      = total ? Math.round((logStep / total) * 100) : 14;
+  document.getElementById('progressFill').style.width = pct + '%';
+  var html = '';
+  for (var i = 0; i < steps.length; i++) {
+    var cls = i + 1 === logStep ? 'active' : (i + 1 < logStep ? 'done' : '');
+    html += '<span class="progress-step ' + cls + '">' + steps[i] + '</span>';
+  }
+  document.getElementById('progressSteps').innerHTML = html;
+}
+
+var _redirectingToPayment = false; // set true before payment redirect to suppress beforeunload warning
+var _handlingHostedPaymentReturn = false;
+var _checkingStoredPaymentRef = false;
+
+// ── NAVIGATION ──
+function nextStep() {
+  if (!validateStep(currentStep)) return;
+  collectStep(currentStep);
+  var maxStep = navMaxStep();
+  if (currentStep >= maxStep) {
+    showSummary();
+    return;
+  }
+  var next = currentStep + 1;
+  if (next === 4 && booking.service === 'studio') next = 5;
+  goToStep(next);
+}
+var onSummaryScreen = false;
+
+function prevStep() {
+  if (onPaymentScreen) { backFromPayment(); return; }
+  if (onSummaryScreen) {
+    onSummaryScreen = false;
+    document.getElementById('stepSummary').classList.remove('active');
+    document.getElementById('progressWrap').style.display = '';
+    currentStep = navMaxStep(); // last HTML panel (7 for studio, flow.steps.length for others)
+    var el = document.getElementById('step' + currentStep);
+    if (el) el.classList.add('active');
+    renderProgress();
+    updateBottomNav();
+    window.scrollTo(0,0);
+    return;
+  }
+  if (currentStep > 1) {
+    var prev = currentStep - 1;
+    if (prev === 4 && booking.service === 'studio') prev = 3;
+    goToStep(prev);
+  }
+}
+function goToStep(n) {
+  var cur = document.getElementById('step' + currentStep);
+  if (cur) cur.classList.remove('active');
+  currentStep = n;
+  var next = document.getElementById('step' + currentStep);
+  if (next) next.classList.add('active');
+  renderProgress();
+  updateNavTotal();
+  document.getElementById('btnBack').style.display = currentStep > 1 ? '' : 'none';
+  var btnN = document.getElementById('btnNext');
+  btnN.textContent = 'Continue'; btnN.className = 'btn-next';
+  btnN.onclick = function() { nextStep(); };
+  window.scrollTo(0,0);
+  if (currentStep === 3) showStep3Panel();
+  if (currentStep === 4) showStep4Panel();
+  if (currentStep === 5) showPetPanel();
+  if (currentStep === 6) showOwnerPanel();
+  if (currentStep === 7) showWaiverPanel();
+  // Validate after panel setup so restored values are counted
+  refreshContinueBtn();
+}
+// ── Manual transfer payment page (online flow) ──
+function showPaymentPage() {
+  if (!_pricingLoaded) { showToast('Pricing data is unavailable. Please refresh the page and try again.', 7000); return; }
+  collectAllState();
+  trackBookingEvent('begin_checkout', bookingEventParams(), 'begin_checkout');
+  onSummaryScreen = false;
+  onPaymentScreen = true;
+  var ss = document.getElementById('stepSummary'); if (ss) ss.classList.remove('active');
+  document.getElementById('progressWrap').style.display = 'none';
+  var pp = document.getElementById('stepPayment'); if (pp) pp.classList.add('active');
+
+  var amt = getRunningTotal(); // subtotal − member discount (convenience fee is 0)
+  document.getElementById('payAmount').textContent = '₱' + (amt || 0).toLocaleString();
+
+  var btns = document.getElementById('payBankBtns');
+  btns.innerHTML = Object.keys(PAYMENT_METHODS).map(function(k){
+    return '<button type="button" class="pay-bank-btn" data-bank="'+k+'" onclick="renderPaymentMethod(\''+k+'\')">'+PAYMENT_METHODS[k].label+'</button>';
+  }).join('');
+  renderPaymentMethod(selectedPaymentBank || 'gcash');
+
+  // Restore a previously chosen receipt (e.g. returning after an error)
+  var _up = document.getElementById('payUploadLabel');
+  var _prev = document.getElementById('payReceiptPreview');
+  if (paymentReceiptFile) {
+    document.getElementById('payUploadText').textContent = '✓ ' + paymentReceiptFile.name + ' — tap to change';
+    _up.classList.add('has-file');
+    _prev.innerHTML = '<img class="pay-receipt-thumb" src="'+URL.createObjectURL(paymentReceiptFile)+'" alt="Receipt preview">';
+    _prev.style.display = 'block';
+  } else {
+    document.getElementById('payUploadText').textContent = '📎 Tap to attach receipt image';
+    _up.classList.remove('has-file');
+    _prev.style.display = 'none'; _prev.innerHTML = '';
+  }
+
+  document.getElementById('btnBack').style.display = '';
+  var next = document.getElementById('btnNext');
+  next.textContent = 'Submit Payment';
+  next.className = 'btn-submit';
+  next.onclick = function(){ submitBooking(); };
+  refreshPaymentSubmit();
+  window.scrollTo(0,0);
+}
+
+function renderPaymentMethod(bank) {
+  selectedPaymentBank = bank;
+  var m = PAYMENT_METHODS[bank]; if (!m) return;
+  document.querySelectorAll('#payBankBtns .pay-bank-btn').forEach(function(b){
+    b.classList.toggle('selected', b.getAttribute('data-bank') === bank);
+  });
+  var html = '';
+  if (m.qr) html += '<img class="pay-qr" src="'+m.qr+'" alt="'+m.label+' QR code" onerror="this.style.display=\'none\'">';
+  html += '<div class="pay-acct-list">' +
+            '<div class="pay-acct-row">' +
+              '<span class="pay-acct-label">Account no.</span>' +
+              '<span class="pay-acct-num">'+m.account+'</span>' +
+              '<button type="button" class="pay-copy-btn" onclick="copyAccount(\''+m.raw+'\', this)">Copy</button>' +
+            '</div>' +
+            '<div class="pay-acct-row">' +
+              '<span class="pay-acct-label">Account name</span>' +
+              '<span class="pay-acct-num" style="font-size:14px">'+ACCOUNT_NAME+'</span>' +
+              '<button type="button" class="pay-copy-btn" onclick="copyAccount(\''+ACCOUNT_NAME+'\', this)">Copy</button>' +
+            '</div>' +
+          '</div>' +
+          '<p class="pay-acct-name">Scan the QR or send to the '+m.label+' account above.</p>';
+  document.getElementById('payMethodDetail').innerHTML = html;
+}
+
+function copyAccount(raw, btn) {
+  function done(){ btn.textContent = 'Copied ✓'; btn.classList.add('copied'); setTimeout(function(){ btn.textContent='Copy'; btn.classList.remove('copied'); }, 1800); }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(raw).then(done).catch(function(){ _legacyCopy(raw); done(); });
+  } else { _legacyCopy(raw); done(); }
+}
+function _legacyCopy(text){ try{ var t=document.createElement('textarea'); t.value=text; t.style.position='fixed'; t.style.opacity='0'; document.body.appendChild(t); t.focus(); t.select(); document.execCommand('copy'); document.body.removeChild(t);}catch(e){} }
+
+function onReceiptSelected(input) {
+  var f = input.files && input.files[0];
+  if (!f) return;
+  if (!/^image\//.test(f.type)) { showToast('Please upload an image file (JPG or PNG).', 5000); input.value=''; return; }
+  if (f.size > 5 * 1024 * 1024) { showToast('That image is too large. Please keep it under 5 MB.', 5000); input.value=''; return; }
+  paymentReceiptFile = f;
+  document.getElementById('payUploadText').textContent = '✓ ' + f.name + ' — tap to change';
+  document.getElementById('payUploadLabel').classList.add('has-file');
+  var prev = document.getElementById('payReceiptPreview');
+  prev.innerHTML = '<img class="pay-receipt-thumb" src="'+URL.createObjectURL(f)+'" alt="Receipt preview">';
+  prev.style.display = 'block';
+  refreshPaymentSubmit();
+}
+
+function refreshPaymentSubmit() {
+  if (!onPaymentScreen) return;
+  var next = document.getElementById('btnNext');
+  var ready = !!paymentReceiptFile && !!selectedPaymentBank;
+  next.disabled = !ready;
+  next.style.opacity = ready ? '' : '0.5';
+}
+
+function backFromPayment() {
+  onPaymentScreen = false;
+  var pp = document.getElementById('stepPayment'); if (pp) pp.classList.remove('active');
+  showSummary();
+}
+
+function showSummary() {
+  var flow    = booking.service ? FLOWS[booking.service] : null;
+  var maxStep = flow ? flow.steps.length : 7;
+  var cur = document.getElementById('step' + maxStep);
+  if (cur) cur.classList.remove('active');
+  document.getElementById('progressWrap').style.display = 'none';
+  onSummaryScreen = true;
+  buildSummary();
+  trackBookingEvent('booking_form_complete', bookingEventParams(), 'booking_form_complete');
+  document.getElementById('stepSummary').classList.add('active');
+  syncHostedCheckoutNotice();
+  updateBottomNavForSummary();
+  window.scrollTo(0,0);
+}
+function updateBottomNavForSummary() {
+  var back = document.getElementById('btnBack');
+  var next = document.getElementById('btnNext');
+  back.style.display = '';
+  next.textContent = 'Confirm Booking';
+  next.className = 'btn-submit';
+  next.disabled = false;
+  next.onclick = function() { submitBooking(); };
+}
+function updateBottomNav() {
+  var back = document.getElementById('btnBack');
+  var next = document.getElementById('btnNext');
+  back.style.display = currentStep > 1 ? '' : 'none';
+  next.textContent = 'Continue';
+  next.className = 'btn-next';
+  next.onclick = function() { nextStep(); };
+  updateNavTotal();
+  refreshContinueBtn();
+}
+function silentValidateStep(step) {
+  var svc = booking.service;
+  var g = function(id) { var el=document.getElementById(id); return el ? el.value : ''; };
+  if (step === 1) return !!booking.location;
+  if (step === 2) return !!svc;
+  if (step === 3) {
+    if (svc === 'grooming') {
+      if (!booking.petSize || !booking.groomService) return false;
+      if (booking.groomService === 'ala_carte' && Object.keys(booking.selectedAddons).length === 0) return false;
+    }
+    if (svc === 'hotel') {
+      if (!booking.petSize) return false;
+      if (!g('hotelCheckin') || !g('hotelCheckout')) return false;
+      if (!booking.hotelRoomType) return false;
+    }
+    if (svc === 'daycare') {
+      if (!booking.petSize) return false;
+      if (!g('daycareDate') || !g('daycareDropoff') || !g('daycarePickup')) return false;
+    }
+    if (svc === 'studio') {
+      if (!g('studioDate') || !booking.studioSlot) return false;
+    }
+    return true;
+  }
+  if (step === 4) {
+    if (svc === 'grooming') {
+      if (!g('groomDate') || !booking.groomSlot) return false;
+    }
+    if (svc === 'hotel') {
+      if (!g('hotelDropoffTime') || !g('hotelPickupTime')) return false;
+    }
+    return true;
+  }
+  if (step === 5) {
+    if (!g('petName').trim() || !booking.petAnimal || !booking.petGender) return false;
+    if (!g('petBreed').trim() || !g('petAgeNum').trim()) return false;
+    if (isGroomAgeBlocked()) return false;
+    if (!booking.petTemperament) return false;
+    var _nf = !uploadedVaccineFiles || uploadedVaccineFiles.length === 0;
+    var _bv = document.getElementById('bringVaccines');
+    if (_nf && (!_bv || !_bv.classList.contains('checked'))) return false;
+    var vw = document.getElementById('vaccineWaiver');
+    if (!vw || !vw.classList.contains('checked')) return false;
+    var sr = document.getElementById('seniorWaiverRow');
+    if (sr && sr.style.display !== 'none') {
+      var sa = document.getElementById('seniorWaiverAck');
+      if (!sa || !sa.classList.contains('checked')) return false;
+    }
+    if (booking.isMember === true && !booking.memberValid) return false;
+    return true;
+  }
+  if (step === 6) {
+    var email = g('ownerEmail').trim();
+    if (!g('ownerFirst').trim() || !g('ownerLast').trim()) return false;
+    if (!email || !email.includes('@')) return false;
+    if (!g('ownerPhone').trim()) return false;
+    return true;
+  }
+  if (step === 7) {
+    var wh = document.getElementById('waiverHouseRules');
+    if (!wh || !wh.classList.contains('checked')) return false;
+    var cfg = SERVICE_CONFIG[svc];
+    if (cfg && cfg.generalWaiverId) {
+      var we = document.getElementById(cfg.generalWaiverId);
+      if (!we || !we.classList.contains('checked')) return false;
+    }
+    var wv = document.getElementById('waiverVaccineDecl');
+    if (!wv || !wv.classList.contains('checked')) return false;
+    if (svc === 'studio') {
+      var ws = document.getElementById('waiverStudio');
+      if (!ws || !ws.classList.contains('checked')) return false;
+    }
+    if (svc === 'grooming') {
+      var gp = document.getElementById('waiverGroomingPolicy');
+      if (!gp || !gp.classList.contains('checked')) return false;
+    }
+    if (svc === 'hotel') {
+      var hp = document.getElementById('waiverHotelCancellation');
+      if (!hp || !hp.classList.contains('checked')) return false;
+    }
+    var ageV = parseInt(g('petAgeNum')) || 0;
+    var unitV = g('petAgeUnit') || 'months';
+    var medV  = g('petMedical').trim();
+    if ((ageV >= 6 && unitV === 'years') || medV.length > 0) {
+      var sw = document.getElementById('seniorWaiver');
+      if (!sw || !sw.classList.contains('checked')) return false;
+    }
+    return true;
+  }
+  return true;
+}
+function refreshContinueBtn() {
+  var btn = document.getElementById('btnNext');
+  if (!btn || onSummaryScreen) return;
+  var valid = silentValidateStep(currentStep);
+  if (valid) {
+    btn.classList.remove('btn-incomplete');
+  } else {
+    btn.classList.add('btn-incomplete');
+  }
+}
+function updateBottomNavForSummary() {
+  document.getElementById('btnBack').style.display = '';
+  var next = document.getElementById('btnNext');
+  next.className = 'btn-submit';
+  next.disabled = false;
+  if (IS_WALKIN) {
+    // Walk-in pays at the counter — no online transfer page.
+    next.textContent = 'Confirm Booking';
+    next.onclick = function() { submitBooking(); };
+  } else if (PAYMENT_GATEWAY_PROVIDER === 'manual') {
+    next.textContent = 'Proceed to Payment';
+    next.onclick = function() { showPaymentPage(); };
+  } else {
+    next.textContent = 'Proceed to Secure Checkout';
+    next.onclick = function() { submitBooking(); };
+  }
+  var total = getRunningTotal();
+  var navEl = document.getElementById('navTotal');
+  if (total > 0) {
+    document.getElementById('navTotalVal').textContent = '₱' + (total + currentConvenienceFee()).toLocaleString();
+    navEl.style.display = 'flex';
+  }
+}
+function updateNavTotal() {
+  var total = getRunningTotal();
+  var el = document.getElementById('navTotal');
+  if (total > 0) {
+    document.getElementById('navTotalVal').textContent = '\u20b1' + total.toLocaleString();
+    el.style.display = 'flex';
+  } else {
+    el.style.display = 'none';
+  }
+}
+function getRunningTotal() {
+  var svc = booking.service;
+  var raw = 0;
+  var discountable = 0;
+  if (svc === 'grooming') {
+    raw = (booking.groomServicePrice || 0) +
+      Object.keys(booking.selectedAddons).reduce(function(a,k) {
+        return a + (ADDONS.find(function(x){return x.key===k;}) ? booking.selectedAddons[k] : 0);
+      }, 0);
+    discountable = booking.groomServicePrice || 0;
+  } else if (svc === 'hotel') {
+    raw = (booking.hotelBaseTotal || 0) + (booking.hotelLateTotal || 0);
+    discountable = booking.hotelBaseTotal || 0;
+  } else if (svc === 'daycare') {
+    raw = booking.daycareTotal || 0;
+    discountable = raw;
+  }
+  return raw - calculateMemberDiscount(svc, discountable, booking.memberValid, booking.membershipType);
+}
+
+// ── LOCATION ──
+function selectLocation(el, val) {
+  document.querySelectorAll('#step1 .option-card').forEach(function(c) { c.classList.remove('selected'); });
+  el.classList.add('selected');
+  booking.location = val;
+  // Reset live data for new branch
+  liveRooms = []; liveGroomers = []; liveStudios = []; liveStudioBlocks = [];
+  window._branchIds = null;
+  // Membership validity is branch-dependent (Standard memberships are branch-bound) —
+  // force re-verification after a branch change so a discount can't carry across branches.
+  booking.memberValid = false;
+  booking.membershipType = 'standard';
+  var _mvMsg = document.getElementById('memberValidMsg');
+  if (_mvMsg) _mvMsg.style.display = 'none';
+  loadLiveRoomsAndGroomers();
+  if (booking.service === 'studio') { booking.service = null; document.querySelectorAll('#serviceGrid .option-card').forEach(function(c){c.classList.remove('selected');}); }
+  // Cat availability for hotel / daycare
+  var hotelCat = document.getElementById('hotelCatBtn');
+  var daycareCat = document.getElementById('daycareCatBtn');
+  var studioCard  = document.getElementById('studioCard');
+  var studioBadge = document.getElementById('studioBadge');
+  if (val === 'estancia') {
+    if (hotelCat)   { hotelCat.classList.add('disabled-opt');    document.getElementById('hotelCatNote').textContent   = 'Eastwood only'; }
+    if (daycareCat) { daycareCat.classList.add('disabled-opt');  document.getElementById('daycareCatNote').textContent = 'Eastwood only'; }
+    if (studioCard) { studioCard.classList.add('disabled');    if (studioBadge) studioBadge.textContent = 'Eastwood only'; }
+  } else {
+    if (hotelCat)   { hotelCat.classList.remove('disabled-opt'); document.getElementById('hotelCatNote').textContent   = 'any size'; }
+    if (daycareCat) {
+      daycareCat.classList.remove('disabled-opt');
+      document.getElementById('daycareCatNote').textContent = '\u20b1' + (DAYCARE_RATES.cat || 300).toLocaleString() + ' base';
+    }
+    if (studioCard) { studioCard.classList.remove('disabled'); if (studioBadge) studioBadge.textContent = 'Contact to book'; }
+  }
+  nextStep();
+}
+
+function setValue(id, value) {
+  var el = document.getElementById(id);
+  if (el) el.value = value;
+}
+
+function setChecked(id, checked) {
+  var el = document.getElementById(id);
+  if (el) el.classList.toggle('checked', !!checked);
+}
+
+function clearActivePanels() {
+  document.querySelectorAll('.step-panel').forEach(function(panel) {
+    panel.classList.remove('active');
+  });
+}
+
+function startSimulatedPaymentFlow() {
+  if (!TEST_PAYMENT_MODE) return;
+  var today = localDateStr();
+
+  booking.location = 'eastwood';
+  booking.service = 'daycare';
+  booking.simulatePayment = true;
+  booking.petSize = 'small_dog';
+  booking.daycareBaseRate = 1;
+  booking.daycareTotal = 1;
+  booking.daycareDate = today;
+  booking.daycareOpenTime = false;
+  booking.daycareDropoffHour = 10;
+  booking.daycarePickupHour = 13;
+  booking.daycareDropoffText = '10:00 AM';
+  booking.daycarePickupText = '1:00 PM';
+  booking.daycareNotes = 'Simulated Maya payment test booking.';
+  booking.petName = 'Maya Test';
+  booking.petAnimal = 'dog';
+  booking.petGender = 'male';
+  booking.petBreed = 'Mixed';
+  booking.petAge = '2';
+  booking.petAgeUnit = 'years';
+  booking.petMedical = '';
+  booking.petTemperament = 'friendly_all';
+  booking.isMember = false;
+  booking.membershipId = null;
+  booking.memberValid = false;
+  booking.membershipType = 'standard';
+  booking.ownerFirst = 'Maya';
+  booking.ownerLast = 'Tester';
+  booking.ownerEmail = 'maya-test@barkhaus.ph';
+  booking.ownerPhone = '09171234567';
+  booking.ownerSource = 'Website';
+
+  uploadedVaccineFiles = [];
+  paymentReceiptFile = null;
+
+  setValue('daycareDate', today);
+  onDaycareDateChange();
+  setValue('daycareDropoff', '10');
+  setValue('daycarePickup', '13');
+  setValue('daycareNotes', booking.daycareNotes);
+  booking.daycareBaseRate = 1;
+  booking.daycareTotal = 1;
+
+  setValue('petName', booking.petName);
+  setValue('petBreed', booking.petBreed);
+  setValue('petAgeNum', booking.petAge);
+  setValue('petAgeUnit', booking.petAgeUnit);
+  setValue('petMedical', '');
+  setValue('ownerFirst', booking.ownerFirst);
+  setValue('ownerLast', booking.ownerLast);
+  setValue('ownerEmail', booking.ownerEmail);
+  setValue('ownerPhone', booking.ownerPhone);
+  setValue('ownerSource', booking.ownerSource);
+  setValue('ownerSourceOther', '');
+
+  document.querySelectorAll('#step1 .option-card').forEach(function(card) { card.classList.remove('selected'); });
+  var simCard = document.getElementById('simulatePaymentCard');
+  if (simCard) simCard.classList.add('selected');
+  document.querySelectorAll('#serviceGrid .option-card').forEach(function(card) { card.classList.remove('selected'); });
+  document.querySelectorAll('#daycareSizeGrid .pet-type-btn').forEach(function(btn) { btn.classList.remove('selected'); });
+  var smallBtn = document.querySelector('#daycareSizeGrid .pet-type-btn[onclick*="small_dog"]');
+  if (smallBtn) smallBtn.classList.add('selected');
+  document.querySelectorAll('#petTypeGroup .gender-btn').forEach(function(btn) { btn.classList.remove('selected'); });
+  var dogBtn = document.getElementById('petTypeDog');
+  if (dogBtn) dogBtn.classList.add('selected');
+  document.querySelectorAll('#petGenderGrid .gender-btn').forEach(function(btn) { btn.classList.remove('selected'); });
+  var maleBtn = document.querySelector('#petGenderGrid .gender-btn[onclick*="male"]');
+  if (maleBtn) maleBtn.classList.add('selected');
+  document.querySelectorAll('.temp-btn').forEach(function(btn) { btn.classList.remove('selected'); });
+  var friendlyBtn = document.querySelector('.temp-btn[onclick*="friendly_all"]');
+  if (friendlyBtn) friendlyBtn.classList.add('selected');
+
+  renderVaccines();
+  setChecked('bringVaccines', true);
+  setChecked('vaccineWaiver', true);
+  setChecked('waiverGeneralDaycare', true);
+  setChecked('waiverVaccineDecl', true);
+  setChecked('waiverMedia', true);
+  checkSeniorWaiver();
+
+  currentStep = 7;
+  onPaymentScreen = false;
+  onSummaryScreen = false;
+  clearActivePanels();
+  document.getElementById('progressWrap').style.display = 'none';
+  showSummary();
+}
+
+// ── SERVICE ──
+function selectService(el, val) {
+  if (el.classList.contains('disabled')) return;
+  document.querySelectorAll('#serviceGrid .option-card').forEach(function(c) { c.classList.remove('selected'); });
+  el.classList.add('selected');
+  booking.service = val;
+  if (val === 'events') {
+    // Events uses the contact modal (showContactModal), not a booking flow.
+    // The eventsCard onclick calls showContactModal directly; this branch
+    // is kept as a safety fallback only.
+    showContactModal('events');
+    return;
+  }
+  nextStep();
+  renderProgress();
+}
+
+// ── BACK FROM EVENTS ──
+function backFromEvents() {
+  document.getElementById('stepEvents').classList.remove('active');
+  document.getElementById('step2').classList.add('active');
+  document.getElementById('bottomNav').style.display = '';
+  document.getElementById('progressWrap').style.display = '';
+}
+
+// ── Auto-scroll helper ──
+// Smoothly scrolls to `id` after `delay` ms (default 80ms, so display:block has
+// time to take effect). Only scrolls FORWARD — never jumps back up the page —
+// to avoid confusing the user when they edit an earlier choice.
+function autoScroll(id, delay) {
+  setTimeout(function() {
+    var el = document.getElementById(id);
+    if (!el || el.offsetParent === null) return;       // hidden or missing — skip
+    var hdr = document.querySelector('.booking-header');
+    var topOffset = (hdr ? hdr.offsetHeight : 0) + 16; // 16px breathing room
+    var targetY = el.getBoundingClientRect().top + window.pageYOffset - topOffset;
+    if (targetY > window.pageYOffset + 20) {           // only scroll if meaningfully forward
+      window.scrollTo({ top: targetY, behavior: 'smooth' });
+    }
+  }, delay || 80);
+}
+
+// ── STEP 3 PANEL ──
+function showStep3Panel() {
+  ['groomSpecsSection','hotelDatesSection','daycareScheduleSection','studioSlotSection'].forEach(function(id) {
+    document.getElementById(id).style.display = 'none';
+  });
+  var cfg = SERVICE_CONFIG[booking.service];
+  if (!cfg || !cfg.step3) return;
+  document.getElementById('s3title').textContent    = cfg.step3.title;
+  document.getElementById('s3subtitle').textContent = cfg.step3.subtitle;
+  document.getElementById(cfg.step3.sectionId).style.display = '';
+  // If returning to hotel step 3 with dates already set (e.g. after cancelled payment edit),
+  // reload room availability so the grid reflects current bookings.
+  if (booking.service === 'hotel') {
+    var _cin  = document.getElementById('hotelCheckin');
+    var _cout = document.getElementById('hotelCheckout');
+    if (_cin && _cout && _cin.value && _cout.value) loadRoomAvailability();
+  }
+}
+
+// ── STEP 4 PANEL ──
+function showStep4Panel() {
+  ['groomSchedSection','hotelDetailsSection','daycareDetailsSection'].forEach(function(id) {
+    document.getElementById(id).style.display = 'none';
+  });
+  var cfg = SERVICE_CONFIG[booking.service];
+  if (!cfg || !cfg.step4) return;
+  document.getElementById('s4title').textContent    = cfg.step4.title;
+  document.getElementById('s4subtitle').textContent = cfg.step4.subtitle;
+  document.getElementById(cfg.step4.sectionId).style.display = '';
+  if (booking.service === 'hotel') {
+    populateHotelDropoffTimes();
+    var _ppGroup = document.getElementById('playparkYes') ? document.getElementById('playparkYes').closest('.form-group') : null;
+    if (_ppGroup) _ppGroup.style.display = booking.petSize === 'cat' ? 'none' : '';
+    if (booking.petSize === 'cat') {
+      booking.playparkConsent = null;
+    } else {
+      // Re-highlight playpark buttons from restored booking state
+      var _ppY = document.getElementById('playparkYes');
+      var _ppN = document.getElementById('playparkNo');
+      if (_ppY) _ppY.classList.toggle('selected', booking.playparkConsent === 'yes');
+      if (_ppN) _ppN.classList.toggle('selected', booking.playparkConsent === 'no');
+    }
+  }
+}
+
+// ── STEP 5 PET PANEL ──
+function showPetPanel() {
+  var svc      = booking.service;
+  var isHotel  = svc === 'hotel';
+  var hasPetSize = !!booking.petSize; // true for grooming, hotel, daycare
+
+  document.getElementById('emergencySection').style.display = isHotel ? '' : 'none';
+  document.getElementById('secondCatSection').style.display = (isHotel && (booking.hotelRoomType === 'villa' || booking.hotelRoomId && liveRooms.find(function(r){return r.id===booking.hotelRoomId && r.room_type==='villa';}))) ? '' : 'none';
+  if (svc !== 'grooming') document.getElementById('seniorWaiverRow').style.display = 'none';
+
+  // ── Animal type: prepopulate and lock whenever petSize is known ──
+  var dogBtn = document.getElementById('petTypeDog');
+  var catBtn = document.getElementById('petTypeCat');
+  if (hasPetSize) {
+    var animal = booking.petSize === 'cat' ? 'cat' : 'dog';
+    booking.petAnimal = animal;
+    dogBtn.classList.toggle('selected', animal === 'dog');
+    catBtn.classList.toggle('selected', animal === 'cat');
+    dogBtn.classList.add('locked-opt');
+    catBtn.classList.add('locked-opt');
+  } else {
+    dogBtn.classList.remove('locked-opt');
+    catBtn.classList.remove('locked-opt');
+  }
+
+  // ── Size: always show readonly display when petSize is already known ──
+  var sizeGroup  = document.getElementById('petSizeGroupPet');
+  var selectGroup = document.getElementById('petSizeSelectGroup');
+  if (hasPetSize) {
+    sizeGroup.style.display   = '';
+    selectGroup.style.display = 'none';
+    document.getElementById('petSizeDisplay').value = PET_SIZE_LABELS[booking.petSize] || '';
+  } else {
+    // Studio: no size collected at all
+    sizeGroup.style.display   = 'none';
+    selectGroup.style.display = 'none';
+  }
+
+  renderVaccines();
+  checkSeniorWaiver();
+}
+
+// ── STEP 6 OWNER PANEL ──
+function showOwnerPanel() {
+  var svc = booking.service;
+  var flow = FLOWS[svc] || FLOWS.grooming;
+  var eyebrow = 'Step ' + flow.steps.indexOf('You') + 1;
+  var el = document.getElementById('s6eyebrow');
+  if (el) el.textContent = eyebrow;
+}
+
+// ── STEP 7 WAIVER PANEL ──
+function showWaiverPanel() {
+  var svc = booking.service;
+  ['groomingWaivers','daycareWaivers','hotelWaivers','studioWaiver'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+  var cfg = SERVICE_CONFIG[svc];
+  if (cfg && cfg.waiverSectionId) document.getElementById(cfg.waiverSectionId).style.display = '';
+  var _ageVal  = parseInt((document.getElementById('petAgeNum')||{}).value) || 0;
+  var _ageUnit = (document.getElementById('petAgeUnit')||{}).value || 'months';
+  var _medical = ((document.getElementById('petMedical')||{}).value || '').trim();
+  var _needsSenior = (_ageUnit === 'years' && _ageVal >= 6) || _medical.length > 0;
+  document.getElementById('seniorWaiverSection').style.display = _needsSenior ? '' : 'none';
+  var _showPlaypark = svc === 'hotel' && booking.playparkConsent === 'yes' && booking.petSize !== 'cat';
+  document.getElementById('playparkWaiverSection').style.display = _showPlaypark ? '' : 'none';
+  checkGroomAge();
+}
+
+// ── PREMIUM GROOM AGE GUARD ──
+// Premium Grooming is too intensive for pets 7 months and under. Block it (and
+// show a warm inline message) when the customer enters such an age; other
+// grooming services (Bath & Dry, Basic) remain fine for younger pets.
+function groomAgeMonths() {
+  var el = document.getElementById('petAgeNum');
+  if (!el || String(el.value).trim() === '') return null;
+  var v = parseInt(el.value, 10);
+  if (isNaN(v)) return null;
+  var unit = (document.getElementById('petAgeUnit') || {}).value || 'years';
+  return unit === 'months' ? v : v * 12;
+}
+function isGroomAgeBlocked() {
+  if (booking.service !== 'grooming' || booking.groomService !== 'premium') return false;
+  var m = groomAgeMonths();
+  return m != null && m <= 7;
+}
+function checkGroomAge() {
+  var box = document.getElementById('groomAgeError');
+  if (box) box.style.display = isGroomAgeBlocked() ? 'block' : 'none';
+}
+
+// ── GROOMING SIZE ──
+function selectGroomSize(el, val) {
+  if (el.classList.contains('disabled-opt')) return;
+  document.querySelectorAll('#groomSizeGrid .pet-type-btn').forEach(function(b){b.classList.remove('selected');});
+  el.classList.add('selected');
+  booking.petSize = val;
+  booking.groomService = null;
+  booking.groomServicePrice = 0;
+  booking.selectedAddons = {};
+  renderGroomServices();
+  document.getElementById('groomServiceSection').style.display = 'block';
+  document.getElementById('addonSection').style.display = 'none';
+  document.getElementById('groomSpecialSection').style.display = 'none';
+  updateGroomTotal();
+  updateNavTotal();
+  refreshContinueBtn();
+  autoScroll('groomServiceSection');
+}
+
+function renderGroomServices() {
+  var size = booking.petSize;
+  var grid = document.getElementById('groomSvcGrid');
+  grid.innerHTML = GROOM_SERVICES.map(function(s) {
+    // Ala carte has no base price — cost comes entirely from selected add-ons
+    var price = (s.key === 'ala_carte') ? 0 : (GROOM_PRICES[s.key][size] || 0);
+    var priceLabel = s.key === 'ala_carte' ? 'Choose services below' : ('₱' + price.toLocaleString());
+    return '<div class="svc-card" onclick="selectGroomService(this,\'' + s.key + '\',' + price + ')">' +
+      '<div class="svc-card-radio"></div>' +
+      '<div class="svc-card-info">' +
+        '<div class="svc-card-name">' + s.name + '</div>' +
+        '<div class="svc-card-duration">' + s.duration + '</div>' +
+        '<div class="svc-card-desc" style="font-size:11px;color:var(--mid);margin-top:3px;line-height:1.4">' + s.desc + '</div>' +
+      '</div>' +
+      '<div class="svc-card-price">' + priceLabel + '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function selectGroomService(el, key, price) {
+  document.querySelectorAll('#groomSvcGrid .svc-card').forEach(function(c){c.classList.remove('selected');});
+  el.classList.add('selected');
+  booking.groomService = key;
+  booking.groomServicePrice = price;
+  booking.selectedAddons = {};
+  renderAddons();
+  document.getElementById('addonSection').style.display = 'block';
+  document.getElementById('groomSpecialSection').style.display = 'block';
+  updateGroomTotal();
+  updateNavTotal();
+  refreshContinueBtn();
+  autoScroll('addonSection');
+}
+
+function renderAddons() {
+  var svcKey  = booking.groomService;
+  var enabled = ADDON_ENABLED[svcKey];
+  var size    = booking.petSize;
+  var grid    = document.getElementById('addonGrid');
+  grid.innerHTML = ADDONS.map(function(a) {
+    var isEnabled = !enabled || enabled.indexOf(a.key) !== -1;
+    var priceLabel = '';
+    if (a.assessment) {
+      priceLabel = 'assessment';
+    } else if (a.sizeDependent) {
+      var p = FACE_TRIM_PRICES[size] || 0;
+      priceLabel = '\u20b1' + p.toLocaleString();
+    } else {
+      priceLabel = '+\u20b1' + a.price.toLocaleString();
+    }
+    var disabledClass = isEnabled ? '' : ' addon-disabled';
+    return '<div class="addon-row' + disabledClass + '" id="addon_' + a.key + '" onclick="toggleAddon(this,\'' + a.key + '\',' + (a.assessment ? 0 : (a.sizeDependent ? (FACE_TRIM_PRICES[size]||0) : a.price)) + ',' + a.assessment + ')">' +
+      '<div class="addon-check"></div>' +
+      '<span class="addon-name">' + a.name + '</span>' +
+      '<span class="addon-price">' + priceLabel + '</span>' +
+      '</div>';
+  }).join('');
+  if (booking.groomService === 'premium') {
+    var ftEl = document.getElementById('addon_face_trim');
+    if (ftEl) {
+      ftEl.classList.add('addon-disabled');
+      ftEl.classList.remove('selected');
+      delete booking.selectedAddons['face_trim'];
+      ftEl.querySelector('.addon-price').textContent = 'included';
+    }
+  }
+}
+
+function toggleAddon(el, key, price, isAssessment) {
+  if (el.classList.contains('addon-disabled')) return;
+  el.classList.toggle('selected');
+  if (el.classList.contains('selected')) {
+    booking.selectedAddons[key] = isAssessment ? 0 : price;
+  } else {
+    delete booking.selectedAddons[key];
+  }
+  // Show assessment note
+  var hasAssess = ['deshed','demat'].some(function(k){ return booking.selectedAddons[k] !== undefined; });
+  document.getElementById('assessNote').style.display = hasAssess ? 'block' : 'none';
+  // Ala carte note
+  var isAlaCarte = booking.groomService === 'ala_carte';
+  var hasAddon   = Object.keys(booking.selectedAddons).length > 0;
+  document.getElementById('alacartNote').style.display = (isAlaCarte && !hasAddon) ? 'block' : 'none';
+  updateGroomTotal();
+  updateNavTotal();
+  refreshContinueBtn();
+}
+
+function updateGroomTotal() {
+  var base    = booking.groomServicePrice || 0;
+  var addons  = Object.keys(booking.selectedAddons).reduce(function(a,k){return a+(booking.selectedAddons[k]||0);},0);
+  var subtotal = base + addons;
+  var discount = calculateMemberDiscount('grooming', base, booking.memberValid, booking.membershipType);
+  var total    = subtotal - discount;
+  var el = document.getElementById('groomPriceTotal');
+  if (subtotal > 0) {
+    var html = '\u20b1' + total.toLocaleString();
+    if (discount > 0) html = '<span style="text-decoration:line-through;opacity:0.5;font-size:14px">\u20b1' + subtotal.toLocaleString() + '</span> \u20b1' + total.toLocaleString();
+    document.getElementById('groomTotalVal').innerHTML = html;
+    el.style.display = 'flex';
+  } else {
+    el.style.display = 'none';
+  }
+}
+
+// ── GROOMING SCHEDULE ──
+function selectStylist(el, val, groomerId) {
+  document.querySelectorAll('#stylistGrid .stylist-btn').forEach(function(b){b.classList.remove('selected');});
+  el.classList.add('selected');
+  booking.preferredStylist   = val;
+  booking.preferredStylistId = groomerId || null;
+  booking.groomSlot = null;
+  document.getElementById('groomSlotsSection').style.display = 'block';
+  renderGroomSlots();
+  autoScroll('groomSlotsSection');
+}
+
+// Duration in minutes per service key. Dematting or deshedding adds one
+// 30-minute buffer, so Bath & Dry becomes 60 minutes and Basic becomes 90.
+var GROOM_SLOT_MINS = { bath_dry:30, basic:60, premium:120, ala_carte:60 };
+var GROOM_DURATION_ADDONS = { demat:true, deshed:true };
+
+function hasDurationAddonMap(addons) {
+  return Object.keys(addons || {}).some(function(k){ return GROOM_DURATION_ADDONS[k]; });
+}
+
+function groomDurationMins(serviceKey, addons) {
+  return (GROOM_SLOT_MINS[serviceKey || 'basic'] || 60) + (hasDurationAddonMap(addons) ? 30 : 0);
+}
+
+// Parse a slot string like "9:00 AM" into minutes since midnight
+function slotToMins(slot) {
+  var m = slot.match(/(\d+):(\d+)\s*(AM|PM)/i);
+  if (!m) return -1;
+  var h = parseInt(m[1]), min = parseInt(m[2]), ap = m[3].toUpperCase();
+  if (ap === 'PM' && h !== 12) h += 12;
+  if (ap === 'AM' && h === 12) h = 0;
+  return h * 60 + min;
+}
+
+function timeValueToMins(value) {
+  var display = slotToMins(String(value || ''));
+  if (display >= 0) return display;
+  var parts = String(value || '').split(':');
+  if (parts.length < 2) return -1;
+  var hour = parseInt(parts[0]), minute = parseInt(parts[1]);
+  if (isNaN(hour) || isNaN(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) return -1;
+  return hour * 60 + minute;
+}
+
+function groomingSlotsForServiceHours(serviceHours, fallback) {
+  if (serviceHours == null) return fallback;
+  var valid = serviceHours.map(function(row) {
+    return { start: timeValueToMins(row.start_time), last: timeValueToMins(row.last_service_time) };
+  }).filter(function(row) { return row.start >= 0 && row.last >= row.start; });
+  if (!valid.length) return [];
+  var first = Math.min.apply(null, valid.map(function(row){ return row.start; }));
+  var last  = Math.max.apply(null, valid.map(function(row){ return row.last; }));
+  var slots = [];
+  // Customer-facing starts are intentionally hourly. Admins retain half-hour
+  // precision for operational scheduling and can use the gaps as buffers.
+  for (var mins = Math.ceil(first / 60) * 60; mins <= last; mins += 60) {
+    var hour24 = Math.floor(mins / 60), minute = mins % 60;
+    var ap = hour24 >= 12 ? 'PM' : 'AM';
+    slots.push((hour24 % 12 || 12) + ':' + String(minute).padStart(2, '0') + ' ' + ap);
+  }
+  return slots;
+}
+
+function serviceWindowForGroomer(serviceHours, groomerId) {
+  if (serviceHours == null) return null;
+  var row = serviceHours.find(function(hours) {
+    return hours.resource_id === groomerId && hours.active !== false;
+  });
+  if (!row) return false;
+  var start = timeValueToMins(row.start_time);
+  var end = timeValueToMins(row.end_time);
+  var last = timeValueToMins(row.last_service_time);
+  if (start < 0 || end <= start || last < start || last > end) return false;
+  return { start:start, end:end, last:last };
+}
+
+// Return all slot strings that a booking occupies based on its start slot + duration
+function occupiedSlots(startSlot, durationMins, allSlots) {
+  var startMins = slotToMins(startSlot);
+  if (startMins < 0) return [startSlot];
+  var endMins = startMins + durationMins;
+  return allSlots.filter(function(s) {
+    var sm = slotToMins(s);
+    return sm >= startMins && sm < endMins;
+  });
+}
+
+// Check whether selecting a given slot would overlap with any booked slot-range
+// Takes into account the CURRENT service duration the customer is booking
+function slotOverlapsBooked(candidateSlot, currentDurationMins, blockedRanges) {
+  var candStart = slotToMins(candidateSlot);
+  var candEnd   = candStart + currentDurationMins;
+  return blockedRanges.some(function(range) {
+    return candStart < range.end && candEnd > range.start;
+  });
+}
+
+async function renderGroomSlots() {
+  var grid = document.getElementById('groomSlots');
+  if (!grid) return;
+
+  var groomerId  = booking.preferredStylistId;   // null = "any available"
+  var isAny      = !groomerId;
+  var dateVal    = booking.groomDate;
+  var serviceKey = booking.groomService || 'basic';
+  var myDuration = groomDurationMins(serviceKey, booking.selectedAddons);
+  var FALLBACK_SLOTS = ['9:00 AM','10:00 AM','11:00 AM','12:00 PM','1:00 PM','2:00 PM','3:00 PM','4:00 PM','5:00 PM'];
+
+  // Which groomers to consider
+  var groomerPool = isAny
+    ? liveGroomers
+    : liveGroomers.filter(function(g){ return g.id === groomerId; });
+
+  grid.innerHTML = '<p style="font-size:12px;color:var(--mid);padding:8px 0">Checking availability...</p>';
+  if (!groomerPool.length) {
+    grid.innerHTML = '<p style="font-size:12px;color:var(--error);padding:8px 0">No groomer is available for this selection.</p>';
+    return;
+  }
+
+  // Helper: parse "HH:MM" or "HH:MM:SS" → minutes since midnight
+  function parseTMins(t) {
+    var p = (t||'').split(':');
+    return parseInt(p[0]||0)*60 + parseInt(p[1]||0);
+  }
+
+  // Helper: does [candStart, candEnd) overlap any range in the list?
+  function overlaps(ranges, candStart, candEnd) {
+    return ranges.some(function(r){ return candStart < r.end && candEnd > r.start; });
+  }
+
+  // All booking rows, service hours, and blocks fetched once for the whole pool.
+  var bookingRows = [];
+  var blockRows   = [];
+  var serviceHours = null;
+
+  try {
+    var branchId = await getSelectedBranchId();
+    if (!branchId || !dateVal) throw new Error('missing_context');
+
+    // The RPC exposes only occupancy fields and filters inactive booking statuses
+    // without making private parent booking rows readable to anonymous visitors.
+    try {
+      bookingRows = (await sbRpcPublic('get_grooming_occupancy', {
+        p_branch_id: branchId,
+        p_service_date: dateVal,
+      })) || [];
+      bookingRows.forEach(function(r) {
+        r._durationAddons = r.has_duration_addon ? { demat:true } : null;
+      });
+    } catch(occupancyErr) {
+      console.warn('Grooming occupancy check unavailable.', occupancyErr);
+      throw new Error('occupancy_unavailable');
+    }
+
+    // 2. ALL one-off blocked_schedules for groomers on this date (no resource filter).
+    //    rangesFor() does client-side resource filtering.
+    var bsQuery = 'select=resource_id,start_time,end_time' +
+      '&resource_type=eq.groomer&active=eq.true' +
+      '&dates=cs.{' + dateVal + '}';
+    blockRows = (await sbFetchPublic('blocked_schedules', bsQuery)) || [];
+
+    try {
+      var serviceHoursQuery = 'select=resource_id,start_time,end_time,last_service_time,active' +
+        '&branch_id=eq.' + branchId + '&resource_type=eq.groomer' +
+        '&service_date=eq.' + dateVal + '&active=eq.true' +
+        '&resource_id=in.(' + liveGroomers.map(function(g){ return g.id; }).join(',') + ')';
+      serviceHours = (await sbFetchPublic('resource_service_hours', serviceHoursQuery)) || [];
+    } catch(hoursErr) {
+      console.warn('Service-hours migration not available yet; using legacy grooming hours.', hoursErr);
+      serviceHours = null;
+    }
+
+  } catch(e) {
+    console.warn('Slot availability check failed:', e);
+    grid.innerHTML = '<p style="font-size:12px;color:var(--error);padding:8px 0">Could not verify grooming availability. Please try again.</p>';
+    return;
+  }
+
+  var ALL_SLOTS = groomingSlotsForServiceHours(serviceHours, FALLBACK_SLOTS);
+
+  // Build the full blocked-ranges list for a given groomer
+  function rangesFor(gId) {
+    var ranges = [];
+    // Active bookings
+    bookingRows.filter(function(r){ return r.groomer_id === gId && r.timeslot; }).forEach(function(r) {
+      var dur = groomDurationMins(r.groom_service_key || 'basic', r._durationAddons);
+      var st  = slotToMins(r.timeslot);
+      if (st >= 0) ranges.push({ start: st, end: st + dur });
+    });
+    // One-off blocked schedules
+    blockRows.filter(function(b){ return b.resource_id === gId; }).forEach(function(b) {
+      ranges.push({ start: parseTMins(b.start_time), end: parseTMins(b.end_time) });
+    });
+    return ranges;
+  }
+
+  // Public site: when booking for today, hide slots whose start time has already
+  // passed. Walk-in (admin) is exempt — staff may log a booking after the service
+  // was rendered.
+  var _todayStr      = localDateStr();
+  var _nowMins       = (function(){ var n = new Date(); return n.getHours() * 60 + n.getMinutes(); })();
+  var _hidePastSlots = !IS_WALKIN && booking.groomDate === _todayStr;
+
+  var availableSlots = ALL_SLOTS.filter(function(slot) {
+    var candStart = slotToMins(slot);
+    if (_hidePastSlots && candStart <= _nowMins) return false;
+    var candEnd   = candStart + myDuration;
+    function canServe(groomer) {
+      var window = serviceWindowForGroomer(serviceHours, groomer.id);
+      if (window === false) return false;
+      if (window && (candStart < window.start || candStart > window.last || candEnd > window.end)) return false;
+      return !overlaps(rangesFor(groomer.id), candStart, candEnd);
+    }
+    if (isAny) {
+      // Count how many groomers in the pool are actually free at this slot
+      var freeCount = groomerPool.filter(canServe).length;
+      // Also count unassigned (groomer_id = null) bookings that overlap this slot —
+      // each one consumes one of the free groomers, so it must be deducted.
+      var unassignedCount = bookingRows.filter(function(r) {
+        if (r.groomer_id != null) return false;
+        if (!r.timeslot) return false;
+        var dur = groomDurationMins(r.groom_service_key || 'basic', r._durationAddons);
+        var st  = slotToMins(r.timeslot);
+        return st >= 0 && candStart < st + dur && candEnd > st;
+      }).length;
+      // Available only if more free groomers remain after accounting for unassigned bookings
+      return freeCount > unassignedCount;
+    } else {
+      // Is this specific groomer scheduled and free?
+      var selectedGroomer = groomerPool.find(function(g){ return g.id === groomerId; });
+      if (!selectedGroomer || !canServe(selectedGroomer)) return false;
+      // Would unassigned bookings overflow into this groomer?
+      // Count other groomers (not this one) who are free at this slot.
+      var otherFreeCount = liveGroomers.filter(function(g) {
+        return g.id !== groomerId && canServe(g);
+      }).length;
+      var unassignedAtSlot = bookingRows.filter(function(r) {
+        if (r.groomer_id != null) return false;
+        if (!r.timeslot) return false;
+        var dur = groomDurationMins(r.groom_service_key || 'basic', r._durationAddons);
+        var st  = slotToMins(r.timeslot);
+        return st >= 0 && candStart < st + dur && candEnd > st;
+      }).length;
+      // If unassigned bookings exceed other free groomers, they'd spill into this groomer
+      return unassignedAtSlot <= otherFreeCount;
+    }
+  });
+
+  if (!availableSlots.length) {
+    var msg = isAny
+      ? 'No available slots — all groomers are fully booked for this date. Please try a different date.'
+      : 'No available slots for this groomer on this date. Try a different date or choose "Any available".';
+    grid.innerHTML = '<p style="font-size:12px;color:var(--error);padding:8px 0">'+msg+'</p>';
+    return;
+  }
+
+  grid.innerHTML = availableSlots.map(function(slot) {
+    return '<div class="timeslot" onclick="selectSlot(this)">'+slot+'</div>';
+  }).join('');
+  // Re-highlight the previously selected slot (e.g. after returning from cancelled payment)
+  if (booking.groomSlot || booking.studioSlot) {
+    var _prevSlot = booking.groomSlot || booking.studioSlot;
+    grid.querySelectorAll('.timeslot').forEach(function(t) {
+      if (t.textContent.trim() === _prevSlot) t.classList.add('selected');
+    });
+  }
+}
+function onGroomDateChange() {
+  var val = document.getElementById('groomDate').value;
+  if (!val) return;
+  if (val < localDateStr()) {
+    alert('Grooming date cannot be in the past. Please select today or a future date.');
+    document.getElementById('groomDate').value = '';
+    refreshContinueBtn();
+    return;
+  }
+  booking.groomDate = val;
+  booking.groomSlot = null;
+  booking.preferredStylist = 'any';
+  booking.preferredStylistId = null;
+  document.getElementById('stylistSection').style.display = 'block';
+  document.getElementById('groomSlotsSection').style.display = 'none';
+  renderStylistGrid();
+  refreshContinueBtn();
+  autoScroll('stylistSection');
+}
+
+function renderStylistGrid() {
+  var grid = document.getElementById('stylistGrid');
+  if (!grid) return;
+  booking.preferredStylist = null;
+  var html = '';
+  var anyOnclick = "selectStylist(this,'any',null)";
+  html += '<div class="stylist-btn" onclick="' + anyOnclick + '">' +
+    '<span class="stylist-name">Any available</span>' +
+    '<span class="stylist-tag">Best availability</span></div>';
+  if (liveGroomers.length) {
+    html += liveGroomers.map(function(g) {
+      var colorDot = '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + (g.color||'#6AAEC8') + ';margin-right:4px;flex-shrink:0;vertical-align:middle"></span>';
+      var onclk = "selectStylist(this,'" + g.name + "','" + g.id + "')";
+      return '<div class="stylist-btn" onclick="' + onclk + '">' +
+        '<span class="stylist-name">' + colorDot + g.name + '</span>' +
+        '<span class="stylist-tag">Groomer</span></div>';
+    }).join('');
+  } else {
+    var fallback = ['Alex','Jamie','Sam','Paolo'];
+    html += fallback.map(function(name) {
+      var onclk = "selectStylist(this,'" + name + "',null)";
+      return '<div class="stylist-btn" onclick="' + onclk + '">' +
+        '<span class="stylist-name">' + name + '</span><span class="stylist-tag">Groomer</span></div>';
+    }).join('');
+  }
+  grid.innerHTML = html;
+}
+function selectSlot(el) {
+  if (el.classList.contains('unavailable')) return;
+  el.closest('.timeslot-grid').querySelectorAll('.timeslot').forEach(function(t){t.classList.remove('selected');});
+  el.classList.add('selected');
+  if (booking.service === 'studio') booking.studioSlot = el.textContent.trim();
+  else booking.groomSlot = el.textContent.trim();
+  refreshContinueBtn();
+}
+
+// ── HOTEL SIZE + RATES ──
+// Room capacity per type (how many concurrent bookings allowed)
+var ROOM_CAPACITY = {
+  small_cage:    3,
+  medium_cage:   3,
+  large_cage:    2,
+  single_cabin:  4,
+  villa:         2
+};
+// Which room keys are available per pet size
+var ROOMS_FOR_SIZE = {
+  small_dog:  ['small_cage','medium_cage','large_cage'],
+  medium_dog: ['medium_cage','large_cage'],
+  large_dog:  ['large_cage'],
+  giant_dog:  ['large_cage'],
+  cat:        ['single_cabin','villa']
+};
+var ROOM_LABELS = {
+  small_cage:   'Small Dog Cage',
+  medium_cage:  'Medium Dog Cage',
+  large_cage:   'Large Dog Cage',
+  single_cabin: 'Single Cabin',
+  villa:        'Villa (up to 2 cats)'
+};
+
+function selectHotelSize(el, val) {
+  if (el.classList.contains('disabled-opt')) return;
+  document.querySelectorAll('#hotelSizeGrid .pet-type-btn').forEach(function(b){b.classList.remove('selected');});
+  el.classList.add('selected');
+  booking.petSize = val;
+  booking.hotelRoomType = null;
+  document.getElementById('hotelDatesBody').style.display = 'block';
+  document.getElementById('roomAvailSection').style.display = 'none';
+  document.getElementById('roomAvailGrid').innerHTML = '';
+  document.getElementById('hotelCheckin').value  = '';
+  document.getElementById('hotelCheckout').value = '';
+  document.getElementById('nightsDisplay').style.display = 'none';
+  refreshContinueBtn();
+  autoScroll('hotelDatesBody');
+}
+
+// Returns {start, end} hour range for hotel based on branch location and date's day-of-week
+function getHotelHours(dateStr, location) {
+  var dow = dateStr ? new Date(dateStr + 'T00:00:00').getDay() : -1;
+  if ((location || '').indexOf('estancia') !== -1) {
+    var isWd = dow >= 1 && dow <= 4;
+    return { start: (dow < 0 ? 10 : (isWd ? 11 : 10)), end: (dow < 0 ? 22 : (isWd ? 21 : 22)) };
+  }
+  return { start: 10, end: 22 }; // Eastwood and default
+}
+
+function hotelTimeLabel(h) {
+  return h < 12 ? h + ':00 AM' : (h === 12 ? '12:00 PM' : (h - 12) + ':00 PM');
+}
+
+var HOTEL_EARLY_DROPOFF_START = 7;   // members-only early drop-off opens at 7:00 AM
+
+function populateHotelDropoffTimes() {
+  var checkin = document.getElementById('hotelCheckin').value;
+  var sel     = document.getElementById('hotelDropoffTime');
+  if (!checkin) { sel.innerHTML = '<option value="">Select date first</option>'; sel.removeAttribute('data-mall-open'); return; }
+  var hours = getHotelHours(checkin, booking.location);
+  // Allow early drop-off from 7:00 AM; hours before mall opening are members-only.
+  var earliest = Math.min(HOTEL_EARLY_DROPOFF_START, hours.start);
+  sel.setAttribute('data-mall-open', hours.start);
+  var html = '<option value="">Select time</option>';
+  for (var h = earliest; h <= hours.end; h++) {
+    var isEarly = h < hours.start;
+    html += '<option value="' + h + '">' + hotelTimeLabel(h) + (isEarly ? ' (Early — members only)' : '') + '</option>';
+  }
+  sel.innerHTML = html;
+  if (booking.hotelDropoffTime) sel.value = booking.hotelDropoffTime;
+  onHotelDropoffChange();
+}
+
+// Show the members-only note whenever the chosen drop-off is before mall opening.
+function onHotelDropoffChange() {
+  var sel  = document.getElementById('hotelDropoffTime');
+  var note = document.getElementById('hotelEarlyDropoffNote');
+  if (!sel || !note) return;
+  var mallOpen = parseInt(sel.getAttribute('data-mall-open'), 10);
+  var val      = parseInt(sel.value, 10);
+  var isEarly  = !isNaN(val) && !isNaN(mallOpen) && val < mallOpen;
+  note.style.display = isEarly ? 'block' : 'none';
+}
+
+function onHotelCheckinChange() {
+  var cin = document.getElementById('hotelCheckin').value;
+  if (!cin) return;
+  // Reject past dates — some mobile browsers don't enforce the min attribute visually
+  if (cin < localDateStr()) {
+    alert('Check-in date cannot be in the past. Please select today or a future date.');
+    document.getElementById('hotelCheckin').value = '';
+    refreshContinueBtn();
+    return;
+  }
+  var next = new Date(cin + 'T12:00:00'); next.setDate(next.getDate() + 1);
+  document.getElementById('hotelCheckout').min = localDateStr(next);
+  document.getElementById('hotelCheckout').value = '';
+  document.getElementById('nightsDisplay').style.display = 'none';
+  document.getElementById('roomAvailSection').style.display = 'none';
+  refreshContinueBtn();
+}
+
+function onHotelCheckoutChange() {
+  var cin  = document.getElementById('hotelCheckin').value;
+  var cout = document.getElementById('hotelCheckout').value;
+  if (!cin || !cout) return;
+  if (cout < localDateStr()) {
+    alert('Check-out date cannot be in the past. Please select a valid date.');
+    document.getElementById('hotelCheckout').value = '';
+    refreshContinueBtn();
+    return;
+  }
+  var nights = Math.round((new Date(cout+' 00:00:00') - new Date(cin+' 00:00:00')) / 86400000);
+  if (nights <= 0) return;
+  document.getElementById('nightsCount').innerHTML =
+    '<strong>' + nights + ' night' + (nights>1?'s':'') + '</strong> selected';
+  document.getElementById('nightsDisplay').style.display = '';
+  booking.hotelCheckin  = cin;
+  booking.hotelCheckout = cout;
+  buildPickupTimeOptions(); // Rebuild pickup options for the checkout date's branch hours
+  loadRoomAvailability();
+  autoScroll('roomAvailSection', 150);
+  refreshContinueBtn();
+}
+
+async function loadRoomAvailability() {
+  var cin  = document.getElementById('hotelCheckin').value;
+  var cout = document.getElementById('hotelCheckout').value;
+  var size = booking.petSize;
+  if (!cin || !cout || !size) return;
+
+  var section = document.getElementById('roomAvailSection');
+  var loading = document.getElementById('roomAvailLoading');
+  var grid    = document.getElementById('roomAvailGrid');
+  var noteEl  = document.getElementById('roomAvailNote');
+
+  section.style.display = '';
+  loading.style.display = 'flex';
+  grid.innerHTML        = '';
+  noteEl.style.display  = 'none';
+  booking.hotelRoomType = null;
+  booking.hotelRoomId   = null;
+
+  var eligibleRooms = liveRooms.filter(function(r) {
+    if (r.is_locked) return false;
+    if (!r.allowed_sizes || !r.allowed_sizes.length) return false;
+    return r.allowed_sizes.indexOf(size) !== -1;
+  });
+
+  var bookedRoomIds = {};
+  try {
+    var branch = await getSelectedBranchId();
+    if (branch) {
+      var detailRows;
+      try {
+        detailRows = await sbRpcPublic('get_hotel_occupancy', {
+          p_branch_id: branch,
+          p_checkin: cin,
+          p_checkout: cout,
+        });
+      } catch(occupancyErr) {
+        console.warn('Hotel occupancy check unavailable.', occupancyErr);
+        throw new Error('occupancy_unavailable');
+      }
+      (detailRows || []).forEach(function(r) {
+        var key = r.room_id || r.room_type;
+        if (key) bookedRoomIds[key] = (bookedRoomIds[key] || 0) + 1;
+      });
+    }
+  } catch(e) {
+    console.error('Hotel availability check failed:', e);
+    loading.style.display = 'none';
+    grid.innerHTML = '<p style="font-size:12px;color:var(--error);padding:8px 0">Could not verify room availability. Please try again.</p>';
+    return;
+  }
+
+  loading.style.display = 'none';
+
+  if (!eligibleRooms.length) {
+    grid.innerHTML = '<p style="font-size:12px;color:var(--error);padding:8px 0">No eligible rooms are available for this pet size.</p>';
+    return;
+  }
+
+  var anyAvailable = false;
+  grid.innerHTML = eligibleRooms.map(function(room) {
+    var booked  = (bookedRoomIds[room.id] || 0) + (bookedRoomIds[room.room_type] || 0);
+    var isAvail = booked === 0;
+    if (isAvail) anyAvailable = true;
+    var availLabel = isAvail
+      ? '<span style="font-size:10px;color:var(--success);font-weight:700">Available</span>'
+      : '<span style="font-size:10px;color:var(--error);font-weight:700">Fully booked</span>';
+    var colorDot = '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + (room.color||'#6AAEC8') + ';margin-right:6px;flex-shrink:0"></span>';
+    var cls = 'svc-card' + (isAvail ? '' : ' svc-card-disabled');
+    return '<div class="' + cls + '" id="room-opt-' + room.id + '"' +
+      (isAvail ? ' onclick="' + "selectRoomFromAvail(this,'" + room.room_type + "','" + room.id + "')" + '"' : '') + '>' +
+      '<div class="svc-card-radio"></div>' +
+      '<div class="svc-card-info">' +
+        '<div class="svc-card-name" style="display:flex;align-items:center">' + colorDot + room.name + '</div>' +
+        '<div class="svc-card-duration">' + availLabel + '</div>' +
+      '</div></div>';
+  }).join('');
+
+  if (!anyAvailable) noteEl.style.display = '';
+  calcNights();
+}
+
+function selectRoomFromAvail(el, key, roomId) {
+  document.querySelectorAll('#roomAvailGrid .svc-card').forEach(function(c){c.classList.remove('selected');});
+  el.classList.add('selected');
+  booking.hotelRoomType = key;
+  booking.hotelRoomId   = roomId || null;
+  // Save the display name (e.g. "Large Cage 1") for use in summary
+  var roomObj = roomId ? liveRooms.find(function(r){return r.id === roomId;}) : null;
+  booking.hotelRoomName = roomObj ? roomObj.name : (ROOM_LABELS[key] || key.replace(/_/g,' '));
+  var secondCat = document.getElementById('secondCatSection');
+  if (secondCat) secondCat.style.display = (key === 'villa') ? '' : 'none';
+  calcHotelTotal();
+  updateNavTotal();
+  refreshContinueBtn();
+  autoScroll('hotelStep3Breakdown', 150);
+}
+
+async function getSelectedBranchId() {
+  if (!window._branchIds) {
+    try {
+      var rows = await sbFetchPublic('branches', 'select=id,name&order=created_at');
+      window._branchIds = rows || [];
+    } catch(e) { return null; }
+  }
+  var loc = booking.location;
+  var match = (window._branchIds).find(function(b) {
+    return (loc === 'estancia' && b.name.toLowerCase().includes('estancia')) ||
+           (loc === 'eastwood'  && b.name.toLowerCase().includes('eastwood'));
+  });
+  return match ? match.id : null;
+}
+
+async function loadLiveRoomsAndGroomers() {
+  var branchId = await getSelectedBranchId();
+  if (!branchId) return;
+  try {
+    liveRooms = await sbFetchPublic('rooms',
+      'select=id,name,color,room_type,pet_type,allowed_sizes,is_locked,schedule_restrictions' +
+      '&branch_id=eq.' + branchId +
+      '&active=eq.true&order=sort_order.asc.nullslast,name.asc');
+  } catch(e) { liveRooms = []; }
+  try {
+    liveGroomers = await sbFetchPublic('groomers',
+      'select=id,name,color,schedule_restrictions,is_unavailable' +
+      '&branch_id=eq.' + branchId +
+      '&active=eq.true&is_unavailable=eq.false&order=sort_order.asc.nullslast,name.asc');
+  } catch(e) { liveGroomers = []; }
+  try {
+    liveStudios = await sbFetchPublic('studios',
+      'select=id,name,color,schedule_restrictions,is_unavailable' +
+      '&branch_id=eq.' + branchId +
+      '&active=eq.true&order=sort_order.asc.nullslast,name.asc');
+  } catch(e) { liveStudios = []; }
+  if (liveStudios.length) {
+    var sids = liveStudios.map(function(s){return s.id;}).join(',');
+    try {
+      liveStudioBlocks = await sbFetchPublic('studio_blocks',
+        'select=studio_id,label,start_time,end_time,days_of_week' +
+        '&studio_id=in.(' + sids + ')&active=eq.true');
+    } catch(e) { liveStudioBlocks = []; }
+  } else {
+    liveStudioBlocks = [];
+  }
+}
+
+function getStudioBlocksForDay(studioId, dow) {
+  return liveStudioBlocks.filter(function(bl) {
+    return bl.studio_id === studioId &&
+      (bl.days_of_week.length === 0 || bl.days_of_week.indexOf(dow) !== -1);
+  });
+}
+
+async function sbFetchPublic(path, params) {
+  var url = SUPABASE_URL + '/rest/v1/' + path + (params ? '?' + params : '');
+  var res = await fetch(url, {
+    headers: {
+      'apikey':        SUPABASE_ANON_KEY,
+      'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+      'Content-Type':  'application/json',
+    }
+  });
+  if (!res.ok) throw new Error('Supabase ' + res.status);
+  return res.json();
+}
+
+async function sbRpcPublic(fn, params) {
+  var res = await fetch(SUPABASE_URL + '/rest/v1/rpc/' + fn, {
+    method:  'POST',
+    headers: {
+      'apikey':        SUPABASE_ANON_KEY,
+      'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+      'Content-Type':  'application/json',
+    },
+    body: JSON.stringify(params || {})
+  });
+  if (!res.ok) throw new Error('Supabase RPC ' + res.status + ': ' + await res.text());
+  return res.json();
+}
+
+function calcNights() {
+  var cin  = document.getElementById('hotelCheckin').value;
+  var cout = document.getElementById('hotelCheckout').value;
+  if (!cin || !cout) return;
+  var nights = Math.round((new Date(cout+' 00:00:00') - new Date(cin+' 00:00:00')) / 86400000);
+  if (nights > 0) {
+    document.getElementById('nightsCount').innerHTML = '<strong>' + nights + ' night' + (nights>1?'s':'') + '</strong> selected';
+    document.getElementById('nightsDisplay').style.display = '';
+  }
+}
+
+function buildPickupTimeOptions() {
+  var sel   = document.getElementById('hotelPickupTime');
+  var feeEl = document.getElementById('hotelLateRateFee');
+  if (!sel) return;
+  var cout  = document.getElementById('hotelCheckout') ? document.getElementById('hotelCheckout').value : '';
+  var hours = getHotelHours(cout, booking.location);
+  sel.innerHTML = '<option value="">Select pick-up time</option>';
+  for (var h = hours.start; h <= hours.end; h++) {
+    var opt = document.createElement('option');
+    opt.value = String(h);
+    opt.textContent = hotelTimeLabel(h);
+    sel.appendChild(opt);
+  }
+  // Restore saved value after rebuild
+  if (booking.hotelPickupTime) sel.value = booking.hotelPickupTime;
+  if (feeEl) feeEl.textContent = '+₱' + HOTEL_LATE_RATE.toLocaleString() + '/hour from 2:00–8:00 PM';
+}
+
+function hotelLateCharge(pickupHour, checkoutDate, rateSize) {
+  var hour = parseInt(pickupHour) || 14;
+  if (hour > 20) {
+    var dayType = hotelDayType(checkoutDate);
+    return {
+      amount: (HOTEL_RATES[dayType] && HOTEL_RATES[dayType][rateSize]) || 0,
+      additionalNight: true,
+      lateHours: 0
+    };
+  }
+  var lateHours = Math.max(0, hour - 14);
+  return {
+    amount: lateHours * HOTEL_LATE_RATE,
+    additionalNight: false,
+    lateHours: lateHours
+  };
+}
+
+function calcHotelTotal() {
+  var cin  = document.getElementById('hotelCheckin').value;
+  var cout = document.getElementById('hotelCheckout').value;
+  var size = booking.petSize;
+  var room = booking.hotelRoomType;
+  var step3el = document.getElementById('hotelStep3Breakdown');
+  var step4el = document.getElementById('hotelDetailsPriceTotal');
+  if (!cin || !cout || !size || !room) {
+    if (step3el) step3el.style.display = 'none';
+    if (step4el) step4el.style.display = 'none';
+    return;
+  }
+  var nights = Math.round((new Date(cout+' 00:00:00') - new Date(cin+' 00:00:00')) / 86400000);
+  if (nights <= 0) return;
+
+  // Rate is determined by the cage type selected, not the pet's size category
+  var rateSize = CAGE_RATE_SIZE[room] || size;
+  var roomLabel = booking.hotelRoomName || ROOM_LABELS[room] || room.replace(/_/g,' ');
+
+  var wdCount = 0, weCount = 0, wdTotal = 0, weTotal = 0;
+  for (var i = 0; i < nights; i++) {
+    var dayType = hotelDayType(hotelDatePlusDays(cin, i));
+    if (dayType === 'weekend') { weCount++; weTotal += HOTEL_RATES.weekend[rateSize]||0; }
+    else                       { wdCount++; wdTotal += HOTEL_RATES.weekday[rateSize]||0; }
+  }
+  var baseTotal = wdTotal + weTotal;
+  booking.hotelBaseTotal = baseTotal;
+
+  // Save drop-off time so it survives navigating back to this step
+  var dropoffEl = document.getElementById('hotelDropoffTime');
+  if (dropoffEl && dropoffEl.value) booking.hotelDropoffTime = dropoffEl.value;
+
+  var pickupEl   = document.getElementById('hotelPickupTime');
+  var pickupHour = pickupEl ? (parseInt(pickupEl.value) || 14) : 14;
+  booking.hotelPickupHour = pickupHour;
+  var lateCharge = hotelLateCharge(pickupHour, cout, rateSize);
+  var lateHours  = lateCharge.lateHours;
+  booking.hotelLateTotal = lateCharge.amount;
+  booking.hotelLateIsAdditionalNight = lateCharge.additionalNight;
+
+  // Show / hide the late pick-up fee note below the selector
+  var lateNoteEl = document.getElementById('hotelLatePickupNote');
+  if (lateNoteEl) {
+    if (booking.hotelLateTotal > 0) {
+      lateNoteEl.innerHTML = lateCharge.additionalNight
+        ? '<strong>Additional night:</strong> +&#8369;' + booking.hotelLateTotal.toLocaleString() + ' (pick-up after 8:00 PM)'
+        : '<strong>Late pick-up fee:</strong> +&#8369;' + booking.hotelLateTotal.toLocaleString() +
+          ' (' + lateHours + ' hr' + (lateHours !== 1 ? 's' : '') + ' &times; &#8369;' + HOTEL_LATE_RATE.toLocaleString() + '/hr)';
+      lateNoteEl.style.display = '';
+    } else {
+      lateNoteEl.style.display = 'none';
+    }
+  }
+
+  var subtotal = baseTotal + booking.hotelLateTotal;
+  var discount = calculateMemberDiscount('hotel', baseTotal, booking.memberValid, booking.membershipType);
+  var total    = subtotal - discount;
+
+  // \u2500\u2500 Step 3 estimate breakdown (no late fee yet) \u2500\u2500
+  if (step3el) {
+    var s3html = '<div class="price-breakdown">';
+    if (wdCount > 0) {
+      var wdRate = HOTEL_RATES.weekday[rateSize]||0;
+      s3html += '<div class="price-line component"><span class="price-line-label">'+wdCount+' weekday night'+(wdCount!==1?'s':'')+' &times; &#8369;'+wdRate.toLocaleString()+' ('+roomLabel+')</span><span class="price-line-val">&#8369;'+wdTotal.toLocaleString()+'</span></div>';
+    }
+    if (weCount > 0) {
+      var weRate = HOTEL_RATES.weekend[rateSize]||0;
+      s3html += '<div class="price-line component"><span class="price-line-label">'+weCount+' weekend/holiday night'+(weCount!==1?'s':'')+' &times; &#8369;'+weRate.toLocaleString()+' ('+roomLabel+')</span><span class="price-line-val">&#8369;'+weTotal.toLocaleString()+'</span></div>';
+    }
+    s3html += '<div class="price-line subtotal-line"><span class="price-line-label">Est. total (excl. late pickup)</span><span class="price-line-val">&#8369;'+baseTotal.toLocaleString()+'</span></div>';
+    s3html += '</div>';
+    step3el.innerHTML = s3html;
+    step3el.style.display = '';
+  }
+
+  // \u2500\u2500 Step 4 full breakdown (includes late pickup fee) \u2500\u2500
+  if (step4el) {
+    var s4html = '<div class="price-breakdown">';
+    if (wdCount > 0) {
+      var wdRate2 = HOTEL_RATES.weekday[rateSize]||0;
+      s4html += '<div class="price-line component"><span class="price-line-label">'+wdCount+' weekday night'+(wdCount!==1?'s':'')+' &times; &#8369;'+wdRate2.toLocaleString()+' ('+roomLabel+')</span><span class="price-line-val">&#8369;'+wdTotal.toLocaleString()+'</span></div>';
+    }
+    if (weCount > 0) {
+      var weRate2 = HOTEL_RATES.weekend[rateSize]||0;
+      s4html += '<div class="price-line component"><span class="price-line-label">'+weCount+' weekend/holiday night'+(weCount!==1?'s':'')+' &times; &#8369;'+weRate2.toLocaleString()+' ('+roomLabel+')</span><span class="price-line-val">&#8369;'+weTotal.toLocaleString()+'</span></div>';
+    }
+    if (booking.hotelLateTotal > 0) {
+      var lateLabel = lateCharge.additionalNight ? 'Additional night (pick-up after 8:00 PM)' : 'Late pick-up fee ('+lateHours+' hr'+(lateHours!==1?'s':'')+')';
+      s4html += '<div class="price-line component"><span class="price-line-label">'+lateLabel+'</span><span class="price-line-val">&#8369;'+booking.hotelLateTotal.toLocaleString()+'</span></div>';
+    }
+    s4html += '<div class="price-line subtotal-line"><span class="price-line-label">Subtotal</span><span class="price-line-val">&#8369;'+subtotal.toLocaleString()+'</span></div>';
+    if (discount > 0) {
+      var discPct = Math.round(memberDiscountRate('hotel', booking.membershipType) * 100);
+      s4html += '<div class="price-line"><span class="price-line-label">Member discount ('+discPct+'%)</span><span class="price-line-val discount">-&#8369;'+discount.toLocaleString()+'</span></div>';
+    }
+    s4html += '<div class="price-line total-line"><span class="price-line-label">Estimated total</span><span class="price-line-val">&#8369;'+total.toLocaleString()+'</span></div>';
+    s4html += '</div>';
+    step4el.innerHTML = s4html;
+    step4el.style.display = '';
+  }
+
+  updateNavTotal();
+}
+
+// ── HOTEL ROOM OPTIONS (kept for compatibility but no longer used in step 4) ──
+function renderHotelRoomOptions() {
+  populateHotelDropoffTimes();
+}
+
+function onHotelRoomChange() {
+  var val = document.getElementById('hotelRoomType') ? document.getElementById('hotelRoomType').value : '';
+  booking.hotelRoomType = val || null;
+  var secondCat = document.getElementById('secondCatSection');
+  if (secondCat) secondCat.style.display = (booking.hotelRoomType === 'villa') ? '' : 'none';
+  calcHotelTotal();
+}
+
+function onHotelMedsChange() {
+  var val = document.getElementById('hotelMeds').value.trim();
+  document.getElementById('hotelMedsNote').style.display = val ? 'block' : 'none';
+}
+
+// ── SECOND CAT ──
+function toggleSecondCat() {
+  secondCatVisible = !secondCatVisible;
+  document.getElementById('secondCatForm').style.display = secondCatVisible ? 'block' : 'none';
+  document.getElementById('addSecondCatBtn').textContent = secondCatVisible ? 'Remove second cat' : '+ Add second cat details (Villa)';
+}
+
+// ── DAYCARE ──
+function selectDaycareSize(el, val) {
+  if (el.classList.contains('disabled-opt')) return;
+  document.querySelectorAll('#daycareSizeGrid .pet-type-btn').forEach(function(b){b.classList.remove('selected');});
+  el.classList.add('selected');
+  booking.petSize = val;
+  booking.daycareBaseRate = DAYCARE_RATES[val] || 500;
+  document.getElementById('daycareDateSection').style.display = 'block';
+  calcDaycareTotal();
+  refreshContinueBtn();
+  autoScroll('daycareDateSection');
+}
+function onDaycareDateChange() {
+  var d = document.getElementById('daycareDate').value;
+  if (!d) return;
+  if (d < localDateStr()) {
+    alert('Daycare date cannot be in the past. Please select today or a future date.');
+    document.getElementById('daycareDate').value = '';
+    refreshContinueBtn();
+    return;
+  }
+  var dow  = new Date(d + 'T00:00:00').getDay();
+  var loc  = booking.location;
+  var startH, endH;
+  if (loc === 'estancia') {
+    var isWd = dow >= 1 && dow <= 4;
+    startH = isWd ? 11 : 10; endH = isWd ? 21 : 22;
+  } else { startH = 10; endH = 22; }
+  var opts = '<option value="">Select time</option>';
+  for (var h = startH; h <= endH; h++) {
+    var lbl = h < 12 ? h+':00 AM' : (h===12?'12:00 PM':(h-12)+':00 PM');
+    opts += '<option value="' + h + '">' + lbl + '</option>';
+  }
+  document.getElementById('daycareDropoff').innerHTML = opts;
+  // Pickup includes Open Time
+  var pOpts = '<option value="">Select time</option><option value="open">Open time (base rate only)</option>';
+  for (var h2 = startH; h2 <= endH; h2++) {
+    var lbl2 = h2 < 12 ? h2+':00 AM' : (h2===12?'12:00 PM':(h2-12)+':00 PM');
+    pOpts += '<option value="' + h2 + '">' + lbl2 + '</option>';
+  }
+  document.getElementById('daycarePickup').innerHTML = pOpts;
+  document.getElementById('daycareTimesSection').style.display = 'block';
+  calcDaycareTotal();
+  refreshContinueBtn();
+  autoScroll('daycareTimesSection');
+}
+// ── STUDIO DATE + SLOT AVAILABILITY ──
+function onStudioDateChange() {
+  var val = document.getElementById('studioDate').value;
+  if (!val) { refreshContinueBtn(); return; }
+  if (val < localDateStr()) {
+    alert('Studio date cannot be in the past. Please select today or a future date.');
+    document.getElementById('studioDate').value = '';
+    booking.studioSlot = null;
+    refreshContinueBtn();
+    return;
+  }
+  // Clear previously selected slot and reload availability
+  booking.studioSlot = null;
+  document.querySelectorAll('#studioSlots .timeslot').forEach(function(t) {
+    t.classList.remove('selected', 'unavailable');
+    t.style.opacity = ''; t.style.cursor = '';
+  });
+  loadStudioSlots();
+  refreshContinueBtn();
+}
+
+async function loadStudioSlots() {
+  var dateVal = document.getElementById('studioDate').value;
+  if (!dateVal) return;
+  var grid = document.getElementById('studioSlots');
+  if (!grid) return;
+
+  var STUDIO_DURATION = 60; // 1-hour session
+  var ALL_SLOTS = ['10:00 AM','11:00 AM','12:00 PM','1:00 PM','2:00 PM','3:00 PM',
+    '4:00 PM','5:00 PM','6:00 PM','7:00 PM','8:00 PM','9:00 PM'];
+  var dow = new Date(dateVal + 'T00:00:00').getDay();
+
+  // Show loading state
+  grid.innerHTML = '<p style="font-size:12px;color:var(--mid);padding:8px 0">Checking availability…</p>';
+
+  var studioPool = liveStudios.filter(function(s) { return !s.is_unavailable; });
+
+  var bookingRows = [];
+  var blockRows   = [];
+
+  try {
+    var branchId = await getSelectedBranchId();
+    if (!branchId || !studioPool.length) throw new Error('missing_context');
+
+    bookingRows = (await sbRpcPublic('get_studio_occupancy', {
+      p_branch_id: branchId,
+      p_service_date: dateVal,
+    })) || [];
+
+    // 3. One-off blocked_schedules for studio resources on this date
+    var sids = studioPool.map(function(s){ return s.id; }).join(',');
+    try {
+      blockRows = await sbFetchPublic('blocked_schedules',
+        'select=resource_id,start_time,end_time' +
+        '&resource_type=eq.studio&active=eq.true' +
+        '&dates=cs.{' + dateVal + '}' +
+        '&resource_id=in.(' + sids + ')') || [];
+    } catch(e) { blockRows = []; }
+
+  } catch(e) {
+    console.warn('Studio slot availability check failed:', e);
+    grid.innerHTML = '<p style="font-size:12px;color:var(--error);padding:8px 0">Could not verify studio availability. Please try again.</p>';
+    return;
+  }
+
+  function parseTM(t) {
+    var m = (t||'').match(/(\d+):(\d+)\s*(AM|PM)?/i);
+    if (!m) return -1;
+    var h = parseInt(m[1]), min = parseInt(m[2]), ap = m[3] ? m[3].toUpperCase() : null;
+    if (ap === 'PM' && h !== 12) h += 12;
+    if (ap === 'AM' && h === 12) h = 0;
+    return h * 60 + min;
+  }
+
+  function overlaps(ranges, s, e) {
+    return ranges.some(function(r){ return s < r.end && e > r.start; });
+  }
+
+  function rangesFor(studioId) {
+    var ranges = [];
+    // Confirmed bookings
+    bookingRows.filter(function(r){ return r.studio_id === studioId && r.timeslot; }).forEach(function(r) {
+      var st = parseTM(r.timeslot);
+      if (st >= 0) ranges.push({ start: st, end: st + STUDIO_DURATION });
+    });
+    // Recurring studio blocks
+    getStudioBlocksForDay(studioId, dow).forEach(function(bl) {
+      var st = parseTM(bl.start_time), en = parseTM(bl.end_time);
+      if (st >= 0 && en > st) ranges.push({ start: st, end: en });
+    });
+    // One-off blocked_schedules
+    blockRows.filter(function(b){ return b.resource_id === studioId; }).forEach(function(b) {
+      var st = parseTM(b.start_time), en = parseTM(b.end_time);
+      if (st >= 0 && en > st) ranges.push({ start: st, end: en });
+    });
+    return ranges;
+  }
+
+  grid.innerHTML = ALL_SLOTS.map(function(slot) {
+    var candStart = parseTM(slot);
+    var candEnd   = candStart + STUDIO_DURATION;
+    var available = studioPool.some(function(s) {
+      return !overlaps(rangesFor(s.id), candStart, candEnd);
+    });
+    if (available) {
+      return '<div class="timeslot" onclick="selectSlot(this)">' + slot + '</div>';
+    } else {
+      return '<div class="timeslot unavailable" style="cursor:not-allowed">' + slot + '</div>';
+    }
+  }).join('');
+
+  // Re-highlight previously selected slot if still available
+  if (booking.studioSlot) {
+    grid.querySelectorAll('.timeslot:not(.unavailable)').forEach(function(t) {
+      if (t.textContent.trim() === booking.studioSlot) t.classList.add('selected');
+    });
+  }
+}
+
+function calcDaycareTotal() {
+  var dropVal = document.getElementById('daycareDropoff').value;
+  var pickVal = document.getElementById('daycarePickup').value;
+  var base    = booking.daycareBaseRate || 0;
+  var el      = document.getElementById('daycarePriceTotal');
+  if (!dropVal || !pickVal || !base) { el.style.display = 'none'; return; }
+  if (pickVal === 'open') {
+    booking.daycareOpenTime = true;
+    booking.daycareTotal = base;
+    document.getElementById('daycareTotalVal').textContent = '\u20b1' + base.toLocaleString();
+    el.style.display = 'flex';
+    updateNavTotal();
+    return;
+  }
+  booking.daycareOpenTime = false;
+  var dropH = parseInt(dropVal);
+  var pickH = parseInt(pickVal);
+  if (pickH <= dropH) { el.style.display = 'none'; return; }
+  var hours   = pickH - dropH;
+  var extra   = Math.max(0, hours - 3);
+  var subtotal = base + extra * (DAYCARE_EXTRA_RATES[booking.petSize] || 100);
+  booking.daycareDropoffHour = dropH;
+  booking.daycarePickupHour  = pickH;
+  booking.daycareTotal = subtotal;
+  var discount = calculateMemberDiscount('daycare', subtotal, booking.memberValid, booking.membershipType);
+  var total    = subtotal - discount;
+  var html = '\u20b1' + total.toLocaleString();
+  if (discount > 0) html = '<span style="text-decoration:line-through;opacity:0.5;font-size:14px">\u20b1' + subtotal.toLocaleString() + '</span> \u20b1' + total.toLocaleString();
+  html += '<span style="font-size:11px;display:block;color:var(--mid);margin-top:2px">' + hours + ' hour' + (hours!==1?'s':'') + (extra>0?' (base + '+extra+' extra hr'+(extra>1?'s':'')+')'  :'') + '</span>';
+  document.getElementById('daycareTotalVal').innerHTML = html;
+  el.style.display = 'flex';
+  updateNavTotal();
+}
+
+// ── PET DETAILS ──
+function selectAnimalType(el, val) {
+  document.querySelectorAll('#petTypeGroup .gender-btn').forEach(function(b){b.classList.remove('selected');});
+  el.classList.add('selected');
+  booking.petAnimal = val;
+  renderVaccines();
+  refreshContinueBtn();
+  autoScroll('petGenderGrid');
+}
+function selectGender(el, val) {
+  document.querySelectorAll('#petGenderGrid .gender-btn').forEach(function(b){b.classList.remove('selected');});
+  el.classList.add('selected');
+  booking.petGender = val;
+  refreshContinueBtn();
+  autoScroll('petBreed');
+}
+function selectTemperament(el, val) {
+  document.querySelectorAll('.temp-btn').forEach(function(b){b.classList.remove('selected');});
+  el.classList.add('selected');
+  booking.petTemperament = val;
+  refreshContinueBtn();
+  autoScroll('vaccineSection');
+}
+function checkSeniorWaiver() {
+  var ageVal  = parseInt(document.getElementById('petAgeNum').value) || 0;
+  var ageUnit = document.getElementById('petAgeUnit').value;
+  var medical = document.getElementById('petMedical').value.trim();
+  var isSenior = (ageUnit === 'years' && ageVal >= 6);
+  var show = isSenior || medical.length > 0;
+  document.getElementById('seniorWaiverRow').style.display = show ? 'flex' : 'none';
+}
+function renderVaccines() {
+  var animal = booking.petAnimal || 'dog';
+  var dogV = ['Anti-rabies','5/6/8-in-1 shot','Kennel Cough / Bordetella','Tick and Flea treatment'];
+  var catV = ['Anti-rabies','All-in-1 shot','Anti-parasitic'];
+  var list = animal === 'cat' ? catV : dogV;
+  document.getElementById('vaccineGrid').innerHTML = list.map(function(v) {
+    var key = v.replace(/[^a-z0-9]/gi,'_');
+    var isChecked = booking.vaccines[key] ? ' checked' : '';
+    return '<div class="vacc-row' + isChecked + '" onclick="toggleVaccine(this,\'' + key + '\')">' +
+      '<div class="vacc-box"></div>' +
+      '<span class="vacc-label">' + v + '</span>' +
+      '</div>';
+  }).join('');
+}
+function toggleVaccine(el, key) {
+  el.classList.toggle('checked');
+  booking.vaccines[key] = el.classList.contains('checked');
+}
+function handleVaccineFiles(input) {
+  var list = document.getElementById('vaccineFileList');
+  for (var i = 0; i < input.files.length; i++) {
+    (function(file) {
+      uploadedVaccineFiles.push(file);
+      var item = document.createElement('div');
+      item.className = 'file-item';
+      item.innerHTML = '&#128206; ' + file.name + '<span class="file-remove" onclick="removeVaccineFile(this,\'' + file.name + '\')">x</span>';
+      list.appendChild(item);
+    })(input.files[i]);
+  }
+}
+function removeVaccineFile(el, name) {
+  uploadedVaccineFiles = uploadedVaccineFiles.filter(function(f){return f.name!==name;});
+  el.closest('.file-item').remove();
+}
+function handleGroomPegFiles(input) {
+  var list = document.getElementById('groomPegList');
+  for (var i = 0; i < input.files.length; i++) {
+    (function(file) {
+      if (!/^image\//.test(file.type)) { showToast('Please upload an image file (JPG, PNG or WEBP).', 5000); return; }
+      if (file.size > 5 * 1024 * 1024) { showToast('"' + file.name + '" is over 5MB. Please upload a smaller image.', 5000); return; }
+      uploadedGroomPegs.push(file);
+      var item = document.createElement('div');
+      item.className = 'file-item';
+      item.innerHTML = '&#128247; ' + file.name + '<span class="file-remove" onclick="removeGroomPeg(this,\'' + file.name + '\')">x</span>';
+      list.appendChild(item);
+    })(input.files[i]);
+  }
+  input.value = '';   // allow re-selecting the same file after a remove
+}
+function removeGroomPeg(el, name) {
+  uploadedGroomPegs = uploadedGroomPegs.filter(function(f){return f.name!==name;});
+  el.closest('.file-item').remove();
+}
+
+// ── MEMBERSHIP ──
+function onSourceChange() {
+  var val = document.getElementById('ownerSource').value;
+  var el = document.getElementById('ownerSourceOther');
+  if (!el) return;
+  el.style.display = val === 'Other' ? '' : 'none';
+  if (val !== 'Other') el.value = '';
+}
+
+function setMembership(val) {
+  booking.isMember = val;
+  document.getElementById('memberYes').classList.toggle('selected', val);
+  document.getElementById('memberNo').classList.toggle('selected', !val);
+  document.getElementById('memberIdSection').style.display = val ? 'block' : 'none';
+  if (!val) {
+    booking.memberValid = false;
+    booking.membershipId = null;
+    booking.membershipType = 'standard';
+    document.getElementById('membershipId').value = '';
+    document.getElementById('memberValidMsg').style.display = 'none';
+    refreshAllTotals();
+  }
+  refreshContinueBtn();
+}
+var _petNameDebounce   = null;
+var _memberIdDebounce  = null;
+
+// Called on every keystroke in the Membership ID field.
+// Immediately invalidates any prior successful check, then re-validates after 600 ms.
+function onMembershipIdInput() {
+  refreshContinueBtn();
+  var idInput = (document.getElementById('membershipId') || {}).value || '';
+  if (idInput.trim().length < 4) {
+    // Too short to be a valid ID — just clear any stale validation state
+    booking.memberValid = false;
+    var msg = document.getElementById('memberValidMsg');
+    if (msg) msg.style.display = 'none';
+    refreshAllTotals();
+    return;
+  }
+  // Invalidate immediately so the discount can't persist while retyping
+  if (booking.memberValid) {
+    booking.memberValid = false;
+    var msg = document.getElementById('memberValidMsg');
+    if (msg) {
+      msg.style.display = 'block';
+      msg.textContent = 'Re-checking membership…';
+      msg.style.color = 'var(--mid)';
+    }
+    refreshAllTotals();
+    refreshContinueBtn();
+  }
+  clearTimeout(_memberIdDebounce);
+  _memberIdDebounce = setTimeout(function() { validateMemberId(); }, 600);
+}
+
+function onPetNameInput() {
+  refreshContinueBtn();
+  var idInput = (document.getElementById('membershipId') || {}).value || '';
+  if (idInput.trim().length < 4) return; // no membership ID entered — nothing to do
+  // Invalidate immediately so the user can't slip through while retyping
+  if (booking.memberValid) {
+    booking.memberValid = false;
+    var msg = document.getElementById('memberValidMsg');
+    if (msg) {
+      msg.style.display = 'block';
+      msg.textContent = 'Re-checking membership…';
+      msg.style.color = 'var(--mid)';
+    }
+    refreshAllTotals();
+    refreshContinueBtn();
+  }
+  // Debounce: re-run validation 600 ms after the user stops typing
+  clearTimeout(_petNameDebounce);
+  _petNameDebounce = setTimeout(function() { validateMemberId(); }, 600);
+}
+
+async function validateMemberId() {
+  var idInput  = document.getElementById('membershipId').value.trim().toUpperCase();
+  var petInput = (document.getElementById('petName') ? document.getElementById('petName').value : '').trim().replace(/\s+/g,' ').toLowerCase();
+  var msg = document.getElementById('memberValidMsg');
+  if (idInput.length < 4) { msg.style.display = 'none'; booking.memberValid = false; refreshAllTotals(); return; }
+  // Require pet name to be filled before validating \u2014 the check is pet-name-bound
+  if (!petInput) {
+    msg.style.display = 'block';
+    msg.textContent = 'Please enter your pet\u2019s name above first, then verify.';
+    msg.style.color = 'var(--error)';
+    booking.memberValid = false;
+    refreshAllTotals();
+    return;
+  }
+  msg.style.display = 'block'; msg.textContent = 'Validating\u2026'; msg.style.color = 'var(--mid)';
+  try {
+    // Validate via RPC \u2014 members/owners/pets tables are not directly readable by anon
+    var member = await sbRpcPublic('validate_member', { p_code: idInput });
+    if (!member || !member.member_code) {
+      msg.textContent = 'Member ID not found.'; msg.style.color = 'var(--error)';
+      booking.memberValid = false;
+    } else if (member.active === false) {
+      msg.textContent = 'This membership is inactive.'; msg.style.color = 'var(--error)';
+      booking.memberValid = false;
+    } else if (member.valid_until && new Date(member.valid_until + 'T23:59:59') < new Date()) {
+      msg.textContent = 'This membership expired on ' + member.valid_until + '.'; msg.style.color = 'var(--error)';
+      booking.memberValid = false;
+    } else if (member.tier !== 'passport' && member.branch_id && member.branch_id !== (await getSelectedBranchId())) {
+      // Standard membership is valid only at its home branch; Passport works anywhere.
+      msg.textContent = 'This membership can only be used at its home branch.'; msg.style.color = 'var(--error)';
+      booking.memberValid = false;
+    } else {
+      // Build petList from pet_name (singular \u2014 current members table schema).
+      // Falls back to pet_names array in case the RPC is ever updated to return multiple pets.
+      var petList = [];
+      if (Array.isArray(member.pet_names) && member.pet_names.length > 0) {
+        petList = member.pet_names.map(function(n) { return (n||'').trim().replace(/\s+/g,' ').toLowerCase(); });
+      } else if (member.pet_name) {
+        petList = [(member.pet_name||'').trim().replace(/\s+/g,' ').toLowerCase()];
+      }
+      if (petList.length === 0 || petList.indexOf(petInput) === -1) {
+        msg.textContent = 'Pet name doesn\u2019t match this membership. Please check the name or ID.';
+        msg.style.color = 'var(--error)';
+        booking.memberValid = false;
+      } else {
+        booking.memberValid = true;
+        booking.membershipId = idInput;
+        booking.membershipType = member.membership_type || 'standard';
+        var disc = Math.round(memberDiscountRate(booking.service, booking.membershipType) * 100);
+        var memberLabel = booking.membershipType === 'renewal' ? 'Renewal member verified' : 'Member verified';
+        msg.textContent = memberLabel + (disc ? ' \u2014 ' + disc + '% discount applied' : '') + ' \u2713';
+        msg.style.color = 'var(--success)';
+      }
+    }
+  } catch(e) {
+    msg.textContent = 'Could not verify membership. Please try again.'; msg.style.color = 'var(--error)';
+    booking.memberValid = false;
+  }
+  refreshAllTotals();
+  refreshContinueBtn();
+}
+function refreshAllTotals() {
+  var svc = booking.service;
+  if (svc === 'grooming') updateGroomTotal();
+  if (svc === 'hotel') calcHotelTotal();
+  else if (svc === 'daycare') calcDaycareTotal();
+  updateNavTotal();
+}
+
+// ── MISC ──
+function selectLocation_noop() {}
+function selectPlaypark(el, val) {
+  document.getElementById('playparkYes').classList.remove('selected');
+  document.getElementById('playparkNo').classList.remove('selected');
+  el.classList.add('selected');
+  booking.playparkConsent = val;
+}
+function toggleCheck(id) { document.getElementById(id).classList.toggle('checked'); refreshContinueBtn(); }
+function toggleSave() { saveDetails = !saveDetails; document.getElementById('saveToggle').classList.toggle('on', saveDetails); }
+
+// ── COLLECT ──
+function collectStep(step) {
+  if (step === 3) {
+    booking.groomDate   = document.getElementById('groomDate').value;
+    booking.hotelCheckin = document.getElementById('hotelCheckin').value;
+    booking.hotelCheckout = document.getElementById('hotelCheckout').value;
+    booking.daycareDate = document.getElementById('daycareDate').value;
+    booking.studioDate  = document.getElementById('studioDate').value;
+  }
+  if (step === 5) {
+    booking.petName   = document.getElementById('petName').value;
+    booking.petBreed  = document.getElementById('petBreed').value;
+    booking.petAge    = document.getElementById('petAgeNum').value;
+    booking.petAgeUnit = document.getElementById('petAgeUnit').value;
+    booking.petMedical = document.getElementById('petMedical').value;
+    // petSize already set from step 3 for grooming/hotel/daycare; only read select for studio
+    if (!booking.petSize) {
+      var sel = document.getElementById('petSizeSelect');
+      if (sel && sel.value) booking.petSize = sel.value;
+    }
+  }
+  if (step === 6) {
+    booking.ownerFirst = document.getElementById('ownerFirst').value;
+    booking.ownerLast  = document.getElementById('ownerLast').value;
+    booking.ownerEmail = document.getElementById('ownerEmail').value;
+    booking.ownerPhone = document.getElementById('ownerPhone').value;
+    if (saveDetails) {
+      try { localStorage.setItem('barkhaus_owner', JSON.stringify({ first:booking.ownerFirst, last:booking.ownerLast, email:booking.ownerEmail, phone:booking.ownerPhone })); } catch(e) {}
+    } else {
+      try { localStorage.removeItem('barkhaus_owner'); } catch(e) {}
+    }
+  }
+}
+
+// ── VALIDATE ──
+// ── VALIDATION (per-step) ──
+
+// ── COLLECT ALL STATE ──
+function collectAllState() {
+  var g    = function(id) { var el=document.getElementById(id); return el ? el.value : ''; };
+  var gOpt = function(id) { var el=document.getElementById(id); return (el&&el.options[el.selectedIndex]) ? el.options[el.selectedIndex].text : ''; };
+  booking.groomDate      = g('groomDate')      || null;
+  booking.hotelCheckin   = g('hotelCheckin')   || null;
+  booking.hotelCheckout  = g('hotelCheckout')  || null;
+  booking.daycareDate    = g('daycareDate')    || null;
+  booking.studioDate     = g('studioDate')     || null;
+  booking.hotelDropoffTime   = g('hotelDropoffTime');
+  booking.hotelPickupTime    = gOpt('hotelPickupTime');
+  booking.hotelFeeding       = g('hotelFeeding');
+  booking.hotelMeds          = g('hotelMeds');
+  booking.vetClinic          = g('vetClinic');
+  booking.vetContact         = g('vetContact');
+  booking.vetAddress         = g('vetAddress');
+  booking.emergencyName      = g('emergencyName');
+  booking.emergencyPhone     = g('emergencyPhone');
+  booking.daycareDropoffText = gOpt('daycareDropoff');
+  booking.daycarePickupText  = gOpt('daycarePickup');
+  booking.daycareNotes       = g('daycareNotes');
+  booking.groomNotes         = g('groomNotes');
+  booking.petName    = g('petName')    || null;
+  booking.petBreed   = g('petBreed')   || null;
+  booking.petAge     = g('petAgeNum')  || null;
+  booking.petAgeUnit = g('petAgeUnit') || null;
+  booking.petMedical = g('petMedical');
+  booking.ownerFirst  = g('ownerFirst');
+  booking.ownerLast   = g('ownerLast');
+  booking.ownerEmail  = g('ownerEmail');
+  booking.ownerPhone  = g('ownerPhone');
+  var rawSource = g('ownerSource');
+  booking.ownerSource = rawSource === 'Other' ? ('Other: ' + (g('ownerSourceOther').trim() || 'Other')) : rawSource;
+}
+
+// ── SUMMARY ──
+function buildWaiverTexts() {
+  var svc = booking.service;
+  var texts = {};
+  var WAIVER_TEXT = {
+    grooming: 'I, the undersigned, hereby acknowledge that I am the legal owner or authorized agent of the pet listed and authorize Barkhaus to perform grooming services as requested. I understand that Barkhaus will use all reasonable precautions to ensure my pet\'s safety and comfort during the grooming process. I confirm that my pet is current on all required vaccinations, including anti-rabies. I understand that while my dog is fully vaccinated, vaccines are not 100% foolproof and there is still a minimal risk that my dog may contract a contagious virus/disease. I agree that this may occur. I have disclosed all known medical conditions, allergies, sensitivities, and/or behavioral issues that may affect the grooming process. I understand that grooming may expose hidden medical conditions, such as skin irritations, parasites, or lumps, and Barkhaus is not liable for any pre-existing or discovered health conditions. I acknowledge that young, senior, or pets with pre-existing conditions may be at higher risk during grooming. I waive any claims against Barkhaus should a health issue arise or worsen during or after the session. I certify that my pet has not shown aggression toward people or other animals unless otherwise disclosed. I understand that if my pet becomes aggressive or unmanageable, Barkhaus may stop or modify services at their discretion. I acknowledge the risk of skin irritation, nicks, or cuts due to matting and agree not to hold Barkhaus responsible for resulting issues. I understand that Barkhaus will attempt to notify me before significant shaving but may proceed if necessary. While Barkhaus takes every precaution, grooming involves sharp tools and moving animals and accidents can happen. I agree that Barkhaus shall not be held liable for any injury or condition arising during or after grooming, provided reasonable care was taken. In case of emergency, Barkhaus will attempt to contact me. If unreachable and my pet needs urgent care, I authorize Barkhaus to seek veterinary services at their discretion and I accept full responsibility for all veterinary charges. I hereby release and hold harmless Barkhaus, its owners, staff, and affiliates from any and all claims arising from grooming services provided. I certify that I have read, understood, and voluntarily agree to these terms. This waiver shall remain in effect for all future grooming appointments unless revoked in writing.',
+    daycare: 'I confirm that I am the owner of the pet or have been authorized by the owner to take responsibility for the pet. In the event that I am unable to pick up my dog as scheduled, I acknowledge Barkhaus\' prerogative to extend my dog\'s stay for additional hours or days, subject to corresponding charges. I certify that my dog is in good health. In the event of a medical emergency and I am unreachable, I authorize Barkhaus staff to contact my veterinarian or any available veterinarian and seek necessary medical attention. Should I refuse Barkhaus\' recommendation to seek immediate care, I release Barkhaus from any liability arising from such decision. I confirm that my pet has complete and updated vaccinations and is free from fleas and any communicable diseases. I understand that vaccines are not 100% effective and that there remains a minimal risk of contracting illness, which I fully accept. I understand that dogs in heat are not allowed to interact with other dogs. By signing this waiver, I acknowledge that my dog may interact with other dogs, and I accept full responsibility if my dog is found to be in heat during its stay, including any consequences such as accidental breeding. I release Barkhaus and its staff from any related liability. I acknowledge that participation in Barkhaus play park activities is at my own risk. I understand that risks such as injury to my dog, other dogs, or individuals may still occur despite proper supervision. I agree that if my dog causes injury to another dog or person, I will assume full responsibility and release Barkhaus from any related liability. I hereby voluntarily release, discharge, and agree to indemnify and hold harmless Barkhaus from any and all claims arising from my participation or my dog\'s participation in any Barkhaus activities. I certify that I have read, understood, and agree to abide by all Barkhaus rules and regulations. I confirm all information provided is true and accurate, and that I am at least eighteen (18) years of age. I understand that while Barkhaus screens all dogs, not all dogs may be suitable for daycare. Barkhaus reserves the right to remove any dog at its discretion. In such cases, daycare packages are non-refundable but may be transferred. I grant Barkhaus permission to use any photos or videos of me and my pet taken within the facility for promotional, marketing, and social media purposes. By signing this agreement, I acknowledge and accept all house rules set by Barkhaus. I understand and agree that if my dog remains at Barkhaus for three (3) days or more with an unsettled bill and without any communication from me, my dog will be considered abandoned. In such cases, I relinquish ownership rights, and Barkhaus reserves the right to place the dog for adoption or appropriate care.',
+    hotel: 'I confirm that I am the legal owner of the pet or have been authorized by the owner to take responsibility for the pet. In the event that I am unable to pick up my pet as scheduled, I acknowledge Barkhaus\' prerogative to extend my pet\'s stay for additional hours or days, subject to corresponding charges. I acknowledge that while my pet may be healthy upon check-in, illness may still occur during their stay. In the event of an emergency where I am unreachable, I authorize Barkhaus to bring my pet to a veterinary clinic for immediate care. All major medical decisions will require my consent when possible, and all related expenses shall be my responsibility. I release Barkhaus from any liability, recognizing that illness may occur, particularly in enclosed air-conditioned environments, especially for pets not accustomed to such conditions. I confirm that my pet has complete and updated vaccinations and is free from fleas and any communicable diseases. I understand that vaccines are not 100% foolproof and that there remains a minimal risk of contracting illness, which I fully accept. I understand that dogs in heat are not permitted to interact with other dogs. By signing this waiver, I acknowledge that my dog may interact with other dogs and accept full responsibility if my dog is found to be in heat during her stay, including any consequences such as accidental breeding. I release Barkhaus and its staff from all related liability. By signing below, I acknowledge and agree to all house rules set by Barkhaus. I understand that if my dog remains at Barkhaus for fifteen (15) days or more with an unsettled bill and without communication, my dog will be considered abandoned, and Barkhaus reserves the right to place the dog for adoption or appropriate care.',
+    playpark: 'I acknowledge that by allowing my dog to use the Barkhaus play park, there are inherent risks involved. Despite proper supervision, I understand that injuries to my dog, other dogs, or individuals may still occur, and I accept these risks. I agree that if my dog causes any injury to other dogs or individuals, I will assume full responsibility and release Barkhaus from any related liability. I hereby voluntarily release, forever discharge, and agree to indemnify and hold harmless Barkhaus from any and all claims arising from my dog\'s participation in any activities, including the use of Barkhaus facilities and equipment, even in cases alleging negligence. Barkhaus reserves the right to refuse or permanently remove any dog from daycare if deemed unsuitable. In such cases, daycare packages are non-refundable but may be transferred. I certify that I have read, understood, and agree to abide by all terms and policies. I confirm all information provided is true and accurate, and that I am at least eighteen (18) years of age.',
+    vaccine: 'I acknowledge and agree that my dog may acquire illnesses or diseases due to outdated or incomplete vaccinations, and that even with complete and updated vaccinations, there remains a minimal risk of contracting illness. I will not hold Barkhaus liable for any such occurrences.',
+    senior: 'I, the undersigned, acknowledge that I am leaving my dog, who is a senior dog and/or has pre-existing medical conditions, in the care of Barkhaus. I am aware that senior dogs and dogs with existing medical conditions may be at increased risk for health complications, including sudden illness or death, especially in a boarding environment. In the event of a medical emergency, Barkhaus will make every reasonable effort to contact me. If I cannot be reached, I authorize Barkhaus to seek immediate veterinary care at their discretion, and I agree to be responsible for all costs incurred. I have disclosed all known medical conditions, medications, and special care instructions for my dog. I agree that Barkhaus may charge Special Handling Fees due to my dog\'s age and/or pre-existing condition(s). I understand that Barkhaus reserves the right to limit my dog\'s access to the play park and/or exposure to other dogs in the interest of my dog\'s well-being. I release Barkhaus from any liability related to the worsening of any existing conditions or the occurrence of age-related complications during or after the stay. I hereby voluntarily release, forever discharge, and agree to indemnify and hold harmless Barkhaus, its staff, owners, and affiliates, from any and all claims arising out of or connected with the services provided, including those involving negligent acts or omissions.',
+    media: 'I consent to Barkhaus taking photographs or videos of my pet during grooming for promotional use, including social media and marketing materials.',
+    houseRules: 'Dogs without a valid vaccination record will not be allowed entry into the Play Park area. Owners must present their dog\'s updated vaccination record upon check-in for verification. Day Care guests without presented or updated vaccination records may still be admitted, subject to hotel room availability, but will be required to stay inside the Dog Hotel with an additional PHP 100 charge. Timeouts using a leash or cage may be implemented for reasons including rough or inappropriate play, aggressive behavior toward other dogs, guests, or staff, signs of exhaustion or overstimulation, scheduled meal times, designated rest and quiet periods, and nighttime sleeping hours for hotel guests. These measures are intended to ensure the safety, comfort, and well-being of all dogs in our care while maintaining a calm and positive environment. Owners and companions using the Indoor Play Park are responsible for supervising and monitoring their own dogs at all times. Our daycare attendants are always available to assist whenever needed. A PHP 250 late pickup penalty will be charged for daycare guests picked up after mall operating hours. The safety of all dog guests, human companions, and daycare attendants remains our highest priority at all times. Guests are expected to treat all Barkhaus staff members with respect at all times. The use of profanity, abusive language, or inappropriate behavior toward our staff will not be tolerated.',
+    groomingPolicy: 'All grooming appointments are scheduled in advance and reserved exclusively for each client. Appointment slots are fixed and cannot be moved once confirmed; however, a fifteen (15)-minute grace period will be provided to accommodate unforeseen delays. Clients who fail to arrive within the allotted grace period may forfeit their appointment slot, and the reserved time may be reassigned to another client. To ensure smooth scheduling and fairness to all guests, rescheduling requests will only be accommodated once and must be communicated to Barkhaus at least three (3) hours prior to the scheduled appointment time. All down payments made for grooming appointments are strictly non-refundable, including cases of no-shows, late arrivals resulting in forfeited slots, or cancelled appointments. Owners are expected to pick up their dogs promptly after grooming services are completed. Failure to do so may require Barkhaus to extend the dog\'s stay for additional hours or overnight care, which will be subject to corresponding boarding or extended care charges.',
+    hotelCancellation: 'To confirm all reservations, a non-refundable advance payment is required. Guests who wish to cancel or re-book their booking must notify management in advance. Cancellations made at least seven (7) days prior to the scheduled check-in date will be eligible for a refund equivalent to fifty percent (50%) of the total amount paid. Cancellations made six (6) days or less before the scheduled check-in date will only be eligible for a refund equivalent to twenty-five percent (25%) of the total amount paid. One-time rescheduling of bookings may be accommodated provided the request is made at least seven (7) days before the original check-in date and is subject to availability. Rescheduled bookings are considered final and may no longer be eligible for additional changes, cancellations, or refunds. Failure to arrive on the scheduled check-in date without prior notice will be considered a "No Show," and all payments made will be forfeited. Approved refunds will be processed within three (3) to seven (7) banking days.',
+  };
+  texts.houseRules = WAIVER_TEXT.houseRules;
+  texts.general  = WAIVER_TEXT[svc] || '';
+  if (svc === 'grooming') texts.groomingPolicy = WAIVER_TEXT.groomingPolicy;
+  if (svc === 'hotel') texts.hotelCancellation = WAIVER_TEXT.hotelCancellation;
+  texts.vaccine  = WAIVER_TEXT.vaccine;
+  texts.media    = WAIVER_TEXT.media;
+  if (booking.playparkConsent) texts.playpark = WAIVER_TEXT.playpark;
+  var seniorSec = document.getElementById('seniorWaiverSection');
+  if (seniorSec && seniorSec.style.display !== 'none') texts.senior = WAIVER_TEXT.senior;
+  return texts;
+}
+function buildSummary() {
+  collectAllState();
+  ensureSummaryMarkup();
+  var svc = booking.service;
+  var locLabels = { estancia:'Estancia (Pasig)', eastwood:'Eastwood (QC)' };
+  var svcLabels = { grooming:'Grooming', hotel:'Pet Hotel', daycare:'Daycare', studio:'Self-Shoot Studio' };
+  var tempLabels = { friendly_all:'Friendly with all', friendly_shy:'Friendly but shy', selective:'Selective', reactive:'Reactive', first_time:'First time' };
+  var schedStr = '';
+  if (svc === 'grooming') schedStr = (booking.groomDate||'-') + ' at ' + (booking.groomSlot||'-');
+  else if (svc === 'hotel') schedStr = 'Check-in: ' + (booking.hotelCheckin||'-') + ' / Check-out: ' + (booking.hotelCheckout||'-');
+  else if (svc === 'daycare') schedStr = booking.daycareDate || '-';
+  else if (svc === 'studio') schedStr = (booking.studioDate||'-') + ' at ' + (booking.studioSlot||'-');
+  // \u2500\u2500 Build grouped summary \u2500\u2500
+  var groups = [];
+  function grp(title) { var g={title:title,rows:[]}; groups.push(g); return g; }
+  function row(g,k,v) { g.rows.push([k,v]); }
+
+  // Group 1: Booking
+  var gBook = grp('Booking');
+  row(gBook,'Branch', locLabels[booking.location]||'-');
+  row(gBook,'Service', svcLabels[svc]||'-');
+
+  // Group 2: Schedule
+  var gSched = grp('Schedule');
+  row(gSched,'Schedule', schedStr||'-');
+  if (svc === 'hotel') {
+    if (booking.hotelRoomName) row(gSched,'Room', booking.hotelRoomName);
+    else if (booking.hotelRoomType) row(gSched,'Room', ROOM_LABELS[booking.hotelRoomType] || booking.hotelRoomType.replace(/_/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase();}));
+    if (booking.hotelDropoffTime) {
+      var dH = parseInt(booking.hotelDropoffTime);
+      var dLabel = dH < 12 ? dH+':00 AM' : (dH===12?'12:00 PM':(dH-12)+':00 PM');
+      row(gSched,'Drop-off time', dLabel);
+    }
+    if (booking.hotelPickupTime) row(gSched,'Pick-up time', booking.hotelPickupTime);
+    if (booking.petSize !== 'cat') row(gSched,'Play park', booking.playparkConsent === 'yes' ? 'Yes' : 'No');
+  }
+  if (svc === 'grooming' && booking.groomService) {
+    var svcSpec = GROOM_SERVICES.find(function(s){return s.key===booking.groomService;});
+    if (svcSpec) row(gSched,'Grooming service', svcSpec.name);
+    var addonNames = Object.keys(booking.selectedAddons).map(function(k) {
+      var a = ADDONS.find(function(x){return x.key===k;}); return a ? a.name : k;
+    });
+    if (addonNames.length) row(gSched,'Add-ons', addonNames.join(', '));
+    if (booking.preferredStylist && booking.preferredStylist !== 'any') row(gSched,'Groomer', booking.preferredStylist);
+    if (booking.groomNotes) row(gSched,'Grooming notes', booking.groomNotes);
+  }
+  if (svc === 'daycare') {
+    if (booking.daycareOpenTime) {
+      row(gSched,'Drop-off', 'Open time'); row(gSched,'Pick-up', 'Open time');
+    } else if (booking.daycareDropoffText || booking.daycareDropoffHour) {
+      row(gSched,'Drop-off', booking.daycareDropoffText || (booking.daycareDropoffHour+':00'));
+      row(gSched,'Pick-up',  booking.daycarePickupText  || (booking.daycarePickupHour+':00'));
+    }
+    if (booking.daycareNotes) row(gSched,'Daycare notes', booking.daycareNotes);
+  }
+
+  // Group 3: Pet details
+  var gPet = grp('Pet Details');
+  row(gPet,'Name',        booking.petName||'-');
+  row(gPet,'Animal',      booking.petAnimal ? (booking.petAnimal.charAt(0).toUpperCase()+booking.petAnimal.slice(1)) : '-');
+  row(gPet,'Sex',         booking.petGender ? (booking.petGender.charAt(0).toUpperCase()+booking.petGender.slice(1)) : '-');
+  row(gPet,'Breed',       booking.petBreed||'-');
+  row(gPet,'Age',         booking.petAge ? (booking.petAge + ' ' + (booking.petAgeUnit||'')) : '-');
+  row(gPet,'Size',        booking.petSize ? PET_SIZE_LABELS[booking.petSize] : '-');
+  row(gPet,'Temperament', booking.petTemperament ? (tempLabels[booking.petTemperament]||booking.petTemperament) : '-');
+  row(gPet,'Medical notes', booking.petMedical && booking.petMedical.trim() ? booking.petMedical.trim() : 'None');
+  if (booking.memberValid && booking.membershipId) {
+    row(gPet,'Membership', booking.membershipId + ' \u2713');
+  } else {
+    row(gPet,'Membership', 'None');
+  }
+
+  // Group 4: Health & Care
+  var gHealth = grp('Health & Care');
+  var vaccineFileCount = uploadedVaccineFiles ? uploadedVaccineFiles.length : 0;
+  var bringVacc = document.getElementById('bringVaccines');
+  var vaccStatus = vaccineFileCount > 0
+    ? (vaccineFileCount + ' file' + (vaccineFileCount>1?'s':'') + ' uploaded')
+    : (bringVacc && bringVacc.classList.contains('checked') ? 'Will bring to venue' : 'Not provided');
+  row(gHealth,'Vaccine records', vaccStatus);
+  if (svc === 'hotel') {
+    if (booking.vetClinic || booking.vetContact) {
+      row(gHealth,'Vet clinic',  booking.vetClinic||'-');
+      row(gHealth,'Vet contact', booking.vetContact||'-');
+      if (booking.vetAddress) row(gHealth,'Vet address', booking.vetAddress);
+    }
+    if (booking.emergencyName || booking.emergencyPhone) {
+      row(gHealth,'Emergency contact', booking.emergencyName||'-');
+      row(gHealth,'Emergency phone',   booking.emergencyPhone||'-');
+    }
+    if (booking.hotelFeeding) row(gHealth,'Feeding instructions', booking.hotelFeeding);
+    if (booking.hotelMeds)    row(gHealth,'Medications', booking.hotelMeds);
+  }
+
+  // Group 5: Owner details
+  var gOwner = grp('Owner Details');
+  row(gOwner,'Name',   ((booking.ownerFirst||'')+' '+(booking.ownerLast||'')).trim()||'-');
+  row(gOwner,'Email',  booking.ownerEmail||'-');
+  row(gOwner,'Mobile', booking.ownerPhone||'-');
+
+  function renderRow(r) {
+    return '<div class="summary-row"><span class="summary-key">'+r[0]+'</span><span class="summary-val">'+r[1]+'</span></div>';
+  }
+  var detailsSummaryEl = document.getElementById('bookingDetailsSummary');
+  if (!detailsSummaryEl) return;
+  detailsSummaryEl.innerHTML = groups.map(function(g) {
+    if (!g.rows.length) return '';
+    return '<div class="summary-group"><div class="summary-group-title">'+g.title+'</div>' +
+      g.rows.map(renderRow).join('') + '</div>';
+  }).join('');
+  // \u2500\u2500 Price breakdown \u2500\u2500
+  var lines = [];
+  var subtotal = 0;
+  var discountable = 0;
+  if (svc === 'grooming') {
+    if (booking.groomService) {
+      var svcObj = GROOM_SERVICES.find(function(s){return s.key===booking.groomService;});
+      if (svcObj && booking.groomServicePrice > 0) {
+        lines.push({ label:svcObj.name, val:'\u20b1'+booking.groomServicePrice.toLocaleString(), amount:booking.groomServicePrice });
+        subtotal += booking.groomServicePrice;
+        discountable += booking.groomServicePrice;
+      } else if (svcObj && booking.groomService === 'ala_carte') {
+        lines.push({ label:'Ala Carte', val:'\u20b10', amount:0 });
+      }
+    }
+    Object.keys(booking.selectedAddons).forEach(function(k) {
+      var addon = ADDONS.find(function(a){return a.key===k;});
+      if (!addon) return;
+      if (addon.assessment) {
+        lines.push({ label:addon.name, val:'for assessment', amount:0, assess:true });
+      } else {
+        var p = booking.selectedAddons[k];
+        lines.push({ label:'Add-on \u2014 '+addon.name, val:'\u20b1'+p.toLocaleString(), amount:p });
+        subtotal += p;
+      }
+    });
+  } else if (svc === 'hotel') {
+    var cin  = booking.hotelCheckin;
+    var cout = booking.hotelCheckout;
+    if (cin && cout) {
+      var room = booking.hotelRoomType || 'small_cage';
+      var rateSize = CAGE_RATE_SIZE[room] || booking.petSize || 'small_dog';
+      var roomLabel = booking.hotelRoomName || ROOM_LABELS[room] || room.replace(/_/g,' ');
+      var totalNights = Math.round((new Date(cout+' 00:00:00') - new Date(cin+' 00:00:00')) / 86400000);
+      var wdCount = 0, weCount = 0, wdTotal = 0, weTotal = 0;
+      for (var i = 0; i < totalNights; i++) {
+        var dayType = hotelDayType(hotelDatePlusDays(cin, i));
+        if (dayType === 'weekend') { weCount++; weTotal += HOTEL_RATES.weekend[rateSize]||0; }
+        else                       { wdCount++; wdTotal += HOTEL_RATES.weekday[rateSize]||0; }
+      }
+      if (wdCount > 0) {
+        var wdRate = HOTEL_RATES.weekday[rateSize]||0;
+        lines.push({ label: wdCount+' weekday night'+(wdCount!==1?'s':'')+' \u00d7 \u20b1'+wdRate.toLocaleString()+' ('+roomLabel+')', val:'\u20b1'+wdTotal.toLocaleString(), amount:wdTotal });
+        subtotal += wdTotal;
+        discountable += wdTotal;
+      }
+      if (weCount > 0) {
+        var weRate = HOTEL_RATES.weekend[rateSize]||0;
+        lines.push({ label: weCount+' weekend/holiday night'+(weCount!==1?'s':'')+' \u00d7 \u20b1'+weRate.toLocaleString()+' ('+roomLabel+')', val:'\u20b1'+weTotal.toLocaleString(), amount:weTotal });
+        subtotal += weTotal;
+        discountable += weTotal;
+      }
+    }
+    if (booking.hotelLateTotal > 0) {
+      lines.push({ label:booking.hotelLateIsAdditionalNight ? 'Additional night (pickup after 8 PM)' : 'Late pickup fee', val:'\u20b1'+booking.hotelLateTotal.toLocaleString(), amount:booking.hotelLateTotal });
+      subtotal += booking.hotelLateTotal;
+    }
+  } else if (svc === 'daycare') {
+    var dH = booking.daycareDropoffHour;
+    var pH = booking.daycarePickupHour;
+    var hrs = booking.daycareOpenTime ? 'Open time' : (pH - dH) + ' hour' + ((pH-dH)!==1?'s':'');
+    lines.push({ label:'Daycare ('+hrs+')', val:'\u20b1'+booking.daycareTotal.toLocaleString(), amount:booking.daycareTotal });
+    subtotal += booking.daycareTotal;
+    discountable += booking.daycareTotal;
+  }
+  var html = lines.map(function(l) {
+    return '<div class="price-line component">' +
+      '<span class="price-line-label">'+l.label+'</span>' +
+      '<span class="price-line-val'+(l.assess?' assess':'')+'">'+l.val+'</span>' +
+      '</div>';
+  }).join('');
+  if (subtotal > 0) {
+    var discRate = booking.memberValid ? memberDiscountRate(svc, booking.membershipType) : 0;
+    var discAmt  = calculateMemberDiscount(svc, discountable, booking.memberValid, booking.membershipType);
+    var fee      = currentConvenienceFee();
+    var total    = subtotal - discAmt + fee;
+    // Always show subtotal when there are components so the hierarchy is clear
+    html += '<div class="price-line subtotal-line"><span class="price-line-label">Subtotal</span><span class="price-line-val">\u20b1'+subtotal.toLocaleString()+'</span></div>';
+    if (discAmt > 0) {
+      var discPct = Math.round(discRate * 100);
+      html += '<div class="price-line"><span class="price-line-label">Member discount ('+discPct+'%)</span><span class="price-line-val discount">-\u20b1'+discAmt.toLocaleString()+'</span></div>';
+    }
+    if (fee > 0) html += '<div class="price-line"><span class="price-line-label">Convenience fee</span><span class="price-line-val">\u20b1'+fee.toLocaleString()+'</span></div>';
+    html += '<div class="price-line total-line"><span class="price-line-label">Total</span><span class="price-line-val">\u20b1'+total.toLocaleString()+'</span></div>';
+  }
+  var priceBreakdownEl = document.getElementById('priceBreakdown');
+  if (priceBreakdownEl) priceBreakdownEl.innerHTML = html || '<div class="price-line"><span class="price-line-label">No price estimate available</span><span class="price-line-val">-</span></div>';
+}
+
+function ensureSummaryMarkup() {
+  var summary = document.getElementById('stepSummary');
+  if (!summary) return;
+  if (document.getElementById('bookingDetailsSummary') && document.getElementById('priceBreakdown')) return;
+  summary.innerHTML =
+    '<p class="step-eyebrow">Almost done!</p>' +
+    '<h1 class="step-title">Review your booking</h1>' +
+    '<p class="step-subtitle">Please confirm the details below before submitting.</p>' +
+    '<div class="info-box payment-heads-up" id="hostedCheckoutNotice">' +
+      '<p><strong>Next: secure payment through Maya</strong></p>' +
+      '<p>You will be redirected to a Maya checkout page that may display <strong>BARKHAUS EASTWOOD</strong>, even when your booking is for Estancia. This is our registered business account name and does not change your selected branch.</p>' +
+      '<p>After payment, please take a screenshot of Maya&rsquo;s payment confirmation for your records.</p>' +
+    '</div>' +
+    '<div class="summary-card" id="bookingDetailsSummary"></div>' +
+    '<p class="section-label">Price breakdown</p>' +
+    '<div class="price-breakdown" id="priceBreakdown"></div>';
+}
+
+function syncHostedCheckoutNotice() {
+  var notice = document.getElementById('hostedCheckoutNotice');
+  if (!notice) return;
+  notice.style.display = (!IS_WALKIN && PAYMENT_GATEWAY_PROVIDER !== 'manual') ? '' : 'none';
+}
+
+// ── SHOW TOAST ──
+function showToast(msg, duration) {
+  var t = document.getElementById('toast');
+  if (!t) return;
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(function() { t.classList.remove('show'); }, duration || 3000);
+}
+
+// ── RENDER SUCCESS / PAY-RETURN DETAIL CARDS ──────────────────────────────────
+// Mirrors buildSummary() but reads from the bk_snapshot saved before the
+// Hosted-checkout redirect. Renders grouped sections + itemised pricing
+// so the customer has a complete record of every detail they submitted.
+function renderSuccessDetails(snap, detailsId, priceId) {
+  if (!snap) return;
+  var bk  = snap.bookingState || {};
+  var svc = bk.service || '';
+  renderSuccessPolicyNotice(svc);
+
+  // Store meta for printBooking() to use as the PDF filename
+  window._printMeta = { branch: snap.location || '', service: snap.service || '' };
+
+  var tempLabels = { friendly_all:'Friendly with all', friendly_shy:'Friendly but shy', selective:'Selective', reactive:'Reactive', first_time:'First time' };
+
+  // ── grouped rows ──
+  var groups = [];
+  function grp(title) { var g = {title:title, rows:[]}; groups.push(g); return g; }
+  function row(g, k, v) { if (v != null && v !== '' && v !== '-') g.rows.push([k, String(v)]); }
+
+  var gBook = grp('Booking');
+  row(gBook, 'Branch',  snap.location || '-');
+  row(gBook, 'Service', snap.service  || '-');
+
+  var gSched = grp('Schedule');
+  row(gSched, 'Schedule', snap.schedule || '-');
+
+  if (svc === 'hotel') {
+    if (bk.hotelRoomName) row(gSched, 'Room', bk.hotelRoomName);
+    else if (bk.hotelRoomType) row(gSched, 'Room', (ROOM_LABELS && ROOM_LABELS[bk.hotelRoomType]) || bk.hotelRoomType.replace(/_/g,' ').replace(/\b\w/g, function(c){return c.toUpperCase();}));
+    if (bk.hotelDropoffTime) {
+      var dH = parseInt(bk.hotelDropoffTime);
+      row(gSched, 'Drop-off time', dH < 12 ? dH+':00 AM' : (dH===12?'12:00 PM':(dH-12)+':00 PM'));
+    }
+    if (bk.hotelPickupTime) row(gSched, 'Pick-up time', bk.hotelPickupTime);
+    if (bk.petSize !== 'cat') row(gSched, 'Play park', bk.playparkConsent === 'yes' ? 'Yes, with consent' : 'No');
+  }
+  if (svc === 'grooming') {
+    var groomSvcSpec = (GROOM_SERVICES||[]).find(function(s){return s.key===bk.groomService;});
+    if (groomSvcSpec) row(gSched, 'Grooming service', groomSvcSpec.name);
+    var addonList = snap.addons || [];
+    if (addonList.length) row(gSched, 'Add-ons', addonList.join(', '));
+    if (bk.preferredStylist && bk.preferredStylist !== 'any') row(gSched, 'Groomer', bk.preferredStylist);
+    if (bk.groomNotes) row(gSched, 'Grooming notes', bk.groomNotes);
+  }
+  if (svc === 'daycare') {
+    if (bk.daycareOpenTime) {
+      row(gSched, 'Drop-off', 'Open time'); row(gSched, 'Pick-up', 'Open time');
+    } else {
+      if (bk.daycareDropoffText) row(gSched, 'Drop-off', bk.daycareDropoffText);
+      if (bk.daycarePickupText)  row(gSched, 'Pick-up',  bk.daycarePickupText);
+    }
+    if (bk.daycareNotes) row(gSched, 'Daycare notes', bk.daycareNotes);
+  }
+  if (svc === 'studio') {
+    if (bk.studioNotes) row(gSched, 'Notes', bk.studioNotes);
+  }
+
+  // Pet fields prefer the full bookingState, but fall back to the top-level
+  // snapshot display fields (snap.petName/petBreed/petSize) so the screen still
+  // renders if bookingState is missing (older/partial snapshots).
+  var gPet = grp('Pet Details');
+  row(gPet, 'Name',         bk.petName || snap.petName);
+  if (bk.petAnimal) row(gPet, 'Animal', bk.petAnimal.charAt(0).toUpperCase()+bk.petAnimal.slice(1));
+  if (bk.petGender) row(gPet, 'Sex',    bk.petGender.charAt(0).toUpperCase()+bk.petGender.slice(1));
+  row(gPet, 'Breed', bk.petBreed || snap.petBreed);
+  if (bk.petAge)  row(gPet, 'Age',  bk.petAge + ' ' + (bk.petAgeUnit||''));
+  var petSizeVal = bk.petSize ? ((PET_SIZE_LABELS && PET_SIZE_LABELS[bk.petSize]) || bk.petSize) : snap.petSize;
+  if (petSizeVal) row(gPet, 'Size', petSizeVal);
+  if (bk.petTemperament) row(gPet, 'Temperament', tempLabels[bk.petTemperament]||bk.petTemperament);
+  if (bk.petMedical && bk.petMedical.trim()) row(gPet, 'Medical notes', bk.petMedical.trim());
+  if (bk.memberValid && bk.membershipId) row(gPet, 'Membership', bk.membershipId + ' ✓');
+
+  var gHealth = grp('Health & Care');
+  row(gHealth, 'Vaccine records', snap.vaccineStatus || 'Not provided');
+  if (svc === 'hotel') {
+    if (bk.vetClinic || bk.vetContact) {
+      row(gHealth, 'Vet clinic',   bk.vetClinic);
+      row(gHealth, 'Vet contact',  bk.vetContact);
+      row(gHealth, 'Vet address',  bk.vetAddress);
+    }
+    if (bk.emergencyName || bk.emergencyPhone) {
+      row(gHealth, 'Emergency contact', bk.emergencyName);
+      row(gHealth, 'Emergency phone',   bk.emergencyPhone);
+    }
+    if (bk.hotelFeeding) row(gHealth, 'Feeding instructions', bk.hotelFeeding);
+    if (bk.hotelMeds)    row(gHealth, 'Medications',          bk.hotelMeds);
+  }
+
+  var gOwner = grp('Owner Details');
+  row(gOwner, 'Name',   (snap.ownerName || '').trim() || '-');
+  row(gOwner, 'Email',  bk.ownerEmail  || '-');
+  row(gOwner, 'Mobile', snap.mobile || bk.ownerPhone || '-');
+
+  function renderRow(r) {
+    return '<div class="summary-row"><span class="summary-key">'+r[0]+'</span><span class="summary-val">'+r[1]+'</span></div>';
+  }
+  var detailsEl = document.getElementById(detailsId || 'successDetails');
+  if (detailsEl) {
+    detailsEl.innerHTML = groups.map(function(g) {
+      if (!g.rows.length) return '';
+      return '<div class="summary-group"><div class="summary-group-title">'+g.title+'</div>' +
+        g.rows.map(renderRow).join('') + '</div>';
+    }).join('');
+  }
+
+  // ── itemised price breakdown ──
+  var plines = [];
+  var calcSub = 0;
+
+  if (svc === 'grooming') {
+    if (bk.groomServicePrice > 0) {
+      var groomSpec = (GROOM_SERVICES||[]).find(function(s){return s.key===bk.groomService;});
+      plines.push({ label: groomSpec ? groomSpec.name : 'Grooming service', amount: bk.groomServicePrice });
+      calcSub += bk.groomServicePrice;
+    }
+    Object.keys(bk.selectedAddons || {}).forEach(function(k) {
+      var addon = (ADDONS||[]).find(function(a){return a.key===k;});
+      var p = (bk.selectedAddons||{})[k] || 0;
+      if (p > 0) { plines.push({ label: 'Add-on — '+(addon?addon.name:k), amount: p }); calcSub += p; }
+    });
+  } else if (svc === 'hotel') {
+    var cin  = bk.hotelCheckin;
+    var cout = bk.hotelCheckout;
+    if (cin && cout) {
+      var room     = bk.hotelRoomType || 'small_cage';
+      var rateSize = (CAGE_RATE_SIZE||{})[room] || bk.petSize || 'small_dog';
+      var roomLbl  = bk.hotelRoomName || (ROOM_LABELS||{})[room] || room.replace(/_/g,' ');
+      var nights   = Math.round((new Date(cout+' 00:00:00') - new Date(cin+' 00:00:00')) / 86400000);
+      var wdCnt=0, weCnt=0, wdTot=0, weTot=0;
+      for (var ni=0; ni<nights; ni++) {
+        var dayType = hotelDayType(hotelDatePlusDays(cin, ni));
+        if (dayType === 'weekend') { weCnt++; weTot += (HOTEL_RATES&&HOTEL_RATES.weekend&&HOTEL_RATES.weekend[rateSize])||0; }
+        else                       { wdCnt++; wdTot += (HOTEL_RATES&&HOTEL_RATES.weekday&&HOTEL_RATES.weekday[rateSize])||0; }
+      }
+      if (wdCnt > 0) {
+        var wdRate = (HOTEL_RATES&&HOTEL_RATES.weekday&&HOTEL_RATES.weekday[rateSize])||0;
+        plines.push({ label: wdCnt+' weekday night'+(wdCnt!==1?'s':'')+' × ₱'+wdRate.toLocaleString()+' ('+roomLbl+')', amount: wdTot });
+        calcSub += wdTot;
+      }
+      if (weCnt > 0) {
+        var weRate = (HOTEL_RATES&&HOTEL_RATES.weekend&&HOTEL_RATES.weekend[rateSize])||0;
+        plines.push({ label: weCnt+' weekend/holiday night'+(weCnt!==1?'s':'')+' × ₱'+weRate.toLocaleString()+' ('+roomLbl+')', amount: weTot });
+        calcSub += weTot;
+      }
+    }
+    if (bk.hotelLateTotal > 0) {
+      var lateLabel = bk.hotelLateIsAdditionalNight
+        ? 'Additional night (pick-up after 8:00 PM)'
+        : 'Late pick-up fee ('+(bk.hotelLateTotal / (HOTEL_LATE_RATE||100))+' hr'+((bk.hotelLateTotal / (HOTEL_LATE_RATE||100))!==1?'s':'')+' × ₱'+(HOTEL_LATE_RATE||100).toLocaleString()+'/hr)';
+      plines.push({ label: lateLabel, amount: bk.hotelLateTotal });
+      calcSub += bk.hotelLateTotal;
+    }
+  } else if (svc === 'daycare') {
+    var dcHrs = bk.daycareOpenTime ? 'Open time' : ((bk.daycarePickupHour||0) - (bk.daycareDropoffHour||0)) + ' hr';
+    plines.push({ label: 'Daycare ('+dcHrs+')', amount: bk.daycareTotal || snap.subtotal || 0 });
+    calcSub += bk.daycareTotal || snap.subtotal || 0;
+  } else if (svc === 'studio') {
+    plines.push({ label: 'Self-Shoot Studio session', amount: snap.subtotal || 0 });
+    calcSub += snap.subtotal || 0;
+  }
+
+  var baseSubtotal = snap.subtotal || calcSub;
+  var ph = plines.map(function(l){
+    return '<div class="price-line component"><span class="price-line-label">'+l.label+'</span><span class="price-line-val">₱'+l.amount.toLocaleString()+'</span></div>';
+  }).join('');
+
+  if (plines.length > 0) {
+    ph += '<div class="price-line subtotal-line"><span class="price-line-label">Subtotal</span><span class="price-line-val">₱'+baseSubtotal.toLocaleString()+'</span></div>';
+  }
+  if ((snap.discountAmount||0) > 0) {
+    var discountType = (snap.bookingState && snap.bookingState.membershipType) ||
+      (snap.rawPayload && snap.rawPayload.membershipType) || 'standard';
+    var discPct = Math.round(memberDiscountRate(svc, discountType) * 100);
+    ph += '<div class="price-line"><span class="price-line-label">Member discount'+(discPct?(' ('+discPct+'%)'):'')+' </span><span class="price-line-val discount">−₱'+snap.discountAmount.toLocaleString()+'</span></div>';
+  }
+  if ((snap.convenienceFee||0) > 0) {
+    ph += '<div class="price-line"><span class="price-line-label">Convenience fee</span><span class="price-line-val">₱'+snap.convenienceFee.toLocaleString()+'</span></div>';
+  }
+  ph += '<div class="price-line total-line"><span class="price-line-label">Total Paid</span><span class="price-line-val">₱'+snap.total.toLocaleString()+'</span></div>';
+
+  var priceEl = document.getElementById(priceId || 'successPriceBreakdown');
+  if (priceEl) priceEl.innerHTML = ph;
+}
+
+function renderSuccessPolicyNotice(service) {
+  var el = document.getElementById('successPolicyNotice');
+  if (!el) return;
+  var html = '';
+  if (service === 'grooming') {
+    html =
+      '<strong>Grooming changes and cancellations</strong><br>' +
+      'A one-time reschedule may be requested at least <strong>3 hours before</strong> the appointment. ' +
+      'There is a <strong>15-minute grace period</strong>; arriving later may forfeit the reserved slot. ' +
+      'All grooming down payments are <strong>non-refundable</strong>, including no-shows, late arrivals that forfeit the slot, and cancellations.';
+  } else if (service === 'hotel') {
+    html =
+      '<strong>Hotel changes, cancellations, and refunds</strong><br>' +
+      'A one-time reschedule may be requested at least <strong>7 days before check-in</strong>, subject to availability. ' +
+      'Cancellations at least 7 days before check-in are eligible for a <strong>50% refund</strong>; cancellations 6 days or less before check-in are eligible for a <strong>25% refund</strong>. ' +
+      'Rescheduled bookings are final, no-shows forfeit all payments, and approved refunds are processed within <strong>3-7 banking days</strong>.';
+  }
+  el.innerHTML = html;
+  el.style.display = html ? '' : 'none';
+}
+
+// ── PDF / Print ──
+// Sets the browser document title (which becomes the default PDF filename)
+// to <Branch>_<Service>_<RefNumber> before triggering the print dialog.
+function printBooking() {
+  var ref  = ((document.getElementById('refNum') || {}).textContent || '').trim();
+  var meta = window._printMeta || {};
+  var parts = [
+    (meta.branch  || '').replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_|_$/g, ''),
+    (meta.service || '').replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_|_$/g, ''),
+    ref
+  ].filter(Boolean);
+  var newTitle = parts.join('_') || document.title;
+  var orig = document.title;
+  document.title = newTitle;
+  window.print();
+  // Restore after dialog closes (slight delay to let browser pick up the title)
+  setTimeout(function() { document.title = orig; }, 2000);
+}
+
+// ── HANDLE RETURN FROM HOSTED PAYMENT PROVIDER ──
+function showHostedPaymentChecking(ref) {
+  document.querySelectorAll('.step-panel, #successScreen, #payReturnScreen').forEach(function(el) {
+    el.classList.remove('active');
+  });
+  var pw = document.getElementById('progressWrap');
+  var bn = document.getElementById('bottomNav');
+  var ss = document.getElementById('stepSummary');
+  var pr = document.getElementById('payReturnScreen');
+  if (pw) pw.style.display = 'none';
+  if (bn) bn.style.display = 'none';
+  if (pr) pr.style.display = 'none';
+  if (ss) {
+    var displayRef = ref ? String(ref).replace(/[^A-Za-z0-9_-]/g, '') : '';
+    ss.innerHTML =
+      '<div class="pay-loading">' +
+      '<div class="bh-spinner"></div>' +
+      '<p class="pay-loading-text">Checking your payment...</p>' +
+      '<p style="font-size:12px;color:var(--mid);margin-top:14px;line-height:1.7;max-width:300px;margin-left:auto;margin-right:auto">' +
+      'Please wait while we confirm your booking' + (displayRef ? ' <strong style="color:var(--cream)">' + displayRef + '</strong>' : '') + '.</p>' +
+      '</div>';
+    ss.classList.add('active');
+  }
+}
+
+function showHostedPaymentSuccess(ref) {
+  // Hide ALL steps and the step UI, show only success screen
+  document.querySelectorAll('.step-panel, #successScreen, #payReturnScreen').forEach(function(el) {
+    el.classList.remove('active');
+  });
+  var pw = document.getElementById('progressWrap');
+  var bn = document.getElementById('bottomNav');
+  var ss = document.getElementById('successScreen');
+  var hd = document.querySelector('header.booking-header, .booking-header');
+  if (pw) pw.style.display = 'none';
+  if (bn) bn.style.display = 'none';
+  if (hd) hd.style.display = 'none';
+  if (ss) {
+    ss.style.display = '';
+    ss.classList.add('active');
+  }
+  setSuccessTimestamp(ref);
+  var purchaseSnap = null;
+  try {
+    var snap = JSON.parse(sessionStorage.getItem('bk_snapshot') || 'null');
+    purchaseSnap = snap;
+    if (snap) {
+      renderSuccessDetails(snap, 'successDetails', 'successPriceBreakdown');
+      sessionStorage.removeItem('bk_snapshot');
+    }
+  } catch(e) {}
+  trackPurchase(
+    ref,
+    purchaseSnap && purchaseSnap.total,
+    purchaseSnap && purchaseSnap.bookingState
+  );
+  try { sessionStorage.removeItem('bk_pending_ref'); } catch(e) {}
+}
+
+(async function checkPaymentReturn() {
+  var params = new URLSearchParams(window.location.search);
+  var status = params.get('payment');
+  var ref    = params.get('ref');
+  if (!status) return;
+  _handlingHostedPaymentReturn = true;
+  try {
+    // Clean URL
+    window.history.replaceState({}, '', window.location.pathname);
+
+    // Maya may return through failure/cancel URLs even after a wallet screen shows
+    // success. Always reconcile by booking ref before deciding which screen to show.
+    var paymentState = null;
+    if (ref && (status === 'success' || status === 'cancelled' || status === 'failed')) {
+      showHostedPaymentChecking(ref);
+      paymentState = await waitForHostedPaymentState(ref);
+      if (paymentState && paymentState.confirmed) {
+        showHostedPaymentSuccess(ref);
+        return;
+      }
+    }
+
+    if (status === 'success' && ref) {
+      if (!paymentState || !paymentState.confirmed) {
+        var pendingSnap = null;
+        try { pendingSnap = JSON.parse(sessionStorage.getItem('bk_snapshot') || 'null'); } catch(e) {}
+        if (pendingSnap) showPayReturnScreen(pendingSnap, ref);
+        showToast('Payment is still being verified. Please keep your booking reference and check again shortly.', 8000);
+        return;
+      }
+    } else if (status === 'cancelled' || status === 'failed') {
+      if (paymentState && paymentState.status === 'pending' && paymentState.payment_status === 'unpaid') {
+        var _pendingSnap = null;
+        try { _pendingSnap = JSON.parse(sessionStorage.getItem('bk_snapshot') || 'null'); } catch(e) {}
+        if (_pendingSnap) {
+          showPayReturnScreen(_pendingSnap, ref || _pendingSnap.refNumber);
+          var _pendingStatus = document.getElementById('payReturnStatus');
+          if (_pendingStatus) _pendingStatus.textContent = 'Your payment is still being verified. Please wait a moment before retrying.';
+        } else {
+          showHostedPaymentChecking(ref);
+        }
+        showToast('Payment is still being verified. Please keep your booking reference and check again shortly.', 8000);
+        return;
+      }
+      var _retSnap = null;
+      try { _retSnap = JSON.parse(sessionStorage.getItem('bk_snapshot') || 'null'); } catch(e) {}
+      if (_retSnap) {
+        showPayReturnScreen(_retSnap, ref || _retSnap.refNumber);
+      } else {
+        setTimeout(function() {
+          showToast('Payment was not completed. Please try again.', 5000);
+        }, 800);
+      }
+    }
+  } finally {
+    _handlingHostedPaymentReturn = false;
+  }
+})();
+
+async function getHostedPaymentState(ref) {
+  try {
+    var res = await fetch(PAYMENT_STATUS_URL + '?ref=' + encodeURIComponent(ref), {
+      headers: { 'Authorization': 'Bearer ' + SUPABASE_ANON_KEY, 'apikey': SUPABASE_ANON_KEY }
+    });
+    if (res.ok) return await res.json();
+  } catch(e) {}
+  return null;
+}
+
+async function waitForHostedPayment(ref) {
+  var state = await waitForHostedPaymentState(ref);
+  return !!(state && state.confirmed);
+}
+
+async function waitForHostedPaymentState(ref) {
+  var latest = null;
+  for (var attempt = 0; attempt < 10; attempt++) {
+    var state = await getHostedPaymentState(ref);
+    if (state) latest = state;
+    if (state && state.confirmed) return state;
+    if (state && state.status === 'cancelled' && state.payment_status !== 'unpaid') return state;
+    await new Promise(function(resolve) { setTimeout(resolve, 2000); });
+  }
+  return latest;
+}
+
+// ── POLL FOR PAYMENT if ref is in sessionStorage (QR fallback) ──
+// Preserve the pending reference across any hosted-checkout redirect.
+setTimeout(checkStoredPaymentRef, 500);
+window.addEventListener('pageshow', function() {
+  setTimeout(checkStoredPaymentRef, 100);
+});
+
+// ── SUCCESS SCREEN TIMESTAMP ──
+// Call this every time the success screen ref number is set.
+function setSuccessTimestamp(ref) {
+  var now = new Date();
+  var opts = { year:'numeric', month:'long', day:'numeric', hour:'numeric', minute:'2-digit', hour12:true };
+  var ts = now.toLocaleString('en-PH', opts); // e.g. "May 22, 2026, 3:05 PM"
+  // Top ref block
+  var rn = document.getElementById('refNum');
+  if (rn) rn.textContent = ref || rn.textContent;
+  var tEl = document.getElementById('bookingTimestamp');
+  if (tEl) tEl.textContent = ts;
+  // Bottom footer strip
+  var fr = document.getElementById('footerRefNum');
+  if (fr) fr.textContent = ref || fr.textContent;
+  var ft = document.getElementById('footerTimestamp');
+  if (ft) ft.textContent = ts;
+}
+
+function storePaymentRef(ref) {
+  try { sessionStorage.setItem('bk_pending_ref', ref); } catch(e) {}
+}
+async function checkStoredPaymentRef() {
+  try {
+    if (_handlingHostedPaymentReturn) return;
+    if (_checkingStoredPaymentRef) return;
+    var ref = sessionStorage.getItem('bk_pending_ref');
+    if (!ref) return;
+    _checkingStoredPaymentRef = true;
+    // Already on success screen - clear and stop
+    if (document.getElementById('successScreen') && document.getElementById('successScreen').classList.contains('active')) {
+      sessionStorage.removeItem('bk_pending_ref');
+      _checkingStoredPaymentRef = false;
+      return;
+    }
+    var snap = null;
+    try { snap = JSON.parse(sessionStorage.getItem('bk_snapshot') || 'null'); } catch(e) {}
+    if (!snap) {
+      _checkingStoredPaymentRef = false;
+      return;
+    }
+
+    var pr = document.getElementById('payReturnScreen');
+    if (pr && pr.classList.contains('active')) {
+      _checkingStoredPaymentRef = false;
+      return;
+    }
+
+    showPayReturnScreen(snap, ref || snap.refNumber);
+    var statusEl = document.getElementById('payReturnStatus');
+    if (statusEl) statusEl.textContent = 'Checking whether your payment went through...';
+
+    if (await waitForHostedPayment(ref)) {
+      showHostedPaymentSuccess(ref);
+      _checkingStoredPaymentRef = false;
+      return;
+    }
+    if (statusEl) statusEl.textContent = '';
+  } catch(e) {
+  } finally {
+    _checkingStoredPaymentRef = false;
+  }
+}
+function confirmPaymentReturn(ref) {
+  try { sessionStorage.removeItem('bk_pending_ref'); } catch(e) {}
+  document.querySelectorAll('.step-panel, #successScreen').forEach(function(el) {
+    el.classList.remove('active');
+  });
+  var pw = document.getElementById('progressWrap');
+  var bn = document.getElementById('bottomNav');
+  var ss = document.getElementById('successScreen');
+  var hd = document.querySelector('.booking-header');
+  var rb = document.getElementById('payReturnBanner');
+  if (pw) pw.style.display = 'none';
+  if (bn) bn.style.display = 'none';
+  if (hd) hd.style.display = 'none';
+  if (rb) rb.style.display = 'none';
+  if (ss) { ss.style.display = ''; ss.classList.add('active'); }
+  setSuccessTimestamp(ref);
+  var snap = window._payReturnSnap || null;
+  trackPurchase(ref, snap && snap.total, snap && snap.bookingState);
+}
+
+// ── PAYMENT RETURN SCREEN (CANCELLED / FAILED) ──
+
+function showPayReturnScreen(snap, ref) {
+  // Hide all step panels, progress, and bottom nav
+  document.querySelectorAll('.step-panel, #successScreen').forEach(function(el) { el.classList.remove('active'); });
+  var pw = document.getElementById('progressWrap');
+  var bn = document.getElementById('bottomNav');
+  var hd = document.querySelector('.booking-header');
+  var pr = document.getElementById('payReturnScreen');
+  if (pw) pw.style.display = 'none';
+  if (bn) bn.style.display = 'none';
+  if (hd) hd.style.display = '';        // keep header visible
+  if (pr) { pr.style.display = ''; pr.classList.add('active'); }
+
+  // Store snap in memory for retry/edit actions
+  window._payReturnSnap = snap;
+
+  // Set booking reference
+  var refEl = document.getElementById('payReturnRef');
+  if (refEl) refEl.textContent = ref || snap.refNumber || 'BH-000000';
+
+  // Render full details (same as success screen)
+  renderSuccessDetails(snap, 'payReturnDetails', 'payReturnPriceBreakdown');
+}
+
+// Re-submit payment for the same booking details
+async function retryPayment() {
+  var snap = window._payReturnSnap;
+  if (!snap || !snap.rawPayload) {
+    showToast('Booking data not found. Please start a new booking.', 5000);
+    return;
+  }
+  var btn      = document.getElementById('btnRetryPayment');
+  var editBtn  = document.getElementById('btnEditBooking');
+  var statusEl = document.getElementById('payReturnStatus');
+  if (btn)     { btn.disabled = true; btn.textContent = 'Processing...'; }
+  if (editBtn) { editBtn.disabled = true; }
+  if (statusEl) statusEl.textContent = 'Connecting to payment gateway…';
+  try {
+    var latestState = await getHostedPaymentState(snap.refNumber);
+    if (latestState && latestState.confirmed) {
+      showHostedPaymentSuccess(snap.refNumber);
+      return;
+    }
+
+    if (snap.refNumber && snap.cancellationToken) {
+      if (statusEl) statusEl.textContent = 'Releasing your previous booking hold…';
+      var released = await cancelPendingBooking(snap.refNumber, snap.cancellationToken);
+      if (!released) {
+        latestState = await getHostedPaymentState(snap.refNumber);
+        if (latestState && latestState.confirmed) {
+          showHostedPaymentSuccess(snap.refNumber);
+          return;
+        }
+      }
+    }
+
+    snap.bookingId = null;
+    snap.cancellationToken = null;
+    var retryPayload = Object.assign({}, snap.rawPayload, {
+      retry: true
+    });
+    var res  = await fetch(hostedPaymentEndpoint(), {
+      method: 'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+        'apikey':        SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify(retryPayload),
+    });
+    var data = await res.json();
+    if (data.conflict) {
+      if (btn)     { btn.disabled = false; btn.textContent = 'Retry Payment'; }
+      if (editBtn) { editBtn.disabled = false; }
+      if (statusEl) statusEl.textContent = '';
+      showToast('⚠️ This slot is no longer available. Please edit your booking to choose another.', 7000);
+      return;
+    }
+    if (data.error || !data.checkout_url) {
+      if (btn)     { btn.disabled = false; btn.textContent = 'Retry Payment'; }
+      if (editBtn) { editBtn.disabled = false; }
+      if (statusEl) statusEl.textContent = data.error || 'No checkout URL returned. Please try again.';
+      return;
+    }
+    // Update snapshot ref if a new booking was created
+    if (data.ref_number) {
+      snap.refNumber  = data.ref_number;
+      snap.bookingId  = data.booking_id || snap.bookingId;
+      snap.cancellationToken = data.cancellation_token || snap.cancellationToken;
+      var refEl = document.getElementById('payReturnRef');
+      if (refEl) refEl.textContent = data.ref_number;
+      try { sessionStorage.setItem('bk_snapshot', JSON.stringify(snap)); } catch(e) {}
+    }
+    storePaymentRef(data.ref_number || snap.refNumber);
+    _redirectingToPayment = true;
+    window.location.href = data.checkout_url;
+  } catch(err) {
+    if (btn)     { btn.disabled = false; btn.textContent = 'Retry Payment'; }
+    if (editBtn) { editBtn.disabled = false; }
+    if (statusEl) statusEl.textContent = 'Connection error — please check your internet and try again.';
+  }
+}
+
+// Cancel a pending booking via Edge Function (service role) so the slot is freed immediately.
+// The checkout response returns a separate cancellation credential for this hold.
+async function cancelPendingBooking(refNumber, cancellationToken) {
+  if (!refNumber || !cancellationToken) return false;
+  try {
+    var res = await fetch(SUPABASE_URL + '/functions/v1/cancel-pending-booking', {
+      method:  'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey':       SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify({ ref_number: refNumber, cancellation_token: cancellationToken }),
+    });
+    if (!res.ok) return false;
+    var data = await res.json();
+    return data.cancelled === true;
+  } catch(e) {
+    return false;
+  }
+}
+
+// Repopulate DOM form inputs from a restored booking state object
+// so that collectAllState() reads correctly after restoration.
+function populateDOMFromBooking(bk) {
+  function setVal(id, val) {
+    var el = document.getElementById(id);
+    if (el && val != null && val !== '') el.value = val;
+  }
+  // Date inputs
+  setVal('hotelCheckin',  bk.hotelCheckin);
+  setVal('hotelCheckout', bk.hotelCheckout);
+  setVal('groomDate',     bk.groomDate);
+  setVal('daycareDate',   bk.daycareDate);
+  setVal('studioDate',    bk.studioDate);
+  // Hotel times (dropoff = numeric hour value; pickup = numeric hour option value)
+  setVal('hotelDropoffTime', bk.hotelDropoffTime);
+  setVal('hotelPickupTime',  bk.hotelPickupHour != null ? bk.hotelPickupHour : 14);
+  if (typeof onHotelDropoffChange === 'function') onHotelDropoffChange();
+  // Hotel care notes
+  setVal('hotelFeeding',    bk.hotelFeeding);
+  setVal('hotelMeds',       bk.hotelMeds);
+  setVal('vetClinic',       bk.vetClinic);
+  setVal('vetContact',      bk.vetContact);
+  setVal('vetAddress',      bk.vetAddress);
+  setVal('emergencyName',   bk.emergencyName);
+  setVal('emergencyPhone',  bk.emergencyPhone);
+  // Daycare times (option values are numeric hours)
+  setVal('daycareDropoff', bk.daycareDropoffHour != null ? bk.daycareDropoffHour : '');
+  setVal('daycarePickup',  bk.daycarePickupHour  != null ? bk.daycarePickupHour  : '');
+  setVal('daycareNotes',   bk.daycareNotes);
+  // Grooming
+  setVal('groomNotes', bk.groomNotes);
+  // Pet details
+  setVal('petName',    bk.petName);
+  setVal('petBreed',   bk.petBreed);
+  setVal('petAgeNum',  bk.petAge);
+  setVal('petAgeUnit', bk.petAgeUnit);
+  setVal('petMedical', bk.petMedical);
+  // Owner details
+  setVal('ownerFirst', bk.ownerFirst);
+  setVal('ownerLast',  bk.ownerLast);
+  setVal('ownerEmail', bk.ownerEmail);
+  setVal('ownerPhone', bk.ownerPhone);
+  // ownerSource — handle "Other: ..." format stored by collectAllState
+  var rawSrc = bk.ownerSource || '';
+  if (rawSrc.startsWith('Other: ')) {
+    setVal('ownerSource', 'Other');
+    setVal('ownerSourceOther', rawSrc.slice(7));
+    var otherFld = document.getElementById('ownerSourceOther');
+    if (otherFld) otherFld.style.display = '';
+  } else {
+    setVal('ownerSource', rawSrc);
+  }
+}
+
+// User chose to edit their booking after a cancelled payment
+async function editAfterCancelledPayment() {
+  var snap = window._payReturnSnap;
+  if (!snap) {
+    showToast('Booking data not found. Please start a new booking.', 5000);
+    return;
+  }
+  var btn      = document.getElementById('btnEditBooking');
+  var retryBtn = document.getElementById('btnRetryPayment');
+  var statusEl = document.getElementById('payReturnStatus');
+  if (btn)      { btn.disabled = true; btn.textContent = 'Loading…'; }
+  if (retryBtn) { retryBtn.disabled = true; }
+  if (statusEl) statusEl.textContent = 'Cancelling previous booking to free your slot…';
+
+  // Cancel the old pending booking in Supabase so inventory is released
+  var cancelled = await cancelPendingBooking(snap.refNumber, snap.cancellationToken);
+  if (statusEl) statusEl.textContent = cancelled
+    ? ''
+    : 'Note: previous booking will auto-release within 15 minutes.';
+
+  // Clear the pending payment reference from session storage
+  try { sessionStorage.removeItem('bk_pending_ref'); } catch(e) {}
+  // Keep bk_snapshot in case something goes wrong — it will be overwritten on next submit
+
+  // Restore the booking object from the saved state
+  if (snap.bookingState) {
+    Object.assign(booking, snap.bookingState);
+  }
+
+  // Determine and restore currentStep to the last step of the flow (before summary)
+  var flow = booking.service ? FLOWS[booking.service] : null;
+  currentStep = navMaxStep();
+
+  // Repopulate DOM form fields so collectAllState() reads the right values
+  populateDOMFromBooking(booking);
+
+  // Re-fetch live rooms/groomers for this branch — liveRooms is empty on a fresh page load
+  // (normally populated by selectLocation(), which never fires in the return flow).
+  // Await it now so room availability is ready before the user navigates back to Step 3.
+  if (statusEl) statusEl.textContent = 'Restoring your booking…';
+  await loadLiveRoomsAndGroomers();
+  if (statusEl) statusEl.textContent = '';
+
+  // Restore playpark button selection in hotel step 4
+  var ppY = document.getElementById('playparkYes');
+  var ppN = document.getElementById('playparkNo');
+  if (ppY && ppN) {
+    ppY.classList.toggle('selected', booking.playparkConsent === 'yes');
+    ppN.classList.toggle('selected', booking.playparkConsent === 'no');
+  }
+
+  // Restore pet gender button selection (buttons use onclick="selectGender(this,'male')" style)
+  if (booking.petGender) {
+    document.querySelectorAll('#petGenderGrid .gender-btn').forEach(function(b) {
+      var oc = b.getAttribute('onclick') || '';
+      b.classList.toggle('selected', oc.indexOf("'"+booking.petGender+"'") >= 0);
+    });
+  }
+  // Restore temperament button selection
+  if (booking.petTemperament) {
+    document.querySelectorAll('.temp-btn').forEach(function(b) {
+      var oc = b.getAttribute('onclick') || '';
+      b.classList.toggle('selected', oc.indexOf("'"+booking.petTemperament+"'") >= 0);
+    });
+  }
+  // Restore membership button selection
+  var memYes = document.getElementById('memberYes');
+  var memNo  = document.getElementById('memberNo');
+  if (memYes && memNo) {
+    memYes.classList.toggle('selected', booking.isMember === true);
+    memNo.classList.toggle('selected',  booking.isMember === false);
+  }
+  // Restore waiver checkbox states from saved payload
+  var _rp = snap.rawPayload || {};
+  function _restoreCheck(id, val) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    if (val)  el.classList.add('checked');
+    else      el.classList.remove('checked');
+  }
+  var _svc = booking.service;
+  if (_svc === 'grooming') _restoreCheck('waiverGeneralGrooming', _rp.waiverGeneral);
+  if (_svc === 'hotel')    _restoreCheck('waiverGeneralHotel',    _rp.waiverGeneral);
+  if (_svc === 'daycare')  _restoreCheck('waiverGeneralDaycare',  _rp.waiverGeneral);
+  if (_svc === 'studio')   _restoreCheck('waiverStudio',          _rp.waiverStudio);
+  _restoreCheck('waiverVaccineDecl',  _rp.waiverVaccine);
+  _restoreCheck('waiverHouseRules',    _rp.waiverHouseRules);
+  _restoreCheck('waiverGroomingPolicy', _rp.waiverGroomingPolicy);
+  _restoreCheck('waiverHotelCancellation', _rp.waiverHotelCancellation);
+  _restoreCheck('waiverMedia',        _rp.waiverMedia);
+  _restoreCheck('waiverPlaypark',     _rp.waiverPlaypark);
+  _restoreCheck('seniorWaiver',       _rp.waiverSeniorMedical);
+
+  // Hide payReturnScreen; restore normal UI chrome
+  var pr = document.getElementById('payReturnScreen');
+  var pw = document.getElementById('progressWrap');
+  var bn = document.getElementById('bottomNav');
+  if (pr) { pr.style.display = 'none'; pr.classList.remove('active'); }
+  if (pw) pw.style.display = '';
+  if (bn) bn.style.display = '';
+
+  // Navigate directly to summary so the user sees their full booking
+  // and can use the Back button to edit any individual step
+  onSummaryScreen = false;  // reset so showSummary() re-enters correctly
+  showSummary();
+}
+
+// ── PRE-PAYMENT AVAILABILITY CHECK ──
+// ----------------------------------------------------------------
+// pg_cron should call expire_pending_bookings() so each pending checkout releases
+// according to pending_bookings.expires_at (15 minutes for Maya):
+//   SELECT cron.schedule(
+//     'cancel-pending-bookings', '*/5 * * * *',
+//     $$ SELECT public.expire_pending_bookings(); $$
+//   );
+// ----------------------------------------------------------------
+async function checkAvailabilityBeforePayment() {
+  var svc = booking.service;
+  if (svc !== 'hotel' && svc !== 'grooming') return { available: true };
+  try {
+    var branchId = await getSelectedBranchId();
+    if (!branchId) return { available: true };
+
+    if (svc === 'hotel') {
+      if (!booking.hotelRoomId) return { available: true }; // fallback type — edge fn will verify
+      var cin = booking.hotelCheckin, cout = booking.hotelCheckout;
+      var dtRows = (await sbRpcPublic('get_hotel_occupancy', {
+        p_branch_id: branchId,
+        p_checkin: cin,
+        p_checkout: cout,
+      })) || [];
+      if (dtRows.some(function(r){ return r.room_id === booking.hotelRoomId; })) {
+        return { available: false, conflict: 'room' };
+      }
+      return { available: true };
+    }
+
+    if (svc === 'grooming') {
+      var dateVal = booking.groomDate, slot = booking.groomSlot;
+      if (!dateVal || !slot) return { available: true };
+      var groomerId  = booking.preferredStylistId;
+      var isAny      = !groomerId;
+      var serviceKey = booking.groomService || 'basic';
+      var myDuration = groomDurationMins(serviceKey, booking.selectedAddons);
+      var candStart  = slotToMins(slot);
+      var candEnd    = candStart + myDuration;
+      var bkRows = (await sbRpcPublic('get_grooming_occupancy', {
+        p_branch_id: branchId,
+        p_service_date: dateVal,
+      })) || [];
+      bkRows.forEach(function(r) {
+        r._durationAddons = r.has_duration_addon ? { demat:true } : null;
+      });
+      var serviceHours = null;
+      try {
+        serviceHours = (await sbFetchPublic('resource_service_hours',
+          'select=resource_id,start_time,end_time,last_service_time,active' +
+          '&branch_id=eq.' + branchId + '&resource_type=eq.groomer' +
+          '&service_date=eq.' + dateVal + '&active=eq.true')) || [];
+      } catch(hoursErr) {
+        console.warn('Service-hours migration not available during submit recheck.', hoursErr);
+      }
+      var blockRows = [];
+      try {
+        blockRows = (await sbFetchPublic('blocked_schedules',
+          'select=resource_id,start_time,end_time&resource_type=eq.groomer&active=eq.true' +
+          '&dates=cs.{' + dateVal + '}')) || [];
+      } catch(blockErr) {
+        console.warn('Could not load grooming blocks during submit recheck.', blockErr);
+      }
+      function isGroomerFree(gId) {
+        var window = serviceWindowForGroomer(serviceHours, gId);
+        if (window === false) return false;
+        if (window && (candStart < window.start || candStart > window.last || candEnd > window.end)) return false;
+        var booked = bkRows.filter(function(r){ return r.groomer_id === gId && r.timeslot; })
+          .some(function(r) {
+            var dur = groomDurationMins(r.groom_service_key || 'basic', r._durationAddons);
+            var st  = slotToMins(r.timeslot);
+            return st >= 0 && candStart < (st + dur) && candEnd > st;
+          });
+        if (booked) return false;
+        return !blockRows.some(function(block) {
+          if (block.resource_id !== gId) return false;
+          var start = timeValueToMins(block.start_time), end = timeValueToMins(block.end_time);
+          return start >= 0 && candStart < end && candEnd > start;
+        });
+      }
+      var unassignedAtSlot = bkRows.filter(function(r) {
+        if (r.groomer_id != null) return false;
+        var dur = groomDurationMins(r.groom_service_key || 'basic', r._durationAddons);
+        var st = slotToMins(r.timeslot || '');
+        return st >= 0 && candStart < st + dur && candEnd > st;
+      }).length;
+      var groomerPool = isAny ? liveGroomers : liveGroomers.filter(function(g){ return g.id === groomerId; });
+      var freeGroomers = groomerPool.filter(function(g){ return isGroomerFree(g.id); });
+      var still;
+      if (isAny) {
+        still = freeGroomers.length > unassignedAtSlot;
+      } else {
+        // Specific groomer: directly free AND unassigned overflow won't consume them
+        var otherFreeCount = liveGroomers.filter(function(g) {
+          return g.id !== groomerId && isGroomerFree(g.id);
+        }).length;
+        still = groomerPool.length > 0 && isGroomerFree(groomerId) && unassignedAtSlot <= otherFreeCount;
+      }
+      if (!still) return { available: false, conflict: 'slot' };
+      return { available: true };
+    }
+  } catch(e) {
+    console.warn('Pre-payment availability check error:', e);
+    return { available: false, conflict: svc === 'hotel' ? 'room' : 'slot' };
+  }
+}
+
+async function handleBookingConflict(conflictType) {
+  _submitting = false;
+  onSummaryScreen = false;
+  document.getElementById('stepSummary').classList.remove('active');
+  document.getElementById('progressWrap').style.display = '';
+
+  if (conflictType === 'room') {
+    booking.hotelRoomType = null;
+    booking.hotelRoomId   = null;
+    booking.hotelRoomName = null;
+    goToStep(3);
+    loadRoomAvailability(); // force-refresh available rooms
+    showToast('⚠️ That room was just booked by someone else — please choose another.', 8000);
+  } else if (conflictType === 'slot') {
+    booking.groomSlot = null;
+    goToStep(4);
+    await renderGroomSlots(); // force-refresh available slots
+    showToast('⚠️ That time slot was just taken — please choose another slot.', 8000);
+  }
+}
+
+// ── SUBMIT (manual transfer or hosted-checkout redirect) ──
+var _submitting = false; // global lock - prevents double-submit on fast double-tap
+
+async function submitBooking() {
+  if (_submitting) return; // already in flight
+  // Guard: pricing must be loaded — a ₱0 booking would be accepted by the edge function
+  if (!_pricingLoaded) {
+    showToast('Pricing data is unavailable. Please refresh the page and try again.', 7000);
+    return;
+  }
+  _submitting = true;
+  var btn = document.getElementById('btnNext');
+  if (btn) { btn.textContent = 'Processing...'; btn.disabled = true; }
+
+  collectAllState();
+
+  // ── Pre-payment availability check ──
+  var avail = await checkAvailabilityBeforePayment();
+  if (!avail.available) {
+    _submitting = false;
+    if (btn) { btn.textContent = 'Confirm Booking'; btn.disabled = false; }
+    await handleBookingConflict(avail.conflict);
+    return;
+  }
+
+  var svc = booking.service;
+  var subtotal = 0;
+  var discountable = 0;
+  if (svc === 'grooming') {
+    subtotal = (booking.groomServicePrice||0) + Object.keys(booking.selectedAddons).reduce(function(a,k){return a+(booking.selectedAddons[k]||0);},0);
+    discountable = booking.groomServicePrice || 0;
+  } else if (svc === 'hotel') {
+    subtotal = (booking.hotelBaseTotal||0) + (booking.hotelLateTotal||0);
+    discountable = booking.hotelBaseTotal || 0;
+  } else if (svc === 'daycare') {
+    subtotal = booking.daycareTotal || 0;
+    discountable = subtotal;
+  }
+  var discAmt  = calculateMemberDiscount(svc, discountable, booking.memberValid, booking.membershipType);
+  var fee      = currentConvenienceFee();
+  var total    = subtotal - discAmt + fee;
+  if (!IS_WALKIN && PAYMENT_GATEWAY_PROVIDER !== 'manual') {
+    trackBookingEvent('begin_checkout', bookingEventParams(total), 'begin_checkout');
+  }
+
+  var groomServiceName = '';
+  if (booking.groomService) {
+    var found = GROOM_SERVICES.find(function(s){ return s.key === booking.groomService; });
+    groomServiceName = found ? found.name : booking.groomService;
+  }
+
+  // ── Upload vaccine documents to Storage ──
+  // Each file gets a signed upload URL from get-upload-url, is PUT directly to Storage,
+  // and its path is passed to create-payment which inserts vaccine_documents rows.
+  var vaccineDocuments = {};
+  var vaccineFileNames = {};
+  var attachmentUploadErrors = [];
+  if (uploadedVaccineFiles && uploadedVaccineFiles.length > 0) {
+    var uploadId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : 'upload-' + Date.now() + '-' + Math.random().toString(36).slice(2, 9);
+    for (var _vi = 0; _vi < uploadedVaccineFiles.length; _vi++) {
+      var _vf = uploadedVaccineFiles[_vi];
+      var _vKey = 'vaccine_' + _vi;
+      try {
+        var _vUploadFile = await compressImageForUpload(_vf);
+        var _vUrlRes = await fetch(GET_UPLOAD_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type':  'application/json',
+            'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,   // required — without it the gateway returns 401
+            'apikey':        SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify({
+            uploadId: uploadId, fileName: _vf.name, contentType: _vUploadFile.type,
+            fileSize: _vUploadFile.size, purpose: 'vaccine_document', vaccineKey: _vKey
+          }),
+        });
+        var _vUrlData = await _vUrlRes.json();
+        if (!_vUrlRes.ok) throw new Error((_vUrlData && _vUrlData.error) || ('Upload authorization failed with status ' + _vUrlRes.status));
+        if (!_vUrlData.uploadUrl || !_vUrlData.path) throw new Error('Upload authorization did not return a storage path.');
+        var _vPutRes = await fetch(_vUrlData.uploadUrl, { method: 'PUT', body: _vUploadFile, headers: { 'Content-Type': _vUploadFile.type } });
+        if (!_vPutRes.ok) throw new Error('Upload failed with status ' + _vPutRes.status);
+        vaccineDocuments[_vKey] = _vUrlData.path;
+        vaccineFileNames[_vKey] = _vf.name;
+      } catch (_ve) {
+        console.warn('Vaccine file upload failed:', _vf.name, _ve);
+        attachmentUploadErrors.push('Vaccine document "' + _vf.name + '" was not uploaded.');
+      }
+    }
+  }
+
+  // ── Upload grooming reference photos ("pegs") ──
+  // Same pipeline as vaccine docs: signed PUT to the vaccine-docs bucket, paths
+  // passed to submit-booking which inserts grooming_reference_images rows.
+  var groomReferenceImages = {};
+  var groomReferenceFileNames = {};
+  if (booking.service === 'grooming' && uploadedGroomPegs && uploadedGroomPegs.length > 0) {
+    var pegUploadId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : 'pegs-' + Date.now() + '-' + Math.random().toString(36).slice(2, 9);
+    for (var _pi = 0; _pi < uploadedGroomPegs.length; _pi++) {
+      var _pf = uploadedGroomPegs[_pi];
+      var _pKey = 'peg_' + _pi;
+      try {
+        var _pUploadFile = await compressImageForUpload(_pf);
+        var _pUrlRes = await fetch(GET_UPLOAD_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type':  'application/json',
+            'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+            'apikey':        SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify({
+            uploadId: pegUploadId, fileName: _pf.name, contentType: _pUploadFile.type,
+            fileSize: _pUploadFile.size, purpose: 'grooming_reference', vaccineKey: _pKey
+          }),
+        });
+        var _pUrlData = await _pUrlRes.json();
+        if (!_pUrlRes.ok) throw new Error((_pUrlData && _pUrlData.error) || ('Upload authorization failed with status ' + _pUrlRes.status));
+        if (!_pUrlData.uploadUrl || !_pUrlData.path) throw new Error('Upload authorization did not return a storage path.');
+        var _pPutRes = await fetch(_pUrlData.uploadUrl, { method: 'PUT', body: _pUploadFile, headers: { 'Content-Type': _pUploadFile.type } });
+        if (!_pPutRes.ok) throw new Error('Upload failed with status ' + _pPutRes.status);
+        groomReferenceImages[_pKey] = _pUrlData.path;
+        groomReferenceFileNames[_pKey] = _pf.name;
+      } catch (_pe) {
+        console.warn('Grooming reference upload failed:', _pf.name, _pe);
+        attachmentUploadErrors.push('Reference photo "' + _pf.name + '" was not uploaded.');
+      }
+    }
+  }
+
+  if (attachmentUploadErrors.length > 0) {
+    _submitting = false;
+    if (btn) { btn.textContent = 'Confirm Booking'; btn.disabled = false; }
+    showToast(attachmentUploadErrors.join(' ') + ' Please try again before continuing.', 9000);
+    return;
+  }
+
+  // ── Upload the manual-transfer receipt (manual provider only) ──
+  var paymentReceiptPath = null, paymentReceiptName = null, paymentReceiptUploadToken = null;
+  if (!IS_WALKIN && PAYMENT_GATEWAY_PROVIDER === 'manual' && paymentReceiptFile) {
+    try {
+      var _receiptUploadFile = await compressImageForUpload(paymentReceiptFile);
+      var _rId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : 'receipt-' + Date.now();
+      var _rRes = await fetch(GET_UPLOAD_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SUPABASE_ANON_KEY, 'apikey': SUPABASE_ANON_KEY },
+        body: JSON.stringify({
+          uploadId: _rId, fileName: paymentReceiptFile.name,
+          contentType: _receiptUploadFile.type, fileSize: _receiptUploadFile.size,
+          purpose: 'manual_payment_receipt', vaccineKey: 'receipt'
+        }),
+      });
+      var _rData = await _rRes.json();
+      if (_rData.uploadUrl && _rData.path) {
+        await fetch(_rData.uploadUrl, { method: 'PUT', body: _receiptUploadFile, headers: { 'Content-Type': _receiptUploadFile.type } });
+        paymentReceiptPath = _rData.path;
+        paymentReceiptName = paymentReceiptFile.name;
+        paymentReceiptUploadToken = _rData.authorizationToken || null;
+      }
+    } catch (_re) { console.warn('Receipt upload failed:', _re); }
+    if (!paymentReceiptPath || !paymentReceiptUploadToken) {
+      _submitting = false;
+      showToast('Could not upload your receipt. Please check your connection and try again.', 6000);
+      if (btn) { btn.textContent = 'Submit Payment'; btn.disabled = false; btn.style.opacity = ''; }
+      return;
+    }
+  }
+
+  // Build the FULL vaccine map for this animal (all applicable vaccines with
+  // their checked state), not just the ones the user toggled — so the admin
+  // drawer can show every expected vaccine with a ✓/✗ rather than only checked ones.
+  var _vaccDogList = ['Anti-rabies','5/6/8-in-1 shot','Kennel Cough / Bordetella','Tick and Flea treatment'];
+  var _vaccCatList = ['Anti-rabies','All-in-1 shot','Anti-parasitic'];
+  var _vaccList    = (booking.petAnimal === 'cat') ? _vaccCatList : _vaccDogList;
+  var _fullVaccines = {};
+  _vaccList.forEach(function(v) {
+    var k = v.replace(/[^a-z0-9]/gi, '_');
+    _fullVaccines[k] = !!booking.vaccines[k];
+  });
+
+  var payload = {
+    location:booking.location, service:booking.service,
+    groomDate:booking.groomDate, groomSlot:booking.groomSlot,
+    preferredStylist:booking.preferredStylist, preferredStylistId:booking.preferredStylistId||null,
+    groomService:booking.groomService, groomServiceName:groomServiceName,
+    groomNotes:booking.groomNotes,
+    hotelCheckin:booking.hotelCheckin, hotelCheckout:booking.hotelCheckout,
+    hotelDropoff:booking.hotelDropoffTime,
+    hotelPickup:booking.hotelPickupTime, hotelPickupHour:booking.hotelPickupHour||14,
+    hotelRoom:booking.hotelRoomType||'', hotelRoomId:booking.hotelRoomId||null,
+    playparkConsent:booking.playparkConsent,
+    hotelFeeding:booking.hotelFeeding, hotelMeds:booking.hotelMeds,
+    vetClinic:booking.vetClinic, vetContact:booking.vetContact, vetAddress:booking.vetAddress,
+    emergencyName:booking.emergencyName, emergencyPhone:booking.emergencyPhone,
+    daycareDate:booking.daycareDate,
+    daycareDropoff:booking.daycareDropoffText, daycareDropoffHour:booking.daycareDropoffHour,
+    daycarePickup:booking.daycarePickupText,   daycarePickupHour:booking.daycarePickupHour,
+    daycareOpenTime:booking.daycareOpenTime,   daycareNotes:booking.daycareNotes,
+    studioDate:booking.studioDate, studioSlot:booking.studioSlot,
+    petName:booking.petName, petAnimal:booking.petAnimal,
+    petGender:booking.petGender, petBreed:booking.petBreed,
+    petAge:booking.petAge, petAgeUnit:booking.petAgeUnit,
+    petSize:booking.petSize, petMedical:booking.petMedical,
+    petTemperament:booking.petTemperament,
+    membershipId:booking.memberValid?booking.membershipId:null,
+    membershipType:booking.memberValid?booking.membershipType:'standard',
+    vaccines:_fullVaccines, addons:booking.selectedAddons,
+    ownerFirst:booking.ownerFirst, ownerLast:booking.ownerLast,
+    ownerEmail:booking.ownerEmail, ownerPhone:booking.ownerPhone,
+    ownerSource:booking.ownerSource,
+    waiverGeneral:(function(){ var m={grooming:'waiverGeneralGrooming',daycare:'waiverGeneralDaycare',hotel:'waiverGeneralHotel'}; var el=m[booking.service]?document.getElementById(m[booking.service]):null; return el?el.classList.contains('checked'):false; })(),
+    waiverHouseRules:document.getElementById('waiverHouseRules').classList.contains('checked'),
+    waiverGroomingPolicy:document.getElementById('waiverGroomingPolicy')?document.getElementById('waiverGroomingPolicy').classList.contains('checked'):false,
+    waiverHotelCancellation:document.getElementById('waiverHotelCancellation')?document.getElementById('waiverHotelCancellation').classList.contains('checked'):false,
+    waiverVaccine:document.getElementById('waiverVaccineDecl').classList.contains('checked'),
+    waiverSeniorMedical:document.getElementById('seniorWaiver')?document.getElementById('seniorWaiver').classList.contains('checked'):false,
+    waiverStudio:document.getElementById('waiverStudio')?document.getElementById('waiverStudio').classList.contains('checked'):false,
+    waiverMedia:document.getElementById('waiverMedia').classList.contains('checked'),
+    waiverPlaypark:document.getElementById('waiverPlaypark')?document.getElementById('waiverPlaypark').classList.contains('checked'):false,
+    waiverTexts: buildWaiverTexts(),
+    subtotal:subtotal, discountAmount:discAmt, convenienceFee:fee, total:total,
+    hotelLateTotal:    booking.hotelLateTotal    || 0,
+    hotelLateIsAdditionalNight: !!booking.hotelLateIsAdditionalNight,
+    groomServicePrice: booking.groomServicePrice || 0,
+    vaccineDocuments:  vaccineDocuments,
+    vaccineFileNames:  vaccineFileNames,
+    groomReferenceImages:    groomReferenceImages,
+    groomReferenceFileNames: groomReferenceFileNames,
+    bringVaccines: (function(){ var el=document.getElementById('bringVaccines'); return !!(el && el.classList.contains('checked')); })(),
+    // Walk-in bookings go through submit-booking (creates all child records,
+    // no payment), so flag them as admin-created with a walkin source.
+    adminCreated:  IS_WALKIN,
+    booking_source: IS_WALKIN ? 'walkin' : 'online',
+    walkinToken: IS_WALKIN ? WALKIN_TOKEN : null,
+    // The manual provider records a receipt for staff verification. Hosted
+    // providers ignore this null field.
+    manualPayment: (!IS_WALKIN && PAYMENT_GATEWAY_PROVIDER === 'manual' && paymentReceiptPath) ? {
+      method:          selectedPaymentBank,
+      receiptPath:     paymentReceiptPath,
+      receiptFileName: paymentReceiptName,
+      uploadToken:     paymentReceiptUploadToken,
+    } : null,
+  };
+
+  // Show loading state. Move the spinner to the summary panel (and away from the
+  // payment form) so that error/timeout recovery — which rebuilds the summary —
+  // always has a valid panel to land on. The receipt stays in paymentReceiptFile,
+  // so re-entering the payment page restores it.
+  if (!IS_WALKIN && onPaymentScreen) {
+    onPaymentScreen = false; onSummaryScreen = true;
+    var _ppHide = document.getElementById('stepPayment'); if (_ppHide) _ppHide.classList.remove('active');
+    var _ssShow = document.getElementById('stepSummary'); if (_ssShow) _ssShow.classList.add('active');
+  }
+  var _loadHead = IS_WALKIN ? 'Recording your booking...' : 'Confirming your booking...';
+  var _loadSub  = IS_WALKIN
+    ? 'Saving your booking — payment will be collected at the counter.'
+    : 'We&rsquo;re recording your payment and confirming your booking. This will only take a moment.';
+  document.getElementById('stepSummary').innerHTML =
+    '<div class="pay-loading">' +
+    '<div class="bh-spinner"></div>' +
+    '<p class="pay-loading-text">' + _loadHead + '</p>' +
+    '<p style="font-size:12px;color:var(--mid);margin-top:14px;line-height:1.7;max-width:280px;margin-left:auto;margin-right:auto">' +
+    _loadSub + '</p>' +
+    '<p id="payDebug" style="font-size:11px;color:var(--mid);margin-top:8px"></p>' +
+    '</div>';
+
+  // 30-second timeout guard
+  var payTimeout = setTimeout(function() {
+    _submitting = false;
+    buildSummary();
+    updateBottomNavForSummary();  // restores the correct button label + enabled state
+    showToast('Request timed out. Please try again.', 5000);
+  }, 30000);
+
+  // Manual/walk-in submissions create the booking immediately. Hosted providers
+  // create a pending booking and redirect to their secure checkout page.
+  var paymentEndpoint = IS_WALKIN
+    ? EDGE_FN_URL
+    : (PAYMENT_GATEWAY_PROVIDER === 'manual' ? EDGE_FN_URL : hostedPaymentEndpoint());
+  fetch(paymentEndpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type':  'application/json',
+      'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+      'apikey':        SUPABASE_ANON_KEY,
+    },
+    body: JSON.stringify(payload),
+  })
+  .then(function(res) {
+    if (!res.ok) {
+      // Non-2xx: throw so the .catch() path handles recovery uniformly
+      return res.text().then(function(body) {
+        throw new Error('Server error ' + res.status + (body ? ': ' + body.slice(0, 120) : ''));
+      });
+    }
+    return res.json();
+  })
+  .then(async function(data) {
+    clearTimeout(payTimeout);
+    // Server-side conflict detection (edge function verified availability)
+    if (data.conflict) {
+      await handleBookingConflict(data.conflict);
+      return;
+    }
+    if (data.error) {
+      _submitting = false;
+      buildSummary();
+      updateBottomNavForSummary();
+      showToast('Booking error: ' + data.error, 6000);
+      return;
+    }
+    storePaymentRef(data.ref_number);
+    try {
+      var _locLbl = { estancia:'Estancia (Pasig)', eastwood:'Eastwood (QC)' };
+      var _svcLbl = { grooming:'Grooming', hotel:'Pet Hotel', daycare:'Daycare', studio:'Self-Shoot Studio' };
+      var _sched = '';
+      if (svc === 'grooming') _sched = (booking.groomDate||'-') + ' at ' + (booking.groomSlot||'-');
+      else if (svc === 'hotel') _sched = 'Check-in: ' + (booking.hotelCheckin||'-') + ' | Check-out: ' + (booking.hotelCheckout||'-');
+      else if (svc === 'daycare') _sched = booking.daycareDate || '-';
+      else if (svc === 'studio') _sched = (booking.studioDate||'-') + ' at ' + (booking.studioSlot||'-');
+      // Capture vaccine status from DOM before we leave the page
+      var _vaccFileCount = uploadedVaccineFiles ? uploadedVaccineFiles.length : 0;
+      var _bringVacc = document.getElementById('bringVaccines');
+      var _vaccStatus = _vaccFileCount > 0
+        ? (_vaccFileCount + ' file' + (_vaccFileCount > 1 ? 's' : '') + ' uploaded')
+        : (_bringVacc && _bringVacc.classList.contains('checked') ? 'Will bring to venue' : 'Not provided');
+      sessionStorage.setItem('bk_snapshot', JSON.stringify({
+        location: _locLbl[booking.location]||booking.location,
+        service: _svcLbl[svc]||svc,
+        petName: booking.petName, petBreed: booking.petBreed,
+        petSize: booking.petSize ? PET_SIZE_LABELS[booking.petSize] : null,
+        ownerName: (booking.ownerFirst||'') + ' ' + (booking.ownerLast||''),
+        mobile: booking.ownerPhone,
+        schedule: _sched,
+        vaccineStatus: _vaccStatus,
+        // Service specs
+        groomServiceName: svc === 'grooming' && booking.groomService ? (GROOM_SERVICES.find(function(s){return s.key===booking.groomService;})||{name:null}).name : null,
+        addons: svc === 'grooming' ? Object.keys(booking.selectedAddons).map(function(k){var a=ADDONS.find(function(x){return x.key===k;});return a?a.name:k;}) : [],
+        preferredStylist: svc === 'grooming' ? booking.preferredStylist : null,
+        hotelRoomType: svc === 'hotel' ? booking.hotelRoomType : null,
+        hotelRoomName: svc === 'hotel' ? booking.hotelRoomName : null,
+        hotelDropoffTime: svc === 'hotel' ? booking.hotelDropoffTime : null,
+        playparkConsent: svc === 'hotel' ? booking.playparkConsent : null,
+        hotelPickupTime: svc === 'hotel' ? booking.hotelPickupTime : null,
+        petSizeRaw: booking.petSize,
+        daycareOpenTime: svc === 'daycare' ? booking.daycareOpenTime : null,
+        daycareDropoffText: svc === 'daycare' ? booking.daycareDropoffText : null,
+        daycarePickupText: svc === 'daycare' ? booking.daycarePickupText : null,
+        subtotal: subtotal, discountAmount: discAmt,
+        convenienceFee: fee, total: total,
+        bookingId: data.booking_id || null,
+        pendingId: data.pending_id || null,
+        refNumber: data.ref_number || null,
+        cancellationToken: data.cancellation_token || null,
+        bookingState: JSON.parse(JSON.stringify(booking)),
+        rawPayload: payload
+      }));
+    } catch(e) {}
+    if (!IS_WALKIN && PAYMENT_GATEWAY_PROVIDER !== 'manual') {
+      if (!data.checkout_url) throw new Error('No checkout URL returned by payment provider');
+      _redirectingToPayment = true;
+      window.location.href = data.checkout_url;
+      return;
+    }
+    if (IS_WALKIN) {
+      // Skip payment gateway — show success screen directly
+      var refNum = data.ref_number || data.booking_id || 'BK-' + Date.now();
+      document.querySelectorAll('.step-panel').forEach(function(el){ el.classList.remove('active'); });
+      var pw = document.getElementById('progressWrap');
+      var bn = document.getElementById('bottomNav');
+      if (pw) pw.style.display = 'none';
+      if (bn) bn.style.display = 'none';
+      var ss = document.getElementById('successScreen');
+      if (ss) { ss.style.display = ''; ss.classList.add('active'); }
+      setSuccessTimestamp(refNum);
+      var msgEl = ss ? ss.querySelector('.success-msg') : null;
+      if (msgEl) msgEl.textContent = 'Your booking has been recorded. Please proceed to the counter to complete your payment.';
+      // Populate booking detail cards from bk_snapshot
+      try {
+        var snap = JSON.parse(sessionStorage.getItem('bk_snapshot') || 'null');
+        if (snap) {
+          renderSuccessDetails(snap, 'successDetails', 'successPriceBreakdown');
+          sessionStorage.removeItem('bk_snapshot');
+        }
+      } catch(e) {}
+      return;
+    }
+    // Online manual-transfer path → booking is confirmed while staff verifies the receipt.
+    var refNumOnline = data.ref_number || data.booking_id || 'BK-' + Date.now();
+    document.querySelectorAll('.step-panel').forEach(function(el){ el.classList.remove('active'); });
+    var pwO = document.getElementById('progressWrap'); if (pwO) pwO.style.display = 'none';
+    var bnO = document.getElementById('bottomNav');    if (bnO) bnO.style.display = 'none';
+    var ssO = document.getElementById('successScreen');
+    if (ssO) { ssO.style.display = ''; ssO.classList.add('active'); }
+    setSuccessTimestamp(refNumOnline);
+    trackPurchase(refNumOnline, total, booking);
+    var msgO = ssO ? ssO.querySelector('.success-msg') : null;
+    if (msgO) msgO.textContent = 'Your booking is confirmed and your payment has been received. A confirmation email is on its way — please arrive 15 minutes early.';
+    try {
+      var snapO = JSON.parse(sessionStorage.getItem('bk_snapshot') || 'null');
+      if (snapO) { renderSuccessDetails(snapO, 'successDetails', 'successPriceBreakdown'); sessionStorage.removeItem('bk_snapshot'); }
+    } catch(e) {}
+  })
+  .catch(function(err) {
+    _submitting = false;
+    clearTimeout(payTimeout);
+    console.error('Payment error:', err);
+    buildSummary();
+    updateBottomNavForSummary();  // restores the correct button label + enabled state
+    showToast('Connection error: ' + err.message, 6000);
+  });
+}
+
+var _BRANCH_CONTACT = {
+  estancia: { tel: 'tel:+639276073681', label: 'Call Estancia — +63 927 607 3681' },
+  eastwood: { tel: 'tel:+639567819641', label: 'Call Eastwood — +63 956 781 9641' }
+};
+function showContactModal(type) {
+  var loc  = booking.location || 'eastwood';
+  var c    = _BRANCH_CONTACT[loc] || _BRANCH_CONTACT.eastwood;
+  var bs   = 'display:block;border-radius:12px;padding:13px;font-family:\'Nunito\',sans-serif;font-weight:700;font-size:14px;text-decoration:none;margin-bottom:10px;';
+  function primaryA(href, label) { return '<a href="' + href + '" style="' + bs + 'background:var(--blue);color:var(--cream)">' + label + '</a>'; }
+  function secondaryA(href, label) { return '<a href="' + href + '" target="_blank" rel="noopener" style="' + bs + 'background:var(--raised);color:var(--cream)">' + label + '</a>'; }
+  function contactActions(branchKey) {
+    var bc = _BRANCH_CONTACT[branchKey] || c;
+    return primaryA(bc.tel, bc.label) +
+           secondaryA('https://instagram.com/barkhausph', 'Instagram @barkhausph') +
+           secondaryA('https://facebook.com/barkhausph', 'Facebook @barkhausph');
+  }
+  var icon, title, body, actions;
+  if (type === 'studio') {
+    icon = '📷'; title = 'BarkStudio';
+    if (loc === 'estancia') {
+      body    = 'BarkStudio is only available at our Eastwood branch — 4th Floor, Eastwood Mall, Libis, Quezon City.';
+      actions = '';
+    } else {
+      body    = 'Studio bookings are currently available via direct visit or message. Get in touch and we’ll set it up for you.';
+      actions = contactActions('eastwood');
+    }
+  } else if (type === 'daycare') {
+    icon    = '☀️'; title = 'Daycare';
+    body    = 'Daycare is walk-in for now — no booking needed! Feel free to drop by your branch during mall hours; your pet’s playmates are already waiting for them. 🐾 Message or call us anytime if you’d like to chat first.';
+    actions = contactActions(loc);
+  } else { // events
+    icon    = '🎉'; title = 'Events';
+    body    = 'Event bookings are currently available via direct visit or message. Get in touch with us to plan your pet’s special day!';
+    actions = contactActions(loc);
+  }
+  document.getElementById('cModalIcon').textContent   = icon;
+  document.getElementById('cModalTitle').textContent  = title;
+  document.getElementById('cModalBody').textContent   = body;
+  document.getElementById('cModalActions').innerHTML  = actions;
+  document.getElementById('contactModalOverlay').style.display = 'flex';
+}
+function closeContactModal() {
+  document.getElementById('contactModalOverlay').style.display = 'none';
+}
+function showStudioContactModal() { showContactModal('studio'); }
+function closeStudioContactModal() { closeContactModal(); }

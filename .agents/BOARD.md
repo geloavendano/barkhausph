@@ -13,6 +13,13 @@ teammates. Keep entries short and current.
 
 ## Handoffs
 
+- 2026-07-31 - Codex: replaced the standalone staging prototype with copies of the
+  actual Barkhaus landing page and full booking wizard. The staging-only insertions
+  are customer-account entry/profile and pet selection, same-branch add-another
+  booking, combined `BH-3CE089-A/B` review/allocation, and email-confirmation preview.
+  A browser-level request guard permits production GETs and only the occupancy/member
+  read RPCs; it blocks every Edge Function, Storage, and data-write request. No
+  Supabase deploy, DDL, RLS, webhook, email, or schema-cache reload is needed.
 - 2026-07-31 - Codex: added the production-domain read-only redesign preview at
   `/staging/` and `/staging/booking/`. It reads live production branches, pricing,
   resources, Grooming/Hotel occupancy, and membership validation, but has no Auth,

@@ -1,27 +1,1355 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="robots" content="noindex,nofollow,noarchive">
-  <meta name="theme-color" content="#0F1C26">
-  <title>Barkhaus Booking Redesign — Read-only Staging</title>
-  <link rel="icon" href="/favicon.ico">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Nunito:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/staging/styles.css">
+<base href="/">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="48x48" href="/images/favicon-48.png">
+<link rel="icon" type="image/png" sizes="96x96" href="/images/favicon-96.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon.png">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+
+  :root {
+    --bg:      #0F1C26;
+    --surface: #1A3044;
+    --raised:  #1F3D55;
+    --border:  rgba(77,150,185,0.30);
+    --mid:     #6AAEC8;
+    --cream:   #F0EDE6;
+    --cream-m: #B8D4E0;
+    --blue:    #4D96B9;
+    --yellow:  #FFCE58;
+    --error:   #FF6B6B;
+    --success: #6BCB77;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--cream); font-family: "Nunito", sans-serif; font-weight: 400; min-height: 100svh; overflow-x: hidden; }
+  .booking-header { position: sticky; top: 0; z-index: 100; background: rgba(15,28,38,0.95); backdrop-filter: blur(12px); border-bottom: 0.5px solid var(--border); padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; }
+  .header-logo { font-family: "Fredoka One", cursive; font-size: 20px; color: var(--cream); text-decoration: none; }
+  .header-logo span { color: var(--yellow); }
+  .header-back { font-size: 12px; color: var(--mid); text-decoration: none; display: flex; align-items: center; gap: 4px; font-weight: 600; }
+  .progress-wrap { padding: 16px 20px 0; }
+  .progress-bar { height: 4px; background: var(--surface); border-radius: 4px; overflow: hidden; }
+  .progress-fill { height: 100%; background: linear-gradient(to right, var(--blue), var(--yellow)); border-radius: 4px; transition: width 0.4s cubic-bezier(0.4,0,0.2,1); }
+  .progress-steps { display: flex; justify-content: space-between; margin-top: 8px; }
+  .progress-step { font-size: 9px; font-weight: 700; letter-spacing: 0.05em; color: var(--mid); text-transform: uppercase; transition: color 0.3s; }
+  .progress-step.active { color: var(--yellow); }
+  .progress-step.done { color: var(--blue); }
+  .booking-main { max-width: 560px; margin: 0 auto; padding: 24px 20px 100px; }
+  .step-panel { display: none; animation: fadeUp 0.35s ease forwards; }
+  .step-panel.active { display: block; }
+  @keyframes fadeUp { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+  .step-eyebrow { font-size: 9px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--yellow); font-weight: 700; margin-bottom: 6px; }
+  .step-title { font-family: "Fredoka One", cursive; font-size: 26px; color: var(--cream); margin-bottom: 4px; }
+  .step-subtitle { font-size: 13px; color: var(--cream-m); line-height: 1.6; margin-bottom: 24px; font-weight: 500; }
+  .option-grid { display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px; }
+  .option-card { background: var(--surface); border: 1.5px solid var(--border); border-radius: 16px; padding: 18px 20px; cursor: pointer; transition: border-color 0.2s, background 0.2s, transform 0.15s; display: flex; align-items: center; gap: 16px; }
+  .option-card:active { transform: scale(0.98); }
+  .option-card.selected { border-color: var(--yellow); background: rgba(255,206,88,0.08); }
+  .option-card.selected .option-radio { border-color: var(--yellow); background: var(--yellow); }
+  .option-card.selected .option-radio::after { opacity: 1; }
+  .option-card.disabled { opacity: 0.45; cursor: not-allowed; }
+  .option-radio { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--mid); flex-shrink: 0; position: relative; transition: all 0.2s; }
+  .option-radio::after { content: ""; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 8px; height: 8px; border-radius: 50%; background: var(--bg); opacity: 0; transition: opacity 0.2s; }
+  .option-info { flex: 1; }
+  .option-name { font-family: "Fredoka One", cursive; font-size: 18px; color: var(--cream); margin-bottom: 2px; }
+  .option-detail { font-size: 12px; color: var(--cream-m); line-height: 1.5; font-weight: 500; }
+  .option-icon { font-size: 28px; flex-shrink: 0; }
+  .option-badge { font-size: 9px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; background: rgba(77,150,185,0.2); color: var(--blue); border: 1px solid rgba(77,150,185,0.3); border-radius: 20px; padding: 3px 8px; margin-top: 4px; display: inline-block; }
+  .badge-soon { background: rgba(255,206,88,0.15); color: #a07e00; border-color: rgba(255,206,88,0.3); }
+  .form-group { margin-bottom: 18px; }
+  .form-label { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--mid); margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+  .form-label .required { color: var(--yellow); }
+  .form-input, .form-select, .form-textarea { width: 100%; background: var(--surface); border: 1.5px solid var(--border); border-radius: 12px; padding: 13px 16px; color: var(--cream); font-family: "Nunito", sans-serif; font-size: 16px; font-weight: 500; outline: none; transition: border-color 0.2s; -webkit-appearance: none; }
+  .form-input:focus, .form-select:focus, .form-textarea:focus { border-color: var(--blue); }
+  .form-input::placeholder, .form-textarea::placeholder { color: rgba(184,212,224,0.4); }
+  .form-select option { background: var(--surface); color: var(--cream); }
+  .form-textarea { resize: vertical; min-height: 80px; line-height: 1.6; }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .form-hint { font-size: 11px; color: var(--mid); margin-top: 5px; font-weight: 500; }
+  .timeslot-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 4px; }
+  .timeslot { background: var(--surface); border: 1.5px solid var(--border); border-radius: 10px; padding: 10px 6px; text-align: center; font-size: 12px; font-weight: 600; color: var(--cream-m); cursor: pointer; transition: all 0.2s; }
+  .timeslot.selected { border-color: var(--yellow); background: rgba(255,206,88,0.1); color: var(--yellow); }
+  .timeslot.unavailable { opacity: 0.35; cursor: not-allowed; }
+  .pet-type-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 4px; }
+  .pet-type-btn { background: var(--surface); border: 1.5px solid var(--border); border-radius: 12px; padding: 14px 12px; text-align: center; cursor: pointer; transition: all 0.2s; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .pet-type-btn.selected { border-color: var(--yellow); background: rgba(255,206,88,0.08); }
+  .pet-type-btn.disabled-opt { opacity: 0.4; cursor: not-allowed; }
+  .pet-type-btn .pt-emoji { font-size: 24px; }
+  .pet-type-btn .pt-label { font-size: 12px; font-weight: 700; color: var(--cream-m); }
+  .pet-type-btn .pt-price { font-size: 11px; color: var(--mid); }
+  .pet-type-btn.selected .pt-label { color: var(--yellow); }
+  .svc-grid { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+  .svc-card { background: var(--surface); border: 1.5px solid var(--border); border-radius: 14px; padding: 16px 18px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 14px; }
+  .svc-card.selected { border-color: var(--yellow); background: rgba(255,206,88,0.08); }
+  .svc-card-radio { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--mid); flex-shrink: 0; position: relative; transition: all 0.2s; }
+  .svc-card.selected .svc-card-radio { border-color: var(--yellow); background: var(--yellow); }
+  .svc-card.selected .svc-card-radio::after { content: ""; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 6px; height: 6px; border-radius: 50%; background: var(--bg); display: block; }
+  .svc-card-disabled { opacity: 0.45; cursor: not-allowed !important; }
+  .svc-card-disabled .svc-card-radio { border-color: var(--mid) !important; background: transparent !important; }
+  .svc-card-info { flex: 1; }
+  .svc-card-name { font-weight: 700; font-size: 14px; color: var(--cream); }
+  .svc-card-duration { font-size: 11px; color: var(--mid); margin-top: 2px; }
+  .svc-card-price { font-family: "Fredoka One", cursive; font-size: 18px; color: var(--yellow); flex-shrink: 0; }
+  .addon-grid { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+  .addon-row { background: var(--surface); border: 1.5px solid var(--border); border-radius: 10px; padding: 12px 14px; display: flex; align-items: center; gap: 12px; cursor: pointer; transition: all 0.2s; }
+  .addon-row.selected { border-color: var(--blue); background: rgba(77,150,185,0.08); }
+  .addon-row.addon-disabled { opacity: 0.3; cursor: not-allowed; pointer-events: none; }
+  .addon-check { width: 20px; height: 20px; border: 2px solid var(--mid); border-radius: 5px; flex-shrink: 0; transition: all 0.2s; display: flex; align-items: center; justify-content: center; }
+  .addon-row.selected .addon-check { background: var(--blue); border-color: var(--blue); }
+  .addon-row.selected .addon-check::after { content: ""; width: 4px; height: 8px; border: 2px solid var(--bg); border-top: none; border-left: none; transform: rotate(45deg) translate(-1px,-1px); display: block; }
+  .addon-name { flex: 1; font-size: 13px; font-weight: 600; color: var(--cream-m); }
+  .addon-row.selected .addon-name { color: var(--cream); }
+  .addon-price { font-size: 13px; font-weight: 700; color: var(--mid); }
+  .addon-row.selected .addon-price { color: var(--blue); }
+  .gender-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 4px; }
+  .gender-btn.locked-opt { pointer-events:none; opacity:0.55; }
+  .gender-btn { background: var(--surface); border: 1.5px solid var(--border); border-radius: 12px; padding: 12px; text-align: center; cursor: pointer; transition: all 0.2s; font-weight: 700; font-size: 13px; color: var(--cream-m); }
+  .gender-btn.selected { border-color: var(--yellow); background: rgba(255,206,88,0.08); color: var(--yellow); }
+  .gender-btn.selected.locked-opt { border-color: var(--blue); background: rgba(77,150,185,0.12); color: var(--blue); opacity: 1; }
+  .temp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 4px; }
+  .temp-btn { background: var(--surface); border: 1.5px solid var(--border); border-radius: 10px; padding: 10px 8px; text-align: center; cursor: pointer; transition: all 0.2s; font-size: 12px; font-weight: 600; color: var(--cream-m); line-height: 1.3; }
+  .temp-btn.selected { border-color: var(--yellow); background: rgba(255,206,88,0.08); color: var(--yellow); }
+  .vaccine-grid { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+  .vacc-row { display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 10px 14px; background: var(--surface); border: 1.5px solid var(--border); border-radius: 10px; transition: all 0.2s; }
+  .vacc-row.checked { border-color: var(--success); background: rgba(107,203,119,0.07); }
+  .vacc-box { width: 20px; height: 20px; border: 2px solid var(--mid); border-radius: 5px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+  .vacc-row.checked .vacc-box { background: var(--success); border-color: var(--success); }
+  .vacc-row.checked .vacc-box::after { content: ""; width: 4px; height: 8px; border: 2px solid var(--bg); border-top: none; border-left: none; transform: rotate(45deg) translate(-1px,-1px); display: block; }
+  .vacc-label { font-size: 13px; font-weight: 600; color: var(--cream-m); }
+  .vacc-row.checked .vacc-label { color: var(--cream); }
+  .file-upload { background: var(--surface); border: 1.5px dashed var(--border); border-radius: 12px; padding: 20px; text-align: center; cursor: pointer; transition: border-color 0.2s; }
+  .file-upload:hover { border-color: var(--blue); }
+  .file-upload input { display: none; }
+  .file-upload-text { font-size: 13px; color: var(--cream-m); font-weight: 500; }
+  .file-upload-sub { font-size: 11px; color: var(--mid); margin-top: 3px; }
+  .file-list { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+  .file-item { background: rgba(77,150,185,0.1); border: 1px solid rgba(77,150,185,0.25); border-radius: 8px; padding: 8px 12px; font-size: 12px; color: var(--cream-m); display: flex; justify-content: space-between; align-items: center; }
+  .file-remove { color: var(--error); cursor: pointer; font-size: 14px; font-weight: 700; }
+  .waiver-list { padding-left:18px; margin:6px 0 0; }
+  .waiver-list li { font-size:12px; color:var(--cream-m); line-height:1.6; margin-bottom:8px; }
+  .waiver-box { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; max-height:220px; overflow-y: auto; font-size: 12px; color: var(--cream-m); line-height: 1.7; margin-bottom: 14px; scrollbar-width: thin; scrollbar-color: var(--mid) transparent; }
+  .waiver-box h4 { font-family: "Fredoka One", cursive; font-size: 15px; color: var(--cream); margin-bottom: 8px; }
+  .waiver-box p { margin-bottom: 8px; }
+  .checkbox-row { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 14px; cursor: pointer; }
+  .checkbox-box { width: 22px; height: 22px; border: 2px solid var(--mid); border-radius: 6px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; transition: all 0.2s; margin-top: 1px; }
+  .checkbox-box.checked { background: var(--blue); border-color: var(--blue); }
+  .checkbox-box.checked::after { content: ""; width: 5px; height: 9px; border: 2px solid var(--bg); border-top: none; border-left: none; transform: rotate(45deg) translate(-1px,-1px); display: block; }
+  .checkbox-label { font-size: 13px; color: var(--cream-m); line-height: 1.55; font-weight: 500; }
+  .checkbox-label strong { color: var(--cream); }
+  .save-banner { background: rgba(77,150,185,0.12); border: 1px solid rgba(77,150,185,0.3); border-radius: 12px; padding: 14px 16px; display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+  .save-banner-text { flex: 1; font-size: 13px; color: var(--cream-m); font-weight: 500; }
+  .save-banner-text strong { color: var(--cream); display: block; margin-bottom: 2px; }
+  .toggle { width: 44px; height: 24px; background: var(--raised); border-radius: 12px; position: relative; cursor: pointer; transition: background 0.2s; flex-shrink: 0; }
+  .toggle.on { background: var(--blue); }
+  .toggle::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform 0.2s; }
+  .toggle.on::after { transform: translateX(20px); }
+  .summary-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px; margin-bottom: 16px; }
+  .summary-row { display: flex; justify-content: space-between; align-items: flex-start; padding: 8px 0; border-bottom: 0.5px solid var(--border); gap: 12px; }
+  .summary-row:last-child { border-bottom: none; }
+  .summary-key { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--mid); flex-shrink: 0; }
+  .summary-val { font-size: 13px; color: var(--cream); font-weight: 600; text-align: right; }
+  .summary-group { margin-bottom: 10px; }
+  .summary-group-title { font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--yellow); font-weight: 700; padding: 10px 0 6px; border-bottom: 0.5px solid var(--border); margin-bottom: 2px; }
+  .summary-group:first-child .summary-group-title { padding-top: 0; }
+  .price-breakdown { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px; margin-bottom: 16px; }
+  .price-line { display: flex; justify-content: space-between; align-items: baseline; padding: 6px 0; border-bottom: 0.5px solid rgba(77,150,185,0.12); gap: 12px; }
+  .price-line:last-child { border-bottom: none; }
+  .price-line-label { font-size: 13px; color: var(--cream-m); font-weight: 500; }
+  .price-line-val { font-size: 13px; font-weight: 700; color: var(--cream); white-space: nowrap; }
+  .price-line-val.assess { color: var(--mid); font-style: italic; }
+  .price-line-val.discount { color: var(--success); }
+  /* Component lines: the individual items that add up to the subtotal */
+  .price-line.component { padding: 3px 0; border-bottom: none; }
+  .price-line.component .price-line-label { font-size: 11.5px; color: var(--mid); padding-left: 10px; font-weight: 400; }
+  .price-line.component .price-line-val { font-size: 12px; color: var(--mid); font-weight: 600; }
+  /* Subtotal row: sits below the components with a separator */
+  .price-line.subtotal-line { border-top: 0.5px solid rgba(77,150,185,0.3); margin-top: 4px; padding-top: 8px; }
+  .price-line.subtotal-line .price-line-label { font-weight: 700; color: var(--cream); }
+  .price-line.total-line { border-top: 1.5px solid rgba(255,206,88,0.4); margin-top: 4px; padding-top: 10px; }
+  .price-line.total-line .price-line-label { color: var(--yellow); font-weight: 700; font-size: 14px; }
+  .price-line.total-line .price-line-val { color: var(--yellow); font-family: "Fredoka One", cursive; font-size: 22px; }
+  .price-total { background: rgba(255,206,88,0.08); border: 1.5px solid rgba(255,206,88,0.3); border-radius: 12px; padding: 14px 16px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .price-total-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--cream-m); }
+  .price-total-val { font-family: "Fredoka One", cursive; font-size: 24px; color: var(--yellow); }
+  .bottom-nav { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 560px; background: rgba(15,28,38,0.96); border-top: 0.5px solid var(--border); padding: 14px 20px 20px; display: flex; gap: 12px; backdrop-filter: blur(12px); z-index: 50; }
+  .nav-total { display: none; flex-direction: column; align-items: flex-start; justify-content: center; flex-shrink: 0; }
+  .nav-total-label { font-size: 9px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--mid); }
+  .nav-total-val { font-family: "Fredoka One", cursive; font-size: 17px; color: var(--yellow); line-height: 1.1; }
+  .btn-back { flex: 0 0 auto; padding: 14px 20px; background: var(--surface); border: 1px solid var(--border); border-radius: 50px; font-size: 13px; font-weight: 700; color: var(--cream-m); cursor: pointer; font-family: "Nunito", sans-serif; transition: background 0.2s; }
+  .btn-next { flex: 1; padding: 14px; background: var(--yellow); color: var(--bg); border: none; border-radius: 50px; font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; font-family: "Nunito", sans-serif; transition: opacity 0.2s; }
+  .btn-next:disabled { opacity: 0.35; cursor: not-allowed; }
+  .btn-next.btn-incomplete { opacity: 0.35; cursor: not-allowed; }
+  .btn-submit { flex: 1; padding: 14px; background: var(--blue); color: #fff; border: none; border-radius: 50px; font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; font-family: "Nunito", sans-serif; }
+  .section-label { font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--yellow); font-weight: 700; margin: 18px 0 10px; padding-bottom: 8px; border-bottom: 0.5px solid var(--border); }
+  .info-box { background: rgba(77,150,185,0.08); border: 1px solid rgba(77,150,185,0.2); border-radius: 10px; padding: 12px 14px; font-size: 12px; color: var(--cream-m); line-height: 1.6; margin-bottom: 14px; }
+  .info-box strong { color: var(--blue); }
+  .payment-heads-up { background: rgba(255,206,88,0.07); border-color: rgba(255,206,88,0.3); }
+  .payment-heads-up strong { color: var(--yellow); }
+  .payment-heads-up p { margin: 0; }
+  .payment-heads-up p + p { margin-top: 7px; }
+  .warn-box { background: rgba(255,206,88,0.08); border: 1px solid rgba(255,206,88,0.25); border-radius: 10px; padding: 12px 14px; font-size: 12px; color: var(--cream-m); line-height: 1.6; margin-top: 10px; }
+  .warn-box strong { color: var(--yellow); }
+  .divider { border: none; border-top: 0.5px solid var(--border); margin: 20px 0; }
+  .contact-page { text-align: center; padding: 20px 0; }
+  .contact-icon { font-size: 56px; margin-bottom: 16px; }
+  .contact-page h2 { font-family: "Fredoka One", cursive; font-size: 26px; color: var(--cream); margin-bottom: 8px; }
+  .contact-page p { font-size: 14px; color: var(--cream-m); line-height: 1.65; max-width: 340px; margin: 0 auto 24px; font-weight: 500; }
+  .contact-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px; margin-bottom: 12px; text-align: left; }
+  .contact-card-branch { font-size: 9px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--yellow); font-weight: 700; margin-bottom: 6px; }
+  .contact-card-name { font-family: "Fredoka One", cursive; font-size: 16px; color: var(--cream); margin-bottom: 4px; }
+  .contact-card-detail { font-size: 12px; color: var(--cream-m); line-height: 1.6; font-weight: 500; }
+  .contact-card-detail a { color: var(--blue); text-decoration: none; }
+  .stylist-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 4px; }
+  .stylist-btn { background: var(--surface); border: 1.5px solid var(--border); border-radius: 12px; padding: 14px 10px; text-align: center; cursor: pointer; transition: all 0.2s; }
+  .stylist-btn.selected { border-color: var(--blue); background: rgba(77,150,185,0.12); }
+  .stylist-name { font-size: 13px; font-weight: 700; color: var(--cream-m); display: block; }
+  .stylist-btn.selected .stylist-name { color: var(--blue); }
+  .stylist-tag { font-size: 10px; color: var(--mid); display: block; margin-top: 2px; }
+  .success-screen { text-align: center; padding: 40px 0; display: none; }
+  .success-screen.active { display: block; animation: fadeUp 0.5s ease forwards; }
+  .success-icon { font-size: 64px; margin-bottom: 16px; }
+  .success-title { font-family: "Fredoka One", cursive; font-size: 30px; color: var(--cream); margin-bottom: 8px; }
+  .success-msg { font-size: 14px; color: var(--cream-m); line-height: 1.65; max-width: 320px; margin: 0 auto 28px; font-weight: 500; }
+  .success-ref { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 20px; display: inline-block; margin-bottom: 24px; }
+  .success-ref-label { font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--mid); font-weight: 700; margin-bottom: 4px; }
+  .success-ref-num { font-family: "Fredoka One", cursive; font-size: 22px; color: var(--yellow); }
+  .btn-home { display: inline-block; padding: 14px 40px; background: var(--yellow); color: var(--bg); border-radius: 50px; font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; text-decoration: none; }
+  .btn-print { display: inline-flex; align-items: center; gap: 7px; padding: 12px 28px; background: transparent; border: 1.5px solid var(--border); border-radius: 50px; color: var(--mid); font-family: "Nunito", sans-serif; font-size: 13px; font-weight: 700; cursor: pointer; letter-spacing: 0.04em; transition: border-color 0.2s, color 0.2s; }
+  .btn-print:hover { border-color: var(--blue); color: var(--cream); }
+
+  /* ── PRINT STYLES ── */
+  .print-logo { display: none; }
+  @media print {
+    @page { margin: 8mm 10mm; size: A4 portrait; }
+
+    /* Hide everything except the success screen */
+    body { background: #fff !important; color: #111 !important; margin: 0; padding: 0; font-size: 10px !important; }
+    .booking-header, #progressWrap, #bottomNav, #toast,
+    .step-panel, #payReturnScreen, .btn-home, .btn-print,
+    #successFooterStrip { display: none !important; }
+
+    /* Force success screen visible, full-width */
+    #successScreen { display: block !important; padding: 0 !important; text-align: left !important; max-width: 100% !important; animation: none !important; }
+    .booking-main { padding: 0 !important; max-width: 100% !important; }
+
+    /* Logo */
+    #successScreen .screen-logo { display: none !important; }
+    .print-logo { display: block !important; margin-bottom: 6px; }
+    .print-logo img { height: 28px !important; width: auto; }
+
+    /* Title & msg — compact */
+    .success-title { color: #111 !important; font-size: 15px !important; margin-bottom: 1px !important; }
+    .success-msg { color: #444 !important; max-width: 100% !important; font-size: 9px !important; margin-bottom: 6px !important; }
+
+    /* Ref block */
+    .success-ref { background: #f5f5f5 !important; border: 1px solid #ccc !important; display: inline-block; padding: 5px 10px !important; margin-bottom: 6px !important; border-radius: 6px !important; }
+    .success-ref-label { color: #666 !important; font-size: 7px !important; }
+    .success-ref-num { color: #c8990a !important; font-size: 14px !important; }
+    #bookingTimestamp { color: #666 !important; font-size: 9px !important; margin-top: 1px !important; }
+
+    /* Arrival info box — kept (useful on receipt) but compact */
+    .info-box { background: #eef6fb !important; border: 1px solid #b0d4e8 !important; color: #333 !important; padding: 4px 8px !important; font-size: 9px !important; margin: 4px 0 !important; }
+    .info-box strong { color: #1a6a99 !important; }
+
+    /* ── 2-column layout for summary groups ── */
+    .summary-card {
+      background: #f9f9f9 !important; border: 1px solid #ddd !important;
+      padding: 6px 8px !important; margin-bottom: 5px !important; border-radius: 6px !important;
+      display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 0 10px !important;
+    }
+    .summary-group { break-inside: avoid; page-break-inside: avoid; margin-bottom: 4px !important; }
+    .summary-group-title { color: #c8990a !important; font-size: 6.5px !important; padding: 4px 0 2px !important; margin-bottom: 1px !important; border-bottom-color: #ddd !important; }
+    .summary-group:first-child .summary-group-title { padding-top: 0 !important; }
+    .summary-row { padding: 2px 0 !important; border-bottom-color: #e8e8e8 !important; gap: 6px !important; }
+    .summary-key { color: #555 !important; font-size: 7px !important; }
+    .summary-val { color: #111 !important; font-size: 9px !important; font-weight: 600 !important; }
+
+    /* Price breakdown */
+    .price-breakdown { background: #f9f9f9 !important; border: 1px solid #ddd !important; padding: 6px 8px !important; margin-bottom: 5px !important; border-radius: 6px !important; break-inside: avoid; }
+    .price-line { padding: 2px 0 !important; border-bottom-color: #e8e8e8 !important; gap: 6px !important; }
+    .price-line-label { font-size: 9px !important; color: #333 !important; }
+    .price-line-val { font-size: 9px !important; color: #111 !important; }
+    .price-line.total-line .price-line-label { font-size: 10px !important; color: #111 !important; }
+    .price-line.total-line .price-line-val { font-size: 12px !important; color: #c8990a !important; font-family: inherit !important; }
+    .price-line.component .price-line-label { font-size: 8px !important; }
+    .price-line.component .price-line-val { font-size: 8px !important; }
+    .price-line-val.discount { color: #2a7a2a !important; }
+  }
+  .second-pet-section { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px; margin-top: 16px; }
+  .second-pet-title { font-family: "Fredoka One", cursive; font-size: 18px; color: var(--cream); margin-bottom: 14px; }
+  .btn-add-pet { width: 100%; padding: 13px; background: transparent; border: 1.5px dashed var(--border); border-radius: 12px; color: var(--mid); font-family: "Nunito", sans-serif; font-size: 13px; font-weight: 700; cursor: pointer; margin-top: 16px; transition: border-color 0.2s, color 0.2s; }
+  .btn-add-pet:hover { border-color: var(--blue); color: var(--blue); }
+  .btn-text-back { background:none; border:none; color:var(--mid); font-family:"Nunito",sans-serif; font-size:13px; font-weight:700; cursor:pointer; padding:0 0 14px 0; display:inline-flex; align-items:center; gap:4px; }
+  .btn-text-back:hover { color:var(--blue); }
+  @keyframes bh-spin { to { transform:rotate(360deg); } }
+  .bh-spinner { width:36px;height:36px;border:4px solid var(--border);border-top-color:var(--yellow);border-radius:50%;animation:bh-spin 0.8s linear infinite;margin:0 auto 16px; }
+  .pay-loading { display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;padding:20px;text-align:center; }
+  .pay-loading-text { text-align:center;margin:0;font-size:14px;color:var(--mid); }
+
+</style>
+<title>Staging Preview · Book at Barkhaus</title>
+<meta name="description" content="Easy online booking for Barkhaus pet hotel, daycare, grooming, and indoor play. Reserve your pet's stay or visit with a few simple steps.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Barkhaus">
+<meta property="og:title" content="Book Your Pet's Stay, Daycare, or Grooming at Barkhaus">
+<meta property="og:description" content="Easy online booking for Barkhaus pet hotel, daycare, grooming, and indoor play. Reserve your pet's stay or visit with a few simple steps.">
+<meta property="og:url" content="https://barkhaus.ph/booking.html">
+<meta property="og:image" content="https://barkhaus.ph/images/hero-01.jpg">
+<meta name="twitter:image" content="https://barkhaus.ph/images/hero-01.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Book Your Pet's Stay, Daycare, or Grooming at Barkhaus">
+<meta name="twitter:description" content="Easy online booking for Barkhaus pet hotel, daycare, grooming, and indoor play. Reserve your pet's stay or visit with a few simple steps.">
+<link rel="stylesheet" href="/staging/styles.css?v=20260731-real-site">
 </head>
 <body>
-  <div class="stage-banner"><strong>Staging preview</strong><span>Live prices and availability · no booking or payment will be submitted</span></div>
-  <header class="stage-header compact">
-    <a class="brand" href="/staging/"><span class="brand-mark">B</span><span>Barkhaus</span><em>STAGING</em></a>
-    <div class="header-actions"><span class="read-only-pill">Read-only</span><button class="link-btn" id="restartBtn">Restart</button></div>
-  </header>
-  <div class="progress-wrap"><div class="progress-labels"><span id="progressName">Branch</span><span id="progressCount">1 of 8</span></div><div class="progress-track"><span id="progressFill"></span></div></div>
-  <main class="booking-shell" id="bookingApp" aria-live="polite"></main>
-  <div class="toast" id="toast" hidden></div>
-  <script src="/pricing.js"></script>
-  <script src="/staging/booking/staging-booking.js"></script>
+
+<div class="staging-ribbon staging-ribbon-booking" role="status">
+  <strong>STAGING PREVIEW</strong>
+  <span>Live availability · checkout disabled</span>
+</div>
+
+<header class="booking-header">
+  <a href="/staging/" class="header-back">
+    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+    Exit
+  </a>
+  <a href="/staging/" class="header-logo"><img src="images/Barkhaus Pet Hotel Logo.png" alt="Barkhaus Pet Hotel Logo" style="height:22px;width:auto;display:inline-block;vertical-align:middle;"></a>
+  <button type="button" class="staging-booking-account" id="stagingBookingAccount">Guest</button>
+</header>
+
+<div class="progress-wrap" id="progressWrap">
+  <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:14%"></div></div>
+  <div class="progress-steps" id="progressSteps"></div>
+</div>
+
+<div class="booking-main">
+
+<div class="staging-flow-note">
+  <strong>This is the actual Barkhaus booking form.</strong>
+  Production prices and availability are shown, but files stay on this device and the final order is only a preview.
+</div>
+
+<!-- STEP 1: LOCATION -->
+<div class="step-panel active" id="step1">
+  <p class="step-eyebrow">Step 1</p>
+  <h1 class="step-title">Pick a branch</h1>
+  <p class="step-subtitle">Choose the Barkhaus location you would like to visit.</p>
+  <div class="info-box payment-heads-up" id="paymentPreparationNotice">
+    <p><strong>Payment is required to confirm your booking.</strong></p>
+    <p>At the end of this form, you will pay securely by credit card or QR payment. Please have your card or online banking/e-wallet balance ready. Bookings that are not paid will not be confirmed, and the reserved slot will be released.</p>
+  </div>
+  <div class="option-grid">
+    <div class="option-card" onclick="selectLocation(this,'estancia')">
+      <div class="option-radio"></div>
+      <div class="option-info">
+        <p class="option-name">Estancia</p>
+        <p class="option-detail">2nd Floor Main Wing, Estancia Mall<br>Capitol Commons, Pasig City</p>
+        <p class="option-detail" style="margin-top:4px;color:var(--mid)">Mon-Thu 11AM-9PM &nbsp;|&nbsp; Fri-Sun 10AM-10PM</p>
+      </div>
+      <span class="option-icon">&#127978;</span>
+    </div>
+    <div class="option-card" onclick="selectLocation(this,'eastwood')">
+      <div class="option-radio"></div>
+      <div class="option-info">
+        <p class="option-name">Eastwood</p>
+        <p class="option-detail">4th Floor, Eastwood Mall<br>Libis, Quezon City</p>
+        <p class="option-detail" style="margin-top:4px;color:var(--mid)">Open daily 10AM-10PM</p>
+      </div>
+      <span class="option-icon">&#127970;</span>
+    </div>
+    <div class="option-card" id="simulatePaymentCard" style="display:none" onclick="startSimulatedPaymentFlow()">
+      <div class="option-radio"></div>
+      <div class="option-info">
+        <p class="option-name">Simulate payment</p>
+        <p class="option-detail">Test Maya checkout with a prefilled daycare booking for today.</p>
+        <span class="option-badge">Test amount: &#8369;1.00</span>
+      </div>
+      <span class="option-icon">&#128179;</span>
+    </div>
+    <div class="option-card disabled">
+      <div class="option-radio"></div>
+      <div class="option-info">
+        <p class="option-name">Greenhills</p>
+        <p class="option-detail">San Juan, Metro Manila</p>
+        <span class="option-badge badge-soon">Coming soon</span>
+      </div>
+      <span class="option-icon">&#127959;</span>
+    </div>
+  </div>
+</div>
+
+<!-- STEP 2: SERVICE -->
+<div class="step-panel" id="step2">
+  <p class="step-eyebrow">Step 2</p>
+  <h1 class="step-title">Choose a service</h1>
+  <p class="step-subtitle">What would you like to book for your pet?</p>
+  <div class="option-grid" id="serviceGrid">
+    <div class="option-card" onclick="selectService(this,'grooming')">
+      <div class="option-radio"></div>
+      <div class="option-info">
+        <p class="option-name">Grooming</p>
+        <p class="option-detail">Bath, blowdry, haircut and styling by our expert groomers.</p>
+        <span class="option-badge">Select service + time slot</span>
+      </div>
+      <span class="option-icon">&#9986;&#65039;</span>
+    </div>
+    <div class="option-card" onclick="selectService(this,'hotel')">
+      <div class="option-radio"></div>
+      <div class="option-info">
+        <p class="option-name">Pet Hotel</p>
+        <p class="option-detail">Overnight or multi-day boarding with 24/7 attentive care.</p>
+        <span class="option-badge">Check-in and out dates</span>
+      </div>
+      <span class="option-icon">&#127968;</span>
+    </div>
+    <div class="option-card" id="daycareCard" onclick="showContactModal('daycare')">
+      <div class="option-radio"></div>
+      <div class="option-info">
+        <p class="option-name">Daycare</p>
+        <p class="option-detail">Drop off your pet for a full day of supervised play and care.</p>
+        <span class="option-badge" id="daycareBadge">Walk in anytime</span>
+      </div>
+      <span class="option-icon">&#9728;&#65039;</span>
+    </div>
+    <div class="option-card disabled" id="studioCard" onclick="showContactModal('studio')">
+      <div class="option-radio"></div>
+      <div class="option-info">
+        <p class="option-name">BarkStudio</p>
+        <p class="option-detail">Pet portrait studio with professional lighting and props.</p>
+        <span class="option-badge" id="studioBadge">Eastwood only</span>
+      </div>
+      <span class="option-icon">&#128247;</span>
+    </div>
+    <div class="option-card" id="eventsCard" onclick="showContactModal('events')">
+      <div class="option-radio"></div>
+      <div class="option-info">
+        <p class="option-name">Events</p>
+        <p class="option-detail">Pet birthdays, parties and special gatherings.</p>
+        <span class="option-badge">Contact branch directly</span>
+      </div>
+      <span class="option-icon">&#127881;</span>
+    </div>
+  </div>
+</div>
+
+<!-- STEP 3: GROOMING SPECS / HOTEL DATES / DAYCARE SCHEDULE / STUDIO SLOT -->
+<div class="step-panel" id="step3">
+  <p class="step-eyebrow" id="s3eyebrow">Step 3</p>
+  <h1 class="step-title" id="s3title">Details</h1>
+  <p class="step-subtitle" id="s3subtitle">Tell us more about your visit.</p>
+
+  <!-- GROOMING SPECS -->
+  <div id="groomSpecsSection" style="display:none">
+    <p class="section-label">Pet size</p>
+    <div class="pet-type-grid" id="groomSizeGrid">
+      <div class="pet-type-btn" onclick="selectGroomSize(this,'small_dog')">
+        <span class="pt-emoji">&#128054;</span>
+        <span class="pt-label">Small Dog</span>
+        <span class="pt-price">Up to 6kg (13 lbs)</span>
+      </div>
+      <div class="pet-type-btn" onclick="selectGroomSize(this,'medium_dog')">
+        <span class="pt-emoji">&#128054;</span>
+        <span class="pt-label">Medium Dog</span>
+        <span class="pt-price">Up to 15kg (33 lbs)</span>
+      </div>
+      <div class="pet-type-btn" onclick="selectGroomSize(this,'large_dog')">
+        <span class="pt-emoji">&#128054;</span>
+        <span class="pt-label">Large Dog</span>
+        <span class="pt-price">Up to 30kg (66 lbs)</span>
+      </div>
+      <div class="pet-type-btn" onclick="selectGroomSize(this,'giant_dog')">
+        <span class="pt-emoji">&#128054;</span>
+        <span class="pt-label">Giant Dog</span>
+        <span class="pt-price">Over 30kg (66 lbs)</span>
+      </div>
+      <div class="pet-type-btn" onclick="selectGroomSize(this,'cat')" style="grid-column:span 2">
+        <span class="pt-emoji">&#128049;</span>
+        <span class="pt-label">Cat</span>
+        <span class="pt-price">any size</span>
+      </div>
+    </div>
+    <p class="form-note" style="font-size:11px;color:var(--mid);margin-top:6px">ℹ️ Pet size is subject to inspection by our staff upon check-in/admission.</p>
+
+    <div id="groomServiceSection" style="display:none">
+      <p class="section-label">Select a service</p>
+      <div class="svc-grid" id="groomSvcGrid"></div>
+
+      <div id="addonSection" style="display:none">
+        <p class="section-label">Add-ons <span style="font-size:10px;color:var(--mid);text-transform:none;letter-spacing:0;font-weight:500">(optional)</span></p>
+        <div class="addon-grid" id="addonGrid"></div>
+        <div id="assessNote" style="display:none" class="warn-box">
+          <strong>Note:</strong> Deshedding and dematting services are available upon and subject to the inspection of the pet groomer.
+        </div>
+        <div id="alacartNote" style="display:none" class="info-box">
+          Please select at least one add-on to proceed with Ala Carte.
+        </div>
+      </div>
+
+      <div class="price-total" id="groomPriceTotal" style="display:none;margin-top:16px">
+        <span class="price-total-label">Estimated total</span>
+        <span class="price-total-val" id="groomTotalVal">&#8369;0</span>
+      </div>
+
+      <div id="groomSpecialSection" style="display:none">
+        <p class="section-label">Special requests</p>
+        <div class="form-group">
+          <textarea class="form-textarea" id="groomNotes" placeholder="e.g. keep the face fluffy, sensitive skin, scared of dryers..."></textarea>
+        </div>
+        <div class="form-group" style="margin-top:4px">
+          <div class="file-upload" onclick="document.getElementById('groomPegFiles').click()">
+            <input type="file" id="groomPegFiles" multiple accept="image/*" onchange="handleGroomPegFiles(this)">
+            <div style="font-size:24px;margin-bottom:6px">&#128247;</div>
+            <div class="file-upload-text">Upload reference photos (optional)</div>
+            <div class="file-upload-sub">Share grooming pegs / inspiration &mdash; JPG, PNG or WEBP, max 5MB each</div>
+          </div>
+          <div class="file-list" id="groomPegList"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- HOTEL DATES -->
+  <div id="hotelDatesSection" style="display:none">
+    <p class="section-label">Pet size</p>
+    <div class="pet-type-grid" id="hotelSizeGrid">
+      <div class="pet-type-btn" onclick="selectHotelSize(this,'small_dog')">
+        <span class="pt-emoji">&#128054;</span>
+        <span class="pt-label">Small Dog</span>
+        <span class="pt-price">Up to 6kg (13 lbs)</span>
+      </div>
+      <div class="pet-type-btn" onclick="selectHotelSize(this,'medium_dog')">
+        <span class="pt-emoji">&#128054;</span>
+        <span class="pt-label">Medium Dog</span>
+        <span class="pt-price">Up to 15kg (33 lbs)</span>
+      </div>
+      <div class="pet-type-btn" onclick="selectHotelSize(this,'large_dog')">
+        <span class="pt-emoji">&#128054;</span>
+        <span class="pt-label">Large Dog</span>
+        <span class="pt-price">Up to 30kg (66 lbs)</span>
+      </div>
+      <div class="pet-type-btn" onclick="selectHotelSize(this,'giant_dog')">
+        <span class="pt-emoji">&#128054;</span>
+        <span class="pt-label">Giant Dog</span>
+        <span class="pt-price">Over 30kg (66 lbs)</span>
+      </div>
+      <div class="pet-type-btn" id="hotelCatBtn" onclick="selectHotelSize(this,'cat')" style="grid-column:span 2">
+        <span class="pt-emoji">&#128049;</span>
+        <span class="pt-label">Cat</span>
+        <span class="pt-price" id="hotelCatNote">Eastwood only</span>
+      </div>
+    </div>
+    <p class="form-note" style="font-size:11px;color:var(--mid);margin-top:6px">ℹ️ Pet size is subject to inspection by our staff upon check-in/admission.</p>
+
+    <div id="hotelDatesBody" style="display:none">
+      <div class="form-row" style="margin-top:8px">
+        <div class="form-group">
+          <label class="form-label">Check-in <span class="required">*</span></label>
+          <input type="date" class="form-input" id="hotelCheckin" onchange="onHotelCheckinChange()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Check-out <span class="required">*</span></label>
+          <input type="date" class="form-input" id="hotelCheckout" onchange="onHotelCheckoutChange()">
+        </div>
+      </div>
+      <div class="info-box" id="nightsDisplay" style="display:none"><strong id="nightsCount"></strong></div>
+      <div class="info-box">
+        🛁 Stays of <strong>7 nights or more</strong> include a complimentary <strong>Bath and Dry</strong> for your pet.
+      </div>
+
+      <!-- Room availability -->
+      <div id="roomAvailSection" style="display:none">
+        <p class="section-label">Available rooms</p>
+        <div id="roomAvailLoading" style="display:none;flex-direction:column;align-items:center;text-align:center" class="info-box"><div class="bh-spinner" style="width:24px;height:24px;border-width:3px;margin-bottom:8px"></div><span>Checking availability…</span></div>
+        <div id="roomAvailGrid" class="svc-grid"></div>
+        <div id="roomAvailNote" style="display:none" class="warn-box">
+          <strong>No rooms available</strong> for the selected dates and pet size.
+          Please <strong>contact the branch directly</strong> for alternative options or to join the waitlist.
+        </div>
+      </div>
+      <!-- Step 3 rate estimate breakdown -->
+      <div id="hotelStep3Breakdown" style="display:none;margin-top:16px"></div>
+    </div>
+  </div>
+
+  <!-- DAYCARE SCHEDULE -->
+  <div id="daycareScheduleSection" style="display:none">
+    <p class="section-label">Pet size</p>
+    <div class="pet-type-grid" id="daycareSizeGrid">
+      <div class="pet-type-btn" onclick="selectDaycareSize(this,'small_dog')">
+        <span class="pt-emoji">&#128054;</span>
+        <span class="pt-label">Small Dog</span>
+        <span class="pt-price">&#8369;500 base</span>
+      </div>
+      <div class="pet-type-btn" onclick="selectDaycareSize(this,'medium_dog')">
+        <span class="pt-emoji">&#128054;</span>
+        <span class="pt-label">Medium Dog</span>
+        <span class="pt-price">&#8369;550 base</span>
+      </div>
+      <div class="pet-type-btn" onclick="selectDaycareSize(this,'large_dog')" style="grid-column:span 2">
+        <span class="pt-emoji">&#128054;</span>
+        <span class="pt-label">Large Dog</span>
+        <span class="pt-price">&#8369;650 base</span>
+      </div>
+      <div class="pet-type-btn" id="daycareCatBtn" onclick="selectDaycareSize(this,'cat')" style="grid-column:span 2">
+        <span class="pt-emoji">&#128049;</span>
+        <span class="pt-label">Cat</span>
+        <span class="pt-price" id="daycareCatNote">Eastwood only</span>
+      </div>
+    </div>
+    <p class="form-note" style="font-size:11px;color:var(--mid);margin-top:6px">ℹ️ Pet size is subject to inspection by our staff upon check-in/admission.</p>
+
+    <div id="daycareDateSection" style="display:none">
+      <div class="form-group" style="margin-top:8px">
+        <label class="form-label">Date <span class="required">*</span></label>
+        <input type="date" class="form-input" id="daycareDate" onchange="onDaycareDateChange()">
+      </div>
+      <div id="daycareTimesSection" style="display:none">
+        <div class="info-box">Base rate covers up to <strong>3 hours</strong>. Additional hours: Dogs <strong>+&#8369;100/hr</strong>, Cats <strong>+&#8369;50/hr</strong>.</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Drop-off <span class="required">*</span></label>
+            <select class="form-select" id="daycareDropoff" onchange="calcDaycareTotal(); refreshContinueBtn();">
+              <option value="">Select time</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Pick-up <span class="required">*</span></label>
+            <select class="form-select" id="daycarePickup" onchange="calcDaycareTotal(); refreshContinueBtn();">
+              <option value="">Select time</option>
+            </select>
+          </div>
+        </div>
+        <div class="price-total" id="daycarePriceTotal" style="display:none">
+          <span class="price-total-label">Estimated total</span>
+          <span class="price-total-val" id="daycareTotalVal">&#8369;0</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STUDIO SLOT -->
+  <div id="studioSlotSection" style="display:none">
+    <div class="form-group">
+      <label class="form-label">Date <span class="required">*</span></label>
+      <input type="date" class="form-input" id="studioDate" onchange="onStudioDateChange()">
+    </div>
+    <p class="section-label">Time slot <span style="font-size:10px;color:var(--mid);text-transform:none;letter-spacing:0;font-weight:500">(1 hour session)</span></p>
+    <div class="timeslot-grid" id="studioSlots" style="grid-template-columns:repeat(3,1fr)">
+        <div class="timeslot" onclick="selectSlot(this)">10:00 AM</div>
+        <div class="timeslot" onclick="selectSlot(this)">10:30 AM</div>
+        <div class="timeslot" onclick="selectSlot(this)">11:00 AM</div>
+        <div class="timeslot" onclick="selectSlot(this)">11:30 AM</div>
+        <div class="timeslot" onclick="selectSlot(this)">12:00 PM</div>
+        <div class="timeslot" onclick="selectSlot(this)">12:30 PM</div>
+        <div class="timeslot" onclick="selectSlot(this)">1:00 PM</div>
+        <div class="timeslot" onclick="selectSlot(this)">1:30 PM</div>
+        <div class="timeslot" onclick="selectSlot(this)">2:00 PM</div>
+        <div class="timeslot" onclick="selectSlot(this)">2:30 PM</div>
+        <div class="timeslot" onclick="selectSlot(this)">3:00 PM</div>
+        <div class="timeslot" onclick="selectSlot(this)">3:30 PM</div>
+        <div class="timeslot" onclick="selectSlot(this)">4:00 PM</div>
+        <div class="timeslot" onclick="selectSlot(this)">4:30 PM</div>
+        <div class="timeslot" onclick="selectSlot(this)">5:00 PM</div>
+        <div class="timeslot" onclick="selectSlot(this)">5:30 PM</div>
+        <div class="timeslot" onclick="selectSlot(this)">6:00 PM</div>
+        <div class="timeslot" onclick="selectSlot(this)">6:30 PM</div>
+        <div class="timeslot" onclick="selectSlot(this)">7:00 PM</div>
+        <div class="timeslot" onclick="selectSlot(this)">7:30 PM</div>
+        <div class="timeslot" onclick="selectSlot(this)">8:00 PM</div>
+        <div class="timeslot" onclick="selectSlot(this)">8:30 PM</div>
+        <div class="timeslot" onclick="selectSlot(this)">9:00 PM</div>
+    </div>
+    <div class="info-box" style="margin-top:14px">Includes use of all backdrops, ring light, and props. Bring your own camera or use your phone.</div>
+  </div>
+</div>
+
+<!-- STEP 4: GROOMING SCHEDULE / HOTEL DETAILS / DAYCARE DETAILS -->
+<div class="step-panel" id="step4">
+  <p class="step-eyebrow" id="s4eyebrow">Step 4</p>
+  <h1 class="step-title" id="s4title">Details</h1>
+  <p class="step-subtitle" id="s4subtitle">A few more details.</p>
+
+  <!-- GROOMING SCHEDULE -->
+  <div id="groomSchedSection" style="display:none">
+    <div class="form-group">
+      <label class="form-label">Date <span class="required">*</span></label>
+      <input type="date" class="form-input" id="groomDate" onchange="onGroomDateChange()">
+    </div>
+    <div id="stylistSection" style="display:none">
+      <p class="section-label">Preferred Groomer <span style="font-size:10px;color:var(--mid);text-transform:none;letter-spacing:0;font-weight:500">(optional)</span></p>
+      <div class="stylist-grid" id="stylistGrid">
+        <!-- Populated dynamically from DB -->
+      </div>
+      <p class="form-note" style="margin-top:8px;font-size:12px;color:var(--mid)">⚠️ If your preferred groomer is unavailable due to absence, we will notify you at the start of day and may reassign or reschedule your appointment.</p>
+    </div>
+    <div id="groomSlotsSection" style="display:none">
+      <p class="section-label" style="margin-top:18px">Available time slots</p>
+      <div class="timeslot-grid" id="groomSlots">
+        <div class="timeslot" onclick="selectSlot(this)">9:00 AM</div>
+        <div class="timeslot" onclick="selectSlot(this)">10:00 AM</div>
+        <div class="timeslot" onclick="selectSlot(this)">11:00 AM</div>
+        <div class="timeslot" onclick="selectSlot(this)">12:00 PM</div>
+        <div class="timeslot" onclick="selectSlot(this)">1:00 PM</div>
+        <div class="timeslot" onclick="selectSlot(this)">2:00 PM</div>
+        <div class="timeslot" onclick="selectSlot(this)">3:00 PM</div>
+        <div class="timeslot" onclick="selectSlot(this)">4:00 PM</div>
+        <div class="timeslot" onclick="selectSlot(this)">5:00 PM</div>
+        <div class="timeslot unavailable">6:00 PM</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- HOTEL SERVICE DETAILS -->
+  <div id="hotelDetailsSection" style="display:none">
+    <div class="form-group">
+      <label class="form-label">Drop-off time <span class="required">*</span></label>
+      <select class="form-select" id="hotelDropoffTime" onchange="calcHotelTotal(); refreshContinueBtn(); onHotelDropoffChange();">
+        <option value="">Select time</option>
+      </select>
+      <div id="hotelEarlyDropoffNote" class="warn-box" style="display:none;margin-top:8px">
+        <strong>⏰ Early drop-off:</strong> Drop-off before mall opening hours is available to <strong>Barkhaus Members</strong> only. Please enter your valid membership ID in the next steps — otherwise we may not be able to accommodate an early drop-off.
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Pick-up time <span class="required">*</span></label>
+      <div class="info-box" style="margin-bottom:10px">Standard checkout is <strong>2:00 PM</strong>. Late pick-up through 8:00 PM is <strong id="hotelLateRateFee">+&#8369;?/hour</strong>. Pick-up after <strong>8:00 PM</strong> is charged as <strong>1 additional night</strong> at the applicable room rate. Holiday rates may apply on public holidays.</div>
+      <select class="form-select" id="hotelPickupTime" onchange="calcHotelTotal(); refreshContinueBtn(); autoScroll('playparkSection', 100);">
+        <option value="">Select pick-up time</option>
+        <option value="14">On or before 2:00 PM (standard)</option>
+      </select>
+      <div id="hotelLatePickupNote" class="warn-box" style="display:none;margin-top:8px"></div>
+    </div>
+    <hr class="divider">
+    <div class="form-group" id="playparkSection">
+      <label class="form-label">Play park consent</label>
+      <div class="info-box" style="margin-bottom:10px">May we allow your pet to join the <strong>dog play park</strong> when space is available during their stay?</div>
+      <div class="gender-grid">
+        <div class="gender-btn playpark" id="playparkYes" onclick="selectPlaypark(this,'yes')">Yes, please!</div>
+        <div class="gender-btn playpark" id="playparkNo" onclick="selectPlaypark(this,'no')">No thanks</div>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Feeding instructions</label>
+      <textarea class="form-textarea" id="hotelFeeding" placeholder="e.g. 1 cup twice a day, dry kibble only..."></textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Medications / special care</label>
+      <textarea class="form-textarea" id="hotelMeds" placeholder="e.g. 1 tablet after breakfast..." onchange="onHotelMedsChange()"></textarea>
+      <div id="hotelMedsNote" style="display:none" class="warn-box">
+        <strong>Note:</strong> Additional charges may apply for special care and will be assessed in-store.
+      </div>
+    </div>
+    <div id="hotelDetailsPriceTotal" style="display:none;margin-top:8px"></div>
+  </div>
+
+  <!-- DAYCARE DETAILS (Notes/Temperament - before pet) -->
+  <div id="daycareDetailsSection" style="display:none">
+    <div class="form-group">
+      <label class="form-label">Any notes for our staff</label>
+      <textarea class="form-textarea" id="daycareNotes" placeholder="Anything we should know about how your pet behaves or prefers..."></textarea>
+    </div>
+  </div>
+</div>
+
+<!-- STEP 5: PET DETAILS -->
+<div class="step-panel" id="step5">
+  <p class="step-eyebrow" id="s5eyebrow">Step 5</p>
+  <h1 class="step-title">About your pet</h1>
+  <p class="step-subtitle">We want to make sure we take great care of them.</p>
+
+  <div class="staging-saved-panel" id="stagingSavedPets" hidden></div>
+
+  <div class="form-group">
+    <label class="form-label">Pet name <span class="required">*</span></label>
+    <input type="text" class="form-input" id="petName" placeholder="e.g. Mochi" maxlength="40" oninput="onPetNameInput()">
+  </div>
+
+  <div class="form-group" id="petTypeGroup">
+    <label class="form-label">Animal type <span class="required">*</span></label>
+    <div class="gender-grid">
+      <div class="gender-btn" id="petTypeDog" onclick="selectAnimalType(this,'dog')">&#128054; Dog</div>
+      <div class="gender-btn" id="petTypeCat" onclick="selectAnimalType(this,'cat')">&#128049; Cat</div>
+    </div>
+  </div>
+
+  <div class="form-group" id="petSizeGroupPet" style="display:none">
+    <label class="form-label">Size</label>
+    <input type="text" class="form-input" id="petSizeDisplay" readonly style="opacity:0.7">
+  </div>
+
+  <div class="form-group" id="petSizeSelectGroup" style="display:none">
+    <label class="form-label">Size <span class="required">*</span></label>
+    <select class="form-select" id="petSizeSelect">
+      <option value="">Select size...</option>
+      <option value="small_dog">Small Dog (up to 6kg / 13 lbs)</option>
+      <option value="medium_dog">Medium Dog (up to 15kg / 33 lbs)</option>
+      <option value="large_dog">Large Dog (up to 30kg / 66 lbs)</option>
+      <option value="giant_dog">Giant Dog (over 30kg / 66 lbs)</option>
+      <option value="cat">Cat</option>
+    </select>
+  </div>
+
+  <div class="form-group">
+    <label class="form-label">Sex <span class="required">*</span></label>
+    <div class="gender-grid" id="petGenderGrid">
+      <div class="gender-btn" onclick="selectGender(this,'male')">Male</div>
+      <div class="gender-btn" onclick="selectGender(this,'female')">Female</div>
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label class="form-label">Breed <span class="required">*</span></label>
+    <input type="text" class="form-input" id="petBreed" placeholder="e.g. Golden Retriever, Mixed" oninput="refreshContinueBtn()">
+  </div>
+
+  <div class="form-row">
+    <div class="form-group">
+      <label class="form-label">Age <span class="required">*</span></label>
+      <input type="number" class="form-input" id="petAgeNum" placeholder="e.g. 2" min="0" max="30" oninput="checkSeniorWaiver(); refreshContinueBtn();">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Unit</label>
+      <select class="form-select" id="petAgeUnit" onchange="checkSeniorWaiver(); refreshContinueBtn();">
+        <option value="years">Years</option>
+        <option value="months">Months</option>
+      </select>
+    </div>
+  </div>
+
+  <div id="groomAgeError" class="warn-box" style="display:none;margin-top:0;margin-bottom:14px">
+    <strong>💛 We can't wait to meet your furry baby!</strong> Premium Grooming isn't recommended for pets <strong>7 months and under</strong> — they're still a little too sensitive for the full session. For now you can choose <strong>Bath &amp; Dry</strong> or <strong>Basic Grooming</strong>, and we'll give them all the gentle pampering they deserve.
+  </div>
+
+  <div class="form-group">
+    <label class="form-label">Known medical issues or allergies</label>
+    <textarea class="form-textarea" id="petMedical" placeholder="Leave blank if none" oninput="checkSeniorWaiver(); refreshContinueBtn();"></textarea>
+    <div id="seniorWaiverRow" style="display:none" class="checkbox-row" onclick="toggleCheck('seniorWaiverAck')" style="margin-top:10px">
+      <div class="checkbox-box" id="seniorWaiverAck"></div>
+      <span class="checkbox-label">I understand that senior pets (6+ years) or pets with known medical conditions may be at higher risk during grooming. I waive Barkhaus from liability for any adverse health reactions.</span>
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label class="form-label">Temperament <span class="required">*</span></label>
+    <div class="temp-grid">
+      <div class="temp-btn" onclick="selectTemperament(this,'friendly_all')">Friendly with all</div>
+      <div class="temp-btn" onclick="selectTemperament(this,'friendly_shy')">Friendly but shy</div>
+      <div class="temp-btn" onclick="selectTemperament(this,'selective')">Selective</div>
+      <div class="temp-btn" onclick="selectTemperament(this,'reactive')">Reactive</div>
+      <div class="temp-btn" onclick="selectTemperament(this,'first_time')" style="grid-column:span 2">First time</div>
+    </div>
+  </div>
+
+  <p class="section-label" id="vaccineSection">Vaccine records</p>
+  <div class="warn-box" style="margin-top:0;margin-bottom:12px">
+    <strong>⚠️ Please note:</strong> Declared vaccines must be active and effective by your admission date — most vaccines take full effect about 2–4 weeks after they're given. If your pet's vaccines are expired, incomplete, or not yet effective upon arrival, Barkhaus may refuse service for the safety of all pets in our care.
+  </div>
+  <div class="vaccine-grid" id="vaccineGrid"></div>
+  <div class="form-group" style="margin-top:12px">
+    <div class="file-upload" onclick="document.getElementById('vaccineFiles').click()">
+      <input type="file" id="vaccineFiles" multiple accept="image/*,.pdf" onchange="handleVaccineFiles(this)">
+      <div style="font-size:24px;margin-bottom:6px">&#128203;</div>
+      <div class="file-upload-text">Upload vaccine records (optional)</div>
+      <div class="file-upload-sub">JPG, PNG or PDF</div>
+    </div>
+    <div class="file-list" id="vaccineFileList"></div>
+  </div>
+  <div class="checkbox-row" onclick="toggleCheck('bringVaccines')" style="margin-bottom:8px">
+    <div class="checkbox-box" id="bringVaccines"></div>
+    <span class="checkbox-label">I will bring my pet's vaccine records to the venue.</span>
+  </div>
+  <div class="waiver-box" style="margin-top:4px">
+    <h4>Vaccine liability declaration</h4>
+    <p>I acknowledge that should my pet have outdated or incomplete vaccines and subsequently contract or transmit any disease during their visit, I waive Barkhaus from any liability arising from such circumstances.</p>
+  </div>
+  <div class="checkbox-row" onclick="toggleCheck('vaccineWaiver')">
+    <div class="checkbox-box" id="vaccineWaiver"></div>
+    <span class="checkbox-label">I have read and agree to the <strong>Vaccine Liability Declaration</strong>.</span>
+  </div>
+
+  <!-- Hotel emergency section -->
+  <div id="emergencySection" style="display:none">
+    <p class="section-label">Veterinary details</p>
+    <div class="form-group">
+      <label class="form-label">Clinic name</label>
+      <input type="text" class="form-input" id="vetClinic" placeholder="e.g. Happy Paws Vet Clinic">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Clinic contact</label>
+      <input type="text" class="form-input" id="vetContact" placeholder="Phone number">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Clinic address</label>
+      <input type="text" class="form-input" id="vetAddress" placeholder="Street, city">
+    </div>
+    <p class="section-label">Emergency contact</p>
+    <div class="form-group">
+      <label class="form-label">Name</label>
+      <input type="text" class="form-input" id="emergencyName" placeholder="Full name">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Contact number</label>
+      <input type="text" class="form-input" id="emergencyPhone" placeholder="+63 9XX XXX XXXX">
+    </div>
+  </div>
+
+
+  <!-- Membership -->
+  <p class="section-label">Barkhaus membership</p>
+  <div class="form-group">
+    <label class="form-label">Is your pet a registered Barkhaus member?</label>
+    <div class="gender-grid">
+      <div class="gender-btn" id="memberYes" onclick="setMembership(true)">Yes</div>
+      <div class="gender-btn" id="memberNo"  onclick="setMembership(false)">No</div>
+    </div>
+  </div>
+  <div id="memberIdSection" style="display:none">
+    <div class="form-group">
+      <label class="form-label">Membership ID <span class="required">*</span></label>
+      <input type="text" class="form-input" id="membershipId" placeholder="e.g. BH-M001" oninput="onMembershipIdInput()" style="text-transform:uppercase">
+    </div>
+    <div id="memberValidMsg" style="font-size:12px;font-weight:700;margin-top:-10px;margin-bottom:14px;display:none"></div>
+  </div>
+
+  <!-- Hotel Villa: second cat -->
+  <div id="secondCatSection" style="display:none">
+    <button class="btn-add-pet" id="addSecondCatBtn" onclick="toggleSecondCat()">+ Add second cat details (Villa)</button>
+    <div class="second-pet-section" id="secondCatForm" style="display:none">
+      <p class="second-pet-title">Second cat</p>
+      <div class="form-group">
+        <label class="form-label">Name</label>
+        <input type="text" class="form-input" id="cat2Name" placeholder="e.g. Luna">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Breed</label>
+        <input type="text" class="form-input" id="cat2Breed" placeholder="e.g. Domestic shorthair">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Age</label>
+          <input type="number" class="form-input" id="cat2Age" placeholder="2" min="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Unit</label>
+          <select class="form-select" id="cat2AgeUnit">
+            <option value="years">Years</option>
+            <option value="months">Months</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Medical notes</label>
+        <textarea class="form-textarea" id="cat2Medical" placeholder="Leave blank if none"></textarea>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- STEP 6: OWNER DETAILS -->
+<div class="step-panel" id="step6">
+  <p class="step-eyebrow" id="s6eyebrow">Step 6</p>
+  <h1 class="step-title">Your details</h1>
+  <p class="step-subtitle">So we know who is dropping off this very important guest.</p>
+  <div class="staging-saved-panel" id="stagingSavedOwner" hidden></div>
+  <div class="save-banner">
+    <div class="save-banner-text">
+      <strong>Save my details for next time</strong>
+      Stored locally on this device only.
+    </div>
+    <div class="toggle" id="saveToggle" onclick="toggleSave()"></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group">
+      <label class="form-label">First name <span class="required">*</span></label>
+      <input type="text" class="form-input" id="ownerFirst" placeholder="Juan" oninput="refreshContinueBtn()">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Last name <span class="required">*</span></label>
+      <input type="text" class="form-input" id="ownerLast" placeholder="dela Cruz" oninput="refreshContinueBtn()">
+    </div>
+  </div>
+  <div class="form-group">
+    <label class="form-label">Email <span class="required">*</span></label>
+    <input type="email" class="form-input" id="ownerEmail" placeholder="juan@email.com" oninput="refreshContinueBtn()">
+  </div>
+  <div class="form-group">
+    <label class="form-label">Mobile <span class="required">*</span></label>
+    <input type="tel" class="form-input" id="ownerPhone" placeholder="+63 9XX XXX XXXX" oninput="refreshContinueBtn()">
+  </div>
+  <div class="form-group">
+    <label class="form-label">How did you hear about us?</label>
+    <select class="form-select" id="ownerSource" onchange="onSourceChange()">
+      <option value="">Select...</option>
+      <option>Instagram</option><option>Facebook</option><option>TikTok</option>
+      <option>Friend or family referral</option><option>Walk-in / saw the branch</option>
+      <option>Google search</option><option>Other</option>
+    </select>
+    <input type="text" class="form-input" id="ownerSourceOther" placeholder="Please tell us more…" maxlength="100" style="display:none;margin-top:8px" oninput="refreshContinueBtn()">
+  </div>
+</div>
+
+<!-- STEP 7: WAIVERS -->
+<div class="step-panel" id="step7">
+  <p class="step-eyebrow" id="s7eyebrow">Step 7</p>
+  <h1 class="step-title">Waivers &amp; Consent</h1>
+  <p class="step-subtitle">Please read each statement and check to confirm your agreement.</p>
+
+  <!-- ── GENERAL HOUSE RULES (ALL SERVICES) ── -->
+  <div class="waiver-box">
+    <h4>General House Rules</h4>
+    <ol class="waiver-list">
+      <li>Dogs without a valid vaccination record will not be allowed entry into the Play Park area. Owners must present their dog's updated vaccination record upon check-in for verification.</li>
+      <li>Day Care guests without presented or updated vaccination records may still be admitted, subject to hotel room availability, but will be required to stay inside the Dog Hotel with an additional PHP 100 charge.</li>
+      <li>Timeouts using a leash or cage may be implemented for reasons including rough or inappropriate play, aggressive behavior toward other dogs, guests, or staff, signs of exhaustion or overstimulation, scheduled meal times, designated rest and quiet periods, and nighttime sleeping hours for hotel guests. These measures are intended to ensure the safety, comfort, and well-being of all dogs in our care while maintaining a calm and positive environment.</li>
+      <li>Owners and companions using the Indoor Play Park are responsible for supervising and monitoring their own dogs at all times. Our daycare attendants are always available to assist whenever needed.</li>
+      <li>A PHP 250 late pickup penalty will be charged for daycare guests picked up after mall operating hours.</li>
+      <li>The safety of all dog guests, human companions, and daycare attendants remains our highest priority at all times.</li>
+      <li>Guests are expected to treat all Barkhaus staff members with respect at all times. The use of profanity, abusive language, or inappropriate behavior toward our staff will not be tolerated.</li>
+    </ol>
+  </div>
+  <div class="checkbox-row" onclick="toggleCheck('waiverHouseRules')">
+    <div class="checkbox-box" id="waiverHouseRules"></div>
+    <span class="checkbox-label">I have read and agree to the <strong>General House Rules</strong>.</span>
+  </div>
+
+  <!-- ── GROOMING WAIVERS ── -->
+  <div id="groomingWaivers" style="display:none">
+    <div class="waiver-box">
+      <h4>Grooming Waiver</h4>
+      <ol class="waiver-list">
+        <li>I, the undersigned, hereby acknowledge that I am the legal owner or authorized agent of the pet listed and authorize Barkhaus to perform grooming services as requested. I understand that Barkhaus will use all reasonable precautions to ensure my pet&#39;s safety and comfort during grooming.</li>
+        <li>I confirm that my pet is current on all required vaccinations, including anti-rabies.</li>
+        <li>I understand that while my dog is fully vaccinated, vaccines are not 100% foolproof and there is still a minimal risk that my dog may contract a contagious virus/disease. I agree that this may occur.</li>
+        <li>I have disclosed all known medical conditions, allergies, sensitivities, and/or behavioral issues that may affect the grooming process.</li>
+        <li>I understand that grooming may expose hidden medical conditions, such as skin irritations, parasites, or lumps, and Barkhaus is not liable for any pre-existing or discovered health conditions.</li>
+        <li>I acknowledge that young, senior, or pets with pre-existing conditions may be at higher risk during grooming. I waive any claims against Barkhaus should a health issue arise or worsen during or after the session.</li>
+        <li>I certify that my pet has not shown aggression toward people or other animals unless otherwise disclosed.</li>
+        <li>I understand that if my pet becomes aggressive or unmanageable, Barkhaus may stop or modify services at their discretion.</li>
+        <li>I acknowledge the risk of skin irritation, nicks, or cuts due to matting and agree not to hold Barkhaus responsible for resulting issues.</li>
+        <li>I understand that Barkhaus will attempt to notify me before significant shaving but may proceed if necessary for the pet&#39;s health and comfort.</li>
+        <li>While Barkhaus takes every precaution, grooming involves sharp tools and moving animals and accidents can happen. I agree that Barkhaus shall not be held liable for any injury or condition arising during or after grooming, provided reasonable care was taken.</li>
+        <li>In case of emergency, Barkhaus will attempt to contact me. If unreachable and my pet needs urgent care, I authorize Barkhaus to seek veterinary services at their discretion and I accept full responsibility for all veterinary charges.</li>
+        <li>I hereby release and hold harmless Barkhaus, its owners, staff, and affiliates from any and all claims arising from grooming services, including injury, illness, stress, or death, unless resulting from proven negligence.</li>
+        <li>I certify that I have read, understood, and voluntarily agree to these terms. This waiver shall remain in effect for all future grooming appointments unless revoked in writing.</li>
+      </ol>
+    </div>
+    <div class="checkbox-row" onclick="toggleCheck('waiverGeneralGrooming')">
+      <div class="checkbox-box" id="waiverGeneralGrooming"></div>
+      <span class="checkbox-label">I have read and agree to the <strong>Grooming Waiver</strong>.</span>
+    </div>
+    <div class="waiver-box" style="margin-top:12px">
+      <h4>Grooming Services Booking Policy</h4>
+      <p>All grooming appointments are scheduled in advance and reserved exclusively for each client. Appointment slots are fixed and cannot be moved once confirmed; however, a fifteen (15)-minute grace period will be provided to accommodate unforeseen delays.</p>
+      <p>Clients who fail to arrive within the allotted grace period may forfeit their appointment slot, and the reserved time may be reassigned to another client. To ensure smooth scheduling and fairness to all guests, rescheduling requests will only be accommodated once and must be communicated to Barkhaus at least three (3) hours prior to the scheduled appointment time.</p>
+      <p>All down payments made for grooming appointments are strictly non-refundable, including cases of no-shows, late arrivals resulting in forfeited slots, or cancelled appointments.</p>
+      <p>Owners are expected to pick up their dogs promptly after grooming services are completed. Failure to do so may require Barkhaus to extend the dog's stay for additional hours or overnight care, which will be subject to corresponding boarding or extended care charges.</p>
+    </div>
+    <div class="checkbox-row" onclick="toggleCheck('waiverGroomingPolicy')">
+      <div class="checkbox-box" id="waiverGroomingPolicy"></div>
+      <span class="checkbox-label">I have read and agree to the <strong>Grooming Services Booking Policy</strong>.</span>
+    </div>
+  </div>
+
+  <!-- ── DAYCARE WAIVERS ── -->
+  <div id="daycareWaivers" style="display:none">
+    <div class="waiver-box">
+      <h4>Daycare Waiver</h4>
+      <ol class="waiver-list">
+        <li>I confirm that I am the owner of the pet or have been authorized by the owner to take responsibility for the pet.</li>
+        <li>In the event that I am unable to pick up my dog as scheduled, I acknowledge Barkhaus&#39; prerogative to extend my dog&#39;s stay for additional hours or days, subject to corresponding charges.</li>
+        <li>I certify that my dog is in good health. In the event of a medical emergency and I am unreachable, I authorize Barkhaus staff to contact my veterinarian or any available veterinarian and seek necessary medical attention. Should I refuse Barkhaus&#39; recommendation to seek immediate care, I release Barkhaus from any liability arising from such decision.</li>
+        <li>I confirm that my pet has complete and updated vaccinations and is free from fleas and any communicable diseases. I understand that vaccines are not 100% effective and that there remains a minimal risk of contracting illness, which I fully accept.</li>
+        <li>I understand that dogs in heat are not allowed to interact with other dogs. By signing this waiver, I acknowledge that my dog may interact with other dogs, and I accept full responsibility if my dog is found to be in heat during its stay, including any consequences such as accidental breeding. I release Barkhaus and its staff from any related liability.</li>
+        <li>I acknowledge that participation in Barkhaus play park activities is at my own risk. I understand that risks such as injury to my dog, other dogs, or individuals may still occur despite proper supervision.</li>
+        <li>I agree that if my dog causes injury to another dog or person, I will assume full responsibility and release Barkhaus from any related liability.</li>
+        <li>I hereby voluntarily release, discharge, and agree to indemnify and hold harmless Barkhaus from any and all claims arising from my participation or my dog&#39;s participation in any Barkhaus activities.</li>
+        <li>I certify that I have read, understood, and agree to abide by all Barkhaus rules and regulations. I confirm all information provided is true and accurate, and that I am at least eighteen (18) years of age.</li>
+        <li>I understand that while Barkhaus screens all dogs, not all dogs may be suitable for daycare. Barkhaus reserves the right to remove any dog at its discretion. In such cases, daycare packages are non-refundable but may be transferred.</li>
+        <li>I grant Barkhaus permission to use any photos or videos of me and my pet taken within the facility for promotional, marketing, and social media purposes.</li>
+        <li>By signing this agreement, I acknowledge and accept all house rules set by Barkhaus.</li>
+        <li>I understand and agree that if my dog remains at Barkhaus for three (3) days or more with an unsettled bill and without any communication from me, my dog will be considered abandoned. In such cases, I relinquish ownership rights, and Barkhaus reserves the right to place the dog for adoption or appropriate care.</li>
+      </ol>
+    </div>
+    <div class="checkbox-row" onclick="toggleCheck('waiverGeneralDaycare')">
+      <div class="checkbox-box" id="waiverGeneralDaycare"></div>
+      <span class="checkbox-label">I have read and agree to the <strong>Daycare Waiver</strong>.</span>
+    </div>
+  </div>
+
+  <!-- ── HOTEL WAIVERS ── -->
+  <div id="hotelWaivers" style="display:none">
+    <div class="waiver-box">
+      <h4>Hotel Waiver</h4>
+      <ol class="waiver-list">
+        <li>I confirm that I am the legal owner of the pet or have been authorized by the owner to take responsibility for the pet.</li>
+        <li>In the event that I am unable to pick up my pet as scheduled, I acknowledge Barkhaus&#39; prerogative to extend my pet&#39;s stay for additional hours or days, subject to corresponding charges.</li>
+        <li>I acknowledge that while my pet may be healthy upon check-in, illness may still occur during their stay. In the event of an emergency where I am unreachable, I authorize Barkhaus to bring my pet to a veterinary clinic for immediate care. All major medical decisions will require my consent when possible, and all related expenses shall be my responsibility. I release Barkhaus from any liability, recognizing that illness may occur, particularly in enclosed air-conditioned environments, especially for pets not accustomed to such conditions.</li>
+        <li>I confirm that my pet has complete and updated vaccinations and is free from fleas and any communicable diseases. I understand that vaccines are not 100% foolproof and that there remains a minimal risk of contracting illness, which I fully accept.</li>
+        <li>I understand that dogs in heat are not permitted to interact with other dogs. By signing this waiver, I acknowledge that my dog may interact with other dogs and accept full responsibility if my dog is found to be in heat during her stay, including any consequences such as accidental breeding. I release Barkhaus and its staff from all related liability.</li>
+        <li>By signing below, I acknowledge and agree to all house rules set by Barkhaus. I understand that if my dog remains at Barkhaus for fifteen (15) days or more with an unsettled bill and without communication, my dog will be considered abandoned, and Barkhaus reserves the right to place the dog for adoption or appropriate care.</li>
+      </ol>
+    </div>
+    <div class="checkbox-row" onclick="toggleCheck('waiverGeneralHotel')">
+      <div class="checkbox-box" id="waiverGeneralHotel"></div>
+      <span class="checkbox-label">I have read and agree to the <strong>Hotel Waiver</strong>.</span>
+    </div>
+    <div class="waiver-box" style="margin-top:12px">
+      <h4>Hotel Cancellation and Refund Policy</h4>
+      <p>To confirm all reservations, a non-refundable advance payment is required. Guests who wish to cancel or re-book their booking must notify management in advance.</p>
+      <p>Cancellations made at least seven (7) days prior to the scheduled check-in date will be eligible for a refund equivalent to fifty percent (50%) of the total amount paid. Cancellations made six (6) days or less before the scheduled check-in date will only be eligible for a refund equivalent to twenty-five percent (25%) of the total amount paid.</p>
+      <p>One-time rescheduling of bookings may be accommodated provided the request is made at least seven (7) days before the original check-in date and is subject to availability. Rescheduled bookings are considered final and may no longer be eligible for additional changes, cancellations, or refunds.</p>
+      <p>Failure to arrive on the scheduled check-in date without prior notice will be considered a "No Show," and all payments made will be forfeited.</p>
+      <p>Approved refunds will be processed within three (3) to seven (7) banking days.</p>
+    </div>
+    <div class="checkbox-row" onclick="toggleCheck('waiverHotelCancellation')">
+      <div class="checkbox-box" id="waiverHotelCancellation"></div>
+      <span class="checkbox-label">I have read and agree to the <strong>Hotel Cancellation and Refund Policy</strong>.</span>
+    </div>
+
+    <!-- Play park consent - shown conditionally when playparkConsent = yes -->
+    <div id="playparkWaiverSection" style="display:none">
+      <div class="waiver-box" style="margin-top:12px">
+        <h4>Play Park Consent</h4>
+        <ol class="waiver-list">
+          <li>I acknowledge that by allowing my dog to use the Barkhaus play park, there are inherent risks involved. Despite proper supervision, I understand that injuries to my dog, other dogs, or individuals may still occur, and I accept these risks.</li>
+          <li>I agree that if my dog causes any injury to other dogs or individuals, I will assume full responsibility and release Barkhaus from any related liability.</li>
+          <li>I hereby voluntarily release, forever discharge, and agree to indemnify and hold harmless Barkhaus from any and all claims arising from my dog&#39;s participation in any activities, including the use of Barkhaus facilities and equipment, even in cases alleging negligence.</li>
+          <li>Barkhaus reserves the right to refuse or permanently remove any dog from daycare if deemed unsuitable. In such cases, daycare packages are non-refundable but may be transferred.</li>
+          <li>I certify that I have read, understood, and agree to abide by all terms and policies. I confirm all information provided is true and accurate, and that I am at least eighteen (18) years of age.</li>
+        </ol>
+      </div>
+      <div class="checkbox-row" onclick="toggleCheck(&#39;waiverPlaypark&#39;)">
+        <div class="checkbox-box" id="waiverPlaypark"></div>
+        <span class="checkbox-label">I agree to the <strong>Play Park Consent</strong>.</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── STUDIO WAIVER ── -->
+  <div id="studioWaiver" style="display:none">
+    <div class="waiver-box">
+      <h4>Studio Usage Agreement</h4>
+      <ol class="waiver-list">
+        <li>I confirm I am the owner of the pet(s) participating in the Barkhaus Studio session.</li>
+        <li>I acknowledge that photography/videography sessions involve movement and activity; while Barkhaus will ensure a safe environment, I accept that minor incidents may occur.</li>
+        <li>I grant Barkhaus permission to use any photos or videos taken during the session for promotional, marketing, and social media purposes, unless I have expressly opted out in writing.</li>
+        <li>I understand that all session fees are non-refundable once the session has commenced.</li>
+        <li>I release Barkhaus, its staff, and affiliates from any liability arising from the studio session, provided reasonable care was taken.</li>
+      </ol>
+    </div>
+    <div class="checkbox-row" onclick="toggleCheck('waiverStudio')">
+      <div class="checkbox-box" id="waiverStudio"></div>
+      <span class="checkbox-label">I agree to the <strong>Studio Usage Agreement</strong>.</span>
+    </div>
+  </div>
+
+  <!-- ── VACCINE DECLARATION (all services) ── -->
+  <div class="waiver-box" style="margin-top:12px">
+    <h4>Vaccine &amp; Health Declaration</h4>
+    <p id="vaccineWaiverText">I acknowledge and agree that my dog may acquire illnesses or diseases due to outdated or incomplete vaccinations, and that even with complete and updated vaccinations, there remains a minimal risk of contracting illness. I will not hold Barkhaus liable for any such occurrences.</p>
+  </div>
+  <div class="checkbox-row" onclick="toggleCheck('waiverVaccineDecl')">
+    <div class="checkbox-box" id="waiverVaccineDecl"></div>
+    <span class="checkbox-label">I agree to the <strong>Vaccine &amp; Health Declaration</strong>.</span>
+  </div>
+
+  <!-- ── SENIOR / PRE-EXISTING CONDITIONS (conditional) ── -->
+  <div id="seniorWaiverSection" style="display:none">
+    <div class="waiver-box" style="margin-top:12px">
+      <h4>Senior &amp; Pre-existing Conditions Waiver</h4>
+      <p style="font-size:13px;line-height:1.6;color:var(--cream)">I acknowledge that I am leaving my pet, who is a senior and/or has pre-existing medical conditions, in the care of Barkhaus. I am aware that senior pets and those with existing medical conditions may be at increased risk for health complications, including sudden illness or death, especially in a boarding or grooming environment. In the event of a medical emergency, Barkhaus will make every reasonable effort to contact me. If I cannot be reached, I authorize Barkhaus to seek immediate veterinary care at their discretion, and I agree to be responsible for all costs incurred. I have disclosed all known medical conditions, medications, and special care instructions for my pet. I agree that Barkhaus may charge Special Handling Fees due to my pet's age and/or pre-existing condition(s). I understand that Barkhaus reserves the right to limit my pet's access to the play park and/or exposure to other animals in the interest of my pet's well-being. I release Barkhaus from any liability related to the worsening of any existing conditions or the occurrence of age-related complications during or after the service. I hereby voluntarily release, forever discharge, and agree to indemnify and hold harmless Barkhaus, its staff, owners, and affiliates, from any and all claims arising out of or connected with the services provided, including those involving negligent acts or omissions.</p>
+    </div>
+    <div class="checkbox-row" onclick="toggleCheck(&#39;seniorWaiver&#39;)">
+      <div class="checkbox-box" id="seniorWaiver"></div>
+      <span class="checkbox-label">I agree to the <strong>Senior &amp; Pre-existing Conditions Waiver</strong>.</span>
+    </div>
+  </div>
+
+  <!-- ── PHOTO CONSENT (all services) ── -->
+  <div class="waiver-box" style="margin-top:12px">
+    <h4>Photo &amp; Media Consent</h4>
+    <p>I consent to Barkhaus taking photographs or videos of my pet during grooming for promotional use, including social media and marketing materials.</p>
+  </div>
+  <div class="checkbox-row" onclick="toggleCheck(&#39;waiverMedia&#39;)">
+    <div class="checkbox-box" id="waiverMedia"></div>
+    <span class="checkbox-label">I <strong>consent</strong> to photos and videos of my pet being used by Barkhaus.</span>
+  </div>
+</div>
+
+<!-- SUMMARY SCREEN (not a step in the progress bar) -->
+<div class="step-panel" id="stepSummary">
+  <p class="step-eyebrow">Almost done!</p>
+  <h1 class="step-title">Review your booking</h1>
+  <p class="step-subtitle">Please confirm the details below before submitting.</p>
+  <div class="info-box payment-heads-up" id="hostedCheckoutNotice">
+    <p><strong>Next: secure payment through Maya</strong></p>
+    <p>You will be redirected to a Maya checkout page that may display <strong>BARKHAUS EASTWOOD</strong>, even when your booking is for Estancia. This is our registered business account name and does not change your selected branch.</p>
+    <p>After payment, please take a screenshot of Maya&rsquo;s payment confirmation for your records.</p>
+  </div>
+  <div class="summary-card" id="bookingDetailsSummary"></div>
+  <p class="section-label">Price breakdown</p>
+  <div class="price-breakdown" id="priceBreakdown"></div>
+</div>
+
+<!-- MANUAL PAYMENT (online transfer) -->
+<style>
+  .pay-amount-box{display:flex;align-items:center;justify-content:space-between;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px 18px;margin-bottom:20px;}
+  .pay-amount-label{font-size:13px;color:var(--mid);font-weight:600;}
+  .pay-amount-val{font-family:'Fredoka One',cursive;font-size:26px;color:var(--yellow);}
+  .pay-bank-btns{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px;}
+  .pay-bank-btn{padding:11px 6px;border-radius:10px;border:1.5px solid var(--border);background:var(--surface);color:var(--cream-m);font-family:'Nunito',sans-serif;font-size:14px;font-weight:700;cursor:pointer;text-align:center;transition:border-color .15s,background .15s;}
+  .pay-bank-btn.selected{border-color:var(--yellow);background:var(--raised);color:var(--cream);}
+  .pay-method-detail{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px;text-align:center;}
+  .pay-qr{width:230px;max-width:75%;border-radius:12px;background:#fff;padding:10px;margin:0 auto 14px;display:block;}
+  .pay-acct-list{display:flex;flex-direction:column;gap:10px;align-items:center;}
+  .pay-acct-row{display:inline-flex;align-items:center;gap:10px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:9px 14px;}
+  .pay-acct-label{font-size:11px;color:var(--mid);text-transform:uppercase;letter-spacing:.06em;}
+  .pay-acct-num{font-family:'Fira Code',monospace;font-size:16px;font-weight:700;color:var(--cream);letter-spacing:.04em;}
+  .pay-copy-btn{background:var(--raised);border:1px solid var(--border);border-radius:7px;color:var(--cream);font-size:12px;font-weight:700;padding:5px 10px;cursor:pointer;font-family:'Nunito',sans-serif;white-space:nowrap;}
+  .pay-copy-btn.copied{background:rgba(107,203,119,.18);color:var(--success);border-color:var(--success);}
+  .pay-acct-name{font-size:12px;color:var(--mid);margin-top:10px;}
+  .pay-upload{display:flex;align-items:center;justify-content:center;min-height:80px;border:1.5px dashed var(--border);border-radius:12px;color:var(--mid);font-size:13px;font-weight:600;cursor:pointer;text-align:center;padding:14px;transition:border-color .15s,color .15s;}
+  .pay-upload:hover{border-color:var(--blue);color:var(--cream-m);}
+  .pay-upload.has-file{border-style:solid;border-color:var(--success);color:var(--success);}
+  .pay-receipt-thumb{max-width:100%;max-height:280px;border-radius:10px;border:1px solid var(--border);display:block;margin:0 auto;}
+</style>
+<div class="step-panel" id="stepPayment">
+  <p class="step-eyebrow">Final step</p>
+  <h1 class="step-title">Complete your payment</h1>
+  <div class="info-box" style="margin-bottom:18px">💡 We're working toward a more seamless checkout — including credit cards and instant online payments. For now, please send your payment via bank or e-wallet transfer below, then upload your receipt to confirm your booking.</div>
+
+  <div class="pay-amount-box">
+    <span class="pay-amount-label">Amount to pay</span>
+    <span class="pay-amount-val" id="payAmount">&#8369;0</span>
+  </div>
+
+  <p class="section-label">Send your payment to</p>
+  <div class="pay-bank-btns" id="payBankBtns"></div>
+  <div class="pay-method-detail" id="payMethodDetail"></div>
+
+  <p class="section-label" style="margin-top:20px">Upload your transfer receipt <span class="required">*</span></p>
+  <p style="font-size:12px;color:var(--mid);margin-bottom:10px;line-height:1.6">Attach a screenshot or photo that clearly shows the <strong style="color:var(--cream-m)">recipient, amount, date &amp; time, and reference number</strong>. One image, max 5&nbsp;MB.</p>
+  <label class="pay-upload" id="payUploadLabel">
+    <input type="file" id="payReceiptInput" accept="image/*" style="display:none" onchange="onReceiptSelected(this)">
+    <span id="payUploadText">&#128206; Tap to attach receipt image</span>
+  </label>
+  <div id="payReceiptPreview" style="display:none;margin-top:12px"></div>
+</div>
+
+<!-- EVENTS CONTACT PAGE -->
+<div class="step-panel" id="stepEvents">
+  <button class="btn-text-back" onclick="backFromEvents()">← Back to services</button>
+  <div class="contact-page">
+    <div class="contact-icon">&#127881;</div>
+    <h2>Let us plan your event!</h2>
+    <p>For pet birthdays, parties, and special gatherings, please contact your preferred branch directly so we can plan the perfect celebration.</p>
+    <div class="contact-card">
+      <p class="contact-card-branch">Estancia -- Capitol Commons, Pasig</p>
+      <p class="contact-card-name">Barkhaus Estancia</p>
+      <p class="contact-card-detail"><a href="tel:+639276073681">+63 927 607 3681</a><br>Mon-Thu 11AM-9PM | Fri-Sun 10AM-10PM</p>
+    </div>
+    <div class="contact-card">
+      <p class="contact-card-branch">Eastwood -- Libis, Quezon City</p>
+      <p class="contact-card-name">Barkhaus Eastwood</p>
+      <p class="contact-card-detail"><a href="tel:+639567819641">+63 956 781 9641</a><br>Open daily 10AM-10PM</p>
+    </div>
+    <p style="font-size:12px;color:var(--mid);margin-top:16px">Message us on Instagram or Facebook <strong style="color:var(--cream)">@barkhausph</strong></p>
+  </div>
+</div>
+
+<!-- PAYMENT RETURN (CANCELLED / FAILED) -->
+<div class="success-screen" id="payReturnScreen" style="display:none">
+  <div class="success-icon">😕</div>
+  <h2 class="success-title">Payment not completed</h2>
+  <p class="success-msg">No worries — your booking details are saved below.</p>
+  <div class="success-ref">
+    <div class="success-ref-label">Booking Reference</div>
+    <div class="success-ref-num" id="payReturnRef">BH-000000</div>
+  </div>
+  <div class="info-box" style="margin:16px 0">
+    ⏳ Your booking slot is held for up to <strong>15 minutes</strong>. If payment is not completed in time, your spot will be automatically released.
+  </div>
+  <div class="summary-card" id="payReturnDetails"></div>
+  <div class="price-breakdown" id="payReturnPriceBreakdown"></div>
+  <div style="margin-top:24px;display:flex;flex-direction:column;gap:12px">
+    <button class="btn-next" id="btnRetryPayment" onclick="retryPayment()" style="width:100%">Retry Payment</button>
+    <button id="btnEditBooking" onclick="editAfterCancelledPayment()" style="display:block;width:100%;background:none;border:1.5px solid var(--border);border-radius:12px;padding:13px 20px;color:var(--mid);font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;transition:all 0.2s">← Edit booking details</button>
+  </div>
+  <p id="payReturnStatus" style="font-size:12px;color:var(--mid);text-align:center;margin-top:12px;line-height:1.6"></p>
+</div>
+
+<!-- SUCCESS -->
+<div class="success-screen" id="successScreen">
+  <!-- Print-only logo (horizontal, works on white background) -->
+  <div class="print-logo">
+    <img src="images/Barkhaus%20Logo%20Horizontal.png" alt="Barkhaus Pet Hotel">
+  </div>
+  <!-- Screen logo (glows on dark background) -->
+  <div class="screen-logo" style="margin-bottom:20px">
+    <img src="images/Barkhaus Pet Hotel Logo.png" alt="Barkhaus Pet Hotel Logo" style="height:48px;width:auto;display:inline-block;filter:drop-shadow(0 0 12px rgba(77,150,185,0.4))">
+  </div>
+  <h2 class="success-title">You're all set!</h2>
+  <p class="success-msg">Your booking is confirmed. Please keep this page for your records.</p>
+  <div class="success-ref">
+    <div class="success-ref-label">Booking Reference</div>
+    <div class="success-ref-num" id="refNum">BH-000000</div>
+    <div id="bookingTimestamp" style="font-size:11px;color:var(--mid);margin-top:5px;letter-spacing:0.02em"></div>
+  </div>
+  <div class="info-box" style="margin:16px 0">
+    🕐 Please arrive <strong>15 minutes before</strong> your scheduled time.
+  </div>
+  <div class="info-box" id="successPolicyNotice" style="margin:0 0 16px;display:none;text-align:left"></div>
+
+  <!-- Full booking details — grouped sections mirroring the review screen -->
+  <div class="summary-card" id="successDetails"></div>
+
+  <!-- Itemised price breakdown -->
+  <div class="price-breakdown" id="successPriceBreakdown"></div>
+
+  <!-- Bottom ref strip — visible for screenshots and in print -->
+  <div id="successFooterStrip" style="border-top:1px solid var(--border);margin-top:8px;padding-top:14px;text-align:center">
+    <div style="font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--mid);font-weight:700;margin-bottom:4px">Booking Reference</div>
+    <div style="font-family:'Fredoka One',cursive;font-size:18px;color:var(--yellow)" id="footerRefNum">BH-000000</div>
+    <div id="footerTimestamp" style="font-size:11px;color:var(--mid);margin-top:4px"></div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;align-items:center;gap:12px;margin-top:24px">
+    <button class="btn-print" onclick="printBooking()">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+      Print / Save as PDF
+    </button>
+    <a href="/staging/" class="btn-home">Back to Home</a>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+</div><!-- /booking-main -->
+
+<div class="bottom-nav" id="bottomNav">
+  <button class="btn-back" id="btnBack" onclick="prevStep()" style="display:none">Back</button>
+  <div class="nav-total" id="navTotal">
+    <span class="nav-total-label">Estimated</span>
+    <span class="nav-total-val" id="navTotalVal">&#8369;0</span>
+  </div>
+  <button class="btn-next" id="btnNext" onclick="nextStep()">Continue</button>
+</div>
+
+<script src="pricing.js?v=20260701-membership-types"></script>
+<script src="validation.js"></script>
+<script src="/staging/booking/staging-booking.js?v=20260731-real-site"></script>
+
+<div id="contactModalOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:1000;align-items:center;justify-content:center;padding:24px" onclick="if(event.target===this)closeContactModal()">
+  <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:20px;padding:28px 24px;max-width:340px;width:100%;text-align:center">
+    <div id="cModalIcon" style="font-size:36px;margin-bottom:12px"></div>
+    <p id="cModalTitle" style="font-family:'Fredoka One',cursive;font-size:22px;color:var(--cream);margin:0 0 8px"></p>
+    <p id="cModalBody" style="font-size:14px;color:var(--mid);line-height:1.6;margin:0 0 20px"></p>
+    <div id="cModalActions"></div>
+    <button onclick="closeContactModal()" style="background:none;border:none;color:var(--mid);font-family:'Nunito',sans-serif;font-size:13px;font-weight:600;cursor:pointer;margin-top:4px">Close</button>
+  </div>
+</div>
 </body>
 </html>
