@@ -3715,6 +3715,7 @@ async function submitBooking() {
   // and its path is passed to create-payment which inserts vaccine_documents rows.
   var vaccineDocuments = {};
   var vaccineFileNames = {};
+  var attachmentUploadErrors = [];
   if (uploadedVaccineFiles && uploadedVaccineFiles.length > 0) {
     var uploadId = (typeof crypto !== 'undefined' && crypto.randomUUID)
       ? crypto.randomUUID()
@@ -3737,14 +3738,15 @@ async function submitBooking() {
           }),
         });
         var _vUrlData = await _vUrlRes.json();
-        if (_vUrlData.uploadUrl && _vUrlData.path) {
-          var _vPutRes = await fetch(_vUrlData.uploadUrl, { method: 'PUT', body: _vUploadFile, headers: { 'Content-Type': _vUploadFile.type } });
-          if (!_vPutRes.ok) throw new Error('Upload failed with status ' + _vPutRes.status);
-          vaccineDocuments[_vKey] = _vUrlData.path;
-          vaccineFileNames[_vKey] = _vf.name;
-        }
+        if (!_vUrlRes.ok) throw new Error((_vUrlData && _vUrlData.error) || ('Upload authorization failed with status ' + _vUrlRes.status));
+        if (!_vUrlData.uploadUrl || !_vUrlData.path) throw new Error('Upload authorization did not return a storage path.');
+        var _vPutRes = await fetch(_vUrlData.uploadUrl, { method: 'PUT', body: _vUploadFile, headers: { 'Content-Type': _vUploadFile.type } });
+        if (!_vPutRes.ok) throw new Error('Upload failed with status ' + _vPutRes.status);
+        vaccineDocuments[_vKey] = _vUrlData.path;
+        vaccineFileNames[_vKey] = _vf.name;
       } catch (_ve) {
-        console.warn('Vaccine file upload failed (non-fatal):', _vf.name, _ve);
+        console.warn('Vaccine file upload failed:', _vf.name, _ve);
+        attachmentUploadErrors.push('Vaccine document "' + _vf.name + '" was not uploaded.');
       }
     }
   }
@@ -3776,16 +3778,24 @@ async function submitBooking() {
           }),
         });
         var _pUrlData = await _pUrlRes.json();
-        if (_pUrlData.uploadUrl && _pUrlData.path) {
-          var _pPutRes = await fetch(_pUrlData.uploadUrl, { method: 'PUT', body: _pUploadFile, headers: { 'Content-Type': _pUploadFile.type } });
-          if (!_pPutRes.ok) throw new Error('Upload failed with status ' + _pPutRes.status);
-          groomReferenceImages[_pKey] = _pUrlData.path;
-          groomReferenceFileNames[_pKey] = _pf.name;
-        }
+        if (!_pUrlRes.ok) throw new Error((_pUrlData && _pUrlData.error) || ('Upload authorization failed with status ' + _pUrlRes.status));
+        if (!_pUrlData.uploadUrl || !_pUrlData.path) throw new Error('Upload authorization did not return a storage path.');
+        var _pPutRes = await fetch(_pUrlData.uploadUrl, { method: 'PUT', body: _pUploadFile, headers: { 'Content-Type': _pUploadFile.type } });
+        if (!_pPutRes.ok) throw new Error('Upload failed with status ' + _pPutRes.status);
+        groomReferenceImages[_pKey] = _pUrlData.path;
+        groomReferenceFileNames[_pKey] = _pf.name;
       } catch (_pe) {
-        console.warn('Grooming reference upload failed (non-fatal):', _pf.name, _pe);
+        console.warn('Grooming reference upload failed:', _pf.name, _pe);
+        attachmentUploadErrors.push('Reference photo "' + _pf.name + '" was not uploaded.');
       }
     }
+  }
+
+  if (attachmentUploadErrors.length > 0) {
+    _submitting = false;
+    if (btn) { btn.textContent = 'Confirm Booking'; btn.disabled = false; }
+    showToast(attachmentUploadErrors.join(' ') + ' Please try again before continuing.', 9000);
+    return;
   }
 
   // ── Upload the manual-transfer receipt (manual provider only) ──
