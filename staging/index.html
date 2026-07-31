@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <meta name="theme-color" content="#0F1C26">
+  <title>Barkhaus Booking Redesign — Staging</title>
+  <link rel="icon" href="/favicon.ico">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Nunito:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/staging/styles.css">
+</head>
+<body>
+  <div class="stage-banner"><strong>Staging preview</strong><span>Live prices and availability · no booking or payment will be submitted</span></div>
+  <header class="stage-header">
+    <a class="brand" href="/staging/"><span class="brand-mark">B</span><span>Barkhaus</span><em>STAGING</em></a>
+    <div class="header-actions">
+      <button class="link-btn" id="headerAccountBtn">Account demo</button>
+      <a class="pill-btn small" href="/staging/booking/">Book now</a>
+    </div>
+  </header>
+
+  <main>
+    <section class="stage-hero">
+      <div>
+        <p class="eyebrow">Booking redesign · read-only preview</p>
+        <h1>See what works <span>before</span> sharing every detail.</h1>
+        <p class="hero-copy">Check real Barkhaus availability first, add services for one or more pets, then review everything as one order and one future payment.</p>
+        <div class="hero-actions">
+          <button class="pill-btn" data-entry="guest">Continue as guest</button>
+          <button class="outline-btn" data-entry="login">Try saved account</button>
+        </div>
+        <div class="trust-strip"><span>✓ Production availability reads</span><span>✓ Full customer fields</span><span>✓ Submission disabled</span></div>
+      </div>
+      <div class="order-visual" aria-label="Example combined booking order">
+        <div class="visual-head"><span>One Barkhaus visit</span><strong>BH-3CE089</strong></div>
+        <div class="visual-item"><span class="pet-icon">🐕</span><div><strong>Mochi · Grooming</strong><small>Premium Groom · 2:00 PM</small></div><b>BH-3CE089-A</b></div>
+        <div class="visual-item"><span class="pet-icon blue">🐈</span><div><strong>Luna · Pet Hotel</strong><small>Villa · 2 nights</small></div><b>BH-3CE089-B</b></div>
+        <div class="visual-total"><span>One future checkout</span><strong>Itemized by service</strong></div>
+      </div>
+    </section>
+
+    <section class="stage-section">
+      <p class="eyebrow">Choose a preview path</p>
+      <h2>Both paths reach availability before the long forms.</h2>
+      <div class="entry-grid">
+        <article><span class="entry-icon">◎</span><h3>Guest booking</h3><p>Choose branch, pet size and service details first. Owner information is collected only after a live schedule is selected.</p><button class="outline-btn wide" data-entry="guest">Start as guest</button></article>
+        <article><span class="entry-icon blue">G</span><h3>Saved account</h3><p>Simulate Google or email OTP login, select a saved pet, and see how registered details can prepopulate the form.</p><button class="outline-btn wide" data-entry="login">Use demo account</button></article>
+        <article><span class="entry-icon green">＋</span><h3>New account</h3><p>Preview lightweight account creation. The production version will use Google SSO and email OTP, separate from Admin access.</p><button class="outline-btn wide" data-entry="create">Create demo account</button></article>
+      </div>
+    </section>
+  </main>
+
+  <div class="modal-backdrop" id="accountModal" hidden>
+    <section class="stage-modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <button class="modal-close" id="modalClose" aria-label="Close">×</button>
+      <p class="eyebrow" id="modalEyebrow">Customer account demo</p>
+      <h2 id="modalTitle">Use saved pet details</h2>
+      <p class="modal-copy" id="modalCopy">Authentication is simulated on staging. It does not create or change a Supabase Auth user.</p>
+      <div id="modalBody"></div>
+    </section>
+  </div>
+
+  <script src="/staging/app.js"></script>
+</body>
+</html>

@@ -13,6 +13,13 @@ teammates. Keep entries short and current.
 
 ## Handoffs
 
+- 2026-07-31 - Codex: added the production-domain read-only redesign preview at
+  `/staging/` and `/staging/booking/`. It reads live production branches, pricing,
+  resources, Grooming/Hotel occupancy, and membership validation, but has no Auth,
+  Storage, booking, payment, webhook, or email write paths. Full pet/owner fields,
+  vaccine and peg file selection (browser-local only), hotel care/emergency fields,
+  waivers, multi-service Review, order references, allocations, and email summary are
+  represented. No Supabase deploy, DDL, or schema-cache reload is needed.
 - 2026-07-31 - Codex: published a private frontend-only booking redesign prototype
   at `https://barkhaus-booking-staging.geloavendano.chatgpt.site`. It demonstrates
   guest/Google/OTP entry, saved pet profiles, availability-first selection, same-branch

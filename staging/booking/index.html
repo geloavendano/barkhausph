@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <meta name="theme-color" content="#0F1C26">
+  <title>Barkhaus Booking Redesign — Read-only Staging</title>
+  <link rel="icon" href="/favicon.ico">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Nunito:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/staging/styles.css">
+</head>
+<body>
+  <div class="stage-banner"><strong>Staging preview</strong><span>Live prices and availability · no booking or payment will be submitted</span></div>
+  <header class="stage-header compact">
+    <a class="brand" href="/staging/"><span class="brand-mark">B</span><span>Barkhaus</span><em>STAGING</em></a>
+    <div class="header-actions"><span class="read-only-pill">Read-only</span><button class="link-btn" id="restartBtn">Restart</button></div>
+  </header>
+  <div class="progress-wrap"><div class="progress-labels"><span id="progressName">Branch</span><span id="progressCount">1 of 8</span></div><div class="progress-track"><span id="progressFill"></span></div></div>
+  <main class="booking-shell" id="bookingApp" aria-live="polite"></main>
+  <div class="toast" id="toast" hidden></div>
+  <script src="/pricing.js"></script>
+  <script src="/staging/booking/staging-booking.js"></script>
+</body>
+</html>
