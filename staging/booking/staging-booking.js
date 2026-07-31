@@ -130,16 +130,23 @@ function hostedPaymentEndpoint() {
     var amounts = orderAmounts(items);
     var rows = items.map(function(item, index) {
       var suffix = String.fromCharCode(65 + index);
-      return '<div class="staging-order-item">' +
-        '<span><strong>' + escapeHtml(ORDER_REF + '-' + suffix) + '</strong><small>' + escapeHtml(item.petName) + ' · ' + escapeHtml(serviceLabel(item.service)) + '<br>' + escapeHtml(item.schedule) + '</small></span>' +
-        '<span>₱' + (Number(item.total) || 0).toLocaleString() + '</span>' +
-      '</div>';
+      return '<details class="staging-order-item">' +
+        '<summary><span><strong>' + escapeHtml(ORDER_REF + '-' + suffix) + '</strong><small>' + escapeHtml(item.petName) + ' · ' + escapeHtml(serviceLabel(item.service)) + '<br>' + escapeHtml(item.schedule) + '</small></span>' +
+        '<span class="staging-order-item-amount">₱' + (Number(item.total) || 0).toLocaleString() + '</span><span class="staging-order-chevron" aria-hidden="true">⌄</span></summary>' +
+        '<div class="staging-order-item-body">' +
+          '<div class="staging-booking-review-details">' + (item.detailsHtml || fallbackDetails(item)) + '</div>' +
+          '<div class="staging-booking-review-price"><p class="summary-group-title">Price breakdown</p>' +
+            (item.priceComponentsHtml || '') +
+            '<div class="price-line total-line"><span class="price-line-label">Booking total</span><span class="price-line-val">₱' + (Number(item.total) || 0).toLocaleString() + '</span></div>' +
+          '</div>' +
+        '</div>' +
+      '</details>';
     }).join('');
     return '<div class="staging-order-panel">' +
       '<div class="staging-order-head"><strong>Order ' + ORDER_REF + '</strong><span>' + items.length + ' booking' + (items.length === 1 ? '' : 's') + ' · ' + escapeHtml(locationLabel(items[0] && items[0].location)) + '</span></div>' +
       rows +
       (amounts.fee ? '<div class="staging-order-fee"><span>Online payment fee</span><span>₱' + amounts.fee.toLocaleString() + '</span></div>' : '') +
-      '<div class="staging-order-total"><span>One payment</span><span>₱' + amounts.total.toLocaleString() + '</span></div>' +
+      '<div class="staging-order-total"><span>Total</span><span>₱' + amounts.total.toLocaleString() + '</span></div>' +
     '</div>';
   }
 
@@ -150,29 +157,6 @@ function hostedPaymentEndpoint() {
       '<div class="summary-row"><span class="summary-key">Schedule</span><span class="summary-val">' + escapeHtml(item.schedule) + '</span></div></div>' +
       '<div class="summary-group"><div class="summary-group-title">Pet details</div>' +
       '<div class="summary-row"><span class="summary-key">Name</span><span class="summary-val">' + escapeHtml(item.petName) + '</span></div></div>';
-  }
-
-  function renderDetailedBookings(items) {
-    return items.map(function(item, index) {
-      var reference = ORDER_REF + '-' + String.fromCharCode(65 + index);
-      return '<section class="staging-booking-review-card">' +
-        '<div class="staging-booking-review-head"><span><strong>' + escapeHtml(reference) + '</strong><small>' + escapeHtml(item.petName) + ' · ' + escapeHtml(serviceLabel(item.service)) + '</small></span><strong>₱' + (Number(item.total) || 0).toLocaleString() + '</strong></div>' +
-        '<div class="staging-booking-review-details">' + (item.detailsHtml || fallbackDetails(item)) + '</div>' +
-        '<div class="staging-booking-review-price"><p class="summary-group-title">Price breakdown</p>' +
-          (item.priceComponentsHtml || '') +
-          '<div class="price-line total-line"><span class="price-line-label">Booking allocation</span><span class="price-line-val">₱' + (Number(item.total) || 0).toLocaleString() + '</span></div>' +
-        '</div>' +
-      '</section>';
-    }).join('');
-  }
-
-  function renderOrderTotal(items) {
-    var amounts = orderAmounts(items);
-    var lines = items.map(function(item, index) {
-      return '<div class="price-line"><span class="price-line-label">' + escapeHtml(ORDER_REF + '-' + String.fromCharCode(65 + index)) + ' · ' + escapeHtml(item.petName) + ' · ' + escapeHtml(serviceLabel(item.service)) + '</span><span class="price-line-val">₱' + (Number(item.total) || 0).toLocaleString() + '</span></div>';
-    }).join('');
-    if (amounts.fee) lines += '<div class="price-line"><span class="price-line-label">Online payment fee</span><span class="price-line-val">₱' + amounts.fee.toLocaleString() + '</span></div>';
-    return lines + '<div class="price-line total-line"><span class="price-line-label">One payment</span><span class="price-line-val">₱' + amounts.total.toLocaleString() + '</span></div>';
   }
 
   function updateOrderNavTotal(items) {
@@ -367,41 +351,27 @@ function hostedPaymentEndpoint() {
     summary.insertAdjacentHTML('afterbegin', renderOrderPanel(items));
     summary.insertAdjacentHTML('beforeend', '<button type="button" class="staging-add-booking" onclick="addAnotherStagingBooking()">+ Add another service or pet at ' + escapeHtml(locationLabel(booking.location)) + '</button>');
     var notice = document.getElementById('hostedCheckoutNotice');
-    if (notice) {
-      notice.style.display = '';
-      notice.innerHTML = '<p><strong>One payment for all your bookings</strong></p><p>When online booking is available, you’ll pay once and receive a separate reference for each service or pet.</p>';
-    }
+    if (notice) notice.style.display = 'none';
     var details = document.getElementById('bookingDetailsSummary');
     if (details) {
-      details.className = 'staging-all-bookings';
-      details.innerHTML = renderDetailedBookings(items);
+      details.style.display = 'none';
     }
     var price = document.getElementById('priceBreakdown');
     if (price) {
       price.setAttribute('data-staging-order-total', '');
-      price.innerHTML = renderOrderTotal(items);
+      price.style.display = 'none';
       var label = price.previousElementSibling;
-      if (label && label.classList.contains('section-label')) label.textContent = 'Order total';
+      if (label && label.classList.contains('section-label')) label.style.display = 'none';
     }
     updateOrderNavTotal(items);
   }
 
-  function showPreview() {
-    var items = orderItems(true);
-    var summary = document.getElementById('stepSummary');
-    document.getElementById('progressWrap').style.display = 'none';
-    document.getElementById('bottomNav').style.display = 'none';
-    _redirectingToPayment = true;
-    summary.innerHTML = '<div class="staging-preview-screen">' +
-      '<p class="step-eyebrow">Your order</p>' +
-      '<h2>Everything looks ready</h2>' +
-      '<p>Your confirmation email will include the order number, each booking reference, schedule, pet, and amount.</p>' +
-      renderOrderPanel(items) +
-      '<div class="info-box" style="text-align:left"><strong>What your confirmation email will include</strong><br>Subject: Barkhaus order ' + ORDER_REF + ' confirmed<br><br>Your payment covers ' + items.length + ' booking' + (items.length === 1 ? '' : 's') + '. Each booking reference and amount is shown above.</div>' +
-      '<a class="btn-home" href="/staging/" style="margin-top:12px">Back to Barkhaus</a>' +
-    '</div>';
-    summary.classList.add('active');
-    window.scrollTo(0, 0);
+  function proceedToPayment() {
+    if (STAGING_PREVIEW) {
+      showToast('Payment is not enabled in this preview yet. At launch, this button will open secure Maya checkout.', 7000);
+      return;
+    }
+    productionSubmitBooking();
   }
 
   function restoreAdditionalContext() {
@@ -421,8 +391,10 @@ function hostedPaymentEndpoint() {
     });
     if (locationCard) selectLocation(locationCard, context.location);
     goToStep(2);
-    var note = document.querySelector('.staging-flow-note');
-    if (note) note.innerHTML = '<strong>Adding another booking to ' + escapeHtml(locationLabel(context.location)) + '</strong>Owner details are already attached to this order, so this pass skips the owner step.';
+    var main = document.querySelector('.booking-main');
+    if (main && !main.querySelector('.staging-flow-note')) {
+      main.insertAdjacentHTML('afterbegin', '<div class="staging-flow-note"><strong>Adding another booking to ' + escapeHtml(locationLabel(context.location)) + '</strong>Owner details are already attached to this order, so this pass skips the owner step.</div>');
+    }
   }
 
   var productionShowSummary = showSummary;
@@ -433,28 +405,40 @@ function hostedPaymentEndpoint() {
   var productionBuildSummary = buildSummary;
   buildSummary = function() {
     var details = document.getElementById('bookingDetailsSummary');
-    if (details) details.className = 'summary-card';
+    if (details) {
+      details.className = 'summary-card';
+      details.style.display = '';
+    }
+    var notice = document.getElementById('hostedCheckoutNotice');
+    if (notice) notice.style.display = '';
     var price = document.getElementById('priceBreakdown');
     if (price) {
       price.removeAttribute('data-staging-order-total');
+      price.style.display = '';
       var label = price.previousElementSibling;
-      if (label && label.classList.contains('section-label')) label.textContent = 'Price breakdown';
+      if (label && label.classList.contains('section-label')) {
+        label.textContent = 'Price breakdown';
+        label.style.display = '';
+      }
     }
     productionBuildSummary();
     if (onSummaryScreen) renderCombinedReview();
   };
 
   var productionUpdateSummaryNav = updateBottomNavForSummary;
+  var productionSubmitBooking = submitBooking;
   updateBottomNavForSummary = function() {
     productionUpdateSummaryNav();
+    var notice = document.getElementById('hostedCheckoutNotice');
+    if (notice) notice.style.display = 'none';
     var button = document.getElementById('btnNext');
-    button.textContent = 'Review complete order';
-    button.onclick = showPreview;
+    button.textContent = 'Proceed to payment';
+    button.onclick = proceedToPayment;
     updateOrderNavTotal(orderItems(true));
   };
 
   submitBooking = function() {
-    showPreview();
+    proceedToPayment();
   };
 
   var productionNextStep = nextStep;

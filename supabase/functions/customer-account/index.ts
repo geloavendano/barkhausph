@@ -90,6 +90,59 @@ function dateHasPassed(value: unknown): boolean {
   return !!date && new Date(`${date}T23:59:59+08:00`) < new Date();
 }
 
+function manilaToday(): { year: number; month: number; day: number } {
+  const shifted = new Date(Date.now() + (8 * 60 * 60 * 1000));
+  return {
+    year: shifted.getUTCFullYear(),
+    month: shifted.getUTCMonth() + 1,
+    day: shifted.getUTCDate(),
+  };
+}
+
+function birthDetails(pet: any): {
+  birthYear: number;
+  birthMonth: number;
+  birthDay: number | null;
+  ageValue: number;
+  ageUnit: "months" | "years";
+} {
+  const birthYear = Number(pet?.birthYear);
+  const birthMonth = Number(pet?.birthMonth);
+  const birthDay = pet?.birthDay === null || pet?.birthDay === undefined || pet?.birthDay === ""
+    ? null
+    : Number(pet.birthDay);
+  const today = manilaToday();
+  if (!Number.isInteger(birthYear) || birthYear < 1900 || birthYear > today.year
+    || !Number.isInteger(birthMonth) || birthMonth < 1 || birthMonth > 12) {
+    throw new ApiError("Enter your pet's birth year and month.");
+  }
+  if (birthDay !== null) {
+    const test = new Date(Date.UTC(birthYear, birthMonth - 1, birthDay));
+    if (!Number.isInteger(birthDay) || birthDay < 1 || birthDay > 31
+      || test.getUTCFullYear() !== birthYear
+      || test.getUTCMonth() !== birthMonth - 1
+      || test.getUTCDate() !== birthDay) {
+      throw new ApiError("Enter a valid birth day, or leave the day blank.");
+    }
+  }
+  if (birthYear > today.year
+    || (birthYear === today.year && birthMonth > today.month)
+    || (birthYear === today.year && birthMonth === today.month && birthDay !== null && birthDay > today.day)) {
+    throw new ApiError("Your pet's birthdate cannot be in the future.");
+  }
+
+  let totalMonths = ((today.year - birthYear) * 12) + (today.month - birthMonth);
+  if (birthDay !== null && today.day < birthDay) totalMonths -= 1;
+  totalMonths = Math.max(0, totalMonths);
+  return {
+    birthYear,
+    birthMonth,
+    birthDay,
+    ageValue: totalMonths < 24 ? totalMonths : Math.floor(totalMonths / 12),
+    ageUnit: totalMonths < 24 ? "months" : "years",
+  };
+}
+
 async function validateMembership(supabase: any, codeValue: unknown, petNameValue: unknown): Promise<Record<string, unknown> | null> {
   const code = cleanText(codeValue, 100).toUpperCase();
   if (!code) return null;
@@ -182,7 +235,7 @@ async function loadProfile(supabase: any, user: any): Promise<Record<string, unk
 
   const { data: pets, error: petsError } = await supabase
     .from("pets")
-    .select("id,name,animal_type,gender,breed,age_value,age_unit,size,medical_notes,temperament,feeding_instructions,medications,vet_clinic,vet_contact,vet_address,emergency_name,emergency_phone,membership_code,vaccine_valid_until,bring_vaccine_records")
+    .select("id,name,animal_type,gender,breed,birth_year,birth_month,birth_day,age_value,age_unit,size,medical_notes,temperament,feeding_instructions,medications,vet_clinic,vet_contact,vet_address,emergency_name,emergency_phone,membership_code,vaccine_valid_until,bring_vaccine_records")
     .eq("owner_id", account.owner_id)
     .is("customer_archived_at", null)
     .order("name", { ascending: true });
@@ -215,14 +268,20 @@ async function loadProfile(supabase: any, user: any): Promise<Record<string, unk
       vaccineMap[row.vaccine_key] = row.confirmed === true;
       vaccineValidity[row.vaccine_key] = row.valid_until || pet.vaccine_valid_until || "";
     });
+    const derived = pet.birth_year && pet.birth_month
+      ? birthDetails({ birthYear: pet.birth_year, birthMonth: pet.birth_month, birthDay: pet.birth_day })
+      : null;
     return {
       id: pet.id,
       name: pet.name || "",
       animal: pet.animal_type || "dog",
       gender: pet.gender || "",
       breed: pet.breed || "",
-      age: pet.age_value == null ? "" : String(pet.age_value),
-      ageUnit: pet.age_unit || "years",
+      birthYear: pet.birth_year || "",
+      birthMonth: pet.birth_month || "",
+      birthDay: pet.birth_day || "",
+      age: derived ? String(derived.ageValue) : (pet.age_value == null ? "" : String(pet.age_value)),
+      ageUnit: derived?.ageUnit || pet.age_unit || "years",
       size: pet.size || "",
       medical: pet.medical_notes || "",
       temperament: pet.temperament || "",
@@ -321,11 +380,10 @@ async function savePet(supabase: any, user: any, body: any): Promise<string> {
   const name = cleanText(pet.name, 100);
   const animal = cleanText(pet.animal, 20).toLowerCase();
   const breed = cleanText(pet.breed, 120);
-  const ageRaw = cleanText(pet.age, 3);
-  const ageValue = ageRaw === "" ? null : Number.parseInt(ageRaw, 10);
-  if (!name || !["dog", "cat"].includes(animal) || !breed || ageValue == null || !Number.isFinite(ageValue) || ageValue < 0 || ageValue > 99) {
-    throw new ApiError("Complete the required pet name, animal, breed, and age fields.");
+  if (!name || !["dog", "cat"].includes(animal) || !breed) {
+    throw new ApiError("Complete the required pet name, animal, and breed fields.");
   }
+  const birth = birthDetails(pet);
   const validatedMembership = await validateMembership(supabase, pet.membershipId, name);
   const vaccineEntries = pet.vaccines && typeof pet.vaccines === "object"
     ? Object.entries(pet.vaccines).slice(0, 20)
@@ -355,8 +413,11 @@ async function savePet(supabase: any, user: any, body: any): Promise<string> {
     animal_type: animal,
     gender: nullableText(pet.gender, 20),
     breed,
-    age_value: ageValue,
-    age_unit: nullableText(pet.ageUnit, 20) || "years",
+    birth_year: birth.birthYear,
+    birth_month: birth.birthMonth,
+    birth_day: birth.birthDay,
+    age_value: birth.ageValue,
+    age_unit: birth.ageUnit,
     size: nullableText(animal === "cat" ? "cat" : pet.size, 40),
     medical_notes: nullableText(pet.medical, 3000),
     temperament: nullableText(pet.temperament, 80),

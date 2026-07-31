@@ -252,7 +252,7 @@
     <tr><td>4</td><td>Schedule</td><td>Service-specific scheduling: groomer + time slot (grooming), drop-off/pick-up times + play park (hotel). For daycare/studio this is merged into step 3.</td></tr>
     <tr><td>5</td><td>Pet</td><td>Pet profile, vaccines, membership. See §3.6.</td></tr>
     <tr><td>6</td><td>Owner ("You")</td><td>Name, email, mobile, referral source ("How did you hear about us" — selecting <em>Other</em> reveals a free-text field that is stored with the booking).</td></tr>
-    <tr><td>7</td><td>Waivers + Summary</td><td>Service-specific waivers (all required), then a grouped summary for every child booking (Booking / Schedule / Pet Details / Health &amp; Care / Owner Details). The order shows each <code>BH-XXXXXX-A/B</code> allocation, one order-level online payment fee, and one payment total; adding another service preserves the earlier booking details.</td></tr>
+    <tr><td>7</td><td>Waivers + Summary</td><td>Service-specific waivers (all required), then one order summary. Every <code>BH-XXXXXX-A/B</code> child is a collapsible item containing its Booking / Schedule / Pet Details / Health &amp; Care / Owner Details and price breakdown. The top card shows the order-level online payment fee and one final Total; adding another service preserves the earlier booking details. Proceed goes directly to hosted payment when order checkout is enabled.</td></tr>
   </table>
   <p>Every step has explicit validation; the Continue button is visually dimmed when incomplete but still tappable — tapping it fires an alert naming exactly what's missing (deliberate UX choice over a dead button). Back-navigation preserves all entered state.</p>
 
@@ -295,6 +295,7 @@
   <h3>3.6 Pet profile, vaccines &amp; senior waiver</h3>
   <ul>
     <li>Pet name, animal (locked to dog/cat by the size already chosen), sex, breed, age (+years/months), temperament, medical notes.</li>
+    <li><strong>Saved account pet birthdate:</strong> birth year and month are required; day is optional. The account API stores those parts and derives the compatible <code>age_value</code>/<code>age_unit</code> fields used by booking and admin. Legacy pets without birthdate parts remain readable but must supply them on their next profile edit.</li>
     <li><strong>Senior / pre-existing-condition waiver</strong> auto-appears when age ≥ 6 years <em>or</em> medical notes are non-empty (age in months never triggers it). It must be checked to continue, and resurfaces as a required waiver block at step 7.</li>
     <li><strong>Vaccine declaration:</strong> per-vaccine checklist — dogs: Anti-rabies, 5/6/8-in-1, Kennel Cough/Bordetella, Tick &amp; flea; cats: Anti-rabies, All-in-1, Anti-parasitic. The full map (checked and unchecked) is stored so the admin sees ✓/✕ per vaccine.</li>
     <li><strong>Vaccine record upload:</strong> in a saved account pet profile, each vaccine type has its own photo/PDF upload control and each reusable document stores its vaccine key. Legacy unclassified documents remain visible separately. During booking, saved documents can be referenced without re-uploading. When no file is available, the customer may choose "I will bring my pet's vaccine records to the venue"; one of the two paths is required.</li>

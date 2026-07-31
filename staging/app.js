@@ -232,6 +232,7 @@
     return {
       id: '', name: '', animal: 'dog', breed: '',
       gender: 'female', size: 'small_dog', age: '', ageUnit: 'years',
+      birthYear: '', birthMonth: '', birthDay: '',
       temperament: 'friendly_all', medical: '', feeding: '', medications: '',
       membershipId: '', vaccines: {}, vaccineValidity: {}, vaccineDocuments: [],
       bringRecords: false, vetClinic: '', vetContact: '', vetAddress: '',
@@ -249,6 +250,36 @@
       '<textarea class="staging-field staging-textarea" id="' + id + '" placeholder="' + escapeHtml(placeholder || '') + '">' + escapeHtml(fieldValue || '') + '</textarea></label>';
   }
 
+  function birthMonthOptions(selected) {
+    var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    return '<option value="">Month</option>' + months.map(function (month, index) {
+      var value = String(index + 1);
+      return '<option value="' + value + '" ' + (String(selected || '') === value ? 'selected' : '') + '>' + month + '</option>';
+    }).join('');
+  }
+
+  function deriveAgeFromBirth(year, month, day) {
+    var today = new Date();
+    var totalMonths = (today.getFullYear() - year) * 12 + ((today.getMonth() + 1) - month);
+    if (day && today.getDate() < day) totalMonths -= 1;
+    totalMonths = Math.max(0, totalMonths);
+    return totalMonths < 24
+      ? { age:String(totalMonths), ageUnit:'months' }
+      : { age:String(Math.floor(totalMonths / 12)), ageUnit:'years' };
+  }
+
+  function validBirthParts(year, month, day) {
+    if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) return false;
+    if (year < 1900 || year > new Date().getFullYear()) return false;
+    if (day == null) {
+      var firstOfMonth = new Date(year, month - 1, 1);
+      return firstOfMonth <= new Date();
+    }
+    if (!Number.isInteger(day) || day < 1 || day > 31) return false;
+    var date = new Date(year, month - 1, day);
+    return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day && date <= new Date();
+  }
+
   function petEditorMarkup(pet) {
     verifiedMembership = null;
     petDocumentsDraft = (pet.vaccineDocuments || []).map(function (document) {
@@ -262,7 +293,11 @@
         field('Breed', 'profilePetBreed', pet.breed, 'text', true) +
         '<label class="staging-field-label">Sex <em>*</em><select class="staging-field" id="profilePetGender"><option value="female">Female</option><option value="male">Male</option></select></label>' +
         '<label class="staging-field-label">Size <em>*</em><select class="staging-field" id="profilePetSize"><option value="small_dog">Small dog — up to 6 kg</option><option value="medium_dog">Medium dog — up to 15 kg</option><option value="large_dog">Large dog — up to 30 kg</option><option value="giant_dog">Giant dog — over 30 kg</option><option value="cat">Cat</option></select></label>' +
-        '<label class="staging-field-label">Age <em>*</em><span class="staging-age-fields"><input class="staging-field" id="profilePetAge" type="number" value="' + escapeHtml(pet.age || '') + '" min="0" max="30"><select class="staging-field" id="profilePetAgeUnit" aria-label="Age unit"><option value="years">Years</option><option value="months">Months</option></select></span></label>' +
+        '<div class="staging-field-label staging-field-label--wide"><span>Birthdate <em>*</em></span><div class="staging-birthdate-fields">' +
+          '<label><span>Year</span><input class="staging-field" id="profilePetBirthYear" type="number" inputmode="numeric" placeholder="YYYY" min="1900" max="' + new Date().getFullYear() + '" value="' + escapeHtml(pet.birthYear || '') + '"></label>' +
+          '<label><span>Month</span><select class="staging-field" id="profilePetBirthMonth">' + birthMonthOptions(pet.birthMonth) + '</select></label>' +
+          '<label><span>Day <small>optional</small></span><input class="staging-field" id="profilePetBirthDay" type="number" inputmode="numeric" placeholder="DD" min="1" max="31" value="' + escapeHtml(pet.birthDay || '') + '"></label>' +
+        '</div><small class="staging-field-help">We’ll calculate your pet’s age from this.</small></div>' +
         '<label class="staging-field-label staging-field-label--wide">Temperament <em>*</em><select class="staging-field" id="profilePetTemperament"><option value="friendly_all">Friendly with all</option><option value="friendly_shy">Friendly but shy</option><option value="selective">Selective</option><option value="reactive">Reactive</option><option value="first_time">First time in group care</option></select></label>' +
       '</div></div>' +
       '<div class="staging-profile-section"><p class="staging-profile-section-title">Health &amp; care</p>' +
@@ -362,7 +397,7 @@
     document.getElementById('profilePetAnimal').value = pet.animal || 'dog';
     document.getElementById('profilePetGender').value = pet.gender || 'female';
     document.getElementById('profilePetSize').value = pet.size || (pet.animal === 'cat' ? 'cat' : 'small_dog');
-    document.getElementById('profilePetAgeUnit').value = pet.ageUnit || 'years';
+    document.getElementById('profilePetBirthMonth').value = pet.birthMonth || '';
     document.getElementById('profilePetTemperament').value = pet.temperament || 'friendly_all';
     renderProfileVaccineGrid(pet.animal || 'dog', pet.vaccines || {}, pet.vaccineValidity || {});
     renderDocumentList();
@@ -372,12 +407,20 @@
     var name = value('profilePetName');
     var animal = value('profilePetAnimal');
     var breed = value('profilePetBreed');
-    var age = value('profilePetAge');
     var temperament = value('profilePetTemperament');
-    if (!name || !animal || !breed || age === '' || !temperament) {
+    var birthYear = Number.parseInt(value('profilePetBirthYear'), 10);
+    var birthMonth = Number.parseInt(value('profilePetBirthMonth'), 10);
+    var birthDayText = value('profilePetBirthDay');
+    var birthDay = birthDayText ? Number.parseInt(birthDayText, 10) : null;
+    if (!name || !animal || !breed || !temperament || !Number.isInteger(birthYear) || !Number.isInteger(birthMonth)) {
       showPetFormError('Please complete the required basic pet details.');
       return null;
     }
+    if (!validBirthParts(birthYear, birthMonth, birthDay)) {
+      showPetFormError('Enter a valid birth year and month. If you add a day, make sure it is valid and not in the future.');
+      return null;
+    }
+    var derivedAge = deriveAgeFromBirth(birthYear, birthMonth, birthDay);
     var size = value('profilePetSize');
     if (animal === 'cat') size = 'cat';
     var vaccines = currentVaccineChecks();
@@ -399,8 +442,9 @@
     return {
       id: existing && existing.id ? existing.id : null,
       name: name, animal: animal, breed: breed,
-      gender: value('profilePetGender'), size: size, age: age,
-      ageUnit: value('profilePetAgeUnit'), temperament: temperament,
+      gender: value('profilePetGender'), size: size,
+      birthYear: birthYear, birthMonth: birthMonth, birthDay: birthDay,
+      age: derivedAge.age, ageUnit: derivedAge.ageUnit, temperament: temperament,
       medical: value('profilePetMedical'), feeding: value('profilePetFeeding'),
       medications: value('profilePetMedications'), vaccines: vaccines,
       vaccineValidity: vaccineValidity,

@@ -13,6 +13,19 @@ teammates. Keep entries short and current.
 
 ## Handoffs
 
+- 2026-08-01 - Codex: account pet setup now captures required birth year/month
+  plus optional day, while `customer-account` validates the partial date in PHT
+  and derives the existing age fields used by booking/admin. Review now has one
+  top order summary, collapsible child details, a single Total, and a direct
+  “Proceed to payment” handoff; the temporary “Everything looks ready” screen
+  and generic planning note are gone. Staging still blocks payment writes and
+  explains that checkout is not enabled. HUMAN TODO: apply
+  `supabase/migrations/20260801113000_pet_birthdate_parts.sql` (it also safely
+  repairs a missing `pet_vaccine_documents.vaccine_key` and runs the PostgREST
+  schema-cache NOTIFY), then deploy `customer-account` with default JWT
+  verification. Apply SQL before the function deploy. Node syntax checks, Edge
+  Function bundling, one-/two-item order review behavior, collapsible details,
+  staging payment handoff, and 390px birthdate/review layouts pass.
 - 2026-08-01 - Codex: refined the staged customer account and multi-booking
   flow. OTP is full-width and has a 60-second resend cooldown; pet age/unit are
   grouped; landing account actions use a contained dropdown; every vaccine has

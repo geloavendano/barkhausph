@@ -29,10 +29,11 @@
 - Session isolation: customer logout uses local scope and does not sign out an open admin session.
 - Existing owner claim: verified email reuses the matching operational owner rather than creating a duplicate.
 - Pet CRUD: add/edit; soft-delete; multiple pets; required-field and maximum-length validation; account setup hides sign-in provider choices after authentication.
+- Pet birthdate: year and month required, day optional; reject invalid calendar dates and future months/days; derive months below 24 months and completed years thereafter using PHT; preserve legacy age-only rows until their next edit; saved-pet booking pre-population receives the derived age.
 - Vaccine profile: every current vaccine requires its own non-expired valid-until date; per-vaccine declarations/dates persist and pre-populate booking.
 - Vaccine documents: separate upload control for each vaccine type; vaccine key persists with the document; same filename may be used for different vaccine types; authenticated signed upload; allowed/blocked MIME types; 10 MB limit; object verification; soft-archive; legacy NULL-key documents remain visible; one stored object can be referenced by future child bookings without re-upload.
 - Booking pet reuse: a signed-in customer's saved pets appear at Grooming Specs / Stay Details / Daycare Details; choosing one selects the saved size, reveals the appropriate service controls, and pre-populates the later pet step without a size-change warning.
-- Multi-booking review: adding a second service retains the complete detail card for the first child; references use A/B suffixes; child allocations, the single order-level payment fee, order total, and sticky footer all reconcile exactly.
+- Multi-booking review: adding a second service retains the complete collapsible detail item for the first child; references use A/B suffixes; child allocations, the single order-level payment fee, top Total, and sticky footer Total all reconcile exactly; no duplicate lower total or intermediate confirmation-preview page appears.
 - Membership during add/edit pet: optional blank code; valid active code matching the pet name; unknown, inactive, expired, and wrong-pet codes are rejected in both the UI check and the account function save path. Branch eligibility remains booking-specific.
 - RLS/API: anonymous and ordinary authenticated users cannot query customer account tables directly; the account function rejects access to another owner's pet/document IDs.
 

@@ -384,7 +384,7 @@ body:has(.staging-ribbon-booking) .booking-header {
 }
 
 .staging-flow-note {
-  margin-bottom: 18px;
+  margin: 14px 0 18px;
   padding: 12px 14px;
   border: 1px solid rgba(255, 206, 88, .3);
   border-radius: 12px;
@@ -471,7 +471,6 @@ body:has(.staging-ribbon-booking) .booking-header {
 }
 
 .staging-order-head,
-.staging-order-item,
 .staging-order-fee,
 .staging-order-total {
   display: flex;
@@ -509,16 +508,54 @@ body:has(.staging-ribbon-booking) .booking-header {
 }
 
 .staging-order-item {
-  padding: 9px 0;
   border-top: 1px solid rgba(106, 174, 200, .18);
   color: var(--staging-cream);
   font-size: 12px;
 }
 
-.staging-order-item span:last-child {
+.staging-order-item summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 18px;
+  align-items: start;
+  gap: 8px;
+  padding: 11px 0;
+  cursor: pointer;
+  list-style: none;
+}
+
+.staging-order-item summary::-webkit-details-marker {
+  display: none;
+}
+
+.staging-order-item-amount {
   color: var(--staging-yellow);
   font-weight: 800;
   white-space: nowrap;
+}
+
+.staging-order-chevron {
+  color: var(--staging-muted);
+  font-size: 15px;
+  line-height: 1;
+  text-align: center;
+  transition: transform .15s ease;
+}
+
+.staging-order-item[open] .staging-order-chevron {
+  transform: rotate(180deg);
+}
+
+.staging-order-item-body {
+  margin: 0 0 11px;
+  overflow: hidden;
+  border: 1px solid rgba(106, 174, 200, .2);
+  border-radius: 11px;
+  background: rgba(7, 24, 34, .24);
+}
+
+.staging-order-item-body .staging-booking-review-details,
+.staging-order-item-body .staging-booking-review-price {
+  padding: 4px 12px 10px;
 }
 
 .staging-order-total {
@@ -666,10 +703,31 @@ body:has(.staging-ribbon-booking) .booking-header {
   grid-column: 1 / -1;
 }
 
-.staging-age-fields {
+.staging-birthdate-fields {
   display: grid;
-  grid-template-columns: minmax(90px, .7fr) minmax(118px, 1fr);
+  grid-template-columns: minmax(84px, .7fr) minmax(150px, 1.35fr) minmax(78px, .65fr);
   gap: 8px;
+}
+
+.staging-birthdate-fields label {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  color: var(--staging-muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.staging-birthdate-fields small,
+.staging-field-help {
+  color: var(--staging-muted);
+  font-size: 9px;
+  font-weight: 600;
+}
+
+.staging-field-help {
+  display: block;
+  margin-top: 6px;
 }
 
 .staging-field-label em {
@@ -981,8 +1039,8 @@ select.staging-field {
     grid-template-columns: 1fr;
   }
 
-  .staging-age-fields {
-    grid-template-columns: minmax(80px, .65fr) minmax(112px, 1fr);
+  .staging-birthdate-fields {
+    grid-template-columns: minmax(72px, .7fr) minmax(126px, 1.35fr) minmax(66px, .65fr);
   }
 
   .staging-profile-section {
