@@ -6,6 +6,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { randomToken, sha256 } from "../_shared/security.ts";
 import { assertHostedInventory, inventoryLockKey } from "../_shared/inventory.ts";
 import { assertAttachmentsExist, attachmentEntries } from "../_shared/attachments.ts";
+import { loadPricing, validateMembership, computeBookingPrice } from "../_shared/pricing.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -116,15 +117,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    const total          = parseInt(body.total)          || 0;
-    const subtotal       = parseInt(body.subtotal)       || total;
-    const discountAmount = parseInt(body.discountAmount) || 0;
-    const convenienceFee = parseInt(body.convenienceFee) || 0;
-
-    if (total <= 0) return new Response(
-      JSON.stringify({ error: "Invalid payment amount" }),
-      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
     await assertAttachmentsExist(supabase, [...vaccineAttachmentEntries, ...groomReferenceEntries]);
 
     // ── 1. Resolve branch ──
@@ -139,6 +131,29 @@ Deno.serve(async (req) => {
       .ilike("name", branchName)
       .single();
     if (branchErr || !branch) throw new Error(`Branch not found: ${branchName}`);
+
+    // ── Authoritative server-side pricing ──
+    // The charged amount is ALWAYS recomputed from the pricing table + booking
+    // inputs; client-supplied total/subtotal/discount/fee are ignored. This is
+    // what prevents a tampered request (or the ?testPayment simulate card) from
+    // paying an amount it chose. Mirrors the public site (pricing.js / buildSummary).
+    const pricing = await loadPricing(supabase);
+    if (!pricing.loaded) throw new Error("Pricing table unavailable — cannot price booking");
+    const membership = await validateMembership(supabase, body.membershipId, body.petName, branch.id);
+    const priced = computeBookingPrice(body, pricing, membership);
+    if (!priced.priceable || priced.total <= 0) {
+      return new Response(JSON.stringify({ error: "Invalid payment amount" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+    const subtotal       = priced.subtotal;
+    const discountAmount = priced.discountAmount;
+    const convenienceFee = priced.convenienceFee;
+    const total          = priced.total;
+    // Tamper signal — log when the client-claimed total diverges from the server's.
+    const clientTotal = parseInt(body.total) || 0;
+    if (clientTotal !== total) {
+      console.warn(`[repricing] client total ₱${clientTotal} != server ₱${total} for ${body.service} — charging server amount`);
+    }
 
     mutexKey = inventoryLockKey(branch.id, body);
     if (mutexKey) {
@@ -261,8 +276,8 @@ Deno.serve(async (req) => {
         subtotal,
         discount_amount:         discountAmount,
         total,
-        member_discount_applied: discountAmount > 0,
-        member_code_used:        discountAmount > 0 ? (body.membershipId as string) || null : null,
+        member_discount_applied: priced.memberValid,
+        member_code_used:        priced.memberCode,
         booking_source:          "online",
       }).select("id, ref_number").single();
     if (bookingErr || !newBooking) throw new Error(`Failed to create booking: ${bookingErr?.message}`);
