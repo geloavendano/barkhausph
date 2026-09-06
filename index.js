@@ -153,13 +153,6 @@ var locations = [
     maps: 'https://maps.app.goo.gl/yPbYz7y2urnmLAuU6',
     mainId: 'b2-main', thumbsId: 'b2-thumbs', modal: null,
   },
-  {
-    key: 'b3', name: 'Greenhills',
-    addr: 'GF Pet Stop, Connecticut Bldg., Greenhills Shopping Center, San Juan, Metro Manila',
-    hours: 'Opening soon',
-    maps: '#',
-    mainId: null, thumbsId: null, modal: null,
-  },
 ];
 
 var currentLoc = 0, autoTimer, userNavigated = false;
