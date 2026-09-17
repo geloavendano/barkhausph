@@ -12,7 +12,7 @@ import {
 } from '../../lib/adminAudit'
 import { parsePricing, parseRateCalendar, emptyPricing, calcBase, calcLate, calcTotal, calcNights, calcHotelBreakdown, calcDaycare, hotelSizeKey, isHotelAdditionalNight } from '../../lib/pricing'
 import { groomDurationMins } from '../../lib/grooming'
-import { availableGroomingSlots, availableHotelRooms, availableStudioSlots, buildGroomingSlots } from '../../lib/availability'
+import { availableGroomingSlots, availableHotelRooms, availableStudioSlots, buildGroomingSlots, hotelStayDates } from '../../lib/availability'
 import styles from './AddBookingPanel.module.css'
 
 // ── Constants ─────────────────────────────────────────────────────────────
@@ -468,13 +468,22 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
 
   const fetchHotelRooms = useCallback(async (checkin, checkout, size) => {
     if (!checkin || !checkout || !size || !branch?.id || checkout <= checkin) return []
-    const stays = await sbGet('hotel_details',
-      `select=booking_id,room_id,checkin_date,checkout_date,bookings!inner(branch_id,status)` +
-      `&checkin_date=lt.${checkout}&checkout_date=gt.${checkin}` +
-      `&bookings.branch_id=eq.${branch.id}&bookings.status=not.in.(cancelled,rejected)`)
+    const stayDates = hotelStayDates(checkin, checkout)
+    const [stays, blocks] = await Promise.all([
+      sbGet('hotel_details',
+        `select=booking_id,room_id,checkin_date,checkout_date,bookings!inner(branch_id,status)` +
+        `&checkin_date=lt.${checkout}&checkout_date=gt.${checkin}` +
+        `&bookings.branch_id=eq.${branch.id}&bookings.status=not.in.(cancelled,rejected)`),
+      stayDates.length
+        ? sbGet('blocked_schedules',
+          `select=resource_id&branch_id=eq.${branch.id}&resource_type=eq.room&active=eq.true` +
+          `&dates=ov.{${stayDates.join(',')}}`)
+        : Promise.resolve([]),
+    ])
     return availableHotelRooms({
       rooms,
       stays: stays ?? [],
+      blocks: blocks ?? [],
       size,
       excludeBookingId: editBooking?.id,
       internalRoomId: INTERNAL_OTHER_ROOM_ID,

@@ -106,6 +106,48 @@ function groomingDuration(body: Record<string, any>): number {
   return (base[body.groomService] ?? 60) + (hasBuffer ? 30 : 0);
 }
 
+function hotelStayDates(checkin: unknown, checkout: unknown): string[] {
+  const start = String(checkin ?? "");
+  const end = String(checkout ?? "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end) || end <= start) {
+    return [];
+  }
+
+  const cursor = new Date(`${start}T00:00:00Z`);
+  if (Number.isNaN(cursor.getTime())) return [];
+  const dates: string[] = [];
+  while (cursor.toISOString().slice(0, 10) < end && dates.length < 370) {
+    dates.push(cursor.toISOString().slice(0, 10));
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  if (cursor.toISOString().slice(0, 10) < end) {
+    throw new Error("Hotel stay exceeds the supported date range.");
+  }
+  return dates;
+}
+
+async function assertHotelRoomNotBlocked(
+  supabase: any,
+  branchId: string,
+  roomId: string,
+  checkin: unknown,
+  checkout: unknown,
+): Promise<void> {
+  const stayDates = hotelStayDates(checkin, checkout);
+  if (!stayDates.length) throw new Error("Hotel checkout must be after check-in.");
+
+  const { data: blocks, error } = await supabase.from("blocked_schedules")
+    .select("id")
+    .eq("branch_id", branchId)
+    .eq("resource_type", "room")
+    .eq("resource_id", roomId)
+    .eq("active", true)
+    .overlaps("dates", stayDates)
+    .limit(1);
+  if (error) throw new Error(`Could not validate room blocks: ${error.message}`);
+  if (blocks?.length) throw new Error("That room is blocked for one or more selected nights. Please select another room.");
+}
+
 async function consumeWalkinToken(supabase: any, token: unknown): Promise<boolean> {
   if (typeof token !== "string" || !token) return false;
   const cutoff = new Date(Date.now() - 60 * 60 * 1000).toISOString();
@@ -260,6 +302,14 @@ async function assertHotelAvailable(
   if (body.petSize && (!Array.isArray(room.allowed_sizes) || !room.allowed_sizes.includes(body.petSize))) {
     throw new Error("That room is not available for this pet size.");
   }
+
+  await assertHotelRoomNotBlocked(
+    supabase,
+    branchId,
+    body.hotelRoomId,
+    body.hotelCheckin,
+    body.hotelCheckout,
+  );
 
   const { data: overlaps, error: overlapError } = await supabase.from("hotel_details")
     .select("booking_id,bookings!inner(branch_id,status)")

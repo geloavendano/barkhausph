@@ -78,6 +78,8 @@ For each **source** × **service** combination, a full happy-path create:
 - **Grooming**: service_date vs booking_date — availability keyed on `service_date` ⚠️.
 - **Hotel – room**: room available across full check-in→check-out span → selectable; capacity exhausted → hidden/disabled.
 - **Hotel**: room locked (`is_locked`) → excluded.
+- **Hotel**: an active room `blocked_schedule` on any occupied night (check-in inclusive, checkout exclusive) excludes the room in public and Admin Add Booking; direct submission and hosted checkout reject it server-side.
+- **Hotel**: a room block on checkout day only does not conflict with the departing stay.
 - **Studio**: slot taken / studio unavailable / blocked_schedule → disabled.
 - **Daycare**: no per-resource booking (capacity only) — confirm no resource gating.
 - Drop-off / pick-up times constrained to **branch operating hours** for the relevant date ⚠️.

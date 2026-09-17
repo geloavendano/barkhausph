@@ -40,6 +40,33 @@ function serviceLineName(body: Record<string, unknown>): string {
     ?? "Barkhaus Booking";
 }
 
+function hotelStayDates(checkin: unknown, checkout: unknown): string[] {
+  const start = String(checkin ?? "");
+  const end = String(checkout ?? "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end) || end <= start) return [];
+  const cursor = new Date(`${start}T00:00:00Z`);
+  if (Number.isNaN(cursor.getTime())) return [];
+  const dates: string[] = [];
+  while (cursor.toISOString().slice(0, 10) < end && dates.length < 370) {
+    dates.push(cursor.toISOString().slice(0, 10));
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  if (cursor.toISOString().slice(0, 10) < end) throw new Error("Hotel stay exceeds the supported date range.");
+  return dates;
+}
+
+async function assertHotelRoomNotBlocked(supabase: any, branchId: string, body: Record<string, any>) {
+  if (body.service !== "hotel" || !body.hotelRoomId) return;
+  const stayDates = hotelStayDates(body.hotelCheckin, body.hotelCheckout);
+  if (!stayDates.length) throw new Error("Hotel checkout must be after check-in.");
+  const { data: blocks, error } = await supabase.from("blocked_schedules")
+    .select("id").eq("branch_id", branchId).eq("resource_type", "room")
+    .eq("resource_id", body.hotelRoomId).eq("active", true)
+    .overlaps("dates", stayDates).limit(1);
+  if (error) throw new Error(`Could not validate room blocks: ${error.message}`);
+  if (blocks?.length) throw new Error("That room is blocked for one or more selected nights. Please select another room.");
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -139,6 +166,7 @@ Deno.serve(async (req) => {
       }
       try {
         await assertHostedInventory(supabase, branch.id, body);
+        await assertHotelRoomNotBlocked(supabase, branch.id, body);
       } catch (inventoryError) {
         await supabase.rpc("release_inventory_mutex", {
           p_lock_key: mutexKey,

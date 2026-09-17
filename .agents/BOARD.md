@@ -13,6 +13,20 @@ teammates. Keep entries short and current.
 
 ## Handoffs
 
+- 2026-09-17 - Codex: hotel room `blocked_schedules` now remove the room from
+  production/staging public availability and Admin Add Booking for every occupied
+  night (check-in inclusive, checkout exclusive). The public pre-payment recheck and
+  all booking Edge Function paths independently reject blocked rooms. Admin assets
+  were rebuilt and the scenario matrix records the rule. HUMAN TODO: deploy
+  `submit-booking`, `create-maya-checkout`, and `create-payment` with default JWT
+  verification, then publish the static commit. No DDL or PostgREST schema reload is
+  needed. Verify the existing Estancia Small Cage 3 block makes a Sep 21–22 stay show
+  Unavailable, while a Sep 20–21 stay remains unaffected. Unit tests, public/staging
+  syntax checks, Admin production build, live PostgREST overlap query, and Edge
+  Function bundles pass. Hotel-block validation is self-contained inside each of the
+  three changed Edge Function `index.ts` files, so dashboard deployments do not depend
+  on adding or updating a `_shared` module. Full Admin lint remains blocked by 43
+  pre-existing errors outside this change; targeted availability lint passes.
 - 2026-08-01 - Codex: account pet setup now captures required birth year/month
   plus optional day, while `customer-account` validates the partial date in PHT
   and derives the existing age fields used by booking/admin. Review now has one
@@ -198,6 +212,13 @@ teammates. Keep entries short and current.
 Record any edge function deploys, table/schema changes, RLS policy changes, or schema-cache
 reloads the human needs to apply manually.
 
+- Deploy the hotel block enforcement functions with default JWT verification:
+  `supabase functions deploy submit-booking --project-ref dxttnbtfhpanyiyduevn`,
+  `supabase functions deploy create-maya-checkout --project-ref dxttnbtfhpanyiyduevn`,
+  and `supabase functions deploy create-payment --project-ref dxttnbtfhpanyiyduevn`.
+  No DDL or PostgREST schema-cache reload is needed. After deployment, verify a direct
+  request selecting a room blocked on any occupied night is rejected before records or
+  a hosted checkout are created.
 - Apply `supabase/migrations/20260801090000_pet_vaccine_document_types.sql`.
   It adds the nullable, constrained/indexed `pet_vaccine_documents.vaccine_key`
   column and already runs `NOTIFY pgrst, 'reload schema';`. Existing documents

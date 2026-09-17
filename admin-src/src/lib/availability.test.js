@@ -5,6 +5,7 @@ import {
   availableHotelRooms,
   availableStudioSlots,
   buildGroomingSlots,
+  hotelStayDates,
   overlaps,
   timeToMinutes,
 } from './availability.js'
@@ -129,6 +130,27 @@ test('hotel excludes occupied, locked, and size-incompatible rooms', () => {
   })
 
   assert.deepEqual(rooms.map(room => room.id), ['free', 'other'])
+})
+
+test('hotel stay dates include check-in nights and exclude checkout', () => {
+  assert.deepEqual(hotelStayDates('2026-09-21', '2026-09-22'), ['2026-09-21'])
+  assert.deepEqual(hotelStayDates('2026-09-21', '2026-09-24'), [
+    '2026-09-21', '2026-09-22', '2026-09-23',
+  ])
+})
+
+test('hotel excludes rooms blocked on any occupied night', () => {
+  const rooms = availableHotelRooms({
+    rooms: [
+      { id: 'blocked', allowed_sizes: ['small_dog'] },
+      { id: 'free', allowed_sizes: ['small_dog'] },
+    ],
+    stays: [],
+    blocks: [{ resource_id: 'blocked' }],
+    size: 'small_dog',
+  })
+
+  assert.deepEqual(rooms.map(room => room.id), ['free'])
 })
 
 test('hotel editing excludes the booking being edited from occupancy', () => {

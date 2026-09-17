@@ -35,6 +35,24 @@ export function buildGroomingSlots(serviceHours, fallback = []) {
   return slots
 }
 
+export function hotelStayDates(checkin, checkout) {
+  const [year, month, day] = String(checkin ?? '').split('-').map(Number)
+  if (![year, month, day].every(Number.isFinite)) return []
+  const cursor = new Date(year, month - 1, day)
+  const dates = []
+  const toLocalDate = date => [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-')
+  while (toLocalDate(cursor) < checkout && dates.length < 370) {
+    dates.push(toLocalDate(cursor))
+    cursor.setDate(cursor.getDate() + 1)
+  }
+  if (toLocalDate(cursor) < checkout) throw new Error('Hotel stay exceeds the supported date range.')
+  return dates
+}
+
 function dayApplies(block, dayOfWeek) {
   const days = block.days_of_week ?? []
   return days.length === 0 || days.includes(dayOfWeek)
@@ -120,18 +138,19 @@ export function availableGroomingSlots({
   })
 }
 
-export function availableHotelRooms({ rooms, stays, size, excludeBookingId, internalRoomId }) {
+export function availableHotelRooms({ rooms, stays, blocks = [], size, excludeBookingId, internalRoomId }) {
   const occupied = new Set(
     stays
       .filter(stay => stay.booking_id !== excludeBookingId && stay.room_id)
       .map(stay => stay.room_id),
   )
+  const blocked = new Set(blocks.map(block => block.resource_id).filter(Boolean))
 
   return rooms.filter(room => {
     if (room.id === internalRoomId) return true
     if (room.is_locked) return false
     if (!Array.isArray(room.allowed_sizes) || !room.allowed_sizes.includes(size)) return false
-    return !occupied.has(room.id)
+    return !occupied.has(room.id) && !blocked.has(room.id)
   })
 }
 

@@ -747,6 +747,29 @@ function localDateStr(d) {
     String(dt.getDate()).padStart(2, '0');
 }
 
+// Hotel inventory is occupied by night: check-in is included and check-out is
+// excluded. Room blocks use the same date window, regardless of their display
+// time, because a partially blocked room cannot safely host an overnight stay.
+function hotelStayDates(checkin, checkout) {
+  var parts = String(checkin || '').split('-').map(Number);
+  if (parts.length !== 3 || parts.some(function(part) { return !Number.isFinite(part); })) return [];
+  var cursor = new Date(parts[0], parts[1] - 1, parts[2]);
+  var dates = [];
+  while (localDateStr(cursor) < checkout && dates.length < 370) {
+    dates.push(localDateStr(cursor));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  if (localDateStr(cursor) < checkout) throw new Error('Hotel stay exceeds the supported date range.');
+  return dates;
+}
+
+function hotelRoomBlocksQuery(branchId, checkin, checkout) {
+  var dates = hotelStayDates(checkin, checkout);
+  if (!branchId || !dates.length) return null;
+  return 'select=resource_id&branch_id=eq.' + branchId +
+    '&resource_type=eq.room&active=eq.true&dates=ov.{' + dates.join(',') + '}';
+}
+
 // ── INIT ──
 (async function init() {
   // Walk-in gate — must pass before any rendering
@@ -2140,23 +2163,33 @@ async function loadRoomAvailability() {
   });
 
   var bookedRoomIds = {};
+  var blockedRoomIds = {};
   try {
     var branch = await getSelectedBranchId();
     if (branch) {
-      var detailRows;
+      var detailRows, blockRows;
       try {
-        detailRows = await sbRpcPublic('get_hotel_occupancy', {
-          p_branch_id: branch,
-          p_checkin: cin,
-          p_checkout: cout,
-        });
+        var blockQuery = hotelRoomBlocksQuery(branch, cin, cout);
+        var availabilityRows = await Promise.all([
+          sbRpcPublic('get_hotel_occupancy', {
+            p_branch_id: branch,
+            p_checkin: cin,
+            p_checkout: cout,
+          }),
+          blockQuery ? sbFetchPublic('blocked_schedules', blockQuery) : Promise.resolve([]),
+        ]);
+        detailRows = availabilityRows[0];
+        blockRows = availabilityRows[1];
       } catch(occupancyErr) {
-        console.warn('Hotel occupancy check unavailable.', occupancyErr);
+        console.warn('Hotel inventory check unavailable.', occupancyErr);
         throw new Error('occupancy_unavailable');
       }
       (detailRows || []).forEach(function(r) {
         var key = r.room_id || r.room_type;
         if (key) bookedRoomIds[key] = (bookedRoomIds[key] || 0) + 1;
+      });
+      (blockRows || []).forEach(function(r) {
+        if (r.resource_id) blockedRoomIds[r.resource_id] = true;
       });
     }
   } catch(e) {
@@ -2176,11 +2209,12 @@ async function loadRoomAvailability() {
   var anyAvailable = false;
   grid.innerHTML = eligibleRooms.map(function(room) {
     var booked  = (bookedRoomIds[room.id] || 0) + (bookedRoomIds[room.room_type] || 0);
-    var isAvail = booked === 0;
+    var blocked = !!blockedRoomIds[room.id];
+    var isAvail = booked === 0 && !blocked;
     if (isAvail) anyAvailable = true;
     var availLabel = isAvail
       ? '<span style="font-size:10px;color:var(--success);font-weight:700">Available</span>'
-      : '<span style="font-size:10px;color:var(--error);font-weight:700">Fully booked</span>';
+      : '<span style="font-size:10px;color:var(--error);font-weight:700">' + (blocked ? 'Unavailable' : 'Fully booked') + '</span>';
     var colorDot = '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + (room.color||'#6AAEC8') + ';margin-right:6px;flex-shrink:0"></span>';
     var cls = 'svc-card' + (isAvail ? '' : ' svc-card-disabled');
     return '<div class="' + cls + '" id="room-opt-' + room.id + '"' +
@@ -4006,12 +4040,21 @@ async function checkAvailabilityBeforePayment() {
     if (svc === 'hotel') {
       if (!booking.hotelRoomId) return { available: true }; // fallback type — edge fn will verify
       var cin = booking.hotelCheckin, cout = booking.hotelCheckout;
-      var dtRows = (await sbRpcPublic('get_hotel_occupancy', {
-        p_branch_id: branchId,
-        p_checkin: cin,
-        p_checkout: cout,
-      })) || [];
+      var blockQuery = hotelRoomBlocksQuery(branchId, cin, cout);
+      var hotelRows = await Promise.all([
+        sbRpcPublic('get_hotel_occupancy', {
+          p_branch_id: branchId,
+          p_checkin: cin,
+          p_checkout: cout,
+        }),
+        blockQuery ? sbFetchPublic('blocked_schedules', blockQuery) : Promise.resolve([]),
+      ]);
+      var dtRows = hotelRows[0] || [];
+      var roomBlocks = hotelRows[1] || [];
       if (dtRows.some(function(r){ return r.room_id === booking.hotelRoomId; })) {
+        return { available: false, conflict: 'room' };
+      }
+      if (roomBlocks.some(function(r){ return r.resource_id === booking.hotelRoomId; })) {
         return { available: false, conflict: 'room' };
       }
       return { available: true };
