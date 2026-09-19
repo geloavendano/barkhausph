@@ -20,7 +20,7 @@ reconcile job** (same failure as BH-E0D9B8).
 |---|---|---|
 | Hosting | Vercel (A records at dotPH) | **Cloudflare Pages**, DNS moved to Cloudflare (Monday). Project `barkhausph`, allowlist build to `dist/`, `env.js` decides production vs staging by address. |
 | Green for functional tests | `green.barkhaus.ph` on production data | **`staging.barkhausph.pages.dev` on the staging database** (`staging.sh up`), with a **payment simulator** |
-| Green for the one real-money test | same | **Release address** `release.barkhausph.pages.dev`: added to `env.js`'s production list, so it runs the new version on production data. Only used during the test window. |
+| Green for the one real-money test | same | **None.** Decided 2026-09-20: traffic is low, so the real-payment test runs on barkhaus.ph right after release, in a quiet window, with multi-service still switched off until it passes. |
 | Backend deploys | straight to production | **staging branch first** (`supabase functions deploy <fn> --project-ref <staging ref>`), then production in the same order |
 | Redirects | `vercel.json` | `_redirects` (Cloudflare format) |
 | Frontend rollback | Vercel Instant Rollback | Cloudflare Pages **Rollback** (dashboard, seconds); DNS is on Cloudflare by Tuesday |
@@ -74,10 +74,11 @@ Tue 22 (day)      C. Frontend on release/accounts-orders → merged into `stagin
                      promote /staging/ pages to the root, remove STAGING_PREVIEW / fetch guard / hard-coded
                      ORDER_REF, items[] checkout, _redirects /staging/* → /*, sitemap
                      test on staging.barkhausph.pages.dev with the simulator
-Tue 22 (evening)     release slot: MAX_ORDER_ITEMS=5; one real 1-item and one real 2-item order on
-                     release.barkhausph.pages.dev → admin shows both paid, 2 payment rows, one combined
-                     email → refund in Maya, cancel in admin
-Tue 22 (night)    D. Merge to main → barkhaus.ph. Smoke test. Rollback = Cloudflare Rollback.
+Tue 22 (night)    D. Quiet hour. Merge to main with MAX_ORDER_ITEMS=1 → barkhaus.ph (accounts live,
+                     carts refused server-side). Smoke test + one real 1-item booking.
+                     Then MAX_ORDER_ITEMS=5 → one real 2-item order → admin shows both paid, 2 payment
+                     rows, one combined email → refund in Maya, cancel in admin.
+                     Any failure: MAX_ORDER_ITEMS=1 (seconds, carts off) or Cloudflare Rollback (frontend).
 ```
 
 A (DNS) and B (backend) are independent. C needs B on staging; D needs B' in production.
@@ -98,7 +99,6 @@ bookings are in mixed states (all paid / some pending / any cancelled).
 
 ## 8. Open
 
-- [ ] Gelo: approve the release address (`release.barkhausph.pages.dev` as a production slot in `env.js`).
 - [ ] Gelo: confirm the Better Stack monitors and add the website monitor (section 9).
 
 ## 9. Monitoring
