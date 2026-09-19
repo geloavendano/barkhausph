@@ -48,7 +48,7 @@ When a task needs Supabase action, leave a handoff note with:
 ## Project overview
 
 Two-branch pet-services platform (Estancia & Eastwood, PHT/UTC+8) at **barkhaus.ph**.
-Static frontend on GitHub Pages + Supabase (Postgres/RLS, Auth, Realtime, Storage, Edge
+Static frontend (GitHub Pages today; moving to Cloudflare Pages, see Deployment model) + Supabase (Postgres/RLS, Auth, Realtime, Storage, Edge
 Functions) + manual transfer payments, dormant Maya Checkout / PayMongo providers,
 Resend (email), and GA4.
 
@@ -59,23 +59,63 @@ admin SPA (`admin-src/` -> served at `/admin/`), edge functions (`supabase/funct
 
 | Task | Command |
 |---|---|
-| Local preview (whole site) | `python3 -m http.server 8788` from repo root (see `.claude/launch.json`) |
+| Local preview (whole site) | `python3 -m http.server 8788` from repo root (see `.claude/launch.json`). **Needs staging settings first** (see Environments), otherwise pages refuse to load data. |
 | Admin dev server | `cd admin-src && npm run dev` |
 | Admin production build | `cd admin-src && npm run build` -> outputs to `../admin/` (**committed** - see below) |
-| Deploy (static site) | `git push` to `main`; GitHub Pages serves repo content from the branch |
+| Deploy (static site) | `git push` to `main`. GitHub Pages serves the repo as-is today; Cloudflare Pages builds `main` with `sh scripts/build-site.sh` → `dist/` |
+| Preview a branch | Push the branch; Cloudflare Pages builds `https://<branch>.barkhausph.pages.dev` against **staging** |
 | Edge function deploy | Human manually runs `supabase functions deploy <name>` |
 | DB changes | SQL file in `supabase/migrations/`, human applies via dashboard/CLI, then `NOTIFY pgrst, 'reload schema';` |
 
 ## Deployment model
 
-GitHub Pages serves the **repo branch** directly (no build step for the static site).
+**Today:** GitHub Pages serves the `main` branch directly. It publishes the **whole repo**, including
+`AGENTS.md`, `supabase/` and `admin-src/`, so treat everything committed as public.
+
+**Moving to (decision: `docs/decisions/2026-09-20-hosting-and-previews.md`):** Cloudflare Pages
+(project `barkhausph`) serves production (`main`) and a preview per branch. Its build command is
+`sh scripts/build-site.sh`, which:
+
+1. runs `scripts/write-env.sh` to write `env-staging.js` (preview builds only), and
+2. copies an **allowlist** of public files into `dist/` (the output folder). Anything not listed there
+   (functions, migrations, admin source, agent notes) is never published. Add new public top-level
+   folders to that script, or they will 404.
+
+`_headers` holds response headers (noindex for `/admin/` and `/staging/`, admin asset caching).
+`404.html` is the not-found page. The DNS move to Cloudflare follows
+`docs/decisions/2026-09-20-dns-move-checklist.md` (email records must be copied exactly).
+
 The built admin SPA in `/admin/` **is committed**. On pushes that touch `admin-src/**`,
 `.github/workflows/build-admin.yml` rebuilds `/admin/` and commits it back (concurrency
 guard prevents overlapping runs). If you change `admin-src` locally and push, either let
 the bot rebuild, or run `npm run build` and commit `/admin/` yourself in the same push to
 avoid a follow-up bot commit.
 
-`docs/` is publicly served.
+`docs/` is publicly served (open question in the hosting decision whether it should stay public).
+
+## Environments (production vs staging)
+
+Every page (public site, `/staging/` pages, admin) loads `/env-staging.js` then `/env.js` before its
+own scripts, and reads the Supabase address and anon key from `window.BH_ENV`. **Never hard-code a
+Supabase address or key in page code again.**
+
+- `barkhaus.ph`, `www.barkhaus.ph`, `barkhausph.pages.dev` → always **production**, even if staging
+  settings are present.
+- Anywhere else (branch previews, localhost) → **staging**, from `window.BH_STAGING` in
+  `env-staging.js`. With no staging settings, `env.js` throws and the page loads no data. It never
+  falls back to production.
+- `env-staging.js` is committed as an empty placeholder. Cloudflare preview builds fill it from the
+  **Preview** variables `STAGING_SUPABASE_URL` / `STAGING_SUPABASE_ANON_KEY`. These must never be set on
+  Production; a `main` build that finds them fails on purpose.
+- The staging database is a Supabase preview branch that the human switches on and off with
+  `~/Projects/claude-setup/staging/staging.sh up|down|snapshot|previews barkhaus`. `up` also updates
+  Cloudflare's preview variables and rebuilds recent previews.
+- Local preview against staging: while staging is up, write the local settings file (don't commit it):
+  `STAGING_SUPABASE_URL=… STAGING_SUPABASE_ANON_KEY=… sh scripts/write-env.sh`, then
+  `git checkout -- env-staging.js` when done. The URL and anon key are in the Supabase dashboard
+  (branch `staging` → Project Settings → API).
+- The `/staging/` folder is a set of **pages** (new customer account + booking flow) served on the
+  same site. It is not the staging environment: on barkhaus.ph those pages use production.
 
 ## Conventions and hard-won gotchas
 
@@ -126,7 +166,7 @@ avoid a follow-up bot commit.
 
 ## Secrets and keys
 
-Supabase anon key is public by design (hardcoded in clients). Real secrets
+Supabase anon key is public by design (production's lives in `env.js`; see Environments). Real secrets
 (`MAYA_PUBLIC_KEY`, `MAYA_SECRET_KEY`, `PAYMONGO_SECRET_KEY`,
 `PAYMONGO_WEBHOOK_SECRET`, `RESEND_API_KEY`) live only in Supabase function env.
 `MAYA_ENVIRONMENT` is `sandbox` or `production`; customer routing remains controlled
