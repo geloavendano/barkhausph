@@ -14,6 +14,13 @@ if [ -z "$URL" ] && [ -z "$KEY" ]; then
   exit 0
 fi
 
+# Staging settings on the production branch mean they were added to Cloudflare's Production
+# environment by mistake. Stop the build rather than ship them (env.js would ignore them anyway).
+if [ "${CF_PAGES_BRANCH:-}" = "main" ]; then
+  echo "write-env: staging settings found in a production (main) build; remove them from Cloudflare's Production variables" >&2
+  exit 1
+fi
+
 # Refuse anything that isn't a plain Supabase address + key, and never production's.
 case "$URL" in
   https://*.supabase.co) ;;
