@@ -55,8 +55,9 @@ Supabase is shared by production and every frontend version, so the backend ship
   env; `1` refuses carts server-side, single bookings still work).
 - **Payment simulator** (staging only): `simulate-payment` calls the same finalize code as the webhook
   (`finalizePending`, extracted by this work), refuses to run unless its database is not production
-  (checked by project ID), and staging emails go to a staging-only outbox. See the simulation design in
-  the hosting conversation; it gets its own short record if it grows.
+  (checked by project ID), and staging emails go to a staging-only outbox table that only `staging.sh up`
+  creates (never a migration). The staging booking flow shows a scenario screen (paid / failed / abandoned)
+  instead of Maya, and the confirmation screen links to the rendered email.
 
 ## 5. Plan and schedule
 
