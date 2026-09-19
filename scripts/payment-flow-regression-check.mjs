@@ -47,6 +47,29 @@ for (const pattern of destructiveStatements) {
   );
 }
 
+
+// ── Orders (2026-09): one payment covers several bookings ────────────────────────
+const orderLookupAt = source.indexOf("const order = await findOrder(");
+const legacyIdempotencyAt = source.indexOf("Idempotency: bail if this provider payment ID is already recorded");
+assert(orderLookupAt > 0, "The handler must look up an order (findOrder) for every event.");
+assert(
+  orderLookupAt > 0 && legacyIdempotencyAt > orderLookupAt,
+  "Order handling must run BEFORE the payment-ID idempotency check (bookings in an order share one payment ID).",
+);
+
+const orderFnMatch = source.match(/async function handleOrderEvent\([\s\S]*?\n\}\n/);
+assert(orderFnMatch, "Could not find handleOrderEvent().");
+const orderFn = orderFnMatch?.[0] ?? "";
+const orderNonSuccess = orderFn.match(/if\s*\(\s*ev\.isMaya\s*&&\s*!ev\.paidEvent\s*\)\s*\{([\s\S]*?)\n\s{2}\}/)?.[1] ?? "";
+assert(orderNonSuccess, "Could not find the order's Maya non-success block.");
+assert(orderNonSuccess.includes('ev.eventType === "PAYMENT_EXPIRED"'), "Orders: only PAYMENT_EXPIRED may cancel bookings.");
+assert(!/PAYMENT_CANCELLED|PAYMENT_FAILED/.test(orderNonSuccess), "Orders: PAYMENT_CANCELLED/FAILED must not cancel the order's bookings.");
+assert(/sendPaymentFailureAlert/.test(orderNonSuccess), "Orders: non-success events must still alert.");
+assert(/ev\.paidAmount\s*!==\s*Number\(order\.amount\)/.test(orderFn), "Orders: the paid amount must be checked against the ORDER total.");
+assert(/paymentAmount:\s*Number\(pending\.amount\)/.test(orderFn), "Orders: each booking's payments row must record that booking's share, not the whole payment.");
+assert(/\.eq\("status",\s*"pending"\)\.select\("id"\)\.maybeSingle\(\)/.test(orderFn), "Orders: the order must be claimed atomically (status pending → paid).");
+assert(/if\s*\(\s*claimed\s*&&\s*details\.length\s*\)/.test(orderFn), "Orders: only the event that claimed the order may send the confirmation email.");
+
 if (!process.exitCode) {
   console.log("Payment flow regression check passed.");
 }

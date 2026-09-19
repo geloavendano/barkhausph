@@ -1089,6 +1089,255 @@ async function finalizePending(supabase: any, pending: any, ctx: FinalizeContext
   return { status: "finalized", bookingId: bookingId!, ref: finalRef, emailDetails };
 }
 
+// ── Orders ────────────────────────────────────────────────────────────────────
+// One hosted checkout = one booking_orders row = one Maya payment, covering one or more bookings
+// (docs/decisions/2026-09-20-accounts-orders-release.md). Holds created before orders existed have
+// no order row and keep using the legacy single-booking path in the handler, unchanged.
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+}
+
+async function findOrder(supabase: any, keys: { checkoutId?: string | null; orderId?: string | null; orderRef?: string | null }) {
+  if (keys.checkoutId) {
+    const { data } = await supabase.from("booking_orders").select("*").eq("gateway_checkout_id", keys.checkoutId).maybeSingle();
+    if (data) return data;
+  }
+  if (keys.orderId) {
+    const { data } = await supabase.from("booking_orders").select("*").eq("id", keys.orderId).maybeSingle();
+    if (data) return data;
+  }
+  if (keys.orderRef) {
+    const { data } = await supabase.from("booking_orders").select("*").eq("order_ref", keys.orderRef).maybeSingle();
+    if (data) return data;
+  }
+  return null;
+}
+
+type OrderEvent = {
+  isMaya: boolean; provider: string; eventType: string; paidEvent: boolean;
+  paymentId: string; paidAmount: number; paymentChannel: string;
+  paymentEventId: string | null; checkoutId: string | null;
+};
+
+async function handleOrderEvent(supabase: any, order: any, ev: OrderEvent): Promise<Response> {
+  const now = new Date().toISOString();
+  const { data: holds } = await supabase.from("pending_bookings")
+    .select("*").eq("order_ref", order.order_ref).order("created_at", { ascending: true });
+  const pendings: any[] = holds || [];
+
+  if (ev.paymentEventId) {
+    await supabase.from("payment_events").update({
+      ref_number:          order.order_ref,
+      pending_booking_id:  pendings[0]?.id ?? null,
+      gateway_checkout_id: ev.checkoutId || order.gateway_checkout_id || null,
+      gateway_payment_id:  ev.paymentId || order.gateway_payment_id || null,
+    }).eq("id", ev.paymentEventId);
+  }
+  if (ev.isMaya && ev.paymentId && !order.gateway_payment_id) {
+    await supabase.from("booking_orders").update({ gateway_payment_id: ev.paymentId, updated_at: now }).eq("id", order.id);
+  }
+
+  // Non-success Maya events: same policy as single bookings. Alert every time (de-duplicated);
+  // only PAYMENT_EXPIRED is final, and it releases EVERY unpaid booking in the order.
+  if (ev.isMaya && !ev.paidEvent) {
+    const alertLock = await claimPaymentAlertLock(supabase, {
+      provider: ev.provider, eventType: ev.eventType, refNumber: order.order_ref,
+      paymentId: ev.paymentId, checkoutId: ev.checkoutId || order.gateway_checkout_id, paymentEventId: ev.paymentEventId,
+    });
+    if (!alertLock.claimed) {
+      await markPaymentEventAlerted(supabase, ev.paymentEventId, `Duplicate alert suppressed: ${alertLock.alertKey}`);
+    } else {
+      try {
+        await sendPaymentFailureAlert({
+          ...(pendings[0]?.payload || {}),
+          eventType: ev.eventType, refNumber: order.order_ref, amount: ev.paidAmount || order.amount,
+          paymentId: ev.paymentId, checkoutId: ev.checkoutId || order.gateway_checkout_id,
+        });
+        await markPaymentEventAlerted(supabase, ev.paymentEventId);
+        await markPaymentAlertLockSent(supabase, alertLock.id);
+      } catch (alertErr) {
+        const message = alertErr instanceof Error ? alertErr.message : String(alertErr);
+        console.error("Maya payment alert failed:", message);
+        await markPaymentEventAlerted(supabase, ev.paymentEventId, message);
+        await markPaymentAlertLockSent(supabase, alertLock.id, message);
+      }
+    }
+    if (ev.eventType === "PAYMENT_EXPIRED") {
+      await supabase.from("bookings")
+        .update({ status: "cancelled", cancellation_reason: "Payment window expired" })
+        .eq("order_id", order.id).eq("status", "pending").eq("payment_status", "unpaid");
+      await supabase.from("pending_bookings").delete().eq("order_ref", order.order_ref);
+      await supabase.from("booking_orders").update({ status: "cancelled", updated_at: now })
+        .eq("id", order.id).eq("status", "pending");
+    }
+    return jsonResponse({ received: true, status: ev.eventType, order_ref: order.order_ref });
+  }
+
+  // The payment covers the whole order.
+  if (ev.paidAmount !== Number(order.amount)) {
+    console.error("Order payment amount mismatch:", ev.paidAmount, "expected:", order.amount, "order:", order.order_ref);
+    return jsonResponse({ error: "Payment amount mismatch" }, 400);
+  }
+  if (pendings.length === 0) {
+    console.log("Order already processed:", order.order_ref);
+    return jsonResponse({ received: true, note: "Already processed", order_ref: order.order_ref });
+  }
+
+  // Claim the order first so exactly one event sends the confirmation email. A retry after a
+  // crash (order already claimed, holds remaining) still finalizes the rest; per-booking safety
+  // comes from finalizePending's atomic pending→confirmed claim, not from the payment ID, because
+  // every booking in the order shares the same payment ID.
+  const { data: claimed } = await supabase.from("booking_orders")
+    .update({ status: "paid", paid_at: now, gateway_payment_id: ev.paymentId || order.gateway_payment_id, updated_at: now })
+    .eq("id", order.id).eq("status", "pending").select("id").maybeSingle();
+
+  const results: FinalizeResult[] = [];
+  for (const pending of pendings) {
+    results.push(await finalizePending(supabase, pending, {
+      bookingIdFromMeta: null,
+      refNumber:         pending.ref_number,
+      paymentId:         ev.paymentId,
+      paymentAmount:     Number(pending.amount),   // this booking's share; shares sum to order.amount
+      paymentChannel:    ev.paymentChannel,
+      provider:          ev.provider,
+      isMaya:            ev.isMaya,
+      orderId:           order.id,
+    }));
+  }
+
+  const finalized = results.filter((r): r is Extract<FinalizeResult, { status: "finalized" }> => r.status === "finalized");
+  const details = finalized.map((r) => r.emailDetails).filter(Boolean) as Record<string, any>[];
+  if (claimed && details.length) {
+    try {
+      if (order.item_count === 1 && details.length === 1) {
+        await sendBookingConfirmation(details[0]);          // identical to today's single-booking email
+      } else {
+        await sendOrderConfirmation(order, details);
+      }
+    } catch (emailErr) {
+      console.error("Order email send failed (non-fatal):", emailErr);
+    }
+  } else if (!claimed && details.length) {
+    console.warn("Order", order.order_ref, "was already claimed; finalized", details.length, "remaining booking(s) without a new email");
+  }
+
+  console.log("ORDER SUCCESS —", order.order_ref, "bookings:", results.map((r) => r.ref).join(", "));
+  return jsonResponse({
+    received: true, order_ref: order.order_ref,
+    booking_ids: results.map((r) => r.bookingId), finalized: finalized.length,
+  });
+}
+
+async function sendOrderConfirmation(order: any, details: Record<string, any>[]) {
+  const apiKey = Deno.env.get("RESEND_API_KEY");
+  if (!apiKey) { console.error("RESEND_API_KEY not set — skipping email"); return; }
+  const first = details[0];
+  const cc = branchBookingEmail(first.branch);
+  const payload: Record<string, unknown> = {
+    from: "Barkhaus Pet Services <hello@barkhaus.ph>",
+    to:   first.ownerEmail,
+    subject: `Booking Confirmed — ${order.order_ref} (${details.length} bookings)`,
+    html: buildOrderEmailHtml(order, details),
+  };
+  if (cc && cc.toLowerCase() !== String(first.ownerEmail || "").toLowerCase()) payload.cc = cc;
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) console.error("Resend error:", await res.text());
+}
+
+function emailCard(title: string, rows: string, marginBottom = 14): string {
+  return `<table width="100%" cellpadding="0" cellspacing="0" style="background:#1F3D55;border:0.5px solid rgba(77,150,185,0.25);border-radius:10px;overflow:hidden;margin-bottom:${marginBottom}px">
+      <tr><td colspan="2" style="padding:9px 14px;font-size:9px;font-weight:700;color:#6AAEC8;text-transform:uppercase;letter-spacing:0.12em;border-bottom:0.5px solid rgba(77,150,185,0.2)">${title}</td></tr>
+      ${rows}
+    </table>`;
+}
+
+// One email for a multi-booking order: a section per booking (details, pet, health & care, waivers),
+// then owner details, one payment summary and the policies for each service booked, once.
+function buildOrderEmailHtml(order: any, details: Record<string, any>[]): string {
+  const first = details[0];
+  const svcLabel: Record<string, string> = { grooming: "Grooming", hotel: "Pet Hotel", daycare: "Daycare", studio: "Studio" };
+  const petNames = [...new Set(details.map((d) => d.petName).filter(Boolean))];
+  const petList = petNames.length <= 1 ? (petNames[0] || "your pet") : `${petNames.slice(0, -1).join(", ")} and ${petNames[petNames.length - 1]}`;
+  const bookedAt = new Date().toLocaleDateString("en-PH", {
+    month: "long", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Asia/Manila",
+  });
+
+  const sections = details.map((d, i) => `
+    <p style="font-size:12px;font-weight:700;color:#FFCE58;margin:${i === 0 ? 0 : 22}px 0 10px;text-transform:uppercase;letter-spacing:0.1em">
+      Booking ${i + 1} of ${details.length} · ${escapeHtml(svcLabel[d.service] ?? d.service)} for ${escapeHtml(d.petName)}
+      <span style="color:#6AAEC8;font-weight:600;letter-spacing:0;text-transform:none;margin-left:6px">${escapeHtml(d.refNumber)}</span>
+    </p>
+    ${emailCard("Booking details", bookingDetailRows(d))}
+    ${emailCard("Pet details", petDetailRows(d))}
+    ${emailCard("Health &amp; care", healthCareRows(d))}
+    ${waiverCard(d)}`).join("");
+
+  const lineRow = (label: string, value: string, color = "#B8D4E0") => `<tr style="border-bottom:0.5px solid rgba(77,150,185,0.08)">
+      <td style="padding:8px 14px;color:#6AAEC8;width:60%;font-size:13px">${label}</td>
+      <td style="padding:8px 14px;color:${color};font-size:13px;text-align:right">${value}</td></tr>`;
+  let payRows = details.map((d) =>
+    lineRow(`${escapeHtml(svcLabel[d.service] ?? d.service)} · ${escapeHtml(d.petName)} <span style="color:#4D96B9;font-size:11px">(${escapeHtml(d.refNumber)})</span>`,
+            `₱${Number(d.total || 0).toLocaleString()}`)).join("");
+  if (Number(order.convenience_fee) > 0) {
+    payRows += lineRow(`<span style="font-size:12px;color:#4D96B9">Includes one convenience fee</span>`, `<span style="font-size:12px;color:#4D96B9">₱${Number(order.convenience_fee).toLocaleString()}</span>`);
+  }
+  payRows += `<tr><td style="padding:10px 14px;color:#F0EDE6;font-size:14px;font-weight:700;border-top:0.5px solid rgba(77,150,185,0.3)">Total · Paid</td>
+      <td style="padding:10px 14px;color:#FFCE58;font-size:14px;font-weight:700;text-align:right;border-top:0.5px solid rgba(77,150,185,0.3)">₱${Number(order.amount).toLocaleString()}</td></tr>`;
+
+  const policies = [...new Map(details.map((d) => [d.service, d])).values()].map(bookingPolicyNotice).join("");
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Booking Confirmation — Barkhaus</title></head>
+<body style="margin:0;padding:0;background:#0F1C26;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#0F1C26;padding:24px 0">
+<tr><td align="center">
+<table width="560" cellpadding="0" cellspacing="0" style="background:#1A3044;border-radius:14px;border:0.5px solid rgba(77,150,185,0.3);overflow:hidden;max-width:560px;width:100%">
+  <tr><td style="background:#0F1C26;padding:22px 28px;text-align:center;border-bottom:0.5px solid rgba(77,150,185,0.2)">
+    <img src="https://barkhaus.ph/images/Barkhaus%20Pet%20Hotel%20Logo.png" alt="Barkhaus Pet Services" height="40" style="display:block;margin:0 auto">
+  </td></tr>
+  <tr><td style="padding:28px">
+    <p style="font-weight:700;font-size:22px;color:#F0EDE6;margin:0 0 6px">Hi ${escapeHtml(first.ownerFirstName)}! 🐾</p>
+    <p style="color:#B8D4E0;margin:0 0 22px;line-height:1.65;font-size:13px">
+      Great news — your <strong style="color:#F0EDE6">${details.length} bookings</strong> for <strong style="color:#F0EDE6">${escapeHtml(petList)}</strong> are all set and we're so excited to see you!
+    </p>
+    <div style="margin-bottom:22px">
+      <span style="font-size:11px;font-weight:700;padding:4px 12px;border-radius:999px;background:rgba(107,203,119,0.15);color:#6BCB77;border:0.5px solid #6BCB77">Confirmed</span>
+      <span style="font-size:12px;color:#6AAEC8;font-weight:600;margin-left:8px">Order ${escapeHtml(order.order_ref)}</span>
+      <span style="font-size:11px;color:#6AAEC8;margin-left:8px">· ${bookedAt}</span>
+    </div>
+    ${sections}
+    ${emailCard("Owner details", ownerDetailRows(first))}
+    ${emailCard("Payment summary", payRows, 20)}
+    <div style="background:rgba(255,206,88,0.08);border:0.5px solid rgba(255,206,88,0.25);border-radius:10px;padding:12px 14px;margin-bottom:14px">
+      <p style="margin:0;font-size:13px;color:#B8D4E0;line-height:1.55">⏰ Please arrive <strong style="color:#FFCE58">15 minutes before</strong> each scheduled time to make check-in a breeze!</p>
+    </div>
+    ${policies}
+    <p style="color:#4D96B9;font-size:11px;line-height:1.6;margin:0;padding:10px 14px;background:rgba(77,150,185,0.08);border-radius:8px;border:0.5px solid rgba(77,150,185,0.2)">
+      📭 This is a no-reply email. Please contact your branch by phone or Instagram for changes or cancellations.
+    </p>
+  </td></tr>
+  <tr><td style="border-top:0.5px solid rgba(77,150,185,0.25);padding:18px 28px;background:#0F1C26">
+    <p style="font-size:9px;font-weight:700;color:#6AAEC8;margin:0 0 12px;text-transform:uppercase;letter-spacing:0.12em">Your branch</p>
+    <p style="font-weight:700;font-size:16px;color:#F0EDE6;margin:0 0 3px">Barkhaus ${escapeHtml(first.branch.name)}</p>
+    <p style="font-size:12px;color:#B8D4E0;margin:0 0 3px">${escapeHtml(first.branch.address)}, ${escapeHtml(first.branch.city)}</p>
+    <p style="font-size:12px;color:#6AAEC8;margin:0 0 8px">${escapeHtml(first.branch.hours_weekday)} · ${escapeHtml(first.branch.hours_weekend)}</p>
+    <p style="font-size:12px;color:#4D96B9;font-weight:600;margin:0">📞 ${escapeHtml(first.branch.phone)} &nbsp;·&nbsp; 📸 @barkhausph</p>
+    <hr style="border:none;border-top:0.5px solid rgba(77,150,185,0.2);margin:14px 0">
+    <p style="font-size:11px;color:#4D96B9;text-align:center;margin:0">© 2026 Barkhaus Pet Services · All rights reserved</p>
+  </td></tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>`;
+}
+
 // ── Main handler ──────────────────────────────────────────────
 
 Deno.serve(async (req) => {
@@ -1272,6 +1521,25 @@ Deno.serve(async (req) => {
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
+    // ── Orders (from 2026-09): one payment for one or more bookings ─────────────
+    // Must run before the payment-ID idempotency check below: every booking in an order shares the
+    // payment ID, so that check would drop the second booking as "already processed".
+    const order = await findOrder(supabase, {
+      checkoutId: isMaya ? mayaCheckoutId(eventData) : null,
+      orderId:    bookingMeta?.orderId || bookingMeta?.order_id || null,
+      orderRef:   bookingMeta?.orderRef || bookingMeta?.order_ref || refNumber,
+    });
+    if (order) {
+      return await handleOrderEvent(supabase, order, {
+        isMaya, provider, eventType: eventType || "", paidEvent, paymentId, paidAmount,
+        paymentChannel: isMaya
+          ? (event.paymentScheme || event.fundSource?.type || "checkout")
+          : (eventAttrs?.source?.type || "qrph"),
+        paymentEventId, checkoutId: isMaya ? mayaCheckoutId(eventData) : null,
+      });
+    }
+
+    // ── Legacy single booking (holds created before orders existed) ──────────────
     // ── Idempotency: bail if this provider payment ID is already recorded ────────
     if (paymentId) {
       const { data: existingPay } = await supabase
