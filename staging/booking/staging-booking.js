@@ -22,12 +22,12 @@ window.fetch = function(input, init) {
 
 
 // ── CONFIG ──
-var SUPABASE_URL        = 'https://dxttnbtfhpanyiyduevn.supabase.co';
+var SUPABASE_URL        = BH_ENV.supabaseUrl;          // from env.js
 var CREATE_PAYMENT_URL  = SUPABASE_URL + '/functions/v1/create-payment';
 var CREATE_MAYA_CHECKOUT_URL = SUPABASE_URL + '/functions/v1/create-maya-checkout';
 var PAYMENT_STATUS_URL  = SUPABASE_URL + '/functions/v1/get-payment-status';
 var GET_UPLOAD_URL      = SUPABASE_URL + '/functions/v1/get-upload-url';
-var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4dHRuYnRmaHBhbnlpeWR1ZXZuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY1MjkyNDcsImV4cCI6MjA5MjEwNTI0N30.jrMk8-_Ga01TydNPUwCzlymf1W44PjaXXIUjCLALb2s';
+var SUPABASE_ANON_KEY = BH_ENV.supabaseAnonKey;
 var EDGE_FN_URL       = SUPABASE_URL + '/functions/v1/submit-booking';
 
 // Customer-facing payment provider. Alternatives: "manual", "maya", and "paymongo".

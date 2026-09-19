@@ -5,8 +5,8 @@
    ═══════════════════════════════════════════════════════════ */
 
 /* ── CONFIG ─────────────────────────────────────────────── */
-var SB_URL      = 'https://dxttnbtfhpanyiyduevn.supabase.co';
-var SB_ANON     = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4dHRuYnRmaHBhbnlpeWR1ZXZuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY1MjkyNDcsImV4cCI6MjA5MjEwNTI0N30.jrMk8-_Ga01TydNPUwCzlymf1W44PjaXXIUjCLALb2s';
+var SB_URL      = BH_ENV.supabaseUrl;          // from env.js
+var SB_ANON     = BH_ENV.supabaseAnonKey;
 var LOCAL_BLOG_COVERS = {
   'how-to-prepare-your-dog-for-daycare': 'images/blog-01 how to prepare your dog for daycare.JPG',
   'what-to-pack-for-a-dog-hotel-stay': 'images/blog-02 what to pack for a dog hotel stay.JPG',
