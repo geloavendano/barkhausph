@@ -5,11 +5,15 @@ teammates. Keep entries short and current.
 
 ## Active
 
-- None.
+- 2026-09-20 - Claude Code: release/accounts-orders (worktree ../barkhaus-hosting). Orders backend
+  (booking_orders, multi-item create-maya-checkout, order-aware webhook/reconcile/status/cancel,
+  staging payment simulator). Plan: docs/decisions/2026-09-20-accounts-orders-release.md.
 
 ## Claimed Files
 
-- None.
+- supabase/functions/{create-maya-checkout,handle-payment-webhook,reconcile-maya-bookings,
+  get-payment-status,cancel-pending-booking}/index.ts, new supabase/functions/simulate-payment/,
+  new migration 20260920130000_booking_orders.sql, scripts/payment-flow-regression-check.mjs.
 
 ## Handoffs
 
