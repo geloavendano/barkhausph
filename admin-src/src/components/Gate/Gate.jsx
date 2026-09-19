@@ -3,10 +3,30 @@ import { supabase } from '../../lib/supabase'
 import logo from '../../assets/barkhaus-logo.png'
 import styles from './Gate.module.css'
 
+// Staging databases get a new address on every `staging.sh up`, and Google only accepts
+// pre-registered addresses, so staging uses email + password instead. Decided by env.js
+// (hostname-based): production always gets the Google button only.
+const IS_STAGING = window.BH_ENV?.name === 'staging'
+
 export default function Gate({ accessError = '', onClearAccessError }) {
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState('')
+  const [email, setEmail]       = useState('')
+  const [password, setPassword] = useState('')
   const shownError = error || accessError
+
+  async function handlePasswordSignIn(e) {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+    onClearAccessError?.()
+    const { error: err } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
+    if (err) {
+      setError(err.message || 'Sign in failed. Please try again.')
+      setLoading(false)
+    }
+    // On success, App's auth listener takes over (same path as the Google sign-in).
+  }
 
   async function handleSignIn() {
     setLoading(true)
@@ -34,6 +54,18 @@ export default function Gate({ accessError = '', onClearAccessError }) {
 
         <p className={styles.sub}>Admin Portal</p>
 
+        {IS_STAGING ? (
+          <form className={styles.form} onSubmit={handlePasswordSignIn}>
+            <p className={styles.stagingTag}>Staging · test data only</p>
+            <input className={styles.input} type="email" autoComplete="username" placeholder="Email"
+              value={email} onChange={e => setEmail(e.target.value)} required />
+            <input className={styles.input} type="password" autoComplete="current-password" placeholder="Password"
+              value={password} onChange={e => setPassword(e.target.value)} required />
+            <button className={styles.primaryBtn} type="submit" disabled={loading}>
+              {loading ? 'Signing in…' : 'Sign in'}
+            </button>
+          </form>
+        ) : (
         <button
           className={styles.googleBtn}
           onClick={handleSignIn}
@@ -50,6 +82,7 @@ export default function Gate({ accessError = '', onClearAccessError }) {
           )}
           <span>{loading ? 'Redirecting…' : 'Sign in with Google'}</span>
         </button>
+        )}
 
         {shownError && <p className={styles.error}>{shownError}</p>}
       </div>
