@@ -13,6 +13,16 @@ teammates. Keep entries short and current.
 
 ## Handoffs
 
+- 2026-09-20 - Claude Code: hosting/env-config. Every page (public site, `/staging/`
+  pages, admin) now reads Supabase settings from `env.js` (production on barkhaus.ph /
+  barkhausph.pages.dev, staging everywhere else, refuses without settings). Cloudflare
+  Pages project `barkhausph` builds `dist/` from an allowlist (`scripts/build-site.sh`);
+  previews use staging via Preview variables that `staging.sh up` keeps current. Added
+  `_headers`, `404.html`; payment-health backup canary is now hourly. AGENTS.md has a new
+  Environments section. HUMAN TODO: merge to `main`, then test the production build at
+  https://barkhausph.pages.dev (booking page loads real branches; nothing internal is
+  published), then follow docs/decisions/2026-09-20-dns-move-checklist.md. No Supabase
+  deploys or DDL are needed for this change.
 - 2026-09-17 - Codex: hotel room `blocked_schedules` now remove the room from
   production/staging public availability and Admin Add Booking for every occupied
   night (check-in inclusive, checkout exclusive). The public pre-payment recheck and

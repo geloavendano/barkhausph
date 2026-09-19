@@ -1,11 +1,13 @@
 import { createClient } from '@supabase/supabase-js'
 import { processLock } from '@supabase/auth-js'
 
-// Anon keys are public by design (browser-facing static site).
-// Hardcoded so local and CI builds are always identical — no GitHub Secrets needed.
-// Exported so App.jsx can use them without re-referencing import.meta.env.
-export const SUPABASE_URL      = 'https://dxttnbtfhpanyiyduevn.supabase.co'
-export const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4dHRuYnRmaHBhbnlpeWR1ZXZuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY1MjkyNDcsImV4cCI6MjA5MjEwNTI0N30.jrMk8-_Ga01TydNPUwCzlymf1W44PjaXXIUjCLALb2s'
+// Which Supabase to use comes from /env.js (loaded by index.html before this bundle), the same
+// file the public site uses: barkhaus.ph → production, previews and local copies → staging.
+// Exported so App.jsx and panels can use them directly.
+const env = window.BH_ENV
+if (!env) throw new Error('Barkhaus admin: /env.js did not provide settings (no staging configured for this copy?)')
+export const SUPABASE_URL      = env.supabaseUrl
+export const SUPABASE_ANON_KEY = env.supabaseAnonKey
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   // The browser Navigator Lock used by default can remain stuck after a tab is

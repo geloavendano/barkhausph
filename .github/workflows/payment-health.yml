@@ -9,9 +9,13 @@ name: Payment health canary
 #   PAYMENT_HEALTH_TOKEN     same random value set as PAYMENT_HEALTH_TOKEN in the
 #                            payment-health function's Supabase env
 
+# Better Stack is the primary monitor (BETTERSTACK_HEALTH_TOKEN); this job is the independent backup.
+# Hourly keeps it inside GitHub's 2,000 free Actions minutes/month once the repo is private
+# (~744 runs × 1 billed minute). Every 20 minutes would be up to ~2,160 and GitHub blocks
+# Actions when the allowance runs out, which would stop this alarm silently.
 on:
   schedule:
-    - cron: '*/20 * * * *'   # every 20 minutes (UTC)
+    - cron: '17 * * * *'     # hourly at :17 (UTC); off the top of the hour, when GitHub queues are busiest
   workflow_dispatch: {}       # allow manual run from the Actions tab
 
 jobs:

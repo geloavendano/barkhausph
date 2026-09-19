@@ -1,8 +1,8 @@
 (function () {
   'use strict';
 
-  var SUPABASE_URL = 'https://dxttnbtfhpanyiyduevn.supabase.co';
-  var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4dHRuYnRmaHBhbnlpeWR1ZXZuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY1MjkyNDcsImV4cCI6MjA5MjEwNTI0N30.jrMk8-_Ga01TydNPUwCzlymf1W44PjaXXIUjCLALb2s';
+  var SUPABASE_URL = BH_ENV.supabaseUrl;          // from env.js
+  var SUPABASE_ANON_KEY = BH_ENV.supabaseAnonKey;
   var CACHE_KEY = 'barkhaus_customer_profile_cache';
   var LEGACY_CACHE_KEY = 'barkhaus_staging_customer';
   var AUTH_STORAGE_KEY = 'barkhaus-customer-auth-v1';
