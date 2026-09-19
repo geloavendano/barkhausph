@@ -12,7 +12,9 @@
     supabaseUrl: 'https://dxttnbtfhpanyiyduevn.supabase.co',
     supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4dHRuYnRmaHBhbnlpeWR1ZXZuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY1MjkyNDcsImV4cCI6MjA5MjEwNTI0N30.jrMk8-_Ga01TydNPUwCzlymf1W44PjaXXIUjCLALb2s'
   };
-  var PRODUCTION_HOSTS = ['barkhaus.ph', 'www.barkhaus.ph'];
+  // barkhausph.pages.dev is Cloudflare's address for the production build (used to test it before the
+  // DNS switch). Branch previews live at <branch>.barkhausph.pages.dev and stay on staging.
+  var PRODUCTION_HOSTS = ['barkhaus.ph', 'www.barkhaus.ph', 'barkhausph.pages.dev'];
 
   // hostname: where this page is being served from (e.g. 'barkhaus.ph', 'my-branch.barkhaus.pages.dev', 'localhost')
   // staging:  window.BH_STAGING from env-staging.js ({ supabaseUrl, supabaseAnonKey }), or undefined
