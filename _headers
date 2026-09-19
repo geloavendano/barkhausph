@@ -1,0 +1,11 @@
+# Cloudflare Pages response headers (replaces the never-deployed vercel.json rules).
+
+# Admin and the /staging/ pages should never appear in search results.
+/admin/*
+  X-Robots-Tag: noindex, nofollow
+/staging/*
+  X-Robots-Tag: noindex, nofollow
+
+# Built admin files have content hashes in their names, so they can be cached for a year.
+/admin/assets/*
+  Cache-Control: public, max-age=31536000, immutable

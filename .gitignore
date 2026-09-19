@@ -19,3 +19,4 @@ node_modules/
 # Vite admin app
 admin-src/.env.local
 admin-src/dist/
+dist/
