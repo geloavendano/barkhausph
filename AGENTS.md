@@ -131,8 +131,11 @@ Supabase address or key in page code again.**
 - **PostgREST**: filter parents by child columns only via `child!inner(...)`. If two
   FKs link the same tables, embeds 300 - disambiguate `child!fk_name(...)`. After any
   DDL, reload the schema cache (`NOTIFY pgrst, 'reload schema';`).
-- **RLS**: admin write policies check `EXISTS (SELECT 1 FROM admin_users WHERE email =
-  auth.email())`. Edge functions/webhook use the service role (bypass). Never wrap
+- **RLS**: admin policies use `public.is_admin()` (case-insensitive match on
+  `admin_users.email`). **Never write `TO authenticated USING (true)`**: "signed in" is not
+  "admin". Any Google account can get a session via the admin's sign-in button, and customer
+  accounts sign in too (incident 2026-09-20, fixed by
+  `20260920120000_restrict_signed_in_access_to_admins.sql`). Edge functions/webhook use the service role (bypass). Never wrap
   admin DB writes in silent `catch {}` - an INSERT-only policy once corrupted
   `booking_charges` invisibly because deletes soft-failed.
 - **Auth (admin)**: Google SSO via Supabase. Never call `supabase.auth.getSession()`
