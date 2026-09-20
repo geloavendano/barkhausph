@@ -5,9 +5,9 @@ teammates. Keep entries short and current.
 
 ## Active
 
-- 2026-09-20 - Claude Code: release/accounts-orders (worktree ../barkhaus-hosting). Orders backend
-  (booking_orders, multi-item create-maya-checkout, order-aware webhook/reconcile/status/cancel,
-  staging payment simulator). Plan: docs/decisions/2026-09-20-accounts-orders-release.md.
+- 2026-09-20 - Claude Code: release/accounts-orders (worktree ../barkhaus-hosting). Orders BACKEND is
+  done and tested on the staging branch; frontend (promote /staging/ pages, cart checkout, simulator
+  page) is next. Plan: docs/decisions/2026-09-20-accounts-orders-release.md.
 
 ## Claimed Files
 
@@ -17,6 +17,29 @@ teammates. Keep entries short and current.
 
 ## Handoffs
 
+- 2026-09-20 - Claude Code: orders backend (branch release/accounts-orders). One hosted checkout can
+  now cover several bookings: booking_orders + bookings.order_id + pending_bookings.order_ref;
+  create-maya-checkout accepts `{items:[...]}` (one fee, one Maya session, locks held across items);
+  the webhook resolves the order, finalizes each booking with the shared finalizePending() and sends
+  ONE email; reconcile groups by order (never looks an order's booking up by its own ref);
+  get-payment-status and cancel-pending-booking are order-aware. Staging-only: simulate-payment
+  (paid/failed/expired) drives the real webhook, emails go to staging_email_outbox, and checkout
+  returns the simulator URL instead of Maya. Both are gated by the production project id, not a flag.
+  Tested on the staging branch only (applied + deployed there): 2-item order priced with one fee,
+  both bookings confirmed with their own payment rows, duplicate event a no-op, expired cancels the
+  whole order. HUMAN TODO for production, in this order:
+    1. `git tag pre-orders <sha of main before this release>` already created; push it if you want it on GitHub.
+    2. Apply `supabase/migrations/20260920130000_booking_orders.sql`, then
+       `supabase/migrations/20260920140000_payments_reference_unique_per_booking.sql` (both additive;
+       the second replaces the table-wide unique on payments.reference_number with unique per booking).
+    3. Set `MAX_ORDER_ITEMS=1` on the project (refuses carts server-side until you are ready).
+    4. Deploy in this order: handle-payment-webhook, reconcile-maya-bookings, get-payment-status,
+       cancel-pending-booking, customer-account, then create-maya-checkout LAST.
+       Do NOT deploy simulate-payment to production (it answers 404 there anyway).
+    5. Gate: make one real single-booking checkout on the live site. Expect a 1-item order, a
+       confirmed+paid booking, one payments row and today's email. Then raise MAX_ORDER_ITEMS when
+       the frontend ships.
+  No PostgREST reload beyond the `notify pgrst` inside each migration.
 - 2026-09-20 - Claude Code: hosting/env-config. Every page (public site, `/staging/`
   pages, admin) now reads Supabase settings from `env.js` (production on barkhaus.ph /
   barkhausph.pages.dev, staging everywhere else, refuses without settings). Cloudflare
