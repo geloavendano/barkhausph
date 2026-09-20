@@ -90,17 +90,330 @@ const ADDON_NAMES: Record<string, string> = {
   premium_shampoo: "Premium Shampoo",
 };
 
+type Created = {
+  bookings: string[];
+  details: { table: string; bookingId: string }[];
+  refs: string[];
+  mutexes: { key: string; token: string }[];
+  orderId: string | null;
+};
+
+type Hold = {
+  bookingId: string; refNumber: string; service: string; petName: string;
+  subtotal: number; discountAmount: number; convenienceFee: number; total: number;
+};
+
+class CheckoutError extends Error {
+  constructor(message: string, readonly status = 400, readonly payload?: Record<string, unknown>) { super(message); }
+}
+
+async function releaseMutexes(supabase: any, created: Created) {
+  for (const m of created.mutexes.splice(0)) {
+    try { await supabase.rpc("release_inventory_mutex", { p_lock_key: m.key, p_lock_token: m.token }); } catch {}
+  }
+}
+
+// Undo everything this request created (payment setup failed, or an item could not be held).
+async function rollback(supabase: any, created: Created) {
+  await releaseMutexes(supabase, created);
+  try {
+    for (const d of created.details) await supabase.from(d.table).delete().eq("booking_id", d.bookingId);
+    for (const ref of created.refs) await supabase.from("pending_bookings").delete().eq("ref_number", ref);
+    for (const id of created.bookings) await supabase.from("bookings").delete().eq("id", id);
+    if (created.orderId) await supabase.from("booking_orders").delete().eq("id", created.orderId);
+  } catch {}
+  created.details = []; created.refs = []; created.bookings = []; created.orderId = null;
+}
+
+// One cart item -> one pending booking, created exactly as a single booking always was: server-side
+// pricing, inventory lock, pet upsert, booking row, detail row, add-ons/vaccines/waivers, pending hold.
+// Locks are kept until the whole order is written, so a later item cannot take the same room or slot.
+async function createHold(
+  supabase: any,
+  ctx: { branchId: string; ownerId: string; expiresAt: string; cancellationTokenHash: string; pricing: any },
+  body: Record<string, any>,
+  opts: { withConvenienceFee: boolean },
+  created: Created,
+): Promise<Hold> {
+  const accepted = (value: unknown) => value === true || value === "true";
+  if (!accepted(body.waiverHouseRules)) throw new CheckoutError("General House Rules acceptance is required.");
+  if (body.service === "grooming" && !accepted(body.waiverGroomingPolicy)) {
+    throw new CheckoutError("Grooming Services Booking Policy acceptance is required.");
+  }
+  if (body.service === "hotel" && !accepted(body.waiverHotelCancellation)) {
+    throw new CheckoutError("Hotel Cancellation and Refund Policy acceptance is required.");
+  }
+  for (const f of ["service", "petName", "ownerFirst", "ownerLast", "ownerEmail", "ownerPhone", "total"]) {
+    if (!body[f]) throw new CheckoutError(`Missing required field: ${f}`);
+  }
+
+  const vaccineAttachmentEntries = attachmentEntries(body.vaccineDocuments, body.vaccineFileNames, "vaccine_document");
+  const groomReferenceEntries = body.service === "grooming"
+    ? attachmentEntries(body.groomReferenceImages, body.groomReferenceFileNames, "grooming_reference")
+    : [];
+  await assertAttachmentsExist(supabase, [...vaccineAttachmentEntries, ...groomReferenceEntries]);
+
+  const branch = { id: ctx.branchId };
+  const ownerId = ctx.ownerId;
+
+  // ── Authoritative server-side pricing ──
+  // The charged amount is ALWAYS recomputed from the pricing table + booking inputs; client-supplied
+  // total/subtotal/discount/fee are ignored. The convenience fee is an ORDER-level charge, so it is
+  // added to the first item only: one fee per checkout, however many services it holds.
+  const membership = await validateMembership(supabase, body.membershipId, body.petName, branch.id);
+  const priced = computeBookingPrice(body, ctx.pricing, membership);
+  if (!priced.priceable || priced.total <= 0) throw new CheckoutError("Invalid payment amount");
+  const subtotal       = priced.subtotal;
+  const discountAmount = priced.discountAmount;
+  const convenienceFee = opts.withConvenienceFee ? priced.convenienceFee : 0;
+  const total          = subtotal - discountAmount + convenienceFee;
+  const clientTotal = parseInt(body.total) || 0;
+  if (opts.withConvenienceFee && clientTotal !== total) {
+    console.warn(`[repricing] client total ₱${clientTotal} != server ₱${total} for ${body.service} — charging server amount`);
+  }
+
+  const mutexKey = inventoryLockKey(branch.id, body);
+  if (mutexKey) {
+    const mutexToken = randomToken(16);
+    const { data: acquired, error: mutexError } = await supabase.rpc("acquire_inventory_mutex", {
+      p_lock_key: mutexKey, p_lock_token: mutexToken, p_ttl_seconds: 120,
+    });
+    if (mutexError) throw new CheckoutError(`Could not reserve inventory: ${mutexError.message}`, 500);
+    if (!acquired) {
+      throw new CheckoutError("This inventory is being reserved by another customer. Please try again.", 200,
+        { conflict: body.service === "hotel" ? "room" : "slot" });
+    }
+    created.mutexes.push({ key: mutexKey, token: mutexToken });
+    try {
+      // Sees the holds already written for earlier items in this same cart.
+      await assertHostedInventory(supabase, branch.id, body);
+      await assertHotelRoomNotBlocked(supabase, branch.id, body);
+    } catch (inventoryError) {
+      throw new CheckoutError(
+        inventoryError instanceof Error ? inventoryError.message : "Inventory is unavailable.", 200,
+        { conflict: body.service === "hotel" ? "room" : "slot" });
+    }
+  }
+
+  // ── 3. Upsert pet ──
+  const petName = (body.petName as string).trim();
+  let petId: string;
+
+  const { data: existingPet } = await supabase
+    .from("pets").select("id")
+    .eq("owner_id", ownerId).ilike("name", petName).maybeSingle();
+
+  if (existingPet) {
+    petId = existingPet.id;
+    await supabase.from("pets").update({
+      animal_type:   body.petAnimal       || null,
+      gender:        body.petGender       || null,
+      breed:         body.petBreed        || null,
+      age_value:     body.petAge ? parseInt(body.petAge as string) : null,
+      age_unit:      body.petAgeUnit      || null,
+      size:          body.petSize         || null,
+      medical_notes: body.petMedical      || null,
+      temperament:   body.petTemperament  || null,
+    }).eq("id", petId);
+  } else {
+    const { data: newPet, error: petErr } = await supabase
+      .from("pets").insert({
+        owner_id:      ownerId,
+        name:          petName,
+        animal_type:   body.petAnimal       || null,
+        gender:        body.petGender       || null,
+        breed:         body.petBreed        || null,
+        age_value:     body.petAge ? parseInt(body.petAge as string) : null,
+        age_unit:      body.petAgeUnit      || null,
+        size:          body.petSize         || null,
+        medical_notes: body.petMedical      || null,
+        temperament:   body.petTemperament  || null,
+      }).select("id").single();
+    if (petErr || !newPet) throw new Error(`Failed to create pet: ${petErr?.message}`);
+    petId = newPet.id;
+  }
+
+  // ── 4. Create booking row (status = pending) ──
+  // We generate a candidate ref, but the bookings table may have a DEFAULT or
+  // trigger on ref_number that overrides it. We therefore read back the value
+  // the database actually stored and treat THAT as authoritative for every
+  // downstream use (pending_bookings, Maya metadata, success/cancel URLs,
+  // the email ref). Otherwise the customer-facing ref would diverge from the
+  // ref persisted in the DB / shown in admin.
+  let refNumber = "BH-" + Math.random().toString(36).substr(2, 6).toUpperCase();
+
+  const { data: newBooking, error: bookingErr } = await supabase
+    .from("bookings").insert({
+      ref_number:              refNumber,
+      branch_id:               branch.id,
+      owner_id:                ownerId,
+      pet_id:                  petId,
+      service:                 body.service,
+      status:                  "pending",
+      payment_status:          "unpaid",
+      booking_date:            bookingDate(),   // ← creation date (service date lives in detail tables)
+      subtotal,
+      discount_amount:         discountAmount,
+      total,
+      member_discount_applied: priced.memberValid,
+      member_code_used:        priced.memberCode,
+      booking_source:          "online",
+    }).select("id, ref_number").single();
+  if (bookingErr || !newBooking) throw new Error(`Failed to create booking: ${bookingErr?.message}`);
+  const bookingId = newBooking.id;
+  created.bookings.push(bookingId);
+
+  // Authoritative ref — use whatever the DB actually persisted (handles any
+  // ref_number DEFAULT/trigger that overrode our inserted value).
+  if (newBooking.ref_number && newBooking.ref_number !== refNumber) {
+    console.warn(`ref_number overridden by DB: inserted ${refNumber}, stored ${newBooking.ref_number}`);
+    refNumber = newBooking.ref_number;
+  }
+
+  // ── 4b. Create the service detail row up front (best-effort) ──
+  // Holds service_date + the schedule, so this PENDING booking shows on the
+  // admin calendar immediately — before payment. The webhook later upserts the
+  // same row (onConflict booking_id) after payment, so this is idempotent.
+  // Non-fatal: if it fails, the booking still proceeds and the webhook creates
+  // the detail row post-payment (the booking just won't appear on the calendar
+  // until then). Requires a UNIQUE constraint on booking_id in each detail table
+  // so the webhook's upsert updates this row rather than erroring.
+  const detailTableFor: Record<string, string> = {
+    hotel: "hotel_details", grooming: "grooming_details",
+    daycare: "daycare_details", studio: "studio_details",
+  };
+  const detailTable = detailTableFor[body.service as string] || null;
+  if (detailTable) created.details.push({ table: detailTable, bookingId });
+  if (body.service === "hotel") {
+    const { error } = await supabase.from("hotel_details").insert({
+        booking_id: bookingId,
+        checkin_date: body.hotelCheckin, checkout_date: body.hotelCheckout,
+        dropoff_time: body.hotelDropoff || null, pickup_time: body.hotelPickup || null,
+        pickup_hour: parseInt(body.hotelPickupHour) || 14,
+        room_type: body.hotelRoom || null, room_id: body.hotelRoomId || null,
+        playpark_consent: body.playparkConsent === "yes",
+        feeding_instructions: body.hotelFeeding || null, medications: body.hotelMeds || null,
+        vet_clinic: body.vetClinic || null, vet_contact: body.vetContact || null, vet_address: body.vetAddress || null,
+        emergency_name: body.emergencyName || null, emergency_phone: body.emergencyPhone || null,
+    });
+    if (error) throw new Error(`Hotel inventory hold failed: ${error.message}`);
+  } else if (body.service === "grooming") {
+    const { error } = await supabase.from("grooming_details").insert({
+        booking_id: bookingId, service_date: body.groomDate || null,
+        timeslot: body.groomSlot,
+        preferred_stylist: body.preferredStylist || "any",
+        groomer_id: body.preferredStylistId || null,
+        groom_service_key: body.groomService || "", groom_service_name: body.groomServiceName || "",
+        special_requests: body.groomNotes || null,
+    });
+    if (error) throw new Error(`Grooming inventory hold failed: ${error.message}`);
+    // Persist add-ons up front so the itemised breakdown survives even if the
+    // booking is later finalized via a recovery path (not the full webhook).
+    // Mirrors submit-booking; the webhook re-establishes these idempotently on
+    // normal payment. Non-fatal so an add-on hiccup never blocks checkout.
+    if (body.addons && Object.keys(body.addons).length > 0) {
+      const { error: addonErr } = await supabase.from("booking_addons").insert(
+        Object.entries(body.addons as Record<string, unknown>).map(([key, price]) => ({
+          booking_id: bookingId, addon_key: key,
+          addon_name: ADDON_NAMES[key] ?? key.replace(/_/g, " "),
+          price: Number(price) || 0,
+        }))
+      );
+      if (addonErr) console.error("Add-on hold insert failed (non-fatal):", addonErr.message);
+    }
+    // Grooming reference photos ("pegs") — online never persisted these before,
+    // so the customer's uploads were silently dropped. Save them up front.
+    if (body.groomReferenceImages && Object.keys(body.groomReferenceImages).length > 0) {
+      const { error: pegErr } = await supabase.from("grooming_reference_images").insert(
+        groomReferenceEntries.map(({ path, fileName }) => ({
+          booking_id: bookingId, file_path: path,
+          file_name: fileName,
+        }))
+      );
+      if (pegErr) console.error("Grooming reference images hold insert failed (non-fatal):", pegErr.message);
+    }
+  } else if (body.service === "daycare") {
+      const openTime = body.daycareOpenTime === true;
+      const { error } = await supabase.from("daycare_details").insert({
+        booking_id: bookingId, service_date: body.daycareDate || null,
+        dropoff_time: body.daycareDropoff || "", dropoff_hour: parseInt(body.daycareDropoffHour) || 0,
+        pickup_time: openTime ? null : (body.daycarePickup || null),
+        pickup_hour: openTime ? null : (parseInt(body.daycarePickupHour) || null),
+        hours_total: openTime ? 0 : Math.max(0, (parseInt(body.daycarePickupHour)||0) - (parseInt(body.daycareDropoffHour)||0)),
+        open_time: openTime, notes: body.daycareNotes || null,
+      });
+      if (error) throw new Error(`Daycare detail insert failed: ${error.message}`);
+  } else if (body.service === "studio") {
+    const { error } = await supabase.from("studio_details").insert({
+        booking_id: bookingId, service_date: body.studioDate || null,
+        timeslot: body.studioSlot || "", studio_id: body._reservedStudioId || null,
+    });
+    if (error) throw new Error(`Studio inventory hold failed: ${error.message}`);
+  }
+
+  // Persist declared vaccines, uploaded documents, and waivers up front (same as
+  // submit-booking) so they survive even if the booking is finalized via a recovery
+  // path. The webhook re-establishes these idempotently on normal payment. Non-fatal.
+  if (body.vaccines && Object.keys(body.vaccines).length > 0) {
+    const { error: vErr } = await supabase.from("pet_vaccines").insert(
+      Object.entries(body.vaccines as Record<string, unknown>).map(([name, confirmed]) => ({
+        booking_id: bookingId, vaccine_name: name.replace(/_/g, " "),
+        confirmed: confirmed === true || confirmed === "true",
+      }))
+    );
+    if (vErr) console.error("Vaccines hold insert failed (non-fatal):", vErr.message);
+  }
+  if (body.vaccineDocuments && Object.keys(body.vaccineDocuments).length > 0) {
+    const { error: dErr } = await supabase.from("vaccine_documents").insert(
+      vaccineAttachmentEntries.map(({ path, fileName }) => ({
+        booking_id: bookingId, file_path: path,
+        file_name: fileName,
+      }))
+    );
+    if (dErr) console.error("Vaccine documents hold insert failed (non-fatal):", dErr.message);
+  }
+  {
+    const { error: wErr } = await supabase.from("waivers").insert({
+      booking_id:                bookingId,
+      general_terms:             body.waiverGeneral === true,
+      house_rules_accepted:      accepted(body.waiverHouseRules),
+      grooming_booking_policy:   body.service === "grooming" ? accepted(body.waiverGroomingPolicy) : null,
+      hotel_cancellation_policy: body.service === "hotel" ? accepted(body.waiverHotelCancellation) : null,
+      health_declaration:        body.waiverVaccine === true,
+      senior_medical_waiver:     body.waiverSeniorMedical === true,
+      studio_agreement:          body.waiverStudio === true,
+      media_consent:             body.waiverMedia === true,
+      waiver_texts:              body.waiverTexts || null,
+      waiver_version:            "2.0",
+    });
+    if (wErr) console.error("Waiver hold insert failed (non-fatal):", wErr.message);
+  }
+
+  // ── 5. Store this item's payload in pending_bookings (the webhook builds child records from it) ──
+  const { error: pendingErr } = await supabase.from("pending_bookings").insert({
+    ref_number: refNumber,
+    payload:    body,
+    amount:     total,
+    expires_at: ctx.expiresAt,
+    payment_provider: "maya",
+    cancellation_token_hash: ctx.cancellationTokenHash,
+  });
+  if (pendingErr) throw new CheckoutError(`Failed to create pending checkout: ${pendingErr.message}`, 500);
+  created.refs.push(refNumber);
+
+  return {
+    bookingId, refNumber, service: String(body.service), petName: String(body.petName),
+    subtotal, discountAmount, convenienceFee, total,
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
   let supabase: any = null;
-  let mutexKey: string | null = null;
-  let mutexToken: string | null = null;
-  let createdBookingId: string | null = null;
-  let createdDetailTable: string | null = null;
-  let createdRefNumber: string | null = null;
+  const created: Created = { bookings: [], details: [], refs: [], mutexes: [], orderId: null };
   try {
     supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -110,46 +423,30 @@ Deno.serve(async (req) => {
     const publicKey = Deno.env.get("MAYA_PUBLIC_KEY")!;
     if (!publicKey) throw new Error("MAYA_PUBLIC_KEY not configured");
 
-    const body = await req.json();
-    const vaccineAttachmentEntries = attachmentEntries(
-      body.vaccineDocuments,
-      body.vaccineFileNames,
-      "vaccine_document",
-    );
-    const groomReferenceEntries = body.service === "grooming"
-      ? attachmentEntries(body.groomReferenceImages, body.groomReferenceFileNames, "grooming_reference")
-      : [];
-    const accepted = (value: unknown) => value === true || value === "true";
-    if (!accepted(body.waiverHouseRules)) {
-      return new Response(JSON.stringify({ error: "General House Rules acceptance is required." }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    const requestBody = await req.json();
+    // One shape for both callers: today's site posts a single booking, the cart posts { items: [...] }.
+    // A 1-item order is priced, held, charged and emailed exactly as a single booking always was.
+    const items: Record<string, any>[] = Array.isArray(requestBody?.items) && requestBody.items.length > 0
+      ? requestBody.items
+      : [requestBody];
+    const maxItems = Math.max(1, parseInt(Deno.env.get("MAX_ORDER_ITEMS") || "5", 10) || 5);
+    if (items.length > maxItems) {
+      return new Response(JSON.stringify({ error: `An order can hold at most ${maxItems} booking${maxItems > 1 ? "s" : ""}.` }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
-    if (body.service === "grooming" && !accepted(body.waiverGroomingPolicy)) {
-      return new Response(JSON.stringify({ error: "Grooming Services Booking Policy acceptance is required." }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    const first = items[0];
+    // One order = one payment = one customer at one branch.
+    const sameOwner = items.every((i) => String(i.ownerEmail || "").trim().toLowerCase() === String(first.ownerEmail || "").trim().toLowerCase());
+    const sameBranch = items.every((i) => i.location === first.location);
+    if (!sameOwner || !sameBranch) {
+      return new Response(JSON.stringify({ error: "Every booking in one checkout must be for the same customer and branch." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
-    if (body.service === "hotel" && !accepted(body.waiverHotelCancellation)) {
-      return new Response(JSON.stringify({ error: "Hotel Cancellation and Refund Policy acceptance is required." }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // ── Validate required fields ──
-    for (const f of ["service","petName","ownerFirst","ownerLast","ownerEmail","ownerPhone","total"]) {
-      if (!body[f]) return new Response(
-        JSON.stringify({ error: `Missing required field: ${f}` }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    await assertAttachmentsExist(supabase, [...vaccineAttachmentEntries, ...groomReferenceEntries]);
 
     // ── 1. Resolve branch ──
-    const branchName = LOCATION_MAP[body.location as string];
+    const branchName = LOCATION_MAP[first.location as string];
     if (!branchName) return new Response(
-      JSON.stringify({ error: `Unknown location: ${body.location}` }),
+      JSON.stringify({ error: `Unknown location: ${first.location}` }),
       { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
     const { data: branch, error: branchErr } = await supabase
@@ -159,65 +456,12 @@ Deno.serve(async (req) => {
       .single();
     if (branchErr || !branch) throw new Error(`Branch not found: ${branchName}`);
 
-    // ── Authoritative server-side pricing ──
-    // The charged amount is ALWAYS recomputed from the pricing table + booking
-    // inputs; client-supplied total/subtotal/discount/fee are ignored. This is
-    // what prevents a tampered request (or the ?testPayment simulate card) from
-    // paying an amount it chose. Mirrors the public site (pricing.js / buildSummary).
     const pricing = await loadPricing(supabase);
     if (!pricing.loaded) throw new Error("Pricing table unavailable — cannot price booking");
-    const membership = await validateMembership(supabase, body.membershipId, body.petName, branch.id);
-    const priced = computeBookingPrice(body, pricing, membership);
-    if (!priced.priceable || priced.total <= 0) {
-      return new Response(JSON.stringify({ error: "Invalid payment amount" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-    const subtotal       = priced.subtotal;
-    const discountAmount = priced.discountAmount;
-    const convenienceFee = priced.convenienceFee;
-    const total          = priced.total;
-    // Tamper signal — log when the client-claimed total diverges from the server's.
-    const clientTotal = parseInt(body.total) || 0;
-    if (clientTotal !== total) {
-      console.warn(`[repricing] client total ₱${clientTotal} != server ₱${total} for ${body.service} — charging server amount`);
-    }
 
-    mutexKey = inventoryLockKey(branch.id, body);
-    if (mutexKey) {
-      mutexToken = randomToken(16);
-      const { data: acquired, error: mutexError } = await supabase.rpc("acquire_inventory_mutex", {
-        p_lock_key: mutexKey,
-        p_lock_token: mutexToken,
-        p_ttl_seconds: 120,
-      });
-      if (mutexError) throw new Error(`Could not reserve inventory: ${mutexError.message}`);
-      if (!acquired) {
-        mutexKey = null;
-        mutexToken = null;
-        return new Response(JSON.stringify({
-          conflict: body.service === "hotel" ? "room" : "slot",
-          error: "This inventory is being reserved by another customer. Please try again.",
-        }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      }
-      try {
-        await assertHostedInventory(supabase, branch.id, body);
-        await assertHotelRoomNotBlocked(supabase, branch.id, body);
-      } catch (inventoryError) {
-        await supabase.rpc("release_inventory_mutex", {
-          p_lock_key: mutexKey,
-          p_lock_token: mutexToken,
-        });
-        mutexKey = null;
-        mutexToken = null;
-        return new Response(JSON.stringify({
-          conflict: body.service === "hotel" ? "room" : "slot",
-          error: inventoryError instanceof Error ? inventoryError.message : "Inventory is unavailable.",
-        }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      }
-    }
-
-    // ── 2. Upsert owner ──
-    const email = (body.ownerEmail as string).trim().toLowerCase();
+    // ── 2. Upsert owner (one customer per order) ──
+    const body = first;
+    const email = (first.ownerEmail as string).trim().toLowerCase();
     let ownerId: string;
 
     const { data: existingOwner } = await supabase
@@ -244,242 +488,61 @@ Deno.serve(async (req) => {
       ownerId = newOwner.id;
     }
 
-    // ── 3. Upsert pet ──
-    const petName = (body.petName as string).trim();
-    let petId: string;
 
-    const { data: existingPet } = await supabase
-      .from("pets").select("id")
-      .eq("owner_id", ownerId).ilike("name", petName).maybeSingle();
-
-    if (existingPet) {
-      petId = existingPet.id;
-      await supabase.from("pets").update({
-        animal_type:   body.petAnimal       || null,
-        gender:        body.petGender       || null,
-        breed:         body.petBreed        || null,
-        age_value:     body.petAge ? parseInt(body.petAge as string) : null,
-        age_unit:      body.petAgeUnit      || null,
-        size:          body.petSize         || null,
-        medical_notes: body.petMedical      || null,
-        temperament:   body.petTemperament  || null,
-      }).eq("id", petId);
-    } else {
-      const { data: newPet, error: petErr } = await supabase
-        .from("pets").insert({
-          owner_id:      ownerId,
-          name:          petName,
-          animal_type:   body.petAnimal       || null,
-          gender:        body.petGender       || null,
-          breed:         body.petBreed        || null,
-          age_value:     body.petAge ? parseInt(body.petAge as string) : null,
-          age_unit:      body.petAgeUnit      || null,
-          size:          body.petSize         || null,
-          medical_notes: body.petMedical      || null,
-          temperament:   body.petTemperament  || null,
-        }).select("id").single();
-      if (petErr || !newPet) throw new Error(`Failed to create pet: ${petErr?.message}`);
-      petId = newPet.id;
-    }
-
-    // ── 4. Create booking row (status = pending) ──
-    // We generate a candidate ref, but the bookings table may have a DEFAULT or
-    // trigger on ref_number that overrides it. We therefore read back the value
-    // the database actually stored and treat THAT as authoritative for every
-    // downstream use (pending_bookings, Maya metadata, success/cancel URLs,
-    // the email ref). Otherwise the customer-facing ref would diverge from the
-    // ref persisted in the DB / shown in admin.
-    let refNumber = "BH-" + Math.random().toString(36).substr(2, 6).toUpperCase();
-
-    const { data: newBooking, error: bookingErr } = await supabase
-      .from("bookings").insert({
-        ref_number:              refNumber,
-        branch_id:               branch.id,
-        owner_id:                ownerId,
-        pet_id:                  petId,
-        service:                 body.service,
-        status:                  "pending",
-        payment_status:          "unpaid",
-        booking_date:            bookingDate(),   // ← creation date (service date lives in detail tables)
-        subtotal,
-        discount_amount:         discountAmount,
-        total,
-        member_discount_applied: priced.memberValid,
-        member_code_used:        priced.memberCode,
-        booking_source:          "online",
-      }).select("id, ref_number").single();
-    if (bookingErr || !newBooking) throw new Error(`Failed to create booking: ${bookingErr?.message}`);
-    const bookingId = newBooking.id;
-    createdBookingId = bookingId;
-    createdRefNumber = refNumber;
-
-    // Authoritative ref — use whatever the DB actually persisted (handles any
-    // ref_number DEFAULT/trigger that overrode our inserted value).
-    if (newBooking.ref_number && newBooking.ref_number !== refNumber) {
-      console.warn(`ref_number overridden by DB: inserted ${refNumber}, stored ${newBooking.ref_number}`);
-      refNumber = newBooking.ref_number;
-      createdRefNumber = refNumber;
-    }
-
-    // ── 4b. Create the service detail row up front (best-effort) ──
-    // Holds service_date + the schedule, so this PENDING booking shows on the
-    // admin calendar immediately — before payment. The webhook later upserts the
-    // same row (onConflict booking_id) after payment, so this is idempotent.
-    // Non-fatal: if it fails, the booking still proceeds and the webhook creates
-    // the detail row post-payment (the booking just won't appear on the calendar
-    // until then). Requires a UNIQUE constraint on booking_id in each detail table
-    // so the webhook's upsert updates this row rather than erroring.
-    const detailTableFor: Record<string, string> = {
-      hotel: "hotel_details", grooming: "grooming_details",
-      daycare: "daycare_details", studio: "studio_details",
-    };
-    const detailTable = detailTableFor[body.service as string] || null;
-    createdDetailTable = detailTable;
-    if (body.service === "hotel") {
-      const { error } = await supabase.from("hotel_details").insert({
-          booking_id: bookingId,
-          checkin_date: body.hotelCheckin, checkout_date: body.hotelCheckout,
-          dropoff_time: body.hotelDropoff || null, pickup_time: body.hotelPickup || null,
-          pickup_hour: parseInt(body.hotelPickupHour) || 14,
-          room_type: body.hotelRoom || null, room_id: body.hotelRoomId || null,
-          playpark_consent: body.playparkConsent === "yes",
-          feeding_instructions: body.hotelFeeding || null, medications: body.hotelMeds || null,
-          vet_clinic: body.vetClinic || null, vet_contact: body.vetContact || null, vet_address: body.vetAddress || null,
-          emergency_name: body.emergencyName || null, emergency_phone: body.emergencyPhone || null,
-      });
-      if (error) throw new Error(`Hotel inventory hold failed: ${error.message}`);
-    } else if (body.service === "grooming") {
-      const { error } = await supabase.from("grooming_details").insert({
-          booking_id: bookingId, service_date: body.groomDate || null,
-          timeslot: body.groomSlot,
-          preferred_stylist: body.preferredStylist || "any",
-          groomer_id: body.preferredStylistId || null,
-          groom_service_key: body.groomService || "", groom_service_name: body.groomServiceName || "",
-          special_requests: body.groomNotes || null,
-      });
-      if (error) throw new Error(`Grooming inventory hold failed: ${error.message}`);
-      // Persist add-ons up front so the itemised breakdown survives even if the
-      // booking is later finalized via a recovery path (not the full webhook).
-      // Mirrors submit-booking; the webhook re-establishes these idempotently on
-      // normal payment. Non-fatal so an add-on hiccup never blocks checkout.
-      if (body.addons && Object.keys(body.addons).length > 0) {
-        const { error: addonErr } = await supabase.from("booking_addons").insert(
-          Object.entries(body.addons as Record<string, unknown>).map(([key, price]) => ({
-            booking_id: bookingId, addon_key: key,
-            addon_name: ADDON_NAMES[key] ?? key.replace(/_/g, " "),
-            price: Number(price) || 0,
-          }))
-        );
-        if (addonErr) console.error("Add-on hold insert failed (non-fatal):", addonErr.message);
-      }
-      // Grooming reference photos ("pegs") — online never persisted these before,
-      // so the customer's uploads were silently dropped. Save them up front.
-      if (body.groomReferenceImages && Object.keys(body.groomReferenceImages).length > 0) {
-        const { error: pegErr } = await supabase.from("grooming_reference_images").insert(
-          groomReferenceEntries.map(({ path, fileName }) => ({
-            booking_id: bookingId, file_path: path,
-            file_name: fileName,
-          }))
-        );
-        if (pegErr) console.error("Grooming reference images hold insert failed (non-fatal):", pegErr.message);
-      }
-    } else if (body.service === "daycare") {
-        const openTime = body.daycareOpenTime === true;
-        const { error } = await supabase.from("daycare_details").insert({
-          booking_id: bookingId, service_date: body.daycareDate || null,
-          dropoff_time: body.daycareDropoff || "", dropoff_hour: parseInt(body.daycareDropoffHour) || 0,
-          pickup_time: openTime ? null : (body.daycarePickup || null),
-          pickup_hour: openTime ? null : (parseInt(body.daycarePickupHour) || null),
-          hours_total: openTime ? 0 : Math.max(0, (parseInt(body.daycarePickupHour)||0) - (parseInt(body.daycareDropoffHour)||0)),
-          open_time: openTime, notes: body.daycareNotes || null,
-        });
-        if (error) throw new Error(`Daycare detail insert failed: ${error.message}`);
-    } else if (body.service === "studio") {
-      const { error } = await supabase.from("studio_details").insert({
-          booking_id: bookingId, service_date: body.studioDate || null,
-          timeslot: body.studioSlot || "", studio_id: body._reservedStudioId || null,
-      });
-      if (error) throw new Error(`Studio inventory hold failed: ${error.message}`);
-    }
-
-    // Persist declared vaccines, uploaded documents, and waivers up front (same as
-    // submit-booking) so they survive even if the booking is finalized via a recovery
-    // path. The webhook re-establishes these idempotently on normal payment. Non-fatal.
-    if (body.vaccines && Object.keys(body.vaccines).length > 0) {
-      const { error: vErr } = await supabase.from("pet_vaccines").insert(
-        Object.entries(body.vaccines as Record<string, unknown>).map(([name, confirmed]) => ({
-          booking_id: bookingId, vaccine_name: name.replace(/_/g, " "),
-          confirmed: confirmed === true || confirmed === "true",
-        }))
-      );
-      if (vErr) console.error("Vaccines hold insert failed (non-fatal):", vErr.message);
-    }
-    if (body.vaccineDocuments && Object.keys(body.vaccineDocuments).length > 0) {
-      const { error: dErr } = await supabase.from("vaccine_documents").insert(
-        vaccineAttachmentEntries.map(({ path, fileName }) => ({
-          booking_id: bookingId, file_path: path,
-          file_name: fileName,
-        }))
-      );
-      if (dErr) console.error("Vaccine documents hold insert failed (non-fatal):", dErr.message);
-    }
-    {
-      const { error: wErr } = await supabase.from("waivers").insert({
-        booking_id:                bookingId,
-        general_terms:             body.waiverGeneral === true,
-        house_rules_accepted:      accepted(body.waiverHouseRules),
-        grooming_booking_policy:   body.service === "grooming" ? accepted(body.waiverGroomingPolicy) : null,
-        hotel_cancellation_policy: body.service === "hotel" ? accepted(body.waiverHotelCancellation) : null,
-        health_declaration:        body.waiverVaccine === true,
-        senior_medical_waiver:     body.waiverSeniorMedical === true,
-        studio_agreement:          body.waiverStudio === true,
-        media_consent:             body.waiverMedia === true,
-        waiver_texts:              body.waiverTexts || null,
-        waiver_version:            "2.0",
-      });
-      if (wErr) console.error("Waiver hold insert failed (non-fatal):", wErr.message);
-    }
-
-    // ── 5. Store full payload in pending_bookings (webhook uses this to create child records) ──
-    // Keep the inventory hold short; expired pending bookings are released by expire_pending_bookings().
+    // ── 3–5. One hold per item ──
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
     const cancellationToken = randomToken();
     const cancellationTokenHash = await sha256(cancellationToken);
-    const { error: pendingErr } = await supabase.from("pending_bookings").insert({
-      ref_number: refNumber,
-      payload:    body,
-      amount:     total,
-      expires_at: expiresAt,
-      payment_provider: "maya",
+    const ctx = { branchId: branch.id, ownerId, expiresAt, cancellationTokenHash, pricing };
+
+    const holds: Hold[] = [];
+    for (const [index, item] of items.entries()) {
+      holds.push(await createHold(supabase, ctx, item, { withConvenienceFee: index === 0 }, created));
+    }
+
+    // ── 6. The order. Its ref is the first booking's ref, so a 1-item order reads like today ──
+    const orderRef       = holds[0].refNumber;
+    const orderAmount    = holds.reduce((sum, h) => sum + h.total, 0);
+    const convenienceFee = holds[0].convenienceFee;
+    const { data: order, error: orderErr } = await supabase.from("booking_orders").insert({
+      order_ref:               orderRef,
+      owner_id:                ownerId,
+      branch_id:               branch.id,
+      amount:                  orderAmount,
+      convenience_fee:         convenienceFee,
+      item_count:              holds.length,
+      status:                  "pending",
+      payment_provider:        "maya",
       cancellation_token_hash: cancellationTokenHash,
+      expires_at:              expiresAt,
+    }).select("id, order_ref").single();
+    if (orderErr || !order) throw new Error(`Failed to create order: ${orderErr?.message}`);
+    created.orderId = order.id;
+
+    for (const h of holds) {
+      const { error: linkErr } = await supabase.from("bookings").update({ order_id: order.id }).eq("id", h.bookingId);
+      if (linkErr) throw new Error(`Failed to link booking to order: ${linkErr.message}`);
+    }
+    const { error: holdLinkErr } = await supabase.from("pending_bookings")
+      .update({ order_ref: orderRef }).in("ref_number", holds.map((h) => h.refNumber));
+    if (holdLinkErr) throw new Error(`Failed to link holds to order: ${holdLinkErr.message}`);
+
+    await releaseMutexes(supabase, created);
+
+    // ── 7. Maya line items: one per booking, plus the single convenience fee ──
+    const lineItems: object[] = holds.map((h, i) => {
+      const serviceAmount = h.subtotal - h.discountAmount;
+      return {
+        name:        serviceLineName(items[i]),
+        code:        String(h.service || "booking"),
+        description: h.discountAmount > 0
+          ? `${h.petName} — Member discount applied (−₱${h.discountAmount})`
+          : String(h.petName),
+        quantity: "1",
+        amount: { value: serviceAmount },
+        totalAmount: { value: serviceAmount },
+      };
     });
-    if (pendingErr) {
-      if (detailTable) await supabase.from(detailTable).delete().eq("booking_id", bookingId);
-      await supabase.from("bookings").delete().eq("id", bookingId);
-      throw new Error(`Failed to create pending checkout: ${pendingErr.message}`);
-    }
-
-    if (mutexKey && mutexToken) {
-      await supabase.rpc("release_inventory_mutex", {
-        p_lock_key: mutexKey,
-        p_lock_token: mutexToken,
-      });
-      mutexKey = null;
-      mutexToken = null;
-    }
-
-    // ── 6. Build Maya line items ──
-    const serviceAmount = subtotal - discountAmount;
-    const lineItems: object[] = [{
-      name:        serviceLineName(body),
-      code:        String(body.service || "booking"),
-      description: discountAmount > 0
-        ? `${body.petName} — Member discount applied (−₱${discountAmount})`
-        : String(body.petName),
-      quantity: "1",
-      amount: { value: serviceAmount },
-      totalAmount: { value: serviceAmount },
-    }];
     if (convenienceFee > 0) {
       lineItems.push({
         name: "Convenience Fee", code: "convenience_fee",
@@ -488,9 +551,9 @@ Deno.serve(async (req) => {
       });
     }
 
-    const ownerName   = `${body.ownerFirst} ${body.ownerLast}`.trim();
+    const ownerName = `${first.ownerFirst} ${first.ownerLast}`.trim();
 
-    // ── 7. Create Maya Checkout session ──
+    // ── 8. ONE Maya Checkout session for the whole order ──
     const mayaRes = await fetch(`${mayaBaseUrl()}/checkout/v1/checkouts`, {
       method: "POST",
       headers: {
@@ -498,20 +561,25 @@ Deno.serve(async (req) => {
         "Authorization": `Basic ${btoa(publicKey + ":")}`,
       },
       body: JSON.stringify({
-        totalAmount: { value: total, currency: "PHP" },
+        totalAmount: { value: orderAmount, currency: "PHP" },
         buyer: {
-          firstName: body.ownerFirst,
-          lastName: body.ownerLast,
-          contact: { email: body.ownerEmail, phone: body.ownerPhone },
+          firstName: first.ownerFirst,
+          lastName: first.ownerLast,
+          contact: { email: first.ownerEmail, phone: first.ownerPhone },
         },
         items: lineItems,
         redirectUrl: {
-          success: `${SITE_URL}/booking.html?payment=success&provider=maya&ref=${refNumber}`,
-          failure: `${SITE_URL}/booking.html?payment=failed&provider=maya&ref=${refNumber}`,
-          cancel:  `${SITE_URL}/booking.html?payment=cancelled&provider=maya&ref=${refNumber}`,
+          success: `${SITE_URL}/booking.html?payment=success&provider=maya&ref=${orderRef}`,
+          failure: `${SITE_URL}/booking.html?payment=failed&provider=maya&ref=${orderRef}`,
+          cancel:  `${SITE_URL}/booking.html?payment=cancelled&provider=maya&ref=${orderRef}`,
         },
-        requestReferenceNumber: refNumber,
-        metadata: { bookingId, refNumber, service: body.service, ownerName },
+        requestReferenceNumber: orderRef,
+        // bookingId/refNumber stay for legacy lookups; a 1-item order reads exactly as before.
+        metadata: {
+          orderId: order.id, orderRef,
+          bookingId: holds[0].bookingId, refNumber: orderRef,
+          service: holds[0].service, ownerName,
+        },
       }),
     });
 
@@ -519,12 +587,7 @@ Deno.serve(async (req) => {
 
     if (!mayaRes.ok) {
       console.error("Maya error:", JSON.stringify(mayaData));
-      // Roll back — remove the detail row, booking, and pending record since
-      // payment setup failed. Delete the detail row first in case the FK to
-      // bookings isn't ON DELETE CASCADE.
-      if (detailTable) await supabase.from(detailTable).delete().eq("booking_id", bookingId);
-      await supabase.from("bookings").delete().eq("id", bookingId);
-      await supabase.from("pending_bookings").delete().eq("ref_number", refNumber);
+      await rollback(supabase, created);
       throw new Error(mayaData?.message || mayaData?.error || "Failed to create Maya checkout");
     }
 
@@ -532,48 +595,34 @@ Deno.serve(async (req) => {
     const checkoutUrl = mayaData.redirectUrl;
     if (!sessionId || !checkoutUrl) throw new Error("Maya returned an incomplete checkout response");
 
-    // Store provider-neutral identifiers; legacy PayMongo data remains intact.
+    // Provider-neutral identifiers on the order and every hold.
     const { error: correlationErr } = await supabase.from("pending_bookings")
       .update({ gateway_checkout_id: sessionId })
-      .eq("ref_number", refNumber);
+      .in("ref_number", holds.map((h) => h.refNumber));
     // The webhook also matches requestReferenceNumber, so this is recoverable.
     if (correlationErr) console.error("Maya checkout correlation update failed:", correlationErr.message);
+    await supabase.from("booking_orders").update({ gateway_checkout_id: sessionId }).eq("id", order.id);
 
-    console.log(`Booking ${bookingId} | Session ${sessionId} | Ref ${refNumber}`);
-    createdBookingId = null;
-    createdDetailTable = null;
-    createdRefNumber = null;
+    console.log(`Order ${order.order_ref} | ${holds.length} booking(s) | Session ${sessionId}`);
+    created.bookings = []; created.details = []; created.refs = []; created.orderId = null;
 
     return new Response(
       JSON.stringify({
         success: true,
         checkout_url: checkoutUrl,
-        ref_number: refNumber,
-        booking_id: bookingId,
+        ref_number: orderRef,
+        booking_id: holds[0].bookingId,
+        booking_refs: holds.map((h) => h.refNumber),
         cancellation_token: cancellationToken,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
   } catch (err) {
-    if (supabase && mutexKey && mutexToken) {
-      try {
-        await supabase.rpc("release_inventory_mutex", {
-          p_lock_key: mutexKey,
-          p_lock_token: mutexToken,
-        });
-      } catch {}
-    }
-    if (supabase && createdBookingId) {
-      try {
-        if (createdDetailTable) {
-          await supabase.from(createdDetailTable).delete().eq("booking_id", createdBookingId);
-        }
-        if (createdRefNumber) {
-          await supabase.from("pending_bookings").delete().eq("ref_number", createdRefNumber);
-        }
-        await supabase.from("bookings").delete().eq("id", createdBookingId);
-      } catch {}
+    if (supabase) await rollback(supabase, created);
+    if (err instanceof CheckoutError) {
+      return new Response(JSON.stringify({ error: err.message, ...(err.payload || {}) }),
+        { status: err.status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
     console.error("create-maya-checkout error:", err instanceof Error ? err.message : err);
     const message = err instanceof Error ? err.message : "Unexpected error";

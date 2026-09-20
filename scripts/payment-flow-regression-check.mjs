@@ -90,6 +90,41 @@ assert(
   "Reconcile must still skip (never cancel) when Maya is unreachable.",
 );
 
+// ── create-maya-checkout: one order, one payment, one fee ────────────────────────
+const checkout = readFileSync(resolve(root, "supabase/functions/create-maya-checkout/index.ts"), "utf8");
+assert(
+  /Array\.isArray\(requestBody\?\.items\)[\s\S]{0,120}\[requestBody\]/.test(checkout),
+  "Checkout must accept both today's single-booking body and { items: [...] }.",
+);
+assert(
+  /withConvenienceFee: index === 0/.test(checkout),
+  "The convenience fee is an order-level charge: only the first item may carry it.",
+);
+assert(
+  /holds\.reduce\(\(sum, h\) => sum \+ h\.total, 0\)/.test(checkout),
+  "The order amount must be the sum of its bookings' totals (so reports stay correct).",
+);
+assert(
+  /requestReferenceNumber: orderRef/.test(checkout),
+  "Maya must be given the ORDER ref, which is what the webhook and reconcile look up.",
+);
+const orderInsertAt = checkout.indexOf('from("booking_orders").insert');
+const releaseAt = checkout.indexOf("await releaseMutexes(supabase, created);\n\n    // ── 7.");
+assert(orderInsertAt > 0 && releaseAt > orderInsertAt,
+  "Inventory locks must be held until the whole order is written, so two items cannot take the same slot.");
+assert(
+  /if \(created\.orderId\) await supabase\.from\("booking_orders"\)\.delete\(\)/.test(checkout),
+  "Rollback must delete the order row too.",
+);
+assert(
+  /MAX_ORDER_ITEMS/.test(checkout),
+  "MAX_ORDER_ITEMS must gate cart size (set it to 1 to refuse carts server-side).",
+);
+assert(
+  /Every booking in one checkout must be for the same customer and branch/.test(checkout),
+  "One order = one customer at one branch.",
+);
+
 if (!process.exitCode) {
   console.log("Payment flow regression check passed.");
 }
