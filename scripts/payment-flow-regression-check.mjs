@@ -70,6 +70,26 @@ assert(/paymentAmount:\s*Number\(pending\.amount\)/.test(orderFn), "Orders: each
 assert(/\.eq\("status",\s*"pending"\)\.select\("id"\)\.maybeSingle\(\)/.test(orderFn), "Orders: the order must be claimed atomically (status pending → paid).");
 assert(/if\s*\(\s*claimed\s*&&\s*details\.length\s*\)/.test(orderFn), "Orders: only the event that claimed the order may send the confirmation email.");
 
+// ── reconcile-maya-bookings: never look an order's booking up by its own ref ─────
+const reconcile = readFileSync(resolve(root, "supabase/functions/reconcile-maya-bookings/index.ts"), "utf8");
+assert(/order_ref/.test(reconcile), "Reconcile must read pending_bookings.order_ref.");
+assert(
+  /expectedTotal = Number\(order\.amount\)/.test(reconcile),
+  "Reconcile phase 1 must compare Maya's payment against the ORDER total for order holds.",
+);
+assert(
+  /const expectedTotal = Number\(order \? order\.amount : group\.bookings\[0\]\.total\)/.test(reconcile),
+  "Reconcile phase 2 (recovery) must use the order total for bookings that belong to an order.",
+);
+assert(
+  /\.eq\("reference_number", payment\.id\)\.eq\("booking_id", booking\.id\)/.test(reconcile),
+  "Reconcile's duplicate-payment check must be per (payment, booking): an order's bookings share one payment ID.",
+);
+assert(
+  /reason: "maya_unreachable"/.test(reconcile),
+  "Reconcile must still skip (never cancel) when Maya is unreachable.",
+);
+
 if (!process.exitCode) {
   console.log("Payment flow regression check passed.");
 }
