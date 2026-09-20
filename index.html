@@ -1,14 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- Google Analytics -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-LBWQT2HSGQ"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-  gtag('config', 'G-LBWQT2HSGQ');
-</script>
+<base href="/">
+<meta name="robots" content="noindex,nofollow,noarchive">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
@@ -197,7 +191,7 @@
     .svc-slide-feature-text { font-size:12px; }
     .svc-price-label { font-size:12px; }
     .svc-price-val { font-size:13px; }
-  
+
   /* Nav collapse — inactive labels hidden until tapped */
   .svc-nav:not(.nav-expanded) .svc-nav-item:not(.active) .svc-nav-label { max-width:0; opacity:0; pointer-events:none; }
   .svc-nav:not(.nav-expanded) .svc-nav-item:not(.active) { gap:0; }
@@ -493,8 +487,12 @@
   ]
 }
 </script>
+<link rel="stylesheet" href="/account-styles.css?v=20260801-birth-review">
 </head>
 <body>
+
+
+<div class="staging-account-nav" id="stagingAccountNav" aria-live="polite"></div>
 
 <!-- ══ FOLD 1 · HERO ══ -->
 <section class="snap-section" id="hero">
@@ -514,6 +512,7 @@
   <div class="loc-tabs">
     <div class="loc-tab active" onclick="switchLoc(0,true)">Estancia</div>
     <div class="loc-tab" onclick="switchLoc(1,true)">Eastwood</div>
+    <div class="loc-tab loc-tab-soon" onclick="switchLoc(2,true)" style="cursor:pointer">Greenhills <span class="soon-pill">Soon</span></div>
   </div>
   <div class="loc-slides-wrap" id="locSlides">
 
@@ -541,11 +540,23 @@
       </div>
     </div>
 
+    <!-- GREENHILLS coming soon -->
+    <div class="loc-slide">
+      <div class="loc-slide-img" style="background:linear-gradient(135deg,#0F1C26 0%,#1A3044 100%);display:flex;align-items:center;justify-content:center;">
+        <div style="text-align:center;padding:40px 32px">
+          <div style="font-size:64px;margin-bottom:20px;opacity:0.35">&#128663;</div>
+          <p style="font-family:'Fredoka One',cursive;font-size:32px;color:var(--mid);margin-bottom:10px">Coming Soon</p>
+          <p style="font-size:13px;color:var(--mid);font-weight:500;line-height:1.7;max-width:220px;margin:0 auto">Greenhills, San Juan<br>Our third home is on the way.</p>
+        </div>
+      </div>
+      <div class="loc-gradient"></div>
+    </div>
 
   </div>
   <div class="loc-dots" id="locDots">
     <div class="loc-dot active" onclick="switchLoc(0,true)"></div>
     <div class="loc-dot" onclick="switchLoc(1,true)"></div>
+    <div class="loc-dot" onclick="switchLoc(2,true)"></div>
   </div>
   <div class="loc-info">
     <p class="loc-info-name" id="locName">Estancia</p>
@@ -877,8 +888,48 @@
   </div>
 </div>
 
+<div class="staging-modal-overlay" id="stagingEntryModal" aria-hidden="true">
+  <div class="staging-modal" role="dialog" aria-modal="true" aria-labelledby="stagingEntryTitle">
+    <button class="staging-modal-close" type="button" data-close-staging aria-label="Close">&times;</button>
+    <p class="staging-kicker">Before you book</p>
+    <h2 id="stagingEntryTitle">How would you like to continue?</h2>
+    <p class="staging-modal-copy" id="stagingEntryIntro">You can check availability as a guest. Signing in lets Barkhaus fill in your owner and pet details.</p>
+    <div class="staging-choice-list" id="stagingEntryChoices">
+      <button class="staging-choice" type="button" data-staging-action="google">
+        <span class="staging-choice-icon">G</span>
+        <span><strong>Sign in with Google</strong><small>Use your existing Barkhaus account</small></span>
+      </button>
+      <button class="staging-choice" type="button" data-staging-action="email">
+        <span class="staging-choice-icon">@</span>
+        <span><strong>Sign in with email</strong><small>Use a one-time code for your existing account</small></span>
+      </button>
+      <button class="staging-choice" type="button" data-staging-action="guest">
+        <span class="staging-choice-icon">🐾</span>
+        <span><strong>Continue as a guest</strong><small>View schedules without creating an account</small></span>
+      </button>
+      <a class="staging-choice" href="/account/">
+        <span class="staging-choice-icon">＋</span>
+        <span><strong>Create an account</strong><small>Save your owner, pet, and vaccine details for future visits</small></span>
+      </a>
+    </div>
+    <div class="staging-account-form" id="stagingAccountForm" hidden></div>
+  </div>
+</div>
+
+<div class="staging-modal-overlay" id="stagingManageModal" aria-hidden="true">
+  <div class="staging-modal" role="dialog" aria-modal="true" aria-labelledby="stagingManageTitle">
+    <button class="staging-modal-close" type="button" data-close-manage aria-label="Close">&times;</button>
+    <p class="staging-kicker">Customer account</p>
+    <h2 id="stagingManageTitle">Owner &amp; pets</h2>
+    <div id="stagingManageContent"></div>
+  </div>
+</div>
+
 <script src="/env-staging.js"></script>
 <script src="/env.js"></script>
 <script src="index.js?v=20260624-hotel-features"></script>
+<script src="/supabase.min.js"></script>
+<script src="/customer-account.js?v=20260801-birth-review"></script>
+<script src="/app.js?v=20260801-birth-review"></script>
 </body>
 </html>

@@ -91,7 +91,7 @@
     localStorage.setItem(MODE_KEY, mode);
     sessionStorage.removeItem('barkhaus_staging_cart');
     sessionStorage.removeItem('barkhaus_staging_context');
-    window.location.href = '/staging/booking/';
+    window.location.href = '/booking';
   }
 
   function renderAccountNav() {
@@ -99,7 +99,7 @@
     var customer = readCustomer();
     if (!customer) {
       accountNav.innerHTML = CustomerApi && CustomerApi.hasSession && CustomerApi.hasSession()
-        ? '<a class="staging-account-pill" href="/staging/account/">Finish creating your account</a>'
+        ? '<a class="staging-account-pill" href="/account/">Finish creating your account</a>'
         : '<button type="button" class="staging-account-pill" data-open-entry>Sign in</button>';
       return;
     }
@@ -526,7 +526,7 @@
       var result = await api.savePet(pet);
       await api.uploadDocuments(result.petId, petDocumentsDraft);
       localStorage.setItem(MODE_KEY, 'account');
-      window.location.href = '/staging/?account=created';
+      window.location.href = '/?account=created';
     } catch (error) {
       showPetFormError(error.message || 'We could not create your account. Please try again.');
       if (button) { button.disabled = false; button.textContent = 'Create account'; }
@@ -658,7 +658,7 @@
     if (bookingLink) {
       event.preventDefault();
       if (readCustomer()) continueToBooking('account');
-      else if (CustomerApi && CustomerApi.hasSession && CustomerApi.hasSession()) window.location.href = '/staging/account/';
+      else if (CustomerApi && CustomerApi.hasSession && CustomerApi.hasSession()) window.location.href = '/account/';
       else openModal(entryModal);
       return;
     }
@@ -743,9 +743,9 @@
           var verified = await requireCustomerApi().verifyEmailOtp(verify.getAttribute('data-email'), otp);
           if (verified.profile && (verified.profile.pets || []).length) {
             localStorage.setItem(MODE_KEY, 'account');
-            window.location.href = '/staging/?account=signed-in';
+            window.location.href = '/?account=signed-in';
           } else if (isAccountPage) beginSetupFromSession();
-          else window.location.href = '/staging/account/';
+          else window.location.href = '/account/';
         } catch (error) {
           verify.disabled = false;
           verify.textContent = 'Verify code';
@@ -853,7 +853,7 @@
       if (isAccountPage) {
         if (state.session && state.profile && (state.profile.pets || []).length) {
           localStorage.setItem(MODE_KEY, 'account');
-          window.location.replace('/staging/?account=signed-in');
+          window.location.replace('/?account=signed-in');
           return;
         }
         if (state.session) {
@@ -875,10 +875,10 @@
         var params = new URLSearchParams(window.location.search);
         if (params.get('account') === 'created' && state.profile) {
           showLandingNotice('Account created. You’re signed in as ' + state.profile.firstName + '. Press Book Now whenever you’re ready.');
-          window.history.replaceState({}, '', '/staging/');
+          window.history.replaceState({}, '', '/');
         } else if (params.get('account') === 'signed-in' && state.profile) {
           showLandingNotice('Welcome back, ' + state.profile.firstName + '. You’re signed in.');
-          window.history.replaceState({}, '', '/staging/');
+          window.history.replaceState({}, '', '/');
         }
       }
     } catch (error) {

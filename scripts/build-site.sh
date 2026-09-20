@@ -11,10 +11,10 @@ sh scripts/write-env.sh          # writes env-staging.js (empty on production bu
 rm -rf dist && mkdir dist
 
 # Top-level pages, scripts and site files.
-cp ./*.html ./*.js favicon.ico robots.txt sitemap.xml _headers dist/
+cp ./*.html ./*.js ./*.css favicon.ico robots.txt sitemap.xml _headers _redirects dist/
 
 # Public folders.
-for dir in images blog staging admin; do
+for dir in images blog account admin; do
   cp -R "$dir" dist/
 done
 

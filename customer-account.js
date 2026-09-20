@@ -131,7 +131,7 @@
     var result = await client.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: window.location.origin + '/staging/account/',
+        redirectTo: window.location.origin + '/account/',
         queryParams: { prompt: 'select_account' }
       }
     });
@@ -143,7 +143,7 @@
       email: String(email || '').trim().toLowerCase(),
       options: {
         shouldCreateUser: true,
-        emailRedirectTo: window.location.origin + '/staging/account/'
+        emailRedirectTo: window.location.origin + '/account/'
       }
     });
     if (result.error) throw result.error;

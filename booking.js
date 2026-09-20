@@ -4,6 +4,8 @@
    Depends on: pricing.js, validation.js
    ═══════════════════════════════════════════════════════════ */
 
+// Which Supabase this flow books against is decided by env.js (production only on barkhaus.ph).
+
 
 // ── CONFIG ──
 var SUPABASE_URL        = BH_ENV.supabaseUrl;          // from env.js
@@ -20,6 +22,487 @@ var PAYMENT_GATEWAY_PROVIDER = 'maya';
 function hostedPaymentEndpoint() {
   return PAYMENT_GATEWAY_PROVIDER === 'maya' ? CREATE_MAYA_CHECKOUT_URL : CREATE_PAYMENT_URL;
 }
+
+// ═══════════════════════════════════════════════════════════
+// STAGING INSERTIONS — customer profiles + multi-booking order
+// ═══════════════════════════════════════════════════════════
+(function installStagingBookingInsertions() {
+  var CUSTOMER_KEY = 'barkhaus_staging_customer';
+  var MODE_KEY = 'barkhaus_staging_mode';
+  var CART_KEY = 'barkhaus_staging_cart';
+  var ORDER_RESULT_KEY = 'barkhaus_order_result';
+  var CONTEXT_KEY = 'barkhaus_staging_context';
+  var isAdditional = new URLSearchParams(window.location.search).get('additional') === '1';
+  var currentReviewSnapshot = null;
+
+  function readJson(storage, key, fallback) {
+    try { return JSON.parse(storage.getItem(key) || JSON.stringify(fallback)); }
+    catch (error) { return fallback; }
+  }
+
+  function customer() {
+    return readJson(localStorage, CUSTOMER_KEY, null);
+  }
+
+  function cart() {
+    return readJson(sessionStorage, CART_KEY, []);
+  }
+
+  function escapeHtml(value) {
+    return String(value == null ? '' : value).replace(/[&<>'"]/g, function(char) {
+      return ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' })[char];
+    });
+  }
+
+  function serviceLabel(value) {
+    return ({ grooming:'Grooming', hotel:'Pet Hotel', daycare:'Daycare', studio:'BarkStudio' })[value] || value || 'Service';
+  }
+
+  function locationLabel(value) {
+    return ({ estancia:'Estancia', eastwood:'Eastwood' })[value] || value || 'Branch';
+  }
+
+  function itemSchedule(state) {
+    if (state.service === 'grooming') return (state.groomDate || 'Date not set') + (state.groomSlot ? ' · ' + state.groomSlot : '');
+    if (state.service === 'hotel') return (state.hotelCheckin || 'Check-in') + ' → ' + (state.hotelCheckout || 'Check-out');
+    if (state.service === 'daycare') return state.daycareDate || 'Date not set';
+    if (state.service === 'studio') return (state.studioDate || 'Date not set') + (state.studioSlot ? ' · ' + state.studioSlot : '');
+    return 'Schedule not set';
+  }
+
+  function snapshotCurrent() {
+    collectAllState();
+    var details = document.getElementById('bookingDetailsSummary');
+    var price = document.getElementById('priceBreakdown');
+    var priceComponents = '';
+    if (price && !price.hasAttribute('data-staging-order-total')) {
+      var clone = price.cloneNode(true);
+      clone.querySelectorAll('.subtotal-line, .total-line').forEach(function(line) { line.remove(); });
+      clone.querySelectorAll('.price-line').forEach(function(line) {
+        var label = line.querySelector('.price-line-label');
+        if (label && /convenience fee/i.test(label.textContent || '')) line.remove();
+      });
+      priceComponents = clone.innerHTML;
+    }
+    return {
+      location: booking.location,
+      service: booking.service,
+      petName: booking.petName || 'Pet',
+      schedule: itemSchedule(booking),
+      total: getRunningTotal(),
+      ownerFirst: booking.ownerFirst,
+      ownerLast: booking.ownerLast,
+      ownerEmail: booking.ownerEmail,
+      ownerPhone: booking.ownerPhone,
+      bookingState: JSON.parse(JSON.stringify(booking)),
+      detailsHtml: details && !details.classList.contains('staging-all-bookings') ? details.innerHTML : '',
+      priceComponentsHtml: priceComponents
+    };
+  }
+
+  function orderItems(includeCurrent) {
+    var items = cart().slice();
+    if (includeCurrent && booking.service) items.push(currentReviewSnapshot || snapshotCurrent());
+    return items;
+  }
+
+  function orderAmounts(items) {
+    var allocations = items.reduce(function(sum, item) { return sum + (Number(item.total) || 0); }, 0);
+    var fee = allocations > 0 ? currentConvenienceFee() : 0;
+    return { allocations:allocations, fee:fee, total:allocations + fee };
+  }
+
+  function renderOrderPanel(items) {
+    var amounts = orderAmounts(items);
+    var rows = items.map(function(item, index) {
+      return '<details class="staging-order-item">' +
+        '<summary><span><strong>' + escapeHtml('Booking ' + (index + 1)) + '</strong><small>' + escapeHtml(item.petName) + ' · ' + escapeHtml(serviceLabel(item.service)) + '<br>' + escapeHtml(item.schedule) + '</small></span>' +
+        '<span class="staging-order-item-amount">₱' + (Number(item.total) || 0).toLocaleString() + '</span><span class="staging-order-chevron" aria-hidden="true">⌄</span></summary>' +
+        '<div class="staging-order-item-body">' +
+          '<div class="staging-booking-review-details">' + (item.detailsHtml || fallbackDetails(item)) + '</div>' +
+          '<div class="staging-booking-review-price"><p class="summary-group-title">Price breakdown</p>' +
+            (item.priceComponentsHtml || '') +
+            '<div class="price-line total-line"><span class="price-line-label">Booking total</span><span class="price-line-val">₱' + (Number(item.total) || 0).toLocaleString() + '</span></div>' +
+          '</div>' +
+        '</div>' +
+      '</details>';
+    }).join('');
+    return '<div class="staging-order-panel">' +
+      '<div class="staging-order-head"><strong>Your order</strong><span>' + items.length + ' booking' + (items.length === 1 ? '' : 's') + ' · ' + escapeHtml(locationLabel(items[0] && items[0].location)) + '</span></div>' +
+      rows +
+      (amounts.fee ? '<div class="staging-order-fee"><span>Online payment fee</span><span>₱' + amounts.fee.toLocaleString() + '</span></div>' : '') +
+      '<div class="staging-order-total"><span>Total</span><span>₱' + amounts.total.toLocaleString() + '</span></div>' +
+    '</div>';
+  }
+
+  function fallbackDetails(item) {
+    return '<div class="summary-group"><div class="summary-group-title">Booking</div>' +
+      '<div class="summary-row"><span class="summary-key">Branch</span><span class="summary-val">' + escapeHtml(locationLabel(item.location)) + '</span></div>' +
+      '<div class="summary-row"><span class="summary-key">Service</span><span class="summary-val">' + escapeHtml(serviceLabel(item.service)) + '</span></div>' +
+      '<div class="summary-row"><span class="summary-key">Schedule</span><span class="summary-val">' + escapeHtml(item.schedule) + '</span></div></div>' +
+      '<div class="summary-group"><div class="summary-group-title">Pet details</div>' +
+      '<div class="summary-row"><span class="summary-key">Name</span><span class="summary-val">' + escapeHtml(item.petName) + '</span></div></div>';
+  }
+
+  function updateOrderNavTotal(items) {
+    var amounts = orderAmounts(items);
+    var nav = document.getElementById('navTotal');
+    var value = document.getElementById('navTotalVal');
+    if (nav && value && amounts.total > 0) {
+      value.textContent = '₱' + amounts.total.toLocaleString();
+      nav.style.display = 'flex';
+    }
+  }
+
+  function renderProfiles() {
+    var profile = customer();
+    var mode = localStorage.getItem(MODE_KEY) || 'guest';
+    var accountButton = document.getElementById('stagingBookingAccount');
+    if (accountButton) {
+      accountButton.textContent = profile && mode === 'account' ? 'My account' : 'Guest';
+      accountButton.onclick = function() { window.location.href = '/'; };
+    }
+    if (!profile || mode !== 'account') return;
+
+    ['ownerFirst','ownerLast','ownerEmail','ownerPhone'].forEach(function(id) {
+      var field = document.getElementById(id);
+      var values = { ownerFirst:profile.firstName, ownerLast:profile.lastName, ownerEmail:profile.email, ownerPhone:profile.phone };
+      if (field) field.value = values[id] || '';
+    });
+    var ownerSource = document.getElementById('ownerSource');
+    if (ownerSource && profile.source) ownerSource.value = profile.source;
+
+    var petsPanel = document.getElementById('stagingSavedPets');
+    petsPanel.hidden = false;
+    petsPanel.innerHTML = '<p class="staging-saved-title">Choose one of your pets</p><div class="staging-pet-chips">' +
+      (profile.pets || []).map(function(pet) {
+        return '<button type="button" class="staging-pet-chip" data-staging-pet="' + escapeHtml(pet.id) + '">🐾 ' + escapeHtml(pet.name) + ' · ' + escapeHtml(pet.breed || pet.animal) + '</button>';
+      }).join('') + '</div>';
+
+    document.querySelectorAll('[data-staging-service-pets]').forEach(function(panel) {
+      panel.hidden = false;
+      panel.innerHTML = '<p class="staging-saved-title">Which pet is this booking for?</p><p class="staging-saved-copy">Choose a saved pet to use their size and profile details.</p><div class="staging-pet-chips">' +
+        (profile.pets || []).map(function(pet) {
+          return '<button type="button" class="staging-pet-chip" data-staging-pet="' + escapeHtml(pet.id) + '">🐾 ' + escapeHtml(pet.name) + '<small>' + escapeHtml(pet.breed || pet.animal) + ' · ' + escapeHtml(PET_SIZE_LABELS[pet.size] || pet.size || '') + '</small></button>';
+        }).join('') + '</div>';
+    });
+
+    var ownerPanel = document.getElementById('stagingSavedOwner');
+    ownerPanel.hidden = false;
+    ownerPanel.innerHTML = '<p class="staging-saved-title">Your contact details are ready</p><div style="font-size:12px;color:var(--mid);line-height:1.55">' +
+      escapeHtml(profile.firstName + ' ' + profile.lastName) + '<br>' + escapeHtml(profile.email) + ' · ' + escapeHtml(profile.phone) + '</div>';
+  }
+
+  function applyPet(petId, selectServiceSize) {
+    var profile = customer();
+    var pet = profile && (profile.pets || []).find(function(item) { return item.id === petId; });
+    if (!pet) return;
+    document.querySelectorAll('[data-staging-pet]').forEach(function(button) {
+      button.classList.toggle('selected', button.getAttribute('data-staging-pet') === petId);
+    });
+    var previousSize = booking.petSize;
+    booking.vaccines = Object.assign({}, pet.vaccines || {});
+    booking.petSize = pet.size || booking.petSize;
+    document.getElementById('petName').value = pet.name || '';
+    document.getElementById('petBreed').value = pet.breed || '';
+    document.getElementById('petAgeNum').value = pet.age || '';
+    document.getElementById('petAgeUnit').value = pet.ageUnit || 'years';
+    document.getElementById('petMedical').value = pet.medical || '';
+    var animalButton = document.getElementById(pet.animal === 'cat' ? 'petTypeCat' : 'petTypeDog');
+    if (animalButton) selectAnimalType(animalButton, pet.animal || 'dog');
+    var genderButton = Array.from(document.querySelectorAll('#petGenderGrid .gender-btn')).find(function(button) {
+      return button.getAttribute('onclick').indexOf("'" + pet.gender + "'") !== -1;
+    });
+    if (genderButton) selectGender(genderButton, pet.gender);
+    var tempButton = Array.from(document.querySelectorAll('.temp-btn')).find(function(button) {
+      return button.getAttribute('onclick').indexOf("'" + pet.temperament + "'") !== -1;
+    });
+    if (tempButton) selectTemperament(tempButton, pet.temperament);
+    booking.petName = pet.name;
+    booking.petBreed = pet.breed;
+    booking.petAge = pet.age;
+    booking.petAgeUnit = pet.ageUnit;
+    booking.petMedical = pet.medical;
+    booking.petTemperament = pet.temperament;
+
+    var sizeDisplay = document.getElementById('petSizeDisplay');
+    if (sizeDisplay && booking.petSize) sizeDisplay.value = PET_SIZE_LABELS[booking.petSize] || booking.petSize;
+    var sizeSelect = document.getElementById('petSizeSelect');
+    if (sizeSelect && booking.petSize) sizeSelect.value = booking.petSize;
+
+    function setProfileValue(id, profileValue) {
+      var field = document.getElementById(id);
+      if (field) field.value = profileValue || '';
+    }
+    setProfileValue('hotelFeeding', pet.feeding);
+    setProfileValue('hotelMeds', pet.medications);
+    setProfileValue('vetClinic', pet.vetClinic);
+    setProfileValue('vetContact', pet.vetContact);
+    setProfileValue('vetAddress', pet.vetAddress);
+    setProfileValue('emergencyName', pet.emergencyName);
+    setProfileValue('emergencyPhone', pet.emergencyPhone);
+    booking.hotelFeeding = pet.feeding || '';
+    booking.hotelMeds = pet.medications || '';
+    booking.vetClinic = pet.vetClinic || '';
+    booking.vetContact = pet.vetContact || '';
+    booking.vetAddress = pet.vetAddress || '';
+    booking.emergencyName = pet.emergencyName || '';
+    booking.emergencyPhone = pet.emergencyPhone || '';
+
+    uploadedVaccineFiles = (pet.vaccineDocuments || []).map(function(document) {
+      var name = typeof document === 'string' ? document : document.name;
+      return {
+        name:name || 'Vaccine document',
+        type:'application/octet-stream',
+        size:0,
+        savedProfileDocument:true,
+        profileDocumentId:typeof document === 'object' ? document.id || null : null
+      };
+    });
+    var vaccineList = document.getElementById('vaccineFileList');
+    if (vaccineList) {
+      vaccineList.innerHTML = uploadedVaccineFiles.map(function(file) {
+        return '<div class="file-item">📁 ' + escapeHtml(file.name) + '<span style="color:var(--success);font-weight:700">Saved to profile</span></div>';
+      }).join('');
+      var vaccineLabels = {
+        Anti_rabies:'Anti-rabies',
+        '5_6_8_in_1_shot':'5/6/8-in-1 shot',
+        Kennel_Cough___Bordetella:'Kennel Cough / Bordetella',
+        Tick_and_Flea_treatment:'Tick and Flea treatment',
+        All_in_1_shot:'All-in-1 shot',
+        Anti_parasitic:'Anti-parasitic'
+      };
+      Object.keys(pet.vaccineValidity || {}).forEach(function(key) {
+        if (pet.vaccines && pet.vaccines[key] && pet.vaccineValidity[key]) {
+          vaccineList.insertAdjacentHTML('beforeend', '<div class="file-item"><span>' + escapeHtml(vaccineLabels[key] || key) + '</span><strong>Valid until ' + escapeHtml(pet.vaccineValidity[key]) + '</strong></div>');
+        }
+      });
+    }
+    var bringRecords = document.getElementById('bringVaccines');
+    if (bringRecords) bringRecords.classList.toggle('checked', !!pet.bringRecords);
+
+    if (pet.membershipId) {
+      setMembership(true);
+      document.getElementById('membershipId').value = pet.membershipId;
+      onMembershipIdInput();
+    } else {
+      setMembership(false);
+    }
+
+    if (booking.service === 'grooming') updateGroomTotal();
+    if (booking.service === 'hotel') calcHotelTotal();
+    if (booking.service === 'daycare') calcDaycareTotal();
+    var sizeChangedOnPetStep = currentStep === 5 && previousSize && pet.size && previousSize !== pet.size;
+    if ((selectServiceSize || sizeChangedOnPetStep) && pet.size) {
+      var gridId = { grooming:'groomSizeGrid', hotel:'hotelSizeGrid', daycare:'daycareSizeGrid' }[booking.service];
+      var selector = gridId && Array.from(document.querySelectorAll('#' + gridId + ' .pet-type-btn')).find(function(button) {
+        return (button.getAttribute('onclick') || '').indexOf("'" + pet.size + "'") !== -1;
+      });
+      if (selector && booking.service === 'grooming') selectGroomSize(selector, pet.size);
+      if (selector && booking.service === 'hotel') selectHotelSize(selector, pet.size);
+      if (selector && booking.service === 'daycare') selectDaycareSize(selector, pet.size);
+      if (sizeChangedOnPetStep) goToStep(3);
+    }
+    checkSeniorWaiver();
+    refreshContinueBtn();
+  }
+
+  async function addAnother() {
+    var captured = await submitBooking({ captureOnly: true });
+    if (!captured) return;   // a check failed; submitBooking already told the customer why
+    var items = cart();
+    var current = currentReviewSnapshot || snapshotCurrent();
+    current.payload = captured.payload;   // what this item will send at checkout
+    items.push(current);
+    sessionStorage.setItem(CART_KEY, JSON.stringify(items));
+    sessionStorage.setItem(CONTEXT_KEY, JSON.stringify({
+      location: current.location,
+      ownerFirst: current.ownerFirst,
+      ownerLast: current.ownerLast,
+      ownerEmail: current.ownerEmail,
+      ownerPhone: current.ownerPhone
+    }));
+    _redirectingToPayment = true;
+    window.location.href = '/booking?additional=1';
+  }
+
+  function renderCombinedReview() {
+    var summary = document.getElementById('stepSummary');
+    if (!summary || !document.getElementById('bookingDetailsSummary')) return;
+    var existing = summary.querySelector('.staging-order-panel');
+    if (existing) existing.remove();
+    var oldAdd = summary.querySelector('.staging-add-booking');
+    if (oldAdd) oldAdd.remove();
+    currentReviewSnapshot = snapshotCurrent();
+    var items = cart().slice();
+    items.push(currentReviewSnapshot);
+    summary.insertAdjacentHTML('afterbegin', renderOrderPanel(items));
+    summary.insertAdjacentHTML('beforeend', '<button type="button" class="staging-add-booking" onclick="addAnotherStagingBooking()">+ Add another service or pet at ' + escapeHtml(locationLabel(booking.location)) + '</button>');
+    var notice = document.getElementById('hostedCheckoutNotice');
+    if (notice) notice.style.display = 'none';
+    var details = document.getElementById('bookingDetailsSummary');
+    if (details) {
+      details.style.display = 'none';
+    }
+    var price = document.getElementById('priceBreakdown');
+    if (price) {
+      price.setAttribute('data-staging-order-total', '');
+      price.style.display = 'none';
+      var label = price.previousElementSibling;
+      if (label && label.classList.contains('section-label')) label.style.display = 'none';
+    }
+    updateOrderNavTotal(items);
+  }
+
+  // One checkout for the whole cart: every item's payload goes in one request, the server prices
+  // them, holds them, charges one convenience fee and returns one payment link.
+  async function proceedToPayment() {
+    var saved = cart();
+    if (!saved.length) return productionSubmitBooking();   // single booking: unchanged path
+
+    var captured = await submitBooking({ captureOnly: true });
+    if (!captured) return;
+
+    var items = saved.map(function (item) { return item.payload; }).filter(Boolean).concat([captured.payload]);
+    if (items.length !== saved.length + 1) {
+      showToast('One of your bookings could not be prepared. Please remove and re-add it.', 7000);
+      return;
+    }
+
+    var btn = document.getElementById('btnNext');
+    if (btn) { btn.textContent = 'Processing...'; btn.disabled = true; }
+    try {
+      var res = await fetch(hostedPaymentEndpoint(), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+          'apikey': SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({ items: items }),
+      });
+      var data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || ('Checkout failed (' + res.status + ')'));
+      if (!data.checkout_url) throw new Error('No checkout URL returned by payment provider');
+      storePaymentRef(data.ref_number);
+      try {
+        sessionStorage.setItem(ORDER_RESULT_KEY, JSON.stringify({
+          orderRef: data.ref_number,
+          bookingRefs: data.booking_refs || [],
+          cancellationToken: data.cancellation_token || null,
+          itemCount: items.length,
+        }));
+      } catch (e) {}
+      _redirectingToPayment = true;
+      window.location.href = data.checkout_url;
+    } catch (err) {
+      if (btn) { btn.textContent = 'Proceed to payment'; btn.disabled = false; }
+      showToast(err && err.message ? err.message : 'Checkout failed. Please try again.', 8000);
+    }
+  }
+
+  function restoreAdditionalContext() {
+    if (!isAdditional) return;
+    var context = readJson(sessionStorage, CONTEXT_KEY, null);
+    if (!context || !context.location) return;
+    ['ownerFirst','ownerLast','ownerEmail','ownerPhone'].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) el.value = context[id] || '';
+    });
+    booking.ownerFirst = context.ownerFirst || '';
+    booking.ownerLast = context.ownerLast || '';
+    booking.ownerEmail = context.ownerEmail || '';
+    booking.ownerPhone = context.ownerPhone || '';
+    var locationCard = Array.from(document.querySelectorAll('#step1 .option-card')).find(function(card) {
+      return (card.getAttribute('onclick') || '').indexOf("'" + context.location + "'") !== -1;
+    });
+    if (locationCard) selectLocation(locationCard, context.location);
+    goToStep(2);
+    var main = document.querySelector('.booking-main');
+    if (main && !main.querySelector('.staging-flow-note')) {
+      main.insertAdjacentHTML('afterbegin', '<div class="staging-flow-note"><strong>Adding another booking to ' + escapeHtml(locationLabel(context.location)) + '</strong>Owner details are already attached to this order, so this pass skips the owner step.</div>');
+    }
+  }
+
+  var productionShowSummary = showSummary;
+  showSummary = function() {
+    productionShowSummary();
+  };
+
+  var productionBuildSummary = buildSummary;
+  buildSummary = function() {
+    var details = document.getElementById('bookingDetailsSummary');
+    if (details) {
+      details.className = 'summary-card';
+      details.style.display = '';
+    }
+    var notice = document.getElementById('hostedCheckoutNotice');
+    if (notice) notice.style.display = '';
+    var price = document.getElementById('priceBreakdown');
+    if (price) {
+      price.removeAttribute('data-staging-order-total');
+      price.style.display = '';
+      var label = price.previousElementSibling;
+      if (label && label.classList.contains('section-label')) {
+        label.textContent = 'Price breakdown';
+        label.style.display = '';
+      }
+    }
+    productionBuildSummary();
+    if (onSummaryScreen) renderCombinedReview();
+  };
+
+  var productionUpdateSummaryNav = updateBottomNavForSummary;
+  var productionSubmitBooking = submitBooking;
+  updateBottomNavForSummary = function() {
+    productionUpdateSummaryNav();
+    var notice = document.getElementById('hostedCheckoutNotice');
+    if (notice) notice.style.display = 'none';
+    var button = document.getElementById('btnNext');
+    button.textContent = 'Proceed to payment';
+    button.onclick = proceedToPayment;
+    updateOrderNavTotal(orderItems(true));
+  };
+
+  submitBooking = function() {
+    proceedToPayment();
+  };
+
+  var productionNextStep = nextStep;
+  nextStep = function() {
+    if (isAdditional && currentStep === 5) {
+      if (!validateStep(5)) return;
+      collectStep(5);
+      goToStep(7);
+      return;
+    }
+    productionNextStep();
+  };
+
+  var productionPrevStep = prevStep;
+  prevStep = function() {
+    if (isAdditional && !onSummaryScreen && !onPaymentScreen && currentStep === 7) {
+      goToStep(5);
+      return;
+    }
+    productionPrevStep();
+  };
+
+  window.addAnotherStagingBooking = addAnother;
+
+  document.addEventListener('click', function(event) {
+    var petButton = event.target.closest('[data-staging-pet]');
+    if (petButton) applyPet(petButton.getAttribute('data-staging-pet'), !!petButton.closest('[data-staging-service-pets]'));
+  });
+
+  function initialize() {
+    renderProfiles();
+    setTimeout(restoreAdditionalContext, 250);
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initialize);
+  else initialize();
+})();
 
 function currentConvenienceFee() {
   return IS_WALKIN || (booking && booking.simulatePayment) ? 0 : CONVENIENCE_FEE;
@@ -323,7 +806,7 @@ function hotelRoomBlocksQuery(branchId, checkin, checkout) {
       document.body.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;font-family:sans-serif;background:#1a1a1a;color:#fff;text-align:center;padding:24px">'
         + '<div style="font-size:48px;margin-bottom:16px">🔒</div>'
         + '<h2 style="margin:0 0 8px">Access Restricted</h2>'
-        + '<p style="color:#aaa;margin:0 0 24px">Walk-in bookings must be started from the admin panel.</p>'
+        + '<p style="color:#aaa;margin:0 0 24px">This booking link is no longer available. Please return to the Barkhaus home page to start again.</p>'
         + '<a href="index.html" style="background:#FFCE58;color:#1a1a1a;padding:10px 24px;border-radius:20px;text-decoration:none;font-weight:700">Go to Home</a>'
         + '</div>';
       return;
@@ -3705,7 +4188,10 @@ async function handleBookingConflict(conflictType) {
 // ── SUBMIT (manual transfer or hosted-checkout redirect) ──
 var _submitting = false; // global lock - prevents double-submit on fast double-tap
 
-async function submitBooking() {
+// opts.captureOnly: run every check and upload, then return the payload instead of sending it.
+// The cart uses this, because each item's details live in the page and are gone after a reload.
+async function submitBooking(opts) {
+  opts = opts || {};
   if (_submitting) return; // already in flight
   // Guard: pricing must be loaded — a ₱0 booking would be accepted by the edge function
   if (!_pricingLoaded) {
@@ -3947,6 +4433,12 @@ async function submitBooking() {
       uploadToken:     paymentReceiptUploadToken,
     } : null,
   };
+
+  if (opts.captureOnly) {
+    _submitting = false;
+    if (btn) { btn.textContent = 'Confirm Booking'; btn.disabled = false; }
+    return { payload: payload, subtotal: subtotal, discountAmount: discAmt, convenienceFee: fee, total: total };
+  }
 
   // Show loading state. Move the spinner to the summary panel (and away from the
   // payment form) so that error/timeout recovery — which rebuilds the summary —

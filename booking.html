@@ -1,14 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- Google Analytics -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-LBWQT2HSGQ"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-  gtag('config', 'G-LBWQT2HSGQ');
-</script>
+<base href="/">
+<meta name="robots" content="noindex,nofollow,noarchive">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <link rel="icon" href="/favicon.ico" sizes="any">
@@ -297,7 +291,7 @@
   .pay-loading-text { text-align:center;margin:0;font-size:14px;color:var(--mid); }
 
 </style>
-<title>Book Your Pet's Stay, Daycare, or Grooming at Barkhaus</title>
+<title>Book at Barkhaus</title>
 <meta name="description" content="Easy online booking for Barkhaus pet hotel, daycare, grooming, and indoor play. Reserve your pet's stay or visit with a few simple steps.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Barkhaus">
@@ -309,16 +303,18 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Book Your Pet's Stay, Daycare, or Grooming at Barkhaus">
 <meta name="twitter:description" content="Easy online booking for Barkhaus pet hotel, daycare, grooming, and indoor play. Reserve your pet's stay or visit with a few simple steps.">
+<link rel="stylesheet" href="/account-styles.css?v=20260801-birth-review">
 </head>
 <body>
 
+
 <header class="booking-header">
-  <a href="index.html" class="header-back">
+  <a href="/" class="header-back">
     <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
     Exit
   </a>
-  <a href="index.html" class="header-logo"><img src="images/Barkhaus Pet Hotel Logo.png" alt="Barkhaus Pet Hotel Logo" style="height:22px;width:auto;display:inline-block;vertical-align:middle;"></a>
-  <div style="width:48px"></div>
+  <a href="/" class="header-logo"><img src="images/Barkhaus Pet Hotel Logo.png" alt="Barkhaus Pet Hotel Logo" style="height:22px;width:auto;display:inline-block;vertical-align:middle;"></a>
+  <button type="button" class="staging-booking-account" id="stagingBookingAccount">Guest</button>
 </header>
 
 <div class="progress-wrap" id="progressWrap">
@@ -364,6 +360,15 @@
         <span class="option-badge">Test amount: &#8369;1.00</span>
       </div>
       <span class="option-icon">&#128179;</span>
+    </div>
+    <div class="option-card disabled">
+      <div class="option-radio"></div>
+      <div class="option-info">
+        <p class="option-name">Greenhills</p>
+        <p class="option-detail">San Juan, Metro Manila</p>
+        <span class="option-badge badge-soon">Coming soon</span>
+      </div>
+      <span class="option-icon">&#127959;</span>
     </div>
   </div>
 </div>
@@ -430,6 +435,7 @@
 
   <!-- GROOMING SPECS -->
   <div id="groomSpecsSection" style="display:none">
+    <div class="staging-saved-panel staging-service-pets" data-staging-service-pets hidden></div>
     <p class="section-label">Pet size</p>
     <div class="pet-type-grid" id="groomSizeGrid">
       <div class="pet-type-btn" onclick="selectGroomSize(this,'small_dog')">
@@ -500,6 +506,7 @@
 
   <!-- HOTEL DATES -->
   <div id="hotelDatesSection" style="display:none">
+    <div class="staging-saved-panel staging-service-pets" data-staging-service-pets hidden></div>
     <p class="section-label">Pet size</p>
     <div class="pet-type-grid" id="hotelSizeGrid">
       <div class="pet-type-btn" onclick="selectHotelSize(this,'small_dog')">
@@ -563,6 +570,7 @@
 
   <!-- DAYCARE SCHEDULE -->
   <div id="daycareScheduleSection" style="display:none">
+    <div class="staging-saved-panel staging-service-pets" data-staging-service-pets hidden></div>
     <p class="section-label">Pet size</p>
     <div class="pet-type-grid" id="daycareSizeGrid">
       <div class="pet-type-btn" onclick="selectDaycareSize(this,'small_dog')">
@@ -746,6 +754,8 @@
   <p class="step-eyebrow" id="s5eyebrow">Step 5</p>
   <h1 class="step-title">About your pet</h1>
   <p class="step-subtitle">We want to make sure we take great care of them.</p>
+
+  <div class="staging-saved-panel" id="stagingSavedPets" hidden></div>
 
   <div class="form-group">
     <label class="form-label">Pet name <span class="required">*</span></label>
@@ -938,6 +948,7 @@
   <p class="step-eyebrow" id="s6eyebrow">Step 6</p>
   <h1 class="step-title">Your details</h1>
   <p class="step-subtitle">So we know who is dropping off this very important guest.</p>
+  <div class="staging-saved-panel" id="stagingSavedOwner" hidden></div>
   <div class="save-banner">
     <div class="save-banner-text">
       <strong>Save my details for next time</strong>
@@ -1305,7 +1316,7 @@
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
       Print / Save as PDF
     </button>
-    <a href="index.html" class="btn-home">Back to Home</a>
+    <a href="/" class="btn-home">Back to Home</a>
   </div>
 </div>
 
@@ -1315,7 +1326,7 @@
 <div class="bottom-nav" id="bottomNav">
   <button class="btn-back" id="btnBack" onclick="prevStep()" style="display:none">Back</button>
   <div class="nav-total" id="navTotal">
-    <span class="nav-total-label">Estimated</span>
+    <span class="nav-total-label">Total</span>
     <span class="nav-total-val" id="navTotalVal">&#8369;0</span>
   </div>
   <button class="btn-next" id="btnNext" onclick="nextStep()">Continue</button>
@@ -1325,7 +1336,7 @@
 <script src="/env.js"></script>
 <script src="pricing.js?v=20260701-membership-types"></script>
 <script src="validation.js"></script>
-<script src="booking.js?v=20260731-attachment-upload-guard"></script>
+<script src="/booking.js?v=20260801-birth-review"></script>
 
 <div id="contactModalOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:1000;align-items:center;justify-content:center;padding:24px" onclick="if(event.target===this)closeContactModal()">
   <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:20px;padding:28px 24px;max-width:340px;width:100%;text-align:center">
