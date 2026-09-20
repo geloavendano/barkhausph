@@ -308,7 +308,7 @@ function hostedPaymentEndpoint() {
   }
 
   async function addAnother() {
-    var captured = await submitBooking({ captureOnly: true });
+    var captured = await productionSubmitBooking({ captureOnly: true });
     if (!captured) return;   // a check failed; submitBooking already told the customer why
     var items = cart();
     var current = currentReviewSnapshot || snapshotCurrent();
@@ -360,7 +360,7 @@ function hostedPaymentEndpoint() {
     var saved = cart();
     if (!saved.length) return productionSubmitBooking();   // single booking: unchanged path
 
-    var captured = await submitBooking({ captureOnly: true });
+    var captured = await productionSubmitBooking({ captureOnly: true });
     if (!captured) return;
 
     var items = saved.map(function (item) { return item.payload; }).filter(Boolean).concat([captured.payload]);
@@ -464,6 +464,9 @@ function hostedPaymentEndpoint() {
     updateOrderNavTotal(orderItems(true));
   };
 
+  // Anything on this page that used to "confirm the booking" now starts the order checkout.
+  // Note: capture the payload with productionSubmitBooking (the original), never with this
+  // replacement — calling submitBooking() here would send the customer to payment instead.
   submitBooking = function() {
     proceedToPayment();
   };
