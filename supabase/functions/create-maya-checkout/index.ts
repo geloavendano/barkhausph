@@ -576,7 +576,7 @@ Deno.serve(async (req) => {
         JSON.stringify({
           success: true,
           simulated: true,
-          checkout_url: `/staging/simulate-payment.html?ref=${orderRef}&amount=${orderAmount}`,
+          checkout_url: `/simulate-payment.html?ref=${orderRef}&amount=${orderAmount}`,
           ref_number: orderRef,
           booking_id: holds[0].bookingId,
           booking_refs: holds.map((h) => h.refNumber),

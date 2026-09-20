@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Staging emails · Barkhaus</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32.png">
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    :root { --bg:#0F1C26; --surface:#1A3044; --border:rgba(77,150,185,0.30);
+            --cream:#F0EDE6; --cream-m:#B8D4E0; --mid:#6AAEC8; --blue:#4D96B9; --yellow:#FFCE58; }
+    * { box-sizing:border-box; margin:0; padding:0; }
+    body { background:var(--bg); color:var(--cream); font-family:'Nunito',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; padding:24px 16px; }
+    main { max-width:720px; margin:0 auto; }
+    .tag { display:inline-block; font-size:10px; font-weight:800; letter-spacing:0.18em; text-transform:uppercase;
+           color:var(--yellow); border:1px solid rgba(255,206,88,0.4); border-radius:999px; padding:4px 10px; margin-bottom:12px; }
+    h1 { font-size:22px; font-weight:900; margin-bottom:6px; }
+    p.lead { color:var(--cream-m); font-size:14px; line-height:1.6; margin-bottom:18px; }
+    .item { background:var(--surface); border:1px solid var(--border); border-radius:12px; margin-bottom:12px; overflow:hidden; }
+    .item header { padding:12px 14px; display:flex; gap:10px; justify-content:space-between; align-items:center; cursor:pointer; }
+    .item h2 { font-size:14px; font-weight:800; }
+    .item .meta { font-size:11px; color:var(--mid); margin-top:3px; }
+    .item iframe { width:100%; height:70vh; border:0; border-top:1px solid var(--border); background:#0F1C26; display:none; }
+    .item.open iframe { display:block; }
+    .toggle { font-size:12px; font-weight:800; color:var(--blue); white-space:nowrap; }
+    .empty, .error { font-size:14px; color:var(--cream-m); background:var(--surface); border:1px solid var(--border);
+                     border-radius:12px; padding:16px; line-height:1.6; }
+    a { color:var(--blue); }
+  </style>
+</head>
+<body>
+<main>
+  <div class="tag">Staging · nothing is sent</div>
+  <h1>Emails this booking would have sent</h1>
+  <p class="lead">On staging, confirmation emails and staff alerts are saved here instead of being delivered.
+     Open one to see exactly what the customer would receive.</p>
+  <div id="list"><p class="empty">Loading…</p></div>
+</main>
+<script src="/env-staging.js"></script>
+<script src="/env.js"></script>
+<script>
+(function () {
+  var list = document.getElementById('list');
+  var ref = (new URLSearchParams(location.search).get('ref') || '').toUpperCase();
+
+  if (!window.BH_ENV || window.BH_ENV.name !== 'staging') {
+    list.innerHTML = '<p class="error">This page only works on staging. Real emails are sent by Resend.</p>';
+    return;
+  }
+
+  function escapeHtml(value) {
+    return String(value == null ? '' : value).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  var url = window.BH_ENV.supabaseUrl + '/rest/v1/staging_email_outbox'
+    + '?select=id,to_email,cc_email,subject,html,created_at&order=created_at.desc&limit=20';
+  if (ref) url += '&subject=ilike.*' + encodeURIComponent(ref) + '*';
+
+  fetch(url, {
+    headers: { apikey: window.BH_ENV.supabaseAnonKey, Authorization: 'Bearer ' + window.BH_ENV.supabaseAnonKey },
+  })
+    .then(function (res) { if (!res.ok) throw new Error('Could not read the outbox (' + res.status + ')'); return res.json(); })
+    .then(function (rows) {
+      if (!rows.length) {
+        list.innerHTML = '<p class="empty">No emails yet'
+          + (ref ? ' for <strong>' + escapeHtml(ref) + '</strong>' : '')
+          + '. Complete a simulated payment and they will appear here.</p>';
+        return;
+      }
+      list.innerHTML = rows.map(function (row) {
+        var when = new Date(row.created_at).toLocaleString('en-PH', { timeZone: 'Asia/Manila' });
+        return '<article class="item">'
+          + '<header><div><h2>' + escapeHtml(row.subject) + '</h2>'
+          + '<div class="meta">To ' + escapeHtml(row.to_email)
+          + (row.cc_email ? ' · cc ' + escapeHtml(row.cc_email) : '') + ' · ' + escapeHtml(when) + '</div></div>'
+          + '<span class="toggle">Open</span></header>'
+          + '<iframe sandbox srcdoc="' + escapeHtml(row.html) + '"></iframe></article>';
+      }).join('');
+      list.querySelectorAll('.item header').forEach(function (head) {
+        head.addEventListener('click', function () {
+          var item = head.parentElement;
+          item.classList.toggle('open');
+          head.querySelector('.toggle').textContent = item.classList.contains('open') ? 'Close' : 'Open';
+        });
+      });
+    })
+    .catch(function (err) {
+      list.innerHTML = '<p class="error">' + escapeHtml(err.message) + '</p>';
+    });
+})();
+</script>
+</body>
+</html>

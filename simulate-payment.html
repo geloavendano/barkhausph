@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Simulate payment · Barkhaus staging</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32.png">
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    :root { --bg:#0F1C26; --surface:#1A3044; --raised:#1F3D55; --border:rgba(77,150,185,0.30);
+            --cream:#F0EDE6; --cream-m:#B8D4E0; --mid:#6AAEC8; --blue:#4D96B9; --yellow:#FFCE58;
+            --green:#6BCB77; --red:#F5556F; }
+    * { box-sizing:border-box; margin:0; padding:0; }
+    body { background:var(--bg); color:var(--cream); font-family:'Nunito',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+           display:flex; align-items:center; justify-content:center; min-height:100vh; padding:24px 16px; }
+    main { width:100%; max-width:460px; }
+    .tag { display:inline-block; font-size:10px; font-weight:800; letter-spacing:0.18em; text-transform:uppercase;
+           color:var(--yellow); border:1px solid rgba(255,206,88,0.4); border-radius:999px; padding:4px 10px; margin-bottom:14px; }
+    h1 { font-size:24px; font-weight:900; margin-bottom:6px; }
+    p.lead { color:var(--cream-m); font-size:14px; line-height:1.6; margin-bottom:20px; }
+    .card { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:20px; }
+    .row { display:flex; justify-content:space-between; font-size:13px; padding:8px 0; border-bottom:1px solid rgba(77,150,185,0.12); }
+    .row:last-of-type { border-bottom:0; }
+    .row span:first-child { color:var(--mid); }
+    .row span:last-child { font-weight:700; }
+    .choices { display:flex; flex-direction:column; gap:10px; margin-top:18px; }
+    button { width:100%; padding:13px 16px; border-radius:10px; border:1px solid transparent; font:inherit; font-size:14px;
+             font-weight:800; cursor:pointer; text-align:left; display:flex; justify-content:space-between; align-items:center; gap:10px; }
+    button small { display:block; font-weight:600; font-size:11px; opacity:0.75; margin-top:2px; }
+    button:disabled { opacity:0.55; cursor:not-allowed; }
+    .paid { background:var(--green); color:#0F1C26; }
+    .failed { background:var(--raised); color:var(--cream); border-color:var(--border); }
+    .abandoned { background:transparent; color:var(--cream-m); border-color:var(--border); }
+    .note { margin-top:16px; font-size:12px; color:var(--mid); line-height:1.6; }
+    .result { margin-top:16px; font-size:13px; line-height:1.6; padding:12px 14px; border-radius:10px;
+              background:rgba(77,150,185,0.1); border:1px solid var(--border); display:none; }
+    .result.error { background:rgba(245,85,111,0.12); border-color:rgba(245,85,111,0.5); color:#FFD9E0; }
+    a { color:var(--blue); }
+  </style>
+</head>
+<body>
+<main>
+  <div class="tag">Staging · no real payment</div>
+  <h1>Simulate the payment</h1>
+  <p class="lead">Barkhaus has no Maya test account, so staging asks you what should happen instead.
+     Everything after this point is the real code: the same confirmation, emails and admin records.</p>
+
+  <div class="card">
+    <div class="row"><span>Order</span><span id="ref">—</span></div>
+    <div class="row"><span>Amount</span><span id="amount">—</span></div>
+    <div class="choices">
+      <button class="paid" data-scenario="paid">Payment succeeds<small>Bookings confirmed, confirmation email written to the staging outbox</small></button>
+      <button class="failed" data-scenario="failed">Payment fails<small>Staff alert; the hold stays until it expires, so the customer can retry</small></button>
+      <button class="abandoned" data-scenario="expired">Customer abandons it<small>Hold expires: every booking in the order is released</small></button>
+    </div>
+    <div class="result" id="result"></div>
+    <p class="note" id="note"></p>
+  </div>
+</main>
+<script src="/env-staging.js"></script>
+<script src="/env.js"></script>
+<script>
+(function () {
+  var params = new URLSearchParams(location.search);
+  var ref = (params.get('ref') || '').toUpperCase();
+  var amount = params.get('amount');
+  var result = document.getElementById('result');
+  var note = document.getElementById('note');
+
+  document.getElementById('ref').textContent = ref || '—';
+  document.getElementById('amount').textContent = amount ? '₱' + Number(amount).toLocaleString() : '—';
+
+  // The simulator exists only where env.js says staging. On barkhaus.ph this page does nothing.
+  var isStaging = window.BH_ENV && window.BH_ENV.name === 'staging';
+  if (!isStaging) {
+    document.querySelectorAll('button').forEach(function (b) { b.disabled = true; });
+    result.className = 'result error';
+    result.style.display = 'block';
+    result.textContent = 'This page only works on staging. Real payments go through Maya.';
+    return;
+  }
+
+  note.textContent = 'Tip: after a successful payment you can read the confirmation email at /email-preview.html?ref=' + ref;
+
+  document.querySelectorAll('button[data-scenario]').forEach(function (btn) {
+    btn.addEventListener('click', async function () {
+      var scenario = btn.getAttribute('data-scenario');
+      document.querySelectorAll('button').forEach(function (b) { b.disabled = true; });
+      result.className = 'result';
+      result.style.display = 'block';
+      result.textContent = 'Simulating…';
+      try {
+        var res = await fetch(window.BH_ENV.supabaseUrl + '/functions/v1/simulate-payment', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': window.BH_ENV.supabaseAnonKey,
+            'Authorization': 'Bearer ' + window.BH_ENV.supabaseAnonKey,
+          },
+          body: JSON.stringify({ ref: ref, scenario: scenario }),
+        });
+        var data = await res.json();
+        if (!res.ok) throw new Error(data.error || ('Simulation failed (' + res.status + ')'));
+        if (scenario === 'paid') {
+          location.href = '/booking?payment=success&provider=maya&ref=' + encodeURIComponent(ref);
+          return;
+        }
+        if (scenario === 'failed') {
+          location.href = '/booking?payment=failed&provider=maya&ref=' + encodeURIComponent(ref);
+          return;
+        }
+        location.href = '/booking?payment=cancelled&provider=maya&ref=' + encodeURIComponent(ref);
+      } catch (err) {
+        result.className = 'result error';
+        result.textContent = err.message || 'Simulation failed.';
+        document.querySelectorAll('button').forEach(function (b) { b.disabled = false; });
+      }
+    });
+  });
+})();
+</script>
+</body>
+</html>

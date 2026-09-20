@@ -4,21 +4,7 @@
    Depends on: pricing.js, validation.js
    ═══════════════════════════════════════════════════════════ */
 
-// Staging is deliberately read-only. Preserve production GETs and the small
-// set of read-only RPC POSTs used for availability/membership, and reject every
-// edge-function, Storage, or data-write request before it leaves the browser.
-var STAGING_PREVIEW = true;
-var _stagingNativeFetch = window.fetch.bind(window);
-window.fetch = function(input, init) {
-  var url = typeof input === 'string' ? input : (input && input.url) || '';
-  var method = String((init && init.method) || (input && input.method) || 'GET').toUpperCase();
-  var isSafeGet = method === 'GET' || method === 'HEAD';
-  var isReadOnlyRpc = method === 'POST' && /\/rest\/v1\/rpc\/(get_grooming_occupancy|get_hotel_occupancy|get_studio_occupancy|validate_member)(?:\?|$)/.test(url);
-  if (/\/functions\/v1\//.test(url) || /\/storage\/v1\//.test(url) || (!isSafeGet && !isReadOnlyRpc)) {
-    return Promise.reject(new Error('This action is not available on this page yet.'));
-  }
-  return _stagingNativeFetch(input, init);
-};
+// Which Supabase this flow books against is decided by env.js (production only on barkhaus.ph).
 
 
 // ── CONFIG ──
@@ -44,8 +30,8 @@ function hostedPaymentEndpoint() {
   var CUSTOMER_KEY = 'barkhaus_staging_customer';
   var MODE_KEY = 'barkhaus_staging_mode';
   var CART_KEY = 'barkhaus_staging_cart';
+  var ORDER_RESULT_KEY = 'barkhaus_order_result';
   var CONTEXT_KEY = 'barkhaus_staging_context';
-  var ORDER_REF = 'BH-3CE089';
   var isAdditional = new URLSearchParams(window.location.search).get('additional') === '1';
   var currentReviewSnapshot = null;
 
@@ -129,9 +115,8 @@ function hostedPaymentEndpoint() {
   function renderOrderPanel(items) {
     var amounts = orderAmounts(items);
     var rows = items.map(function(item, index) {
-      var suffix = String.fromCharCode(65 + index);
       return '<details class="staging-order-item">' +
-        '<summary><span><strong>' + escapeHtml(ORDER_REF + '-' + suffix) + '</strong><small>' + escapeHtml(item.petName) + ' · ' + escapeHtml(serviceLabel(item.service)) + '<br>' + escapeHtml(item.schedule) + '</small></span>' +
+        '<summary><span><strong>' + escapeHtml('Booking ' + (index + 1)) + '</strong><small>' + escapeHtml(item.petName) + ' · ' + escapeHtml(serviceLabel(item.service)) + '<br>' + escapeHtml(item.schedule) + '</small></span>' +
         '<span class="staging-order-item-amount">₱' + (Number(item.total) || 0).toLocaleString() + '</span><span class="staging-order-chevron" aria-hidden="true">⌄</span></summary>' +
         '<div class="staging-order-item-body">' +
           '<div class="staging-booking-review-details">' + (item.detailsHtml || fallbackDetails(item)) + '</div>' +
@@ -143,7 +128,7 @@ function hostedPaymentEndpoint() {
       '</details>';
     }).join('');
     return '<div class="staging-order-panel">' +
-      '<div class="staging-order-head"><strong>Order ' + ORDER_REF + '</strong><span>' + items.length + ' booking' + (items.length === 1 ? '' : 's') + ' · ' + escapeHtml(locationLabel(items[0] && items[0].location)) + '</span></div>' +
+      '<div class="staging-order-head"><strong>Your order</strong><span>' + items.length + ' booking' + (items.length === 1 ? '' : 's') + ' · ' + escapeHtml(locationLabel(items[0] && items[0].location)) + '</span></div>' +
       rows +
       (amounts.fee ? '<div class="staging-order-fee"><span>Online payment fee</span><span>₱' + amounts.fee.toLocaleString() + '</span></div>' : '') +
       '<div class="staging-order-total"><span>Total</span><span>₱' + amounts.total.toLocaleString() + '</span></div>' +
@@ -322,9 +307,12 @@ function hostedPaymentEndpoint() {
     refreshContinueBtn();
   }
 
-  function addAnother() {
+  async function addAnother() {
+    var captured = await submitBooking({ captureOnly: true });
+    if (!captured) return;   // a check failed; submitBooking already told the customer why
     var items = cart();
     var current = currentReviewSnapshot || snapshotCurrent();
+    current.payload = captured.payload;   // what this item will send at checkout
     items.push(current);
     sessionStorage.setItem(CART_KEY, JSON.stringify(items));
     sessionStorage.setItem(CONTEXT_KEY, JSON.stringify({
@@ -366,12 +354,51 @@ function hostedPaymentEndpoint() {
     updateOrderNavTotal(items);
   }
 
-  function proceedToPayment() {
-    if (STAGING_PREVIEW) {
-      showToast('Payment is not enabled in this preview yet. At launch, this button will open secure Maya checkout.', 7000);
+  // One checkout for the whole cart: every item's payload goes in one request, the server prices
+  // them, holds them, charges one convenience fee and returns one payment link.
+  async function proceedToPayment() {
+    var saved = cart();
+    if (!saved.length) return productionSubmitBooking();   // single booking: unchanged path
+
+    var captured = await submitBooking({ captureOnly: true });
+    if (!captured) return;
+
+    var items = saved.map(function (item) { return item.payload; }).filter(Boolean).concat([captured.payload]);
+    if (items.length !== saved.length + 1) {
+      showToast('One of your bookings could not be prepared. Please remove and re-add it.', 7000);
       return;
     }
-    productionSubmitBooking();
+
+    var btn = document.getElementById('btnNext');
+    if (btn) { btn.textContent = 'Processing...'; btn.disabled = true; }
+    try {
+      var res = await fetch(hostedPaymentEndpoint(), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+          'apikey': SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({ items: items }),
+      });
+      var data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || ('Checkout failed (' + res.status + ')'));
+      if (!data.checkout_url) throw new Error('No checkout URL returned by payment provider');
+      storePaymentRef(data.ref_number);
+      try {
+        sessionStorage.setItem(ORDER_RESULT_KEY, JSON.stringify({
+          orderRef: data.ref_number,
+          bookingRefs: data.booking_refs || [],
+          cancellationToken: data.cancellation_token || null,
+          itemCount: items.length,
+        }));
+      } catch (e) {}
+      _redirectingToPayment = true;
+      window.location.href = data.checkout_url;
+    } catch (err) {
+      if (btn) { btn.textContent = 'Proceed to payment'; btn.disabled = false; }
+      showToast(err && err.message ? err.message : 'Checkout failed. Please try again.', 8000);
+    }
   }
 
   function restoreAdditionalContext() {
@@ -4161,7 +4188,10 @@ async function handleBookingConflict(conflictType) {
 // ── SUBMIT (manual transfer or hosted-checkout redirect) ──
 var _submitting = false; // global lock - prevents double-submit on fast double-tap
 
-async function submitBooking() {
+// opts.captureOnly: run every check and upload, then return the payload instead of sending it.
+// The cart uses this, because each item's details live in the page and are gone after a reload.
+async function submitBooking(opts) {
+  opts = opts || {};
   if (_submitting) return; // already in flight
   // Guard: pricing must be loaded — a ₱0 booking would be accepted by the edge function
   if (!_pricingLoaded) {
@@ -4403,6 +4433,12 @@ async function submitBooking() {
       uploadToken:     paymentReceiptUploadToken,
     } : null,
   };
+
+  if (opts.captureOnly) {
+    _submitting = false;
+    if (btn) { btn.textContent = 'Confirm Booking'; btn.disabled = false; }
+    return { payload: payload, subtotal: subtotal, discountAmount: discAmt, convenienceFee: fee, total: total };
+  }
 
   // Show loading state. Move the spinner to the summary panel (and away from the
   // payment form) so that error/timeout recovery — which rebuilds the summary —
