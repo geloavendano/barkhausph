@@ -106,6 +106,56 @@ async function nudgeMayaFinalizer(ref: string): Promise<void> {
   }
 }
 
+// ── Orders (2026-09) ─────────────────────────────────────────────────────────
+// A hosted checkout can cover several bookings. The ref the customer returns with is the ORDER ref
+// (which, for a 1-item order, is also the booking's ref). The page shows one outcome for the order,
+// so the children's states have to be summarised into one.
+type OrderChild = { ref_number: string; status: string; payment_status: string };
+type OrderSummary = { status: string; payment_status: string; confirmed: boolean };
+
+// children: every booking in the order, e.g.
+//   [{ ref_number: "BH-3CE089", status: "confirmed", payment_status: "paid" },
+//    { ref_number: "BH-9F21AB", status: "pending",   payment_status: "unpaid" }]
+// Returns what the confirmation page shows for the whole order. `confirmed: true` makes the page say
+// "Booking confirmed" and stop polling; false keeps it waiting (or shows the cancelled state).
+function orderStatusFromChildren(children: OrderChild[]): OrderSummary {
+  if (children.length === 0) return { status: "cancelled", payment_status: "unpaid", confirmed: false };
+
+  const paid = children.filter((c) => c.status === "confirmed" && c.payment_status === "paid");
+  if (paid.length === children.length) return { status: "confirmed", payment_status: "paid", confirmed: true };
+
+  // Still waiting on the payment: keep the page polling rather than showing a verdict too early.
+  if (children.some((c) => c.status === "pending" && c.payment_status === "unpaid")) {
+    return { status: "pending", payment_status: "unpaid", confirmed: false };
+  }
+
+  if (children.every((c) => c.status === "cancelled")) {
+    return { status: "cancelled", payment_status: "unpaid", confirmed: false };
+  }
+
+  // Mixed and settled (e.g. one booking paid, another cancelled). The customer DID pay, so stop
+  // polling and show the confirmation; the page lists each booking with its own state, and the
+  // "partial" status lets it flag the ones that need attention.
+  return { status: "partial", payment_status: paid.length > 0 ? "paid" : "unpaid", confirmed: paid.length > 0 };
+}
+
+async function orderChildren(supabase: any, orderId: string): Promise<OrderChild[]> {
+  const { data } = await supabase.from("bookings")
+    .select("ref_number,status,payment_status")
+    .eq("order_id", orderId)
+    .order("created_at", { ascending: true });
+  return (data ?? []) as OrderChild[];
+}
+
+async function findOrderForRef(supabase: any, ref: string) {
+  const { data: byRef } = await supabase.from("booking_orders").select("id,order_ref,amount,status").eq("order_ref", ref).maybeSingle();
+  if (byRef) return byRef;
+  const { data: booking } = await supabase.from("bookings").select("order_id").eq("ref_number", ref).maybeSingle();
+  if (!booking?.order_id) return null;
+  const { data: byId } = await supabase.from("booking_orders").select("id,order_ref,amount,status").eq("id", booking.order_id).maybeSingle();
+  return byId ?? null;
+}
+
 async function bookingStatus(supabase: any, ref: string) {
   return await supabase.from("bookings")
     .select("status,payment_status")
@@ -126,6 +176,32 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
+  // ── Order path: report on every booking in the order ──────────────────────
+  const order = await findOrderForRef(supabase, ref);
+  if (order) {
+    let children = await orderChildren(supabase, order.id);
+    const anyUnpaid = children.some((c) => c.status === "pending" && c.payment_status === "unpaid");
+    if (anyUnpaid) {
+      const { data: hold } = await supabase.from("pending_bookings")
+        .select("payment_provider").eq("order_ref", order.order_ref).limit(1).maybeSingle();
+      if (hold?.payment_provider === "maya") {
+        // The webhook resolves the order and finalizes every booking in it.
+        await nudgeMayaFinalizer(order.order_ref);
+        children = await orderChildren(supabase, order.id);
+      }
+    }
+    const summary = orderStatusFromChildren(children);
+    return json({
+      found: children.length > 0,
+      confirmed: summary.confirmed,
+      status: summary.status,
+      payment_status: summary.payment_status,
+      order_ref: order.order_ref,
+      bookings: children,
+    });
+  }
+
+  // ── Legacy single booking (no order row) ──────────────────────────────────
   let { data, error } = await bookingStatus(supabase, ref);
   if (error) return json({ error: "Status lookup failed" }, 500);
 
