@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -123,6 +123,40 @@ assert(
 assert(
   /Every booking in one checkout must be for the same customer and branch/.test(checkout),
   "One order = one customer at one branch.",
+);
+
+// ── Staging simulation must be impossible in production ─────────────────────────
+const simulator = readFileSync(resolve(root, "supabase/functions/simulate-payment/index.ts"), "utf8");
+for (const [name, src] of [["webhook", source], ["simulate-payment", simulator]]) {
+  assert(
+    /const PRODUCTION_PROJECT_REF = "dxttnbtfhpanyiyduevn"/.test(src),
+    `${name}: the production project id must be hard-coded, not read from a setting.`,
+  );
+  assert(
+    /\(Deno\.env\.get\("SUPABASE_URL"\) \|\| ""\)\.includes\(PRODUCTION_PROJECT_REF\)/.test(src),
+    `${name}: "am I production?" must be decided by the project's own id.`,
+  );
+}
+assert(
+  /if \(isProductionProject\(\)\) return json\(\{ error: "Not found" \}, 404\)/.test(simulator),
+  "simulate-payment must answer 404 on production, even if deployed there by mistake.",
+);
+assert(
+  /if \(isProductionProject\(\)\) return false;\s*\/\/ never in production/.test(source),
+  "The webhook must never accept a simulated event on production.",
+);
+assert(
+  /isSimulatedRequest[\s\S]{0,200}SIMULATION_TOKEN/.test(source),
+  "A simulated event must also carry the staging-only SIMULATION_TOKEN.",
+);
+// Staging-only objects must never be created by a migration (that would put them in production).
+const migrationsDir = resolve(root, "supabase/migrations");
+const migrationHits = readdirSync(migrationsDir)
+  .filter((f) => f.endsWith(".sql"))
+  .filter((f) => /staging_email_outbox|SIMULATION_TOKEN/.test(readFileSync(resolve(migrationsDir, f), "utf8")));
+assert(
+  migrationHits.length === 0,
+  `Staging-only objects must not appear in migrations: ${migrationHits.join(", ")}`,
 );
 
 if (!process.exitCode) {

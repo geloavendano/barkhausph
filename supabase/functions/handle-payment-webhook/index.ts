@@ -7,8 +7,51 @@ import { attachmentEntries, verifyAttachments } from "../_shared/attachments.ts"
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, paymongo-signature",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, paymongo-signature, x-simulated-payment",
 };
+
+// ── Staging simulation ────────────────────────────────────────────────────────
+// Barkhaus has no Maya sandbox, so staging fakes the payment result instead. A simulated event is
+// accepted ONLY when this function is not running against the production database. That check is the
+// project's own id, not a setting: production can never satisfy it, whatever env vars are set.
+const PRODUCTION_PROJECT_REF = "dxttnbtfhpanyiyduevn";
+
+function isProductionProject(): boolean {
+  return (Deno.env.get("SUPABASE_URL") || "").includes(PRODUCTION_PROJECT_REF);
+}
+
+function isSimulatedRequest(req: Request): boolean {
+  if (isProductionProject()) return false;               // never in production
+  const token = Deno.env.get("SIMULATION_TOKEN");
+  return !!token && req.headers.get("x-simulated-payment") === token;
+}
+
+// On staging, emails are written to an outbox table (created by staging.sh, never by a migration)
+// so testers can read them, and nothing is ever sent to a real customer.
+async function deliverEmail(payload: Record<string, unknown>): Promise<void> {
+  if (isProductionProject()) {
+    const apiKey = Deno.env.get("RESEND_API_KEY");
+    if (!apiKey) { console.error("RESEND_API_KEY not set — skipping email"); return; }
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) console.error("Resend error:", await res.text());
+    return;
+  }
+  try {
+    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const { error } = await supabase.from("staging_email_outbox").insert({
+      to_email: payload.to, cc_email: payload.cc ?? null,
+      subject: payload.subject, html: payload.html,
+    });
+    if (error) console.error("Staging outbox insert failed:", error.message);
+    else console.log("Staging: email captured in the outbox —", payload.subject);
+  } catch (err) {
+    console.error("Staging outbox failed:", err instanceof Error ? err.message : err);
+  }
+}
 
 function mayaBaseUrl(): string {
   return (Deno.env.get("MAYA_ENVIRONMENT") || "sandbox").toLowerCase() === "production"
@@ -231,8 +274,7 @@ async function markPaymentAlertLockSent(supabase: any, lockId: string | null, al
 }
 
 async function sendPaymentFailureAlert(details: Record<string, any>) {
-  const apiKey = Deno.env.get("RESEND_API_KEY");
-  if (!apiKey) throw new Error("RESEND_API_KEY not set");
+  if (isProductionProject() && !Deno.env.get("RESEND_API_KEY")) throw new Error("RESEND_API_KEY not set");
 
   const branchEmail = branchBookingEmailFromLocation(details.location);
   const recipients = Array.from(new Set([
@@ -268,10 +310,7 @@ async function sendPaymentFailureAlert(details: Record<string, any>) {
     </tr>
   `).join("");
 
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
+  await deliverEmail({
       from: "Barkhaus Pet Services <hello@barkhaus.ph>",
       to: recipients,
       subject: `Maya payment alert — ${eventType} — ${ref}`,
@@ -285,14 +324,10 @@ async function sendPaymentFailureAlert(details: Record<string, any>) {
             <table style="width:100%;border-collapse:collapse;font-size:14px">${htmlRows}</table>
           </div>
         </body></html>`,
-    }),
   });
-  if (!res.ok) throw new Error(await res.text());
 }
 
 async function sendBookingConfirmation(details: any) {
-  const apiKey = Deno.env.get("RESEND_API_KEY");
-  if (!apiKey) { console.error("RESEND_API_KEY not set — skipping email"); return; }
   const cc = branchBookingEmail(details.branch);
   const payload: Record<string, unknown> = {
     from: "Barkhaus Pet Services <hello@barkhaus.ph>",
@@ -303,12 +338,7 @@ async function sendBookingConfirmation(details: any) {
   if (cc && cc.toLowerCase() !== String(details.ownerEmail || "").toLowerCase()) {
     payload.cc = cc;
   }
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) console.error("Resend error:", await res.text());
+  await deliverEmail(payload);
 }
 
 function fmtDate(d?: string) {
@@ -974,13 +1004,17 @@ async function finalizePending(supabase: any, pending: any, ctx: FinalizeContext
   // One payments row per booking. For an order, every booking's row carries the same provider
   // payment ID (reference_number) and that booking's own share of the payment (ctx.paymentAmount).
   const paymentChannel = ctx.paymentChannel;
-  await supabase.from("payments").insert({
+  const { error: paymentErr } = await supabase.from("payments").insert({
     booking_id:       bookingId!, amount: ctx.paymentAmount,
     type:             "downpayment", method: "online",
     reference_number: ctx.paymentId || null,
     notes:            `${ctx.isMaya ? "Maya" : "PayMongo"} ${paymentChannel} — ${ctx.paymentId}`,
     recorded_by:      `${ctx.provider}_webhook`,
   });
+  // Never swallow this: a confirmed booking with no payments row is invisible money.
+  if (paymentErr) {
+    console.error("PAYMENT ROW INSERT FAILED for booking", bookingId, "ref", resolvedRef, ":", paymentErr.message);
+  }
 
   // ── 8. Delete pending ──
   await supabase.from("pending_bookings").delete().eq("id", pending.id);
@@ -1230,8 +1264,6 @@ async function handleOrderEvent(supabase: any, order: any, ev: OrderEvent): Prom
 }
 
 async function sendOrderConfirmation(order: any, details: Record<string, any>[]) {
-  const apiKey = Deno.env.get("RESEND_API_KEY");
-  if (!apiKey) { console.error("RESEND_API_KEY not set — skipping email"); return; }
   const first = details[0];
   const cc = branchBookingEmail(first.branch);
   const payload: Record<string, unknown> = {
@@ -1241,12 +1273,7 @@ async function sendOrderConfirmation(order: any, details: Record<string, any>[])
     html: buildOrderEmailHtml(order, details),
   };
   if (cc && cc.toLowerCase() !== String(first.ownerEmail || "").toLowerCase()) payload.cc = cc;
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) console.error("Resend error:", await res.text());
+  await deliverEmail(payload);
 }
 
 function emailCard(title: string, rows: string, marginBottom = 14): string {
@@ -1415,7 +1442,16 @@ Deno.serve(async (req) => {
     let description:    string = "";
     let bookingMeta:    Record<string, string> | null = null;
 
-    if (isMaya) {
+    const simulated = isSimulatedRequest(req);
+    if (simulated) console.log("STAGING SIMULATION — skipping Maya verification for", event?.id);
+
+    if (isMaya && simulated) {
+      // Staging only: the event itself is the source of truth, since there is no Maya to ask.
+      paymentId   = event.id || "";
+      paidAmount  = mayaAmount(event);
+      bookingMeta = (event.metadata || null) as Record<string, string> | null;
+      description = "Simulated payment (staging)";
+    } else if (isMaya) {
       const mayaSecret = Deno.env.get("MAYA_SECRET_KEY");
       if (!mayaSecret) throw new Error("MAYA_SECRET_KEY not configured");
 
