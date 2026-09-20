@@ -386,11 +386,21 @@ function hostedPaymentEndpoint() {
       if (!data.checkout_url) throw new Error('No checkout URL returned by payment provider');
       storePaymentRef(data.ref_number);
       try {
+        var orderItemsForScreen = saved.concat([currentReviewSnapshot || snapshotCurrent()]).map(function (item, i) {
+          return {
+            refNumber: (data.booking_refs || [])[i] || null,
+            service: item.service, petName: item.petName,
+            schedule: item.schedule, total: item.total,
+          };
+        });
+        var totals = orderAmounts(saved.concat([currentReviewSnapshot || snapshotCurrent()]));
         sessionStorage.setItem(ORDER_RESULT_KEY, JSON.stringify({
           orderRef: data.ref_number,
           bookingRefs: data.booking_refs || [],
           cancellationToken: data.cancellation_token || null,
           itemCount: items.length,
+          items: orderItemsForScreen,
+          fee: totals.fee, total: totals.total,
         }));
       } catch (e) {}
       _redirectingToPayment = true;
@@ -423,6 +433,57 @@ function hostedPaymentEndpoint() {
       main.insertAdjacentHTML('afterbegin', '<div class="staging-flow-note"><strong>Adding another booking to ' + escapeHtml(locationLabel(context.location)) + '</strong>Owner details are already attached to this order, so this pass skips the owner step.</div>');
     }
   }
+
+  // ── Confirmation screen for an order ─────────────────────────────────────
+  // The production screen describes one booking. An order has several, so list them all with their
+  // own refs (BH-XXXXXX-A, -B) under one order ref and one total.
+  function orderResult() {
+    try { return JSON.parse(sessionStorage.getItem(ORDER_RESULT_KEY) || 'null'); } catch (e) { return null; }
+  }
+
+  function renderOrderSuccess(result) {
+    var details = document.getElementById('successDetails');
+    var price = document.getElementById('successPriceBreakdown');
+    if (!details || !price) return;
+    var rows = (result.items || []).map(function (item, index) {
+      return '<div class="summary-group">' +
+        '<div class="summary-group-title">Booking ' + (index + 1) + ' · ' + escapeHtml(item.refNumber || '') + '</div>' +
+        '<div class="summary-row"><span class="summary-key">Service</span><span class="summary-val">' + escapeHtml(serviceLabel(item.service)) + '</span></div>' +
+        '<div class="summary-row"><span class="summary-key">Pet</span><span class="summary-val">' + escapeHtml(item.petName || '') + '</span></div>' +
+        '<div class="summary-row"><span class="summary-key">Schedule</span><span class="summary-val">' + escapeHtml(item.schedule || '') + '</span></div>' +
+        '<div class="summary-row"><span class="summary-key">Amount</span><span class="summary-val">₱' + Number(item.total || 0).toLocaleString() + '</span></div>' +
+        '</div>';
+    }).join('');
+    details.innerHTML = '<div class="summary-group"><div class="summary-group-title">Order ' +
+      escapeHtml(result.orderRef || '') + '</div>' +
+      '<div class="summary-row"><span class="summary-key">Bookings</span><span class="summary-val">' + (result.items || []).length + '</span></div></div>' + rows;
+    price.innerHTML =
+      (result.fee ? '<div class="price-line"><span class="price-line-label">Convenience fee</span><span>₱' + Number(result.fee).toLocaleString() + '</span></div>' : '') +
+      '<div class="total-line"><span>Total paid</span><span>₱' + Number(result.total || 0).toLocaleString() + '</span></div>';
+  }
+
+  // Staging only: read the confirmation email that would have been sent.
+  function addStagingEmailLink(ref) {
+    if (!window.BH_ENV || window.BH_ENV.name !== 'staging') return;
+    var details = document.getElementById('successDetails');
+    if (!details || document.getElementById('stagingEmailLink')) return;
+    details.insertAdjacentHTML('afterend',
+      '<a id="stagingEmailLink" class="staging-add-booking" href="/email-preview?ref=' + encodeURIComponent(ref || '') +
+      '" style="display:block;text-align:center;text-decoration:none">✉️ View the confirmation email (staging)</a>');
+  }
+
+  var productionShowHostedPaymentSuccess = showHostedPaymentSuccess;
+  showHostedPaymentSuccess = function (ref) {
+    var result = orderResult();
+    var isThisOrder = result && result.orderRef &&
+      (String(ref || '').toUpperCase().indexOf(String(result.orderRef).toUpperCase()) === 0);
+    productionShowHostedPaymentSuccess(ref);
+    if (isThisOrder && (result.items || []).length > 1) renderOrderSuccess(result);
+    // Paid: the cart has become bookings, so start clean.
+    try { sessionStorage.removeItem(CART_KEY); sessionStorage.removeItem(CONTEXT_KEY); } catch (e) {}
+    if (isThisOrder) { try { sessionStorage.removeItem(ORDER_RESULT_KEY); } catch (e) {} }
+    addStagingEmailLink(ref);
+  };
 
   var productionShowSummary = showSummary;
   showSummary = function() {

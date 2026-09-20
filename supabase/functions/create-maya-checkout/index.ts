@@ -511,6 +511,23 @@ Deno.serve(async (req) => {
 
     // ── 6. The order. Its ref is the first booking's ref, so a 1-item order reads like today ──
     const orderRef       = holds[0].refNumber;
+
+    // Multi-item orders read as one order with lettered bookings: BH-3CE089-A, -B, …
+    // The bookings trigger only generates a ref on INSERT, so renaming here sticks.
+    if (holds.length > 1) {
+      for (const [index, hold] of holds.entries()) {
+        const letteredRef = `${orderRef}-${String.fromCharCode(65 + index)}`;
+        const { error: refErr } = await supabase.from("bookings")
+          .update({ ref_number: letteredRef }).eq("id", hold.bookingId);
+        if (refErr) throw new Error(`Failed to set booking ref: ${refErr.message}`);
+        const { error: holdRefErr } = await supabase.from("pending_bookings")
+          .update({ ref_number: letteredRef }).eq("ref_number", hold.refNumber);
+        if (holdRefErr) throw new Error(`Failed to set hold ref: ${holdRefErr.message}`);
+        created.refs[created.refs.indexOf(hold.refNumber)] = letteredRef;
+        hold.refNumber = letteredRef;
+      }
+    }
+
     const orderAmount    = holds.reduce((sum, h) => sum + h.total, 0);
     const convenienceFee = holds[0].convenienceFee;
     const { data: order, error: orderErr } = await supabase.from("booking_orders").insert({

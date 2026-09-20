@@ -167,7 +167,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
 
   const ref = new URL(req.url).searchParams.get("ref")?.trim().toUpperCase();
-  if (!ref || !/^BH-[A-Z0-9]+$/.test(ref)) {
+  if (!ref || !/^BH-[A-Z0-9-]+$/.test(ref)) {
     return json({ error: "Invalid booking reference" }, 400);
   }
 
