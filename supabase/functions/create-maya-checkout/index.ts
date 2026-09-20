@@ -15,6 +15,14 @@ const corsHeaders = {
 
 const SITE_URL = Deno.env.get("SITE_URL") || "https://barkhaus.ph";
 
+// Staging has no Maya sandbox: the order is created as usual, then the tester is sent to the
+// simulator page instead of Maya's. Decided by the project's own id, never by a setting, so
+// production always goes to Maya.
+const PRODUCTION_PROJECT_REF = "dxttnbtfhpanyiyduevn";
+function isProductionProject(): boolean {
+  return (Deno.env.get("SUPABASE_URL") || "").includes(PRODUCTION_PROJECT_REF);
+}
+
 function mayaBaseUrl(): string {
   return (Deno.env.get("MAYA_ENVIRONMENT") || "sandbox").toLowerCase() === "production"
     ? "https://pg.maya.ph"
@@ -420,8 +428,9 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const publicKey = Deno.env.get("MAYA_PUBLIC_KEY")!;
-    if (!publicKey) throw new Error("MAYA_PUBLIC_KEY not configured");
+    const publicKey = Deno.env.get("MAYA_PUBLIC_KEY") || "";
+    // Staging never calls Maya (see step 8), so it does not need Maya keys.
+    if (!publicKey && isProductionProject()) throw new Error("MAYA_PUBLIC_KEY not configured");
 
     const requestBody = await req.json();
     // One shape for both callers: today's site posts a single booking, the cart posts { items: [...] }.
@@ -553,7 +562,31 @@ Deno.serve(async (req) => {
 
     const ownerName = `${first.ownerFirst} ${first.ownerLast}`.trim();
 
-    // ── 8. ONE Maya Checkout session for the whole order ──
+    // ── 8. Payment step ──
+    if (!isProductionProject()) {
+      // Staging: no Maya call. The simulator page asks the tester for the outcome and
+      // simulate-payment then drives the real webhook with it.
+      const simulatedSession = `SIM-${crypto.randomUUID()}`;
+      await supabase.from("pending_bookings").update({ gateway_checkout_id: simulatedSession })
+        .in("ref_number", holds.map((h) => h.refNumber));
+      await supabase.from("booking_orders").update({ gateway_checkout_id: simulatedSession }).eq("id", order.id);
+      console.log(`STAGING order ${order.order_ref} | ${holds.length} booking(s) | simulator`);
+      created.bookings = []; created.details = []; created.refs = []; created.orderId = null;
+      return new Response(
+        JSON.stringify({
+          success: true,
+          simulated: true,
+          checkout_url: `/staging/simulate-payment.html?ref=${orderRef}&amount=${orderAmount}`,
+          ref_number: orderRef,
+          booking_id: holds[0].bookingId,
+          booking_refs: holds.map((h) => h.refNumber),
+          cancellation_token: cancellationToken,
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // ── 8b. ONE Maya Checkout session for the whole order (production) ──
     const mayaRes = await fetch(`${mayaBaseUrl()}/checkout/v1/checkouts`, {
       method: "POST",
       headers: {
