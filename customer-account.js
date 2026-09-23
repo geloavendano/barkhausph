@@ -138,7 +138,34 @@
     if (result.error) throw result.error;
   }
 
+  // Staging cannot send email (the branch has the SMTP settings but not the password), so instead of a
+  // code that never arrives, staging-signin returns the token a magic-link email would have carried and
+  // we complete sign-in with it. Production is untouched: it sends the real code.
+  function isStaging() {
+    return !!(window.BH_ENV && window.BH_ENV.name === 'staging');
+  }
+
+  async function stagingSignIn(email) {
+    var res = await fetch(window.BH_ENV.supabaseUrl + '/functions/v1/staging-signin', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': window.BH_ENV.supabaseAnonKey,
+        'Authorization': 'Bearer ' + window.BH_ENV.supabaseAnonKey
+      },
+      body: JSON.stringify({ email: String(email || '').trim().toLowerCase() })
+    });
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Staging sign-in failed');
+    var verified = await client.auth.verifyOtp({ token_hash: data.token_hash, type: 'email' });
+    if (verified.error) throw verified.error;
+    currentSession = verified.data.session || null;
+    if (currentSession) await refreshProfile();
+    return { session: currentSession, profile: currentProfile };
+  }
+
   async function sendEmailOtp(email) {
+    if (isStaging()) return await stagingSignIn(email);
     var result = await client.auth.signInWithOtp({
       email: String(email || '').trim().toLowerCase(),
       options: {

@@ -708,8 +708,18 @@
         try {
           sendButton.disabled = true;
           sendButton.textContent = 'Sending code…';
-          await requireCustomerApi().sendEmailOtp(email);
-          showOtpForm(email);
+          var sent = await requireCustomerApi().sendEmailOtp(email);
+          // On staging there is no email: sendEmailOtp signs the tester in and returns the session,
+          // so skip the code screen and continue exactly as a verified code would.
+          if (sent && sent.session) {
+            if (sent.profile && (sent.profile.pets || []).length) {
+              localStorage.setItem(MODE_KEY, 'account');
+              window.location.href = '/?account=signed-in';
+            } else if (isAccountPage) beginSetupFromSession();
+            else window.location.href = '/account/';
+          } else {
+            showOtpForm(email);
+          }
         } catch (error) {
           sendButton.disabled = false;
           sendButton.textContent = 'Send one-time code';
