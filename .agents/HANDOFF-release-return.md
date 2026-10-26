@@ -6,6 +6,29 @@ Work in `/Users/gelo/Projects/barkhaus-hosting`, branch `release/accounts-orders
 checkout `/Users/gelo/Projects/barkhaus` alone. Gelo executes remote writes/deploys/DNS/Maya steps.
 Read-only Supabase MCP diagnostics were authorized during this session.
 
+## Update 27 Oct (Claude Code): resume steps 1–3 below are DONE
+
+- Branch pushed (incl. `03f4bf9`, `9231be7`, Codex prep checkpoint `f5184a9`, and fix `f8b2854`).
+- Browser run on the release preview (staging `jsvqukuiegdrojmdbqgi`, `?orders=on`, fictional
+  owner release-test@example.invalid, pets Release Cart Gamma/Delta, Eastwood Small Cage 1 + 2,
+  31 Oct–1 Nov, total ₱2,620 = 1,300 + 1,300 + one ₱20 fee):
+  - Two rooms in one order checked out (lock fix OK). `BH-1C0D91` → "Payment fails" → return
+    screen showed both bookings `-A/-B`, one fee, Retry + Edit (return fix OK; took ~20–35 s of
+    "Checking your payment…" before it settled).
+  - Retry → new order `BH-B87D47`, same items, ₱2,620; old order's holds released.
+  - Fail again → Edit → review restored (cart item kept, current item restored) → pay →
+    `BH-60F2D7` paid: success screen `-A/-B`, ₱2,620, ONE combined outbox email.
+  - Final state via get-payment-status: 1C0D91 and B87D47 cancelled/unpaid, 60F2D7 confirmed/paid.
+- **Bug found and fixed (`f8b2854`):** Edit didn't restore "I will bring vaccine records" (and the
+  step-5 liability box); the email recorded "Vaccine records: Not provided" for the edited item.
+  Same gap existed in production's single-booking Edit. Regression check now asserts it. The fix was
+  verified by the check (fails without it) but **not re-run end to end in the browser**.
+- Cosmetic, not fixed: after Edit, the review screen still shows "Payment is still being verified…".
+- Still open from below: step 4 (Better Stack, dotPH inventory, re-export + preflight near cutover).
+  New: set the 4 GitHub apex A records + `www` CNAME in the Cloudflare zone to **DNS only** (grey)
+  before the NS switch; they're imported as proxied, and Flexible SSL in front of GitHub Pages'
+  enforced HTTPS loops. Check SSL/TLS mode.
+
 ## Resume here
 
 **Do not change nameservers, deploy release functions to production, or merge PR #77 yet.**
