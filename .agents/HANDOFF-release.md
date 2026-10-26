@@ -106,6 +106,40 @@ Ask Gelo what, if anything, was done since 27 Oct (daytime prep items in the run
 - Staging-tool pages `simulate-payment.html` and `email-preview.html` ship in `dist/`. Both are `noindex`
   and switch themselves off when `BH_ENV.name !== 'staging'`. Accepted.
 
+### 5a. Payments: simulated on staging, real Maya on production (nothing to implement)
+
+The real Maya flow is **already in the release code**, and it is the same flow production uses today,
+extended to orders. There is no setting to flip and nothing to build. **Don't add a flag or "turn the
+simulator off".**
+
+- **How the switch works:** `create-maya-checkout` (`supabase/functions/create-maya-checkout/index.ts`,
+  `isProductionProject()` near line 22, branch near line 583) checks its own `SUPABASE_URL` for the
+  production project ref `dxttnbtfhpanyiyduevn`.
+  - **Production:** creates a real Maya Checkout session (`MAYA_PUBLIC_KEY`), one line item per booking
+    plus the fee, `requestReferenceNumber` = order ref, and returns Maya's `checkout_url`.
+  - **Anywhere else (staging):** makes no Maya call. It returns `/simulate-payment.html?ref=…&amount=…`;
+    that page calls `simulate-payment`, which drives the **same** `handle-payment-webhook` finalize code
+    (`finalizePending`). That's why staging tests exercise the real finalize path.
+  - The frontend doesn't know or care: it redirects to whatever `checkout_url` comes back
+    (`booking.js`, around lines 422 and 4642).
+- **After paying on production:** Maya calls `handle-payment-webhook` directly on Supabase. This **does
+  not depend on barkhaus.ph or the DNS move**. The customer is sent back to
+  `${SITE_URL}/booking.html?payment=success|failed|cancelled&provider=maya&ref=<order ref>`
+  (`SITE_URL` env, default `https://barkhaus.ph`). On Cloudflare that becomes a 308 to `/booking?…`
+  with the query kept (verified on barkhausph.pages.dev). The page then polls `get-payment-status`.
+  If the webhook is late, `get-payment-status` and `reconcile-maya-bookings` ask Maya and finalize.
+- **Production secrets this depends on** (already set, because payments work today; confirm the
+  **names** in the backup's `secrets.txt`): `MAYA_PUBLIC_KEY`, `MAYA_SECRET_KEY`, **`MAYA_ENVIRONMENT`**
+  (the webhook defaults it to `sandbox` if missing, which would make it verify real payments against
+  Maya's sandbox and fail), `RECONCILE_TOKEN`, `RESEND_API_KEY`, and optionally `SITE_URL`. New tonight:
+  `MAX_ORDER_ITEMS`. The Maya dashboard's webhook URL points at the Supabase function and needs no change.
+- **How it's proven on the night:** Gate B (real single booking after the backend deploy), Gate D
+  (real single booking on the new pages), step E (real 2-item order + refund). Those three are the only
+  tests of the real Maya path for orders; staging can't test it.
+- **Don't confuse with `?testPayment=1`.** That's an older shortcut, live today too, that pre-fills a
+  "₱1" daycare booking in the browser. The server re-prices every checkout (commit 299f3d3), so Maya
+  charges the **real** daycare price. It is not a cheap test and not related to the staging simulator.
+
 Tested: on staging with the simulator on 2026-09-20 (2-item order priced with one fee, both confirmed,
 own payment rows, duplicate event no-op, expiry cancels whole order). **Not tested:** the release preview
 with the 26 Oct changes against staging (staging was off), and nothing at all against production.
