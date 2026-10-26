@@ -19,6 +19,19 @@ var EDGE_FN_URL       = SUPABASE_URL + '/functions/v1/submit-booking';
 // Customer-facing payment provider. Alternatives: "manual", "maya", and "paymongo".
 var PAYMENT_GATEWAY_PROVIDER = 'maya';
 
+// Multi-service booking ("Add another service or pet"). Off until the real 2-item order test passes on
+// barkhaus.ph; the server has its own limit (MAX_ORDER_ITEMS), so both must allow carts.
+// Testers can switch it on for their own browser tab with ?orders=on (remembered for the tab).
+var MULTI_SERVICE_ENABLED = false;
+(function () {
+  try {
+    var q = new URLSearchParams(window.location.search).get('orders');
+    if (q === 'on') sessionStorage.setItem('barkhaus_orders_tester', '1');
+    if (q === 'off') sessionStorage.removeItem('barkhaus_orders_tester');
+    if (sessionStorage.getItem('barkhaus_orders_tester') === '1') MULTI_SERVICE_ENABLED = true;
+  } catch (e) {}
+})();
+
 function hostedPaymentEndpoint() {
   return PAYMENT_GATEWAY_PROVIDER === 'maya' ? CREATE_MAYA_CHECKOUT_URL : CREATE_PAYMENT_URL;
 }
@@ -337,7 +350,9 @@ function hostedPaymentEndpoint() {
     var items = cart().slice();
     items.push(currentReviewSnapshot);
     summary.insertAdjacentHTML('afterbegin', renderOrderPanel(items));
-    summary.insertAdjacentHTML('beforeend', '<button type="button" class="staging-add-booking" onclick="addAnotherStagingBooking()">+ Add another service or pet at ' + escapeHtml(locationLabel(booking.location)) + '</button>');
+    if (MULTI_SERVICE_ENABLED && !IS_WALKIN) {
+      summary.insertAdjacentHTML('beforeend', '<button type="button" class="staging-add-booking" onclick="addAnotherStagingBooking()">+ Add another service or pet at ' + escapeHtml(locationLabel(booking.location)) + '</button>');
+    }
     var notice = document.getElementById('hostedCheckoutNotice');
     if (notice) notice.style.display = 'none';
     var details = document.getElementById('bookingDetailsSummary');
@@ -3939,6 +3954,9 @@ async function cancelPendingBooking(refNumber, cancellationToken) {
       method:  'POST',
       headers: {
         'Content-Type': 'application/json',
+        // The function is deployed with JWT verification on; without this the gateway answers 401
+        // and the customer's held slot stays blocked until the expiry job (found 2026-10-26).
+        'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
         'apikey':       SUPABASE_ANON_KEY,
       },
       body: JSON.stringify({ ref_number: refNumber, cancellation_token: cancellationToken }),
