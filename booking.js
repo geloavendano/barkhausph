@@ -409,13 +409,27 @@ function hostedPaymentEndpoint() {
           };
         });
         var totals = orderAmounts(saved.concat([currentReviewSnapshot || snapshotCurrent()]));
-        sessionStorage.setItem(ORDER_RESULT_KEY, JSON.stringify({
+        var orderResultForScreen = {
           orderRef: data.ref_number,
           bookingRefs: data.booking_refs || [],
           cancellationToken: data.cancellation_token || null,
           itemCount: items.length,
           items: orderItemsForScreen,
           fee: totals.fee, total: totals.total,
+        };
+        sessionStorage.setItem(ORDER_RESULT_KEY, JSON.stringify(orderResultForScreen));
+        // The return handler and retry/edit actions use this same snapshot for singles and carts.
+        // Keep the entire checkout payload for retry, and the current item's state for editing.
+        sessionStorage.setItem('bk_snapshot', JSON.stringify({
+          refNumber: data.ref_number,
+          cancellationToken: data.cancellation_token || null,
+          location: locationLabel(booking.location),
+          service: serviceLabel(booking.service),
+          bookingState: JSON.parse(JSON.stringify(booking)),
+          rawPayload: { items: items },
+          editPayload: captured.payload,
+          total: totals.total,
+          orderResult: orderResultForScreen,
         }));
       } catch (e) {}
       _redirectingToPayment = true;
@@ -456,9 +470,9 @@ function hostedPaymentEndpoint() {
     try { return JSON.parse(sessionStorage.getItem(ORDER_RESULT_KEY) || 'null'); } catch (e) { return null; }
   }
 
-  function renderOrderSuccess(result) {
-    var details = document.getElementById('successDetails');
-    var price = document.getElementById('successPriceBreakdown');
+  function renderOrderSuccess(result, detailsId, priceId, totalLabel) {
+    var details = document.getElementById(detailsId || 'successDetails');
+    var price = document.getElementById(priceId || 'successPriceBreakdown');
     if (!details || !price) return;
     var rows = (result.items || []).map(function (item, index) {
       return '<div class="summary-group">' +
@@ -474,8 +488,16 @@ function hostedPaymentEndpoint() {
       '<div class="summary-row"><span class="summary-key">Bookings</span><span class="summary-val">' + (result.items || []).length + '</span></div></div>' + rows;
     price.innerHTML =
       (result.fee ? '<div class="price-line"><span class="price-line-label">Convenience fee</span><span>₱' + Number(result.fee).toLocaleString() + '</span></div>' : '') +
-      '<div class="total-line"><span>Total paid</span><span>₱' + Number(result.total || 0).toLocaleString() + '</span></div>';
+      '<div class="total-line"><span>' + escapeHtml(totalLabel || 'Total paid') + '</span><span>₱' + Number(result.total || 0).toLocaleString() + '</span></div>';
   }
+
+  var productionShowPayReturnScreen = showPayReturnScreen;
+  showPayReturnScreen = function (snap, ref) {
+    productionShowPayReturnScreen(snap, ref);
+    if (snap.orderResult && snap.orderResult.itemCount > 1) {
+      renderOrderSuccess(snap.orderResult, 'payReturnDetails', 'payReturnPriceBreakdown', 'Order total');
+    }
+  };
 
   // Staging only: read the confirmation email that would have been sent.
   function addStagingEmailLink(ref) {
@@ -3931,6 +3953,15 @@ async function retryPayment() {
       snap.refNumber  = data.ref_number;
       snap.bookingId  = data.booking_id || snap.bookingId;
       snap.cancellationToken = data.cancellation_token || snap.cancellationToken;
+      if (snap.orderResult) {
+        snap.orderResult.orderRef = data.ref_number;
+        snap.orderResult.cancellationToken = snap.cancellationToken;
+        snap.orderResult.bookingRefs = data.booking_refs || [];
+        (snap.orderResult.items || []).forEach(function(item, index) {
+          item.refNumber = snap.orderResult.bookingRefs[index] || null;
+        });
+        try { sessionStorage.setItem('barkhaus_order_result', JSON.stringify(snap.orderResult)); } catch(e) {}
+      }
       var refEl = document.getElementById('payReturnRef');
       if (refEl) refEl.textContent = data.ref_number;
       try { sessionStorage.setItem('bk_snapshot', JSON.stringify(snap)); } catch(e) {}
@@ -4096,7 +4127,7 @@ async function editAfterCancelledPayment() {
     memNo.classList.toggle('selected',  booking.isMember === false);
   }
   // Restore waiver checkbox states from saved payload
-  var _rp = snap.rawPayload || {};
+  var _rp = snap.editPayload || snap.rawPayload || {};
   function _restoreCheck(id, val) {
     var el = document.getElementById(id);
     if (!el) return;
