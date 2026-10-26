@@ -5,10 +5,9 @@ teammates. Keep entries short and current.
 
 ## Active
 
-- 2026-10-26 - Claude Code: release prep for TONIGHT (DNS move to Cloudflare + accounts/orders
-  release), worktree ../barkhaus-hosting on release/accounts-orders. Adding the frontend
-  MULTI_SERVICE_ENABLED switch, the production backup script and tonight's runbook. Nothing is
-  merged to main or deployed by Claude; Gelo runs every Supabase/DNS step.
+- 2026-10-27 - HANDOFF: release (DNS move to Cloudflare + accounts/orders) is prepared but NOT
+  executed. Next agent: read `.agents/HANDOFF-release.md` first, then the runbook it points to.
+  Branch release/accounts-orders (worktree ../barkhaus-hosting), PR #77 (do not merge before Gate B).
 
 ## Claimed Files
 
