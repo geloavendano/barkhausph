@@ -5,13 +5,162 @@ teammates. Keep entries short and current.
 
 ## Active
 
+- 2026-10-27 - Codex handed release guidance back at Gelo's request. Read
+  `.agents/HANDOFF-release-return.md` before resuming. Next is push/rebuild and browser test of
+  cart return/retry/edit, then remaining prep gates. No DNS switch/production feature deploy/merge.
 - 2026-10-27 - HANDOFF: release (DNS move to Cloudflare + accounts/orders) is prepared but NOT
   executed. Next agent: read `.agents/HANDOFF-release.md` first, then the runbook it points to.
   Branch release/accounts-orders (worktree ../barkhaus-hosting), PR #77 (do not merge before Gate B).
 
 ## Claimed Files
 
-- None (Claude Code released its claims at handoff, 2026-10-27).
+- No active Codex claims. Session changes and outstanding verification are handed off in
+  `.agents/HANDOFF-release-return.md`; preserve them for the receiving agent.
+
+## Release checkpoint
+
+- FRONTEND RETURN FIX READY, BROWSER RETEST PENDING: expired cart BH-782B7E did release both
+  holds, but returned to a permanent checking screen. Cart checkout saved only order_result,
+  not bk_snapshot used by retry/edit. Local booking.js now saves both, renders combined unpaid
+  return details, refreshes child/order refs and cancellation token on retry, and restores current
+  item declarations on edit. New order-return-regression-check passes, as do payment regression,
+  JS syntax and diff check. Need release preview rebuild and browser return/retry/edit retest.
+  Checkout mutex fix committed as 03f4bf9; Gelo already deployed it to staging, no production deploy.
+- STAGING BACKEND CHECKS PASSED; frontend return blocker found afterward. Gelo deployed checkout
+  version 22 (verify_jwt=true). BH-2AEB79:
+  2 confirmed/paid children, total 2420 = 1200 + 1200 + one 20 fee; two payment allocations
+  1220/1200 share one SIM payment ID; one combined email contains both pets and total; zero holds.
+  Repeated simulator success left two payment rows and one email. BH-782B7E: two holds observed
+  before simulated PAYMENT_EXPIRED, then both cancelled/unpaid, zero holds/payment rows.
+  No real payment/email; synthetic fixtures only. Single-item edit/cancel already passed.
+  Gelo explicitly confirmed keeping -A/-B child references; corrected handoff/design docs.
+  Next: confirm Better Stack website/payment monitors and full dotPH inventory, refresh recovery
+  export/preflight before NS switch. Production still unchanged except previously applied view RLS.
+- STAGING BLOCKER / LOCAL FIX READY: release preview passed hidden-by-default cart flag,
+  `?orders=on`, 2 hotel items + one fee (PHP 2420), and single-order cancel/edit released holds
+  (fixture order BH-26E614). Two-item submit failed because the second item reacquired this
+  order's own branch-wide hotel mutex with a new token. Local checkout now acquires each key
+  once but checks availability/blocks for every item. New executable regression reproduces
+  failure on old source and passes fixed source: shared keys, duplicate inventory, blocked room,
+  competing checkout, distinct keys, one release per key, RPC errors. Payment regression and
+  diff check pass. Human next: deploy ONLY create-maya-checkout to staging ref
+  jsvqukuiegdrojmdbqgi, JWT verification on; no DDL/schema reload needed. Retry preserved
+  2-item cart, simulator payment, DB allocations and one combined email before any DNS move.
+  Neither new source nor tests are committed/pushed yet; no production deploy/merge/NS switch.
+- RESOLVED GUIDE/CODE DISCREPANCY (Gelo confirmed keep -A/-B on 27 Oct): handoff said no lettered refs, but
+  committed release code (43eab27) renames multi-item booking refs to order-A/order-B.
+  Staging trigger is BEFORE INSERT only, so it does not overwrite subsequent UPDATEs.
+  Mutex fix leaves reference behavior untouched. Handoff/design now reflect Gelo's confirmed choice.
+- Staging already exists; Gelo's `up barkhaus` stopped before changes. Reuse it; do NOT run down.
+  Parent branch inventory confirms staging ref jsvqukuiegdrojmdbqgi is ACTIVE_HEALTHY; its historical
+  branch status is MIGRATIONS_FAILED (snapshot-built schema exists). Direct read-only SQL confirms
+  orders + staging email outbox present, 2 branches and 58 pricing rows. Earlier get_project 404
+  did not mean it was deleted; branch metadata is obtained via the parent's branches endpoint.
+  Opened release-accounts-orders preview booking page; both branch choices load. Runtime test
+  of default flag, 2-item simulator checkout/email, and abandon flow is in progress.
+- Gelo reached the existing zone's activation Overview; screenshot confirms assigned NS
+  donald.ns.cloudflare.com / harlee.ns.cloudflare.com. "Begin DNS transfer" in Pages opens
+  generic onboarding; use existing Domains -> barkhaus.ph -> Overview instead.
+  Next requested user action remains `~/Projects/claude-setup/staging/staging.sh up barkhaus`
+  for the outstanding release-preview test. Do not change registrar NS before remaining prep.
+- CLOUDFLARE ORDER CORRECTION: Pages apex setup shows "Transfer DNS management" / "Begin DNS
+  transfer" because the existing zone is not active yet. This is the intended DNS move, not a
+  registrar transfer. Current Pages docs require active Cloudflare nameservers before the apex
+  custom domain can finish. Complete other prep first; activate DNS with imported GitHub records
+  intact, then finish Pages apex/www setup and verify both hosts before backend/frontend release.
+  Pages custom domains have NOT been attached yet. Do not claim DNS cutover readiness until full
+  dotPH inventory confirmation, monitors and release-preview staging tests are complete.
+- DNS EXPORT VERIFIED: all 16 imported A/CNAME/MX/TXT record values exactly match current
+  dotPH authoritative DNS (TXT chunks concatenated for comparison), including both entire DKIM
+  values, SPF, DMARC, Google verification, send MX/SPF and staging CNAME. mail/webmail confirmed
+  `cf-proxied:false`. TTL 1 in Cloudflare export denotes automatic. Saved export outside git at
+  `/Users/gelo/Backups/barkhaus/20261027-cloudflare-zone-before-move.txt`.
+  Assigned Cloudflare NS in export: donald.ns.cloudflare.com and harlee.ns.cloudflare.com.
+  Not switched. Next: Pages project barkhausph custom domains for apex and www; still need full
+  dotPH panel inventory confirmation, monitors, staging release-preview tests before NS change.
+- Cloudflare zone added on Free plan; screenshot shows 6 A, 2 CNAME (including staging),
+  2 MX, 6 TXT records. Gelo switched mail/webmail A records to DNS only; reported TTL "1"
+  (unit not independently verified). MX/TXT were already DNS only. Need full zone export to
+  compare TXT/DKIM end-to-end and confirm staging CNAME target against dotPH. Nameservers
+  must remain unchanged until record verification, Pages custom domains, and other prep pass.
+- Gelo confirmed both root account Auth redirect URLs were added and saved (existing entries kept).
+  Cloudflare DNS preparation is next. pages.dev serves 200 with a browser User-Agent (the default
+  Python User-Agent was rejected). Production root and /booking serve today's site; production
+  env-staging.js is empty. Release preview has the multi-service switch; the older staging branch
+  does not. Both previews point at staging ref jsvqukuiegdrojmdbqgi; runtime tests still pending.
+  Current known authoritative DNS records saved outside git at
+  `/Users/gelo/Backups/barkhaus/20261027-dns-before-move.txt`; still need full dotPH panel export.
+- VIEW FIX APPLIED BY GELO AND VERIFIED: `security_invoker=true` is live. Anonymous API HEAD
+  returns 0 rows; read-only ordinary authenticated-role simulation returns 0; read-only admin-role
+  simulation returns all 57 expected rows (matches privileged baseline). Only counts were read.
+  This resolves the view security release blocker. Next human step: add/confirm the two root
+  account Auth redirect URLs, preserving existing entries. Staging/Cloudflare prep still pending.
+- VERIFIED fallback export: `/Users/gelo/Backups/barkhaus/20261027-024128-dcf9f3f2-table-recovery`,
+  02:41:28–02:41:56 PHT on 27 Oct. All 78 inventory tables have exports; verifier passed all
+  80 data/metadata files and SHA256SUMS, folder 0700 and files private. Counts: bookings 3946,
+  payments 1667, owners 2476, pets 2833, Auth users/identities 14 each, Storage objects 760.
+  Preflight passed: zero active checkouts, zero duplicate payment groups, expected named unique,
+  is_admin=true, ref trigger=true, orders absent. This passes the user-requested fallback gate,
+  not a full pg_dump/restore-test gate. Original Git bundle and backup checksums verified too.
+  Latest remote check: main/tag still 1dd0569, PR #77 OPEN/MERGEABLE, site GitHub Pages/dotPH.
+  NEXT HUMAN STEP: apply the prepared view security SQL in production SQL Editor, then agent
+  verifies anonymous denial and Gelo checks admin access. Auth redirects, Cloudflare DNS prep,
+  monitoring, and release-preview staging tests remain unconfirmed; no nameserver switch/merge yet.
+- Reviewed customer-account discrepancy is an older known Git version, not dashboard-only code
+  requiring a merge. Keep the release's birthdate handling. Rollback instructions must use the
+  actual downloaded account function, with the tag for the other five release functions.
+- Gelo requested daily backup + fresh table exports as a fallback to failing DB-password dumps.
+  Prepared `scripts/export-production-data.py`: password-free Management API, READ ONLY SQL,
+  CLI login from Keychain (same approach as staging.sh); exports all public/auth/storage base-table
+  rows outside git, per-table timestamps/counts, preflight, inventory, checksums and local verifier.
+  Synthetic checks passed for successful export, corruption, interruption, and truncated/missing
+  rows. NOT run against production yet; Gelo must run it. This is a supplementary recovery copy,
+  not a standalone pg_dump or one consistent cross-table snapshot; daily restore + manual
+  reconciliation is required. Alternative gate and limitations added to release runbook §0.
+- Supabase MCP connected for read-only diagnostics. Production is ACTIVE_HEALTHY on
+  Postgres 17.6.1.104. `postgres` can log in, has no expiry. Orders absent; migration prerequisites
+  present; payments constraint is exactly `payments_reference_number_unique`.
+  Pooler logs show repeated session-mode authentication failures through 2026-10-27 02:22 PHT;
+  these do NOT establish the root cause or confirm the new password is correct.
+  SECURITY RELEASE BLOCKER: `public.bookings_needs_action` has default view security, no
+  admin predicate, grants to anon/authenticated. Anonymous HEAD returned 206 with a nonzero
+  count (no rows retrieved). Draft a human-applied `security_invoker=true` migration and verify
+  anon/ordinary signed-in users cannot read rows while admin access still works. Not applied.
+  Draft ready: `supabase/migrations/20261026182733_secure_bookings_needs_action_view.sql`;
+  it includes `NOTIFY pgrst, 'reload schema';`. Added to backend runbook after backup gate.
+  Live source-table policies were reviewed; SQL has NOT been applied or behavior-tested.
+  Read-only advisor baseline also includes existing performance/security warnings; no unrelated
+  fixes were made. Pooler evidence: "SecretChecker not started, using a one-off auth_query
+  connection" followed by "ClientHandler: Exchange error: password authentication failed".
+- Direct `psql` attempt failed at DNS resolution before authentication. Checked public DNS:
+  direct hostname has an AAAA record, no A record; local system resolver cannot resolve it,
+  while the shared-pooler hostname resolves to IPv4. This direct test does not validate
+  the reset password. Next: one bounded pooler retry after confirming its hostname/user
+  against production Connect settings; do not loop backup attempts or reset again.
+- Gelo reset the database password, then the explicit shared-pooler `psql -W` test still
+  failed authentication. Backup gate remains closed. Next: confirm reset was on production
+  project `dxttnbtfhpanyiyduevn`, then Gelo tests direct `db.dxttnbtfhpanyiyduevn.supabase.co`
+  with username `postgres` to distinguish database credentials from post-reset pooler caching.
+  No additional reset, restart, schema change, or deployment has been requested.
+- Backup attempt `/Users/gelo/Backups/barkhaus/20261027-0212-pre-release` is NOT COMPLETE:
+  PostgreSQL password authentication failed; public/auth/storage dumps are zero bytes and
+  pre-flight did not run. Git bundle and deployed function downloads succeeded.
+  `customer-account` differs from `pre-orders` but exactly matches Git commit `d14b296`:
+  deployed source predates pet birthdate handling; no dashboard-only code was found in this diff.
+  STOP before deployments until this discrepancy is reflected in the rollback instructions:
+  restoring that function from `pre-orders` would NOT restore the currently deployed source.
+  Its actual rollback source is saved under this backup folder's
+  `live-functions/supabase/functions/customer-account/index.ts`.
+  Next connection check: Gelo runs a read-only `psql -W` SELECT 1 with the pooler hostname
+  and `postgres.dxttnbtfhpanyiyduevn` username, entering the raw database password separately.
+- Gelo confirmed PITR is disabled and the latest dashboard daily backup is
+  `2026-10-25 20:15:00 UTC` (`2026-10-26 04:15:00 PHT`). Fresh local backup remains required.
+- 2026-10-27 - Codex: local backup script now reports NOT COMPLETE on function-download
+  or checksum failure. Bash 3.2 syntax and isolated checks for matching source, differing source,
+  download failure, and checksum failure pass; no live Supabase CLI calls were run.
+  Next: Gelo logs into Supabase, confirms the dashboard backup/PITR status, then runs the
+  backup script with the production Session pooler URI entered hidden in their terminal.
+  Database backup, deployed-function comparison, and production pre-flight are still pending.
 
 ## Handoffs
 

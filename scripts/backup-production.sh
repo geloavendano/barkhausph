@@ -65,7 +65,8 @@ for fn in $(git -C "$REPO" ls-tree --name-only pre-orders supabase/functions/ | 
       echo "DIFFERS FROM GIT $fn   ← review before deploying over it" | tee -a "$OUT/live-vs-git.txt"
     fi
   else
-    echo "not deployed     $fn" | tee -a "$OUT/live-vs-git.txt"
+      echo "DOWNLOAD FAILED $fn   ← cannot verify deployed source" | tee -a "$OUT/live-vs-git.txt"
+      fail "function download: $fn"
   fi
 done
 
@@ -88,7 +89,8 @@ psql "$BH_PROD_DB_URL" -X -v ON_ERROR_STOP=1 -f "$REPO/scripts/preflight-product
   && cat "$OUT/preflight.txt" || { cat "$OUT/preflight.txt"; fail "preflight"; }
 
 step "6. Checksums"
-(cd "$OUT" && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 shasum -a 256 > SHA256SUMS) && echo "  ok"
+(cd "$OUT" && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 shasum -a 256 > SHA256SUMS) \
+  && echo "  ok" || fail "checksums"
 
 printf '\nBackup folder: %s (%s)\n' "$OUT" "$(du -sh "$OUT" | cut -f1)"
 if [ -n "$failures" ]; then

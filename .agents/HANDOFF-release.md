@@ -1,8 +1,10 @@
 # Handoff: Barkhaus release (Cloudflare DNS move + customer accounts + multi-service booking)
 
-Written 2026-10-27 by Claude Code for the next agent. **Nothing in this guide has been executed against
-production.** Everything below was verified on 2026-10-26/27 unless marked otherwise. Re-verify (§4)
-before acting: state may have moved since.
+**27 Oct return checkpoint:** read `.agents/HANDOFF-release-return.md` first. Gelo completed backup
+fallback, Auth/DNS prep and a production view RLS fix; two checkout bugs were fixed locally, with
+the backend fix deployed/tested on staging and frontend return/retry browser retest still pending.
+No production feature deploy, PR merge or nameserver change is confirmed. The original baseline
+below was written by Claude Code before those steps; don't repeat completed work or assume it is current.
 
 You will be guiding **Gelo** (the owner) through a release. Gelo runs every step that touches Supabase,
 DNS, Cloudflare or Maya. You prepare, check outputs, interpret stop conditions and fix repo code.
@@ -47,8 +49,10 @@ DNS, Cloudflare or Maya. You prepare, check outputs, interpret stop conditions a
 - **Every hosted checkout is an order.** The existing `create-maya-checkout` accepts both today's
   single-booking body and `{ items: [...] }`. No new checkout endpoint. Bookings stay individual in admin
   (calendar, lists), tagged with `bookings.order_id`, and share one Maya payment ID.
-- **Order ref = first booking's generated ref** (`generate_ref_number()` trigger, unchanged). No `-A/-B`
-  suffixes (the trigger would overwrite them).
+- **Order ref = first booking's generated ref** (`generate_ref_number()` trigger, unchanged).
+  Gelo confirmed on 27 Oct: keep the release code's `-A/-B` child booking references for multi-item
+  orders. The trigger runs only BEFORE INSERT; checkout renames children afterward via UPDATE.
+  Single-item booking/order references stay identical.
 - **One combined confirmation email** per order.
 - Test the order path with **one real payment + refund** on barkhaus.ph, carts hidden from customers
   until it passes.

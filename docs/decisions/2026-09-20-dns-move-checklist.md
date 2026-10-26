@@ -34,9 +34,16 @@ afterwards (one change at a time). `+a` will authorize Cloudflare's addresses to
        set rows 3–5 and 11 to **DNS only**, and compare the long DKIM values (rows 9–10) end to end.
 3. [ ] Confirm the Pages project already works on its `*.pages.dev` link.
 4. [ ] In Pages → Custom domains, add `barkhaus.ph` and `www.barkhaus.ph` (this creates rows 1–2).
+       **Verified 27 Oct:** the apex flow may stop at "Transfer DNS management" until the zone is
+       active. In that case keep the imported GitHub A/www records intact through steps 5–6,
+       then finish this Pages step and verify both hostnames. "Begin DNS transfer" here moves
+       DNS hosting only; domain registration stays at dotPH.
 5. [ ] **Late weekday night:** dotPH panel → nameservers → replace `dns1/dns2.domains.ph` with the two
        Cloudflare nameservers. Leave dotPH's old records in place (they're the undo button).
 6. [ ] Wait for Cloudflare to show the site as **Active** (minutes to hours).
+       If step 4 was blocked, now attach apex/www in Pages and let it replace only their website
+       records. Do not remove mail/TXT/staging records. Verify the Pages site and certificates
+       before continuing with the backend/frontend release.
 
 ## After the move: checks
 

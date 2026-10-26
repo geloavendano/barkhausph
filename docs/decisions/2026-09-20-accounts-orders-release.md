@@ -34,11 +34,12 @@ reconcile job** (same failure as BH-E0D9B8).
   created_at). RLS: admin read and service role.
 - `bookings.order_id` (nullable), `pending_bookings.order_ref` (nullable) + index. Each booking keeps its own
   `pending_bookings` row, so admin, the expiry job and payment-health keep working per booking.
-- Refs: the `generate_ref_number()` trigger always sets `bookings.ref_number` (`BH-` + 6 chars from the
-  booking id) and today's checkout reads it back. **The order ref is the first booking's generated ref**,
-  so a 1-item order looks exactly like today; other items keep their own refs and are listed under the
-  order in the email and on the confirmation page. The trigger is not changed. (Replaces the `-A/-B`
-  suffix idea, which the trigger would overwrite.)
+- Refs (confirmed by Gelo on 27 Oct 2026): the `generate_ref_number()` trigger sets
+  `bookings.ref_number` on INSERT (`BH-` + 6 chars from the booking id). **The order ref is the first
+  booking's generated ref**, so a 1-item order looks exactly like today. For multi-item orders,
+  checkout then renames child booking and hold references to `<order>-A`, `<order>-B`, etc., as
+  implemented in commit `43eab27`. The trigger runs only BEFORE INSERT, so these UPDATEs stick;
+  the earlier claim that it overwrote suffixes was incorrect. Email and confirmation list child refs.
 - One Maya checkout per order; all its `payments` rows share the Maya payment ID. One order fee, added to the
   first booking's total, so booking totals sum to the order amount.
 
