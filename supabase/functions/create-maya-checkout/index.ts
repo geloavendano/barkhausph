@@ -182,16 +182,20 @@ async function createHold(
 
   const mutexKey = inventoryLockKey(branch.id, body);
   if (mutexKey) {
-    const mutexToken = randomToken(16);
-    const { data: acquired, error: mutexError } = await supabase.rpc("acquire_inventory_mutex", {
-      p_lock_key: mutexKey, p_lock_token: mutexToken, p_ttl_seconds: 120,
-    });
-    if (mutexError) throw new CheckoutError(`Could not reserve inventory: ${mutexError.message}`, 500);
-    if (!acquired) {
-      throw new CheckoutError("This inventory is being reserved by another customer. Please try again.", 200,
-        { conflict: body.service === "hotel" ? "room" : "slot" });
+    // Several items can share a key (all hotel rooms in a branch, or same-day slots).
+    // Keep this order's existing lock; a new token would conflict with our own hold.
+    if (!created.mutexes.some((mutex) => mutex.key === mutexKey)) {
+      const mutexToken = randomToken(16);
+      const { data: acquired, error: mutexError } = await supabase.rpc("acquire_inventory_mutex", {
+        p_lock_key: mutexKey, p_lock_token: mutexToken, p_ttl_seconds: 120,
+      });
+      if (mutexError) throw new CheckoutError(`Could not reserve inventory: ${mutexError.message}`, 500);
+      if (!acquired) {
+        throw new CheckoutError("This inventory is being reserved by another customer. Please try again.", 200,
+          { conflict: body.service === "hotel" ? "room" : "slot" });
+      }
+      created.mutexes.push({ key: mutexKey, token: mutexToken });
     }
-    created.mutexes.push({ key: mutexKey, token: mutexToken });
     try {
       // Sees the holds already written for earlier items in this same cart.
       await assertHostedInventory(supabase, branch.id, body);
