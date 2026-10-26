@@ -11,8 +11,7 @@ teammates. Keep entries short and current.
 
 ## Claimed Files
 
-- booking.js (multi-service switch only), new scripts/backup-production.sh, new
-  scripts/preflight-production.sql, new docs/decisions/2026-10-26-release-night-runbook.md.
+- None (Claude Code released its claims at handoff, 2026-10-27).
 
 ## Handoffs
 
