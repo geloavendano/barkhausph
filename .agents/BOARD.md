@@ -5,18 +5,26 @@ teammates. Keep entries short and current.
 
 ## Active
 
-- 2026-09-20 - Claude Code: release/accounts-orders (worktree ../barkhaus-hosting). Orders BACKEND is
-  done and tested on the staging branch; frontend (promote /staging/ pages, cart checkout, simulator
-  page) is next. Plan: docs/decisions/2026-09-20-accounts-orders-release.md.
+- 2026-10-26 - Claude Code: release prep for TONIGHT (DNS move to Cloudflare + accounts/orders
+  release), worktree ../barkhaus-hosting on release/accounts-orders. Adding the frontend
+  MULTI_SERVICE_ENABLED switch, the production backup script and tonight's runbook. Nothing is
+  merged to main or deployed by Claude; Gelo runs every Supabase/DNS step.
 
 ## Claimed Files
 
-- supabase/functions/{create-maya-checkout,handle-payment-webhook,reconcile-maya-bookings,
-  get-payment-status,cancel-pending-booking}/index.ts, new supabase/functions/simulate-payment/,
-  new migration 20260920130000_booking_orders.sql, scripts/payment-flow-regression-check.mjs.
+- booking.js (multi-service switch only), new scripts/backup-production.sh, new
+  scripts/preflight-production.sql, new docs/decisions/2026-10-26-release-night-runbook.md.
 
 ## Handoffs
 
+- 2026-10-26 - Claude Code: release-night prep (branch release/accounts-orders, nothing merged or
+  deployed). Verified: production has none of the orders changes; site still on GitHub Pages;
+  Cloudflare Pages serving; `pre-orders` = origin/main 1dd0569. Added `MULTI_SERVICE_ENABLED` (off;
+  testers use `?orders=on`), fixed the cancel-pending-booking call (missing Authorization header:
+  production gateway answered 401, so abandoned holds stayed until expiry), `scripts/backup-production.sh`
+  + `scripts/preflight-production.sql`, and `docs/decisions/2026-10-26-release-night-runbook.md`.
+  Live JWT gates checked by probing: webhook + reconcile need `--no-verify-jwt`, the rest default.
+  HUMAN TODO: follow the runbook top to bottom; backup must end "Backup complete" before any change.
 - 2026-09-20 - Claude Code: orders backend (branch release/accounts-orders). One hosted checkout can
   now cover several bookings: booking_orders + bookings.order_id + pending_bookings.order_ref;
   create-maya-checkout accepts `{items:[...]}` (one fee, one Maya session, locks held across items);

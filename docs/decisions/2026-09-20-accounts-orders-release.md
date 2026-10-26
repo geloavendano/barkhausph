@@ -1,7 +1,7 @@
 # Decision: releasing customer accounts + multi-service booking (orders)
 
 Status: **Approved plan** · 2026-09-20. Replaces the earlier "Vercel move + blue-green release" plan.
-Schedule: **DNS move Monday 21 Sep (night)**, **features Tuesday 22 Sep (night)**.
+Schedule: ~~DNS move Mon 21 Sep, features Tue 22 Sep~~ did not run. **Superseded by `2026-10-26-release-night-runbook.md`** (both on the night of 26 Oct).
 Related: `2026-09-20-hosting-and-previews.md` (Cloudflare), `2026-09-20-dns-move-checklist.md`.
 
 ## 1. The request
