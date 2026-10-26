@@ -4146,6 +4146,11 @@ async function editAfterCancelledPayment() {
   _restoreCheck('waiverMedia',        _rp.waiverMedia);
   _restoreCheck('waiverPlaypark',     _rp.waiverPlaypark);
   _restoreCheck('seniorWaiver',       _rp.waiverSeniorMedical);
+  // Step-5 vaccine boxes. bringVaccines is sent at checkout (the email/admin show "Will bring to
+  // venue" vs "Not provided"), so losing it here recorded "Not provided" after Edit (found 2026-10-27).
+  // vaccineWaiver isn't sent, but a saved payload only exists after step 5 passed, which requires it.
+  _restoreCheck('bringVaccines',      _rp.bringVaccines);
+  _restoreCheck('vaccineWaiver',      !!(_rp && _rp.petName));
 
   // Hide payReturnScreen; restore normal UI chrome
   var pr = document.getElementById('payReturnScreen');

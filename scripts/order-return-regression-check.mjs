@@ -19,7 +19,7 @@ function element(id) {
 }
 const saved = { service: "hotel", petName: "Alpha", total: 1200, payload: { petName: "Alpha", waiverHouseRules: true } };
 const current = { service: "hotel", petName: "Beta", total: 1200 };
-const captured = { payload: { petName: "Beta", waiverHouseRules: true, waiverGeneral: true } };
+const captured = { payload: { petName: "Beta", waiverHouseRules: true, waiverGeneral: true, bringVaccines: true } };
 const posted = [];
 const cancelled = [];
 let checkoutNumber = 0;
@@ -97,4 +97,7 @@ vm.runInContext(between("  var _rp = snap.editPayload", "  // Hide payReturnScre
 assert(checked.has("waiverHouseRules"));
 assert(checked.has("waiverGeneralHotel"));
 assert(!checked.has("waiverMedia"));
+// Step-5 boxes: losing bringVaccines here recorded "Not provided" after Edit (2026-10-27).
+assert(checked.has("bringVaccines"));
+assert(checked.has("vaccineWaiver"));
 console.log("Order return regression check passed (snapshot, combined return screen, retry credentials/refs, edit declarations).");
