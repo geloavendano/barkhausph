@@ -19,10 +19,11 @@ var EDGE_FN_URL       = SUPABASE_URL + '/functions/v1/submit-booking';
 // Customer-facing payment provider. Alternatives: "manual", "maya", and "paymongo".
 var PAYMENT_GATEWAY_PROVIDER = 'maya';
 
-// Multi-service booking ("Add another service or pet"). Off until the real 2-item order test passes on
-// barkhaus.ph; the server has its own limit (MAX_ORDER_ITEMS), so both must allow carts.
-// Testers can switch it on for their own browser tab with ?orders=on (remembered for the tab).
-var MULTI_SERVICE_ENABLED = false;
+// Multi-service booking ("Add another service or pet"). On for everyone since 2026-10-27.
+// Kill switches: set this to false to hide the cart (needs a deploy), or set the server's
+// MAX_ORDER_ITEMS to 1 to refuse multi-item checkouts immediately (no deploy).
+// While false, testers can switch it on for their own tab with ?orders=on (remembered for the tab).
+var MULTI_SERVICE_ENABLED = true;
 (function () {
   try {
     var q = new URLSearchParams(window.location.search).get('orders');
