@@ -438,12 +438,6 @@ function hostedPaymentEndpoint() {
     }
   }
 
-  var productionShowHostedPaymentSuccess = showHostedPaymentSuccess;
-  showHostedPaymentSuccess = function(ref) {
-    productionShowHostedPaymentSuccess(ref);
-    saveNewPetsToAccount();
-  };
-
   async function addAnother() {
     var captured = await productionSubmitBooking({ captureOnly: true });
     if (!captured) return;   // a check failed; submitBooking already told the customer why
@@ -646,6 +640,7 @@ function hostedPaymentEndpoint() {
     try { sessionStorage.removeItem(CART_KEY); sessionStorage.removeItem(CONTEXT_KEY); } catch (e) {}
     if (isThisOrder) { try { sessionStorage.removeItem(ORDER_RESULT_KEY); } catch (e) {} }
     addStagingEmailLink(ref);
+    saveNewPetsToAccount();
   };
 
   var productionShowSummary = showSummary;
