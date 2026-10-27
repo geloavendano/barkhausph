@@ -45,7 +45,6 @@ function hostedPaymentEndpoint() {
   var CART_KEY = 'barkhaus_staging_cart';
   var ORDER_RESULT_KEY = 'barkhaus_order_result';
   var CONTEXT_KEY = 'barkhaus_staging_context';
-  var NEW_PETS_KEY = 'barkhaus_new_pets_pending';
   var isAdditional = new URLSearchParams(window.location.search).get('additional') === '1';
   var currentReviewSnapshot = null;
 
@@ -326,7 +325,8 @@ function hostedPaymentEndpoint() {
   }
 
   // "A different pet": clear whatever a saved pet filled in, so the customer types a new one.
-  // It is added to their account once the booking is paid (saveNewPetsToAccount).
+  // Checkout files the booking under the customer's account email and creates the pet there
+  // (create-maya-checkout matches pets by name), so the new pet joins their saved pets.
   function startNewPet() {
     document.querySelectorAll('[data-staging-pet]').forEach(function(button) { button.classList.remove('selected'); });
     document.querySelectorAll('[data-staging-new-pet]').forEach(function(button) { button.classList.add('selected'); });
@@ -351,100 +351,12 @@ function hostedPaymentEndpoint() {
     refreshContinueBtn();
   }
 
-  // Birth year/month from the booking's "age" answer; the customer can correct it in Manage account.
-  function birthFromAge(age, unit) {
-    var amount = parseInt(age, 10);
-    if (!(amount >= 0)) return {};
-    var date = new Date();
-    date.setDate(1);
-    date.setMonth(date.getMonth() - (unit === 'months' ? amount : amount * 12));
-    return { birthYear: date.getFullYear(), birthMonth: date.getMonth() + 1 };
-  }
-
-  // Booking fields (a checkout payload or the live booking state) -> customer-account save_pet shape.
-  function petFromBooking(source, bringRecords) {
-    var birth = birthFromAge(source.petAge, source.petAgeUnit);
-    return {
-      name: source.petName || '', animal: source.petAnimal || 'dog', breed: source.petBreed || '',
-      gender: source.petGender || '', size: source.petSize || '',
-      birthYear: birth.birthYear, birthMonth: birth.birthMonth,
-      medical: source.petMedical || '', temperament: source.petTemperament || '',
-      feeding: source.hotelFeeding || '', medications: source.hotelMeds || '',
-      vetClinic: source.vetClinic || '', vetContact: source.vetContact || '', vetAddress: source.vetAddress || '',
-      emergencyName: source.emergencyName || '', emergencyPhone: source.emergencyPhone || '',
-      membershipId: source.membershipId || '', bringRecords: !!bringRecords
-    };
-  }
-
-  // Remembered across the Maya redirect; only saved once the payment succeeds.
-  function rememberNewPets(savedItems) {
-    var profile = customer();
-    var signedIn = profile && localStorage.getItem(MODE_KEY) === 'account' && !IS_WALKIN;
-    var pets = !signedIn ? [] : savedItems
-      .filter(function(item) { return !item.savedPetId && item.payload; })
-      .map(function(item) { return petFromBooking(item.payload, item.payload.bringVaccines); });
-    if (signedIn && !booking.savedPetId) {
-      var bring = document.getElementById('bringVaccines');
-      pets.push(petFromBooking(booking, bring && bring.classList.contains('checked')));
-    }
-    try {
-      if (pets.length) localStorage.setItem(NEW_PETS_KEY, JSON.stringify({ pets: pets, at: Date.now() }));
-      else localStorage.removeItem(NEW_PETS_KEY);
-    } catch (e) {}
-  }
-
-  // Should this pet from the booking be added to the account, given the pets already saved there?
-  function isNewPet(pet, savedPets) {
-    // Same name and animal counts as the same pet: a dog and a cat may both be called "Mochi".
-    function key(item) {
-      return String(item.name || '').trim().toLowerCase() + '|' + String(item.animal || 'dog').toLowerCase();
-    }
-    if (!String(pet.name || '').trim()) return false;
-    return !savedPets.some(function(saved) { return key(saved) === key(pet); });
-  }
-
-  function loadScript(src) {
-    return new Promise(function(resolve, reject) {
-      var script = document.createElement('script');
-      script.src = src;
-      script.onload = resolve;
-      script.onerror = function() { reject(new Error('Could not load ' + src)); };
-      document.head.appendChild(script);
-    });
-  }
-
-  // The booking page doesn't load the account API up front; guests never need it.
-  async function saveNewPetsToAccount() {
-    var pending = readJson(localStorage, NEW_PETS_KEY, null);
-    if (!pending || !(pending.pets || []).length) return;
-    try { localStorage.removeItem(NEW_PETS_KEY); } catch (e) {}   // one attempt, even if saving fails
-    try {
-      if (!window.supabase) await loadScript('/supabase.min.js');
-      if (!window.BarkhausCustomerAccount) await loadScript('/customer-account.js?v=20261027-new-pet');
-      var api = window.BarkhausCustomerAccount;
-      var state = await api.initialize();
-      var profile = state && state.profile;
-      if (!state || !state.session || !profile) return;
-      var added = [];
-      for (var i = 0; i < pending.pets.length; i++) {
-        var pet = pending.pets[i];
-        if (!isNewPet(pet, profile.pets || [])) continue;
-        profile = (await api.savePet(pet)) || profile;
-        added.push(pet.name);
-      }
-      if (added.length) showToast('We added ' + added.join(' and ') + ' to your saved pets.', 6000);
-    } catch (error) {
-      console.warn('Could not add the new pet to the customer account:', error);
-    }
-  }
-
   async function addAnother() {
     var captured = await productionSubmitBooking({ captureOnly: true });
     if (!captured) return;   // a check failed; submitBooking already told the customer why
     var items = cart();
     var current = currentReviewSnapshot || snapshotCurrent();
     current.payload = captured.payload;   // what this item will send at checkout
-    current.savedPetId = booking.savedPetId || null;
     items.push(current);
     sessionStorage.setItem(CART_KEY, JSON.stringify(items));
     sessionStorage.setItem(CONTEXT_KEY, JSON.stringify({
@@ -492,7 +404,6 @@ function hostedPaymentEndpoint() {
   // them, holds them, charges one convenience fee and returns one payment link.
   async function proceedToPayment() {
     var saved = cart();
-    rememberNewPets(saved);
     if (!saved.length) return productionSubmitBooking();   // single booking: unchanged path
 
     var captured = await productionSubmitBooking({ captureOnly: true });
@@ -640,7 +551,6 @@ function hostedPaymentEndpoint() {
     try { sessionStorage.removeItem(CART_KEY); sessionStorage.removeItem(CONTEXT_KEY); } catch (e) {}
     if (isThisOrder) { try { sessionStorage.removeItem(ORDER_RESULT_KEY); } catch (e) {} }
     addStagingEmailLink(ref);
-    saveNewPetsToAccount();
   };
 
   var productionShowSummary = showSummary;
