@@ -191,14 +191,16 @@ function hostedPaymentEndpoint() {
     petsPanel.innerHTML = '<p class="staging-saved-title">Choose one of your pets</p><div class="staging-pet-chips">' +
       (profile.pets || []).map(function(pet) {
         return '<button type="button" class="staging-pet-chip" data-staging-pet="' + escapeHtml(pet.id) + '">🐾 ' + escapeHtml(pet.name) + ' · ' + escapeHtml(pet.breed || pet.animal) + '</button>';
-      }).join('') + '</div>';
+      }).join('') +
+      '<button type="button" class="staging-pet-chip staging-pet-chip--new" data-staging-new-pet>＋ A different pet</button></div>';
 
     document.querySelectorAll('[data-staging-service-pets]').forEach(function(panel) {
       panel.hidden = false;
       panel.innerHTML = '<p class="staging-saved-title">Which pet is this booking for?</p><p class="staging-saved-copy">Choose a saved pet to use their size and profile details.</p><div class="staging-pet-chips">' +
         (profile.pets || []).map(function(pet) {
           return '<button type="button" class="staging-pet-chip" data-staging-pet="' + escapeHtml(pet.id) + '">🐾 ' + escapeHtml(pet.name) + '<small>' + escapeHtml(pet.breed || pet.animal) + ' · ' + escapeHtml(PET_SIZE_LABELS[pet.size] || pet.size || '') + '</small></button>';
-        }).join('') + '</div>';
+        }).join('') +
+        '<button type="button" class="staging-pet-chip staging-pet-chip--new" data-staging-new-pet>＋ A different pet<small>We’ll add them to your account after you book</small></button></div>';
     });
 
     var ownerPanel = document.getElementById('stagingSavedOwner');
@@ -214,6 +216,8 @@ function hostedPaymentEndpoint() {
     document.querySelectorAll('[data-staging-pet]').forEach(function(button) {
       button.classList.toggle('selected', button.getAttribute('data-staging-pet') === petId);
     });
+    document.querySelectorAll('[data-staging-new-pet]').forEach(function(button) { button.classList.remove('selected'); });
+    booking.savedPetId = pet.id;
     var previousSize = booking.petSize;
     booking.vaccines = Object.assign({}, pet.vaccines || {});
     booking.petSize = pet.size || booking.petSize;
@@ -318,6 +322,33 @@ function hostedPaymentEndpoint() {
       if (sizeChangedOnPetStep) goToStep(3);
     }
     checkSeniorWaiver();
+    refreshContinueBtn();
+  }
+
+  // "A different pet": clear whatever a saved pet filled in, so the customer types a new one.
+  // Checkout files the booking under the customer's account email and creates the pet there
+  // (create-maya-checkout matches pets by name), so the new pet joins their saved pets.
+  function startNewPet() {
+    document.querySelectorAll('[data-staging-pet]').forEach(function(button) { button.classList.remove('selected'); });
+    document.querySelectorAll('[data-staging-new-pet]').forEach(function(button) { button.classList.add('selected'); });
+    if (!booking.savedPetId) return;   // nothing saved was filled in; keep what they typed
+    booking.savedPetId = null;
+    ['petName','petBreed','petAgeNum','petMedical','hotelFeeding','hotelMeds',
+     'vetClinic','vetContact','vetAddress','emergencyName','emergencyPhone'].forEach(function(id) {
+      var field = document.getElementById(id);
+      if (field) field.value = '';
+    });
+    booking.petName = ''; booking.petBreed = ''; booking.petAge = ''; booking.petMedical = '';
+    booking.hotelFeeding = ''; booking.hotelMeds = '';
+    booking.vetClinic = ''; booking.vetContact = ''; booking.vetAddress = '';
+    booking.emergencyName = ''; booking.emergencyPhone = '';
+    booking.vaccines = {};
+    uploadedVaccineFiles = uploadedVaccineFiles.filter(function(file) { return !file.savedProfileDocument; });
+    var vaccineList = document.getElementById('vaccineFileList');
+    if (vaccineList) vaccineList.innerHTML = '';
+    setChecked('bringVaccines', false);
+    setMembership(false);
+    renderVaccines();
     refreshContinueBtn();
   }
 
@@ -595,6 +626,7 @@ function hostedPaymentEndpoint() {
   document.addEventListener('click', function(event) {
     var petButton = event.target.closest('[data-staging-pet]');
     if (petButton) applyPet(petButton.getAttribute('data-staging-pet'), !!petButton.closest('[data-staging-service-pets]'));
+    if (event.target.closest('[data-staging-new-pet]')) startNewPet();
   });
 
   function initialize() {

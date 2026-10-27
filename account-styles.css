@@ -457,6 +457,10 @@ body:has(.staging-ribbon-booking) .booking-header {
   opacity: .82;
 }
 
+.staging-pet-chip--new {
+  border-style: dashed;
+}
+
 .staging-pet-chip.selected {
   border-color: var(--staging-yellow);
   color: var(--staging-yellow);
