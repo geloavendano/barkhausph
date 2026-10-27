@@ -34,12 +34,52 @@ Deno.serve(async (req: Request) => {
     );
 
     const tokenHash = await sha256(cancellation_token);
+    const ref = ref_number.trim().toUpperCase();
+    const nowIso = new Date().toISOString();
+
+    // ── Orders (2026-09): one hold per booking, one token on the order ───────────
+    // The customer returns with the ORDER ref, and cancelling releases every booking in it.
+    const { data: order } = await supabase
+      .from('booking_orders')
+      .select('id,order_ref')
+      .eq('order_ref', ref)
+      .eq('cancellation_token_hash', tokenHash)
+      .eq('status', 'pending')
+      .gt('expires_at', nowIso)
+      .maybeSingle();
+
+    if (order) {
+      const { data: cancelledBookings, error: orderCancelError } = await supabase
+        .from('bookings')
+        .update({
+          status: 'cancelled',
+          cancellation_reason: 'Customer initiated — editing booking after failed payment',
+        })
+        .eq('order_id', order.id)
+        .eq('status', 'pending')
+        .select('id');
+      if (orderCancelError) throw orderCancelError;
+
+      await supabase.from('pending_bookings').delete().eq('order_ref', order.order_ref);
+      await supabase.from('booking_orders')
+        .update({ status: 'cancelled', updated_at: nowIso })
+        .eq('id', order.id).eq('status', 'pending');
+
+      return new Response(
+        JSON.stringify({ cancelled: Array.isArray(cancelledBookings) && cancelledBookings.length > 0,
+                         order_ref: order.order_ref,
+                         bookings_cancelled: cancelledBookings?.length ?? 0 }),
+        { headers: { ...CORS, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // ── Legacy single hold (and holds created before orders existed) ─────────────
     const { data: pending, error: pendingError } = await supabase
       .from('pending_bookings')
       .select('id,ref_number')
-      .eq('ref_number', ref_number.trim().toUpperCase())
+      .eq('ref_number', ref)
       .eq('cancellation_token_hash', tokenHash)
-      .gt('expires_at', new Date().toISOString())
+      .gt('expires_at', nowIso)
       .maybeSingle();
     if (pendingError) throw pendingError;
     if (!pending) {

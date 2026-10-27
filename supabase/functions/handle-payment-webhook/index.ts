@@ -7,8 +7,51 @@ import { attachmentEntries, verifyAttachments } from "../_shared/attachments.ts"
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, paymongo-signature",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, paymongo-signature, x-simulated-payment",
 };
+
+// ── Staging simulation ────────────────────────────────────────────────────────
+// Barkhaus has no Maya sandbox, so staging fakes the payment result instead. A simulated event is
+// accepted ONLY when this function is not running against the production database. That check is the
+// project's own id, not a setting: production can never satisfy it, whatever env vars are set.
+const PRODUCTION_PROJECT_REF = "dxttnbtfhpanyiyduevn";
+
+function isProductionProject(): boolean {
+  return (Deno.env.get("SUPABASE_URL") || "").includes(PRODUCTION_PROJECT_REF);
+}
+
+function isSimulatedRequest(req: Request): boolean {
+  if (isProductionProject()) return false;               // never in production
+  const token = Deno.env.get("SIMULATION_TOKEN");
+  return !!token && req.headers.get("x-simulated-payment") === token;
+}
+
+// On staging, emails are written to an outbox table (created by staging.sh, never by a migration)
+// so testers can read them, and nothing is ever sent to a real customer.
+async function deliverEmail(payload: Record<string, unknown>): Promise<void> {
+  if (isProductionProject()) {
+    const apiKey = Deno.env.get("RESEND_API_KEY");
+    if (!apiKey) { console.error("RESEND_API_KEY not set — skipping email"); return; }
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) console.error("Resend error:", await res.text());
+    return;
+  }
+  try {
+    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const { error } = await supabase.from("staging_email_outbox").insert({
+      to_email: payload.to, cc_email: payload.cc ?? null,
+      subject: payload.subject, html: payload.html,
+    });
+    if (error) console.error("Staging outbox insert failed:", error.message);
+    else console.log("Staging: email captured in the outbox —", payload.subject);
+  } catch (err) {
+    console.error("Staging outbox failed:", err instanceof Error ? err.message : err);
+  }
+}
 
 function mayaBaseUrl(): string {
   return (Deno.env.get("MAYA_ENVIRONMENT") || "sandbox").toLowerCase() === "production"
@@ -231,8 +274,7 @@ async function markPaymentAlertLockSent(supabase: any, lockId: string | null, al
 }
 
 async function sendPaymentFailureAlert(details: Record<string, any>) {
-  const apiKey = Deno.env.get("RESEND_API_KEY");
-  if (!apiKey) throw new Error("RESEND_API_KEY not set");
+  if (isProductionProject() && !Deno.env.get("RESEND_API_KEY")) throw new Error("RESEND_API_KEY not set");
 
   const branchEmail = branchBookingEmailFromLocation(details.location);
   const recipients = Array.from(new Set([
@@ -268,10 +310,7 @@ async function sendPaymentFailureAlert(details: Record<string, any>) {
     </tr>
   `).join("");
 
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
+  await deliverEmail({
       from: "Barkhaus Pet Services <hello@barkhaus.ph>",
       to: recipients,
       subject: `Maya payment alert — ${eventType} — ${ref}`,
@@ -285,14 +324,10 @@ async function sendPaymentFailureAlert(details: Record<string, any>) {
             <table style="width:100%;border-collapse:collapse;font-size:14px">${htmlRows}</table>
           </div>
         </body></html>`,
-    }),
   });
-  if (!res.ok) throw new Error(await res.text());
 }
 
 async function sendBookingConfirmation(details: any) {
-  const apiKey = Deno.env.get("RESEND_API_KEY");
-  if (!apiKey) { console.error("RESEND_API_KEY not set — skipping email"); return; }
   const cc = branchBookingEmail(details.branch);
   const payload: Record<string, unknown> = {
     from: "Barkhaus Pet Services <hello@barkhaus.ph>",
@@ -303,12 +338,7 @@ async function sendBookingConfirmation(details: any) {
   if (cc && cc.toLowerCase() !== String(details.ownerEmail || "").toLowerCase()) {
     payload.cc = cc;
   }
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) console.error("Resend error:", await res.text());
+  await deliverEmail(payload);
 }
 
 function fmtDate(d?: string) {
@@ -602,6 +632,739 @@ function buildEmailHtml(d: any): string {
 </html>`;
 }
 
+// ── Finalize one pending hold ──────────────────────────────────────────────
+// Moved unchanged from the main handler so an order can finalize each of its bookings with the same
+// code a single booking has always used: confirm (atomic claim), details, add-ons, vaccines, waivers,
+// one payments row, delete the hold. It no longer sends the email; it returns the details so the caller
+// sends one email per legacy booking, or one combined email per order.
+type FinalizeContext = {
+  bookingIdFromMeta: string | null;
+  refNumber:         string | null;
+  paymentId:         string;
+  paymentAmount:     number;   // this booking's share (legacy: the whole payment)
+  paymentChannel:    string;
+  provider:          string;
+  isMaya:            boolean;
+  orderId?:          string | null;
+};
+type FinalizeResult =
+  | { status: "already"; note: string; bookingId: string | null; ref: string | null }
+  | { status: "finalized"; bookingId: string; ref: string; emailDetails: Record<string, any> | null };
+
+async function finalizePending(supabase: any, pending: any, ctx: FinalizeContext): Promise<FinalizeResult> {
+  const body = pending.payload;
+  console.log("Payload service:", body.service, "owner:", body.ownerEmail);
+
+  // ── 1. Branch ──
+  const { data: branch } = await supabase.from("branches")
+    .select("id, name, address, city, hours_weekday, hours_weekend, phone")
+    .ilike("name", body.location === "estancia" ? "%Estancia%" : "%Eastwood%")
+    .single();
+  if (!branch) throw new Error("Branch not found: " + body.location);
+
+  // ── 2. Find existing booking (created by create-payment) ────────────────────
+  let bookingId:         string | null = null;
+  let ownerId:           string | null = null;
+  let petId:             string | null = null;
+  let createdByPaymentFn = false;
+
+  // Try booking_id UUID first (most reliable), then fall back to ref_number.
+  // Both lookups are attempted so a transient UUID miss doesn't incorrectly
+  // trigger the fallback path and create a duplicate booking.
+  let eb: Record<string, any> | null = null;
+  if (ctx.bookingIdFromMeta) {
+    const { data } = await supabase.from("bookings")
+      .select("id, ref_number, status, payment_status, owner_id, pet_id")
+      .eq("id", ctx.bookingIdFromMeta).maybeSingle();
+    eb = data;
+    if (!eb) console.warn("UUID lookup missed for", ctx.bookingIdFromMeta, "— trying ref_number");
+  }
+  if (!eb && ctx.refNumber) {
+    const { data } = await supabase.from("bookings")
+      .select("id, ref_number, status, payment_status, owner_id, pet_id")
+      .eq("ref_number", ctx.refNumber).maybeSingle();
+    eb = data;
+  }
+
+  // If the event didn't carry a ref_number (e.g. payment.paid omits it while
+  // checkout_session.payment.paid does not), read it from the DB row so that
+  // finalRef, the email subject, and the fallback booking all use the correct
+  // value instead of null → random.
+  // Declared with let so we can reassign; the outer const declarations above
+  // use || null so these are already the best values from the event.
+  let resolvedRef: string | null = ctx.refNumber;
+  if (!resolvedRef && eb?.ref_number) resolvedRef = eb.ref_number;
+
+  if (eb) {
+    if (eb.status === "confirmed" && eb.payment_status === "paid") {
+      console.log("Already confirmed:", eb.id, "ref:", eb.ref_number, "— skipping");
+      await supabase.from("pending_bookings").delete().eq("id", pending.id);
+      return { status: "already", note: "Already processed", bookingId: eb.id, ref: eb.ref_number };
+    }
+    bookingId          = eb.id;
+    ownerId            = eb.owner_id;
+    petId              = eb.pet_id;
+    createdByPaymentFn = true;
+    console.log("Found booking:", bookingId, "ref:", eb.ref_number, "— will confirm");
+  }
+
+  // ── 3. Membership ──
+  let memberDiscountApplied = false;
+  let memberCodeUsed: string | null = null;
+  if (body.membershipId && ownerId) {
+    const { data: member } = await supabase.from("members").select("id, active")
+      .eq("member_code", body.membershipId.trim().toUpperCase()).maybeSingle();
+    if (member?.active) {
+      memberDiscountApplied = true;
+      memberCodeUsed = body.membershipId.trim().toUpperCase();
+      await supabase.from("members").update({ owner_id: ownerId })
+        .eq("member_code", memberCodeUsed!).is("owner_id", null);
+    }
+  }
+
+  // ── 4. Confirm or create booking ────────────────────────────────────────────
+  const subtotal    = parseInt(body.subtotal)       || 0;
+  const discountAmt = parseInt(body.discountAmount) || 0;
+  const total       = parseInt(body.total)          || subtotal - discountAmt;
+
+  if (createdByPaymentFn && bookingId) {
+    // Atomic status transition: UPDATE WHERE status = 'pending' ensures only one
+    // of the two simultaneous PayMongo events (payment.paid + checkout_session.payment.paid)
+    // successfully claims the booking. The other gets 0 rows back and exits cleanly.
+    const { data: claimed } = await supabase.from("bookings")
+      .update({
+        status:                  "confirmed",
+        payment_status:          "paid",
+        member_discount_applied: memberDiscountApplied,
+        member_code_used:        memberCodeUsed,
+      })
+      .eq("id", bookingId)
+      .eq("status", "pending")      // ← atomic claim guard
+      .select("id")
+      .maybeSingle();
+
+    if (!claimed) {
+      // Another concurrent event already confirmed this booking
+      console.log("Booking already claimed by concurrent event:", bookingId, "— skipping");
+      await supabase.from("pending_bookings").delete().eq("id", pending.id);
+      return { status: "already", note: "Concurrent event already processed", bookingId, ref: eb.ref_number };
+    }
+
+    // Insert booking_charges so admin panel and email have the full breakdown
+    const primaryCharges = chargesFromPayload(body, subtotal, discountAmt);
+    if (primaryCharges.length > 0) {
+      await supabase.from("booking_charges").insert(
+        primaryCharges.map((c, i) => ({ ...c, booking_id: bookingId!, sort_order: i }))
+      );
+    }
+
+  } else {
+    // ── Fallback: create-payment didn't run or booking row was missing ──────────
+    // Build everything from scratch using the pending_bookings payload.
+
+    const email = body.ownerEmail.trim().toLowerCase();
+    const { data: existingOwner } = await supabase.from("owners").select("id").ilike("email", email).maybeSingle();
+    if (existingOwner) {
+      ownerId = existingOwner.id;
+      await supabase.from("owners").update({
+        first_name: body.ownerFirst, last_name: body.ownerLast,
+        mobile: body.ownerPhone, referral_source: body.ownerSource || null,
+      }).eq("id", ownerId!);
+    } else {
+      const { data: newOwner, error: ownerErr } = await supabase.from("owners").insert({
+        first_name: body.ownerFirst.trim(), last_name: body.ownerLast.trim(),
+        email, mobile: body.ownerPhone.trim(), referral_source: body.ownerSource || null,
+      }).select("id").single();
+      if (ownerErr) throw new Error(`Owner insert failed: ${ownerErr.message}`);
+      ownerId = newOwner.id;
+    }
+
+    if (body.membershipId) {
+      const { data: member } = await supabase.from("members").select("id, active")
+        .eq("member_code", body.membershipId.trim().toUpperCase()).maybeSingle();
+      if (member?.active) {
+        memberDiscountApplied = true;
+        memberCodeUsed = body.membershipId.trim().toUpperCase();
+        await supabase.from("members").update({ owner_id: ownerId })
+          .eq("member_code", memberCodeUsed!).is("owner_id", null);
+      }
+    }
+
+    const petName = body.petName.trim();
+    const { data: existingPet } = await supabase.from("pets").select("id")
+      .eq("owner_id", ownerId!).ilike("name", petName).maybeSingle();
+    if (existingPet) {
+      petId = existingPet.id;
+      await supabase.from("pets").update({
+        animal_type: body.petAnimal || null, gender: body.petGender || null,
+        breed: body.petBreed?.trim() || null,
+        age_value: body.petAge ? parseInt(body.petAge) : null, age_unit: body.petAgeUnit || "years",
+        size: body.petSize || null, medical_notes: body.petMedical?.trim() || null,
+        temperament: body.petTemperament || null,
+      }).eq("id", petId!);
+    } else {
+      const { data: newPet, error: petErr } = await supabase.from("pets").insert({
+        owner_id: ownerId!, name: petName,
+        animal_type: body.petAnimal || null, gender: body.petGender || null,
+        breed: body.petBreed?.trim() || null,
+        age_value: body.petAge ? parseInt(body.petAge) : null, age_unit: body.petAgeUnit || "years",
+        size: body.petSize || null, medical_notes: body.petMedical?.trim() || null,
+        temperament: body.petTemperament || null,
+      }).select("id").single();
+      if (petErr) throw new Error(`Pet insert failed: ${petErr.message}`);
+      petId = newPet.id;
+    }
+
+    const { data: newBooking, error: bookingErr } = await supabase.from("bookings").insert({
+      ref_number:              resolvedRef ?? ("BH-" + Math.random().toString(36).substr(2, 6).toUpperCase()),
+      branch_id:               branch.id,
+      owner_id:                ownerId!, pet_id: petId!,
+      service:                 body.service, status: "confirmed", payment_status: "paid",
+      booking_date:            new Date().toISOString().split("T")[0],   // creation date (service date lives in detail tables)
+      subtotal, discount_amount: discountAmt, total,
+      member_discount_applied: memberDiscountApplied, member_code_used: memberCodeUsed,
+      booking_source:          "online",
+      order_id:                ctx.orderId ?? null,
+    }).select("id").single();
+    if (bookingErr) throw new Error(`Booking insert failed: ${bookingErr.message}`);
+    bookingId = newBooking.id;
+
+    const fallbackCharges = chargesFromPayload(body, subtotal, discountAmt);
+    if (fallbackCharges.length > 0) {
+      await supabase.from("booking_charges").insert(
+        fallbackCharges.map((c, i) => ({ ...c, booking_id: bookingId!, sort_order: i }))
+      );
+    }
+  }
+
+  // ── 5. Service details ──
+  // Each upsert uses onConflict:"booking_id" so retries are safe.
+  // If the table is missing the UNIQUE constraint the upsert falls back to a
+  // plain INSERT; a duplicate-key error on retry is treated as a non-fatal
+  // warning (the row already exists from the first successful run) rather than
+  // aborting the entire webhook and leaving payment/email undelivered.
+  const upsertDetail = async (table: string, row: Record<string, unknown>) => {
+    const { error } = await (supabase.from(table) as any).upsert(row, { onConflict: "booking_id" });
+    if (error) {
+      // 23505 = unique_violation — row already exists from a prior run; safe to continue
+      if (error.code === "23505" || error.message?.includes("duplicate")) {
+        console.warn(`${table} already exists for booking ${row.booking_id} — skipping duplicate`);
+      } else {
+        throw new Error(`${table} upsert failed: ${error.message}`);
+      }
+    }
+  };
+
+  if (body.service === "hotel") {
+    await upsertDetail("hotel_details", {
+      booking_id: bookingId!, checkin_date: body.hotelCheckin, checkout_date: body.hotelCheckout,
+      dropoff_time: body.hotelDropoff || null, pickup_time: body.hotelPickup || null,
+      pickup_hour: parseInt(body.hotelPickupHour) || 14,
+      room_type: body.hotelRoom || null, room_id: body.hotelRoomId || null,
+      playpark_consent: body.playparkConsent === "yes",
+      feeding_instructions: body.hotelFeeding || null, medications: body.hotelMeds || null,
+      vet_clinic: body.vetClinic || null, vet_contact: body.vetContact || null, vet_address: body.vetAddress || null,
+      emergency_name: body.emergencyName || null, emergency_phone: body.emergencyPhone || null,
+    });
+  }
+  if (body.service === "grooming") {
+    await upsertDetail("grooming_details", {
+      booking_id: bookingId!, timeslot: body.groomSlot,
+      service_date: body.groomDate || null,   // service date lives here (mirrors hotel)
+      preferred_stylist: body.preferredStylist || "any",
+      groomer_id: body.preferredStylistId || null,
+      groom_service_key: body.groomService || "", groom_service_name: body.groomServiceName || "",
+      special_requests: body.groomNotes || null,
+    });
+  }
+  if (body.service === "daycare") {
+    const openTime = body.daycareOpenTime === true;
+    await upsertDetail("daycare_details", {
+      booking_id: bookingId!,
+      service_date: body.daycareDate || null,   // service date lives here (mirrors hotel)
+      dropoff_time: body.daycareDropoff || "", dropoff_hour: parseInt(body.daycareDropoffHour) || 0,
+      pickup_time: openTime ? null : (body.daycarePickup || null),
+      pickup_hour: openTime ? null : (parseInt(body.daycarePickupHour) || null),
+      hours_total: openTime ? 0 : Math.max(0, (parseInt(body.daycarePickupHour)||0) - (parseInt(body.daycareDropoffHour)||0)),
+      open_time: openTime, notes: body.daycareNotes || null,
+    });
+  }
+  if (body.service === "studio") {
+    await upsertDetail("studio_details", {
+      booking_id: bookingId!, timeslot: body.studioSlot || "",
+      service_date: body.studioDate || null,   // service date lives here (mirrors hotel)
+    });
+  }
+
+  // ── 6. Add-ons, vaccines, waivers ──
+  if (body.service === "grooming" && body.addons && Object.keys(body.addons).length > 0) {
+    // Idempotent: create-maya-checkout now pre-inserts these up front, so clear
+    // any existing rows before re-establishing from the authoritative payload.
+    await supabase.from("booking_addons").delete().eq("booking_id", bookingId!);
+    await supabase.from("booking_addons").insert(
+      Object.entries(body.addons as Record<string, number>).map(([key, price]) => ({
+        booking_id: bookingId!, addon_key: key,
+        addon_name: ADDON_NAMES[key] ?? key.replace(/_/g, " "),
+        price: price as number,
+      }))
+    );
+  }
+  // These may have been pre-inserted up front by create-maya-checkout, so each
+  // clears existing rows before re-establishing from the authoritative payload.
+  if (body.vaccines && Object.keys(body.vaccines).length > 0) {
+    await supabase.from("pet_vaccines").delete().eq("booking_id", bookingId!);
+    await supabase.from("pet_vaccines").insert(
+      Object.entries(body.vaccines as Record<string, boolean>).map(([name, confirmed]) => ({
+        booking_id: bookingId!, vaccine_name: name.replace(/_/g, " "), confirmed,
+      }))
+    );
+  }
+  // Vaccine document uploads (paths from get-upload-url, carried in the payload)
+  if (body.vaccineDocuments && Object.keys(body.vaccineDocuments).length > 0) {
+    await supabase.from("vaccine_documents").delete().eq("booking_id", bookingId!);
+    try {
+      const { valid: vaccineAttachmentEntries, missing } = await verifyAttachments(
+        supabase,
+        attachmentEntries(body.vaccineDocuments, body.vaccineFileNames, "vaccine_document"),
+      );
+      if (missing.length) {
+        console.error("Skipping missing vaccine document rows:", missing.map((entry) => entry.rawPath || entry.path).join(", "));
+      }
+      if (vaccineAttachmentEntries.length) {
+        const { error: docErr } = await supabase.from("vaccine_documents").insert(
+          vaccineAttachmentEntries.map(({ path, fileName }) => ({
+            booking_id: bookingId!,
+            file_path:  path,
+            file_name:  fileName,
+          }))
+        );
+        if (docErr) console.error("Vaccine documents insert failed (non-fatal):", docErr.message);
+      }
+    } catch (attachmentErr) {
+      console.error(
+        "Vaccine document verification failed; skipping attachment rows (non-fatal):",
+        attachmentErr instanceof Error ? attachmentErr.message : attachmentErr,
+      );
+    }
+  }
+  // Grooming reference photos ("pegs")
+  if (body.service === "grooming" && body.groomReferenceImages && Object.keys(body.groomReferenceImages).length > 0) {
+    await supabase.from("grooming_reference_images").delete().eq("booking_id", bookingId!);
+    try {
+      const { valid: groomReferenceEntries, missing } = await verifyAttachments(
+        supabase,
+        attachmentEntries(body.groomReferenceImages, body.groomReferenceFileNames, "grooming_reference"),
+      );
+      if (missing.length) {
+        console.error("Skipping missing grooming reference rows:", missing.map((entry) => entry.rawPath || entry.path).join(", "));
+      }
+      if (groomReferenceEntries.length) {
+        const { error: pegErr } = await supabase.from("grooming_reference_images").insert(
+          groomReferenceEntries.map(({ path, fileName }) => ({
+            booking_id: bookingId!,
+            file_path:  path,
+            file_name:  fileName,
+          }))
+        );
+        if (pegErr) console.error("Grooming reference images insert failed (non-fatal):", pegErr.message);
+      }
+    } catch (attachmentErr) {
+      console.error(
+        "Grooming reference verification failed; skipping attachment rows (non-fatal):",
+        attachmentErr instanceof Error ? attachmentErr.message : attachmentErr,
+      );
+    }
+  }
+  await supabase.from("waivers").delete().eq("booking_id", bookingId!);
+  await supabase.from("waivers").insert({
+    booking_id:            bookingId!,
+    general_terms:         body.waiverGeneral        === true,
+    house_rules_accepted:  body.waiverHouseRules == null
+      ? null
+      : body.waiverHouseRules === true || body.waiverHouseRules === "true",
+    grooming_booking_policy: body.service === "grooming"
+      ? body.waiverGroomingPolicy == null
+        ? null
+        : body.waiverGroomingPolicy === true || body.waiverGroomingPolicy === "true"
+      : null,
+    hotel_cancellation_policy: body.service === "hotel"
+      ? body.waiverHotelCancellation == null
+        ? null
+        : body.waiverHotelCancellation === true || body.waiverHotelCancellation === "true"
+      : null,
+    health_declaration:    body.waiverVaccine         === true,
+    senior_medical_waiver: body.waiverSeniorMedical   === true,
+    studio_agreement:      body.waiverStudio          === true,
+    media_consent:         body.waiverMedia           === true,
+    waiver_texts:          body.waiverTexts           || null,
+    waiver_version:        "2.0",
+  });
+
+  // ── 7. Payment record ──
+  // One payments row per booking. For an order, every booking's row carries the same provider
+  // payment ID (reference_number) and that booking's own share of the payment (ctx.paymentAmount).
+  const paymentChannel = ctx.paymentChannel;
+  const { error: paymentErr } = await supabase.from("payments").insert({
+    booking_id:       bookingId!, amount: ctx.paymentAmount,
+    type:             "downpayment", method: "online",
+    reference_number: ctx.paymentId || null,
+    notes:            `${ctx.isMaya ? "Maya" : "PayMongo"} ${paymentChannel} — ${ctx.paymentId}`,
+    recorded_by:      `${ctx.provider}_webhook`,
+  });
+  // Never swallow this: a confirmed booking with no payments row is invisible money.
+  if (paymentErr) {
+    console.error("PAYMENT ROW INSERT FAILED for booking", bookingId, "ref", resolvedRef, ":", paymentErr.message);
+  }
+
+  // ── 8. Delete pending ──
+  await supabase.from("pending_bookings").delete().eq("id", pending.id);
+
+  const finalRef = resolvedRef || "—";
+  console.log("SUCCESS — booking_id:", bookingId, "ref:", finalRef);
+
+  // ── 9. Confirmation email details (the caller sends: one email per booking, or one per order) ──
+  let emailDetails: Record<string, any> | null = null;
+  try {
+    let hotelRoomName = body.hotelRoom || null;
+    if (body.service === "hotel" && body.hotelRoomId) {
+      const { data: room } = await supabase.from("rooms").select("name").eq("id", body.hotelRoomId).maybeSingle();
+      if (room?.name) hotelRoomName = room.name;
+    }
+
+    // Build charges from payload — reliable for both primary and fallback paths.
+    // (booking_charges rows may not be queryable yet at this point in the same transaction)
+    const emailCharges = chargesFromPayload(body, subtotal, discountAmt);
+
+    const { data: addonData } = await supabase
+      .from("booking_addons")
+      .select("addon_name, price")
+      .eq("booking_id", bookingId!);
+
+    // Derive vaccine status from the payload (mirrors booking.js logic)
+    const vaccFileCount   = body.vaccineDocuments ? Object.keys(body.vaccineDocuments).length : 0;
+    const bringVaccines   = body.bringVaccines === true || body.bringVaccines === "true";
+    const vaccineStatus   = vaccFileCount > 0
+      ? `${vaccFileCount} file${vaccFileCount > 1 ? "s" : ""} uploaded`
+      : bringVaccines ? "Will bring to venue" : "Not provided";
+
+    emailDetails = {
+      ownerEmail:      body.ownerEmail,
+      ownerFirstName:  body.ownerFirst,
+      ownerLastName:   body.ownerLast   || "",
+      ownerMobile:     body.ownerPhone  || "",
+      petName:         body.petName,
+      petAnimal:       body.petAnimal       || null,
+      petGender:       body.petGender       || null,
+      petBreed:        body.petBreed        || null,
+      petAge:          body.petAge          || null,
+      petAgeUnit:      body.petAgeUnit      || "years",
+      petSize:         body.petSize         || null,
+      petTemperament:  body.petTemperament  || null,
+      petMedical:      body.petMedical      || null,
+      membershipId:    body.membershipId    || null,
+      vaccineStatus,
+      vetClinic:       body.vetClinic       || null,
+      vetContact:      body.vetContact      || null,
+      vetAddress:      body.vetAddress      || null,
+      emergencyName:   body.emergencyName   || null,
+      emergencyPhone:  body.emergencyPhone  || null,
+      hotelFeeding:    body.hotelFeeding    || null,
+      hotelMeds:       body.hotelMeds       || null,
+      groomNotes:      body.groomNotes      || null,
+      daycareNotes:    body.daycareNotes    || null,
+      waiverGeneral:       body.waiverGeneral       === true || body.waiverGeneral       === "true",
+      waiverHouseRules: body.waiverHouseRules == null
+        ? null
+        : body.waiverHouseRules === true || body.waiverHouseRules === "true",
+      waiverGroomingPolicy: body.waiverGroomingPolicy == null
+        ? null
+        : body.waiverGroomingPolicy === true || body.waiverGroomingPolicy === "true",
+      waiverHotelCancellation: body.waiverHotelCancellation == null
+        ? null
+        : body.waiverHotelCancellation === true || body.waiverHotelCancellation === "true",
+      waiverVaccine:       body.waiverVaccine       === true || body.waiverVaccine       === "true",
+      waiverSeniorMedical: body.waiverSeniorMedical === true || body.waiverSeniorMedical === "true",
+      waiverStudio:        body.waiverStudio        === true || body.waiverStudio        === "true",
+      waiverMedia:         body.waiverMedia         === true || body.waiverMedia         === "true",
+      waiverPlaypark:      body.waiverPlaypark      === true || body.waiverPlaypark      === "true",
+      seniorWaiverApplicable: !!body.waiverTexts?.senior ||
+        body.waiverSeniorMedical === true || body.waiverSeniorMedical === "true",
+      refNumber:       finalRef,
+      service:         body.service,
+      branch,
+      total,
+      charges:         emailCharges,
+      addonRows:       addonData    || [],
+      groomServiceName: body.groomServiceName || null,
+      addons:           body.addons
+        ? Object.keys(body.addons as Record<string, unknown>)
+            .map((k) => ADDON_NAMES[k] ?? k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()))
+        : [],
+      groomerName:      body.preferredStylist || null,
+      groomDate:        body.groomDate  || null,
+      groomSlot:        body.groomSlot  || null,
+      hotelRoomName,
+      checkinDate:     body.hotelCheckin  || null,
+      checkoutDate:    body.hotelCheckout || null,
+      dropoffTime:     body.hotelDropoff  || null,
+      pickupTime:      body.hotelPickup   || null,
+      playparkConsent: body.playparkConsent === "yes",
+      daycareDate:     body.daycareDate    || null,
+      daycareDropoff:  body.daycareDropoff || null,
+      daycarePickup:   body.daycarePickup  || null,
+      daycareOpenTime: body.daycareOpenTime === true,
+      studioDate: body.studioDate || null,
+      studioSlot: body.studioSlot || null,
+    };
+  } catch (emailErr) {
+    console.error("Email details failed (non-fatal):", emailErr);
+  }
+
+  return { status: "finalized", bookingId: bookingId!, ref: finalRef, emailDetails };
+}
+
+// ── Orders ────────────────────────────────────────────────────────────────────
+// One hosted checkout = one booking_orders row = one Maya payment, covering one or more bookings
+// (docs/decisions/2026-09-20-accounts-orders-release.md). Holds created before orders existed have
+// no order row and keep using the legacy single-booking path in the handler, unchanged.
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+}
+
+async function findOrder(supabase: any, keys: { checkoutId?: string | null; orderId?: string | null; orderRef?: string | null }) {
+  if (keys.checkoutId) {
+    const { data } = await supabase.from("booking_orders").select("*").eq("gateway_checkout_id", keys.checkoutId).maybeSingle();
+    if (data) return data;
+  }
+  if (keys.orderId) {
+    const { data } = await supabase.from("booking_orders").select("*").eq("id", keys.orderId).maybeSingle();
+    if (data) return data;
+  }
+  if (keys.orderRef) {
+    const { data } = await supabase.from("booking_orders").select("*").eq("order_ref", keys.orderRef).maybeSingle();
+    if (data) return data;
+  }
+  return null;
+}
+
+type OrderEvent = {
+  isMaya: boolean; provider: string; eventType: string; paidEvent: boolean;
+  paymentId: string; paidAmount: number; paymentChannel: string;
+  paymentEventId: string | null; checkoutId: string | null;
+};
+
+async function handleOrderEvent(supabase: any, order: any, ev: OrderEvent): Promise<Response> {
+  const now = new Date().toISOString();
+  const { data: holds } = await supabase.from("pending_bookings")
+    .select("*").eq("order_ref", order.order_ref).order("created_at", { ascending: true });
+  const pendings: any[] = holds || [];
+
+  if (ev.paymentEventId) {
+    await supabase.from("payment_events").update({
+      ref_number:          order.order_ref,
+      pending_booking_id:  pendings[0]?.id ?? null,
+      gateway_checkout_id: ev.checkoutId || order.gateway_checkout_id || null,
+      gateway_payment_id:  ev.paymentId || order.gateway_payment_id || null,
+    }).eq("id", ev.paymentEventId);
+  }
+  if (ev.isMaya && ev.paymentId && !order.gateway_payment_id) {
+    await supabase.from("booking_orders").update({ gateway_payment_id: ev.paymentId, updated_at: now }).eq("id", order.id);
+  }
+
+  // Non-success Maya events: same policy as single bookings. Alert every time (de-duplicated);
+  // only PAYMENT_EXPIRED is final, and it releases EVERY unpaid booking in the order.
+  if (ev.isMaya && !ev.paidEvent) {
+    const alertLock = await claimPaymentAlertLock(supabase, {
+      provider: ev.provider, eventType: ev.eventType, refNumber: order.order_ref,
+      paymentId: ev.paymentId, checkoutId: ev.checkoutId || order.gateway_checkout_id, paymentEventId: ev.paymentEventId,
+    });
+    if (!alertLock.claimed) {
+      await markPaymentEventAlerted(supabase, ev.paymentEventId, `Duplicate alert suppressed: ${alertLock.alertKey}`);
+    } else {
+      try {
+        await sendPaymentFailureAlert({
+          ...(pendings[0]?.payload || {}),
+          eventType: ev.eventType, refNumber: order.order_ref, amount: ev.paidAmount || order.amount,
+          paymentId: ev.paymentId, checkoutId: ev.checkoutId || order.gateway_checkout_id,
+        });
+        await markPaymentEventAlerted(supabase, ev.paymentEventId);
+        await markPaymentAlertLockSent(supabase, alertLock.id);
+      } catch (alertErr) {
+        const message = alertErr instanceof Error ? alertErr.message : String(alertErr);
+        console.error("Maya payment alert failed:", message);
+        await markPaymentEventAlerted(supabase, ev.paymentEventId, message);
+        await markPaymentAlertLockSent(supabase, alertLock.id, message);
+      }
+    }
+    if (ev.eventType === "PAYMENT_EXPIRED") {
+      await supabase.from("bookings")
+        .update({ status: "cancelled", cancellation_reason: "Payment window expired" })
+        .eq("order_id", order.id).eq("status", "pending").eq("payment_status", "unpaid");
+      await supabase.from("pending_bookings").delete().eq("order_ref", order.order_ref);
+      await supabase.from("booking_orders").update({ status: "cancelled", updated_at: now })
+        .eq("id", order.id).eq("status", "pending");
+    }
+    return jsonResponse({ received: true, status: ev.eventType, order_ref: order.order_ref });
+  }
+
+  // The payment covers the whole order.
+  if (ev.paidAmount !== Number(order.amount)) {
+    console.error("Order payment amount mismatch:", ev.paidAmount, "expected:", order.amount, "order:", order.order_ref);
+    return jsonResponse({ error: "Payment amount mismatch" }, 400);
+  }
+  if (pendings.length === 0) {
+    console.log("Order already processed:", order.order_ref);
+    return jsonResponse({ received: true, note: "Already processed", order_ref: order.order_ref });
+  }
+
+  // Claim the order first so exactly one event sends the confirmation email. A retry after a
+  // crash (order already claimed, holds remaining) still finalizes the rest; per-booking safety
+  // comes from finalizePending's atomic pending→confirmed claim, not from the payment ID, because
+  // every booking in the order shares the same payment ID.
+  const { data: claimed } = await supabase.from("booking_orders")
+    .update({ status: "paid", paid_at: now, gateway_payment_id: ev.paymentId || order.gateway_payment_id, updated_at: now })
+    .eq("id", order.id).eq("status", "pending").select("id").maybeSingle();
+
+  const results: FinalizeResult[] = [];
+  for (const pending of pendings) {
+    results.push(await finalizePending(supabase, pending, {
+      bookingIdFromMeta: null,
+      refNumber:         pending.ref_number,
+      paymentId:         ev.paymentId,
+      paymentAmount:     Number(pending.amount),   // this booking's share; shares sum to order.amount
+      paymentChannel:    ev.paymentChannel,
+      provider:          ev.provider,
+      isMaya:            ev.isMaya,
+      orderId:           order.id,
+    }));
+  }
+
+  const finalized = results.filter((r): r is Extract<FinalizeResult, { status: "finalized" }> => r.status === "finalized");
+  const details = finalized.map((r) => r.emailDetails).filter(Boolean) as Record<string, any>[];
+  if (claimed && details.length) {
+    try {
+      if (order.item_count === 1 && details.length === 1) {
+        await sendBookingConfirmation(details[0]);          // identical to today's single-booking email
+      } else {
+        await sendOrderConfirmation(order, details);
+      }
+    } catch (emailErr) {
+      console.error("Order email send failed (non-fatal):", emailErr);
+    }
+  } else if (!claimed && details.length) {
+    console.warn("Order", order.order_ref, "was already claimed; finalized", details.length, "remaining booking(s) without a new email");
+  }
+
+  console.log("ORDER SUCCESS —", order.order_ref, "bookings:", results.map((r) => r.ref).join(", "));
+  return jsonResponse({
+    received: true, order_ref: order.order_ref,
+    booking_ids: results.map((r) => r.bookingId), finalized: finalized.length,
+  });
+}
+
+async function sendOrderConfirmation(order: any, details: Record<string, any>[]) {
+  const first = details[0];
+  const cc = branchBookingEmail(first.branch);
+  const payload: Record<string, unknown> = {
+    from: "Barkhaus Pet Services <hello@barkhaus.ph>",
+    to:   first.ownerEmail,
+    subject: `Booking Confirmed — ${order.order_ref} (${details.length} bookings)`,
+    html: buildOrderEmailHtml(order, details),
+  };
+  if (cc && cc.toLowerCase() !== String(first.ownerEmail || "").toLowerCase()) payload.cc = cc;
+  await deliverEmail(payload);
+}
+
+function emailCard(title: string, rows: string, marginBottom = 14): string {
+  return `<table width="100%" cellpadding="0" cellspacing="0" style="background:#1F3D55;border:0.5px solid rgba(77,150,185,0.25);border-radius:10px;overflow:hidden;margin-bottom:${marginBottom}px">
+      <tr><td colspan="2" style="padding:9px 14px;font-size:9px;font-weight:700;color:#6AAEC8;text-transform:uppercase;letter-spacing:0.12em;border-bottom:0.5px solid rgba(77,150,185,0.2)">${title}</td></tr>
+      ${rows}
+    </table>`;
+}
+
+// One email for a multi-booking order: a section per booking (details, pet, health & care, waivers),
+// then owner details, one payment summary and the policies for each service booked, once.
+function buildOrderEmailHtml(order: any, details: Record<string, any>[]): string {
+  const first = details[0];
+  const svcLabel: Record<string, string> = { grooming: "Grooming", hotel: "Pet Hotel", daycare: "Daycare", studio: "Studio" };
+  const petNames = [...new Set(details.map((d) => d.petName).filter(Boolean))];
+  const petList = petNames.length <= 1 ? (petNames[0] || "your pet") : `${petNames.slice(0, -1).join(", ")} and ${petNames[petNames.length - 1]}`;
+  const bookedAt = new Date().toLocaleDateString("en-PH", {
+    month: "long", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Asia/Manila",
+  });
+
+  const sections = details.map((d, i) => `
+    <p style="font-size:12px;font-weight:700;color:#FFCE58;margin:${i === 0 ? 0 : 22}px 0 10px;text-transform:uppercase;letter-spacing:0.1em">
+      Booking ${i + 1} of ${details.length} · ${escapeHtml(svcLabel[d.service] ?? d.service)} for ${escapeHtml(d.petName)}
+      <span style="color:#6AAEC8;font-weight:600;letter-spacing:0;text-transform:none;margin-left:6px">${escapeHtml(d.refNumber)}</span>
+    </p>
+    ${emailCard("Booking details", bookingDetailRows(d))}
+    ${emailCard("Pet details", petDetailRows(d))}
+    ${emailCard("Health &amp; care", healthCareRows(d))}
+    ${waiverCard(d)}`).join("");
+
+  const lineRow = (label: string, value: string, color = "#B8D4E0") => `<tr style="border-bottom:0.5px solid rgba(77,150,185,0.08)">
+      <td style="padding:8px 14px;color:#6AAEC8;width:60%;font-size:13px">${label}</td>
+      <td style="padding:8px 14px;color:${color};font-size:13px;text-align:right">${value}</td></tr>`;
+  let payRows = details.map((d) =>
+    lineRow(`${escapeHtml(svcLabel[d.service] ?? d.service)} · ${escapeHtml(d.petName)} <span style="color:#4D96B9;font-size:11px">(${escapeHtml(d.refNumber)})</span>`,
+            `₱${Number(d.total || 0).toLocaleString()}`)).join("");
+  if (Number(order.convenience_fee) > 0) {
+    payRows += lineRow(`<span style="font-size:12px;color:#4D96B9">Includes one convenience fee</span>`, `<span style="font-size:12px;color:#4D96B9">₱${Number(order.convenience_fee).toLocaleString()}</span>`);
+  }
+  payRows += `<tr><td style="padding:10px 14px;color:#F0EDE6;font-size:14px;font-weight:700;border-top:0.5px solid rgba(77,150,185,0.3)">Total · Paid</td>
+      <td style="padding:10px 14px;color:#FFCE58;font-size:14px;font-weight:700;text-align:right;border-top:0.5px solid rgba(77,150,185,0.3)">₱${Number(order.amount).toLocaleString()}</td></tr>`;
+
+  const policies = [...new Map(details.map((d) => [d.service, d])).values()].map(bookingPolicyNotice).join("");
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Booking Confirmation — Barkhaus</title></head>
+<body style="margin:0;padding:0;background:#0F1C26;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#0F1C26;padding:24px 0">
+<tr><td align="center">
+<table width="560" cellpadding="0" cellspacing="0" style="background:#1A3044;border-radius:14px;border:0.5px solid rgba(77,150,185,0.3);overflow:hidden;max-width:560px;width:100%">
+  <tr><td style="background:#0F1C26;padding:22px 28px;text-align:center;border-bottom:0.5px solid rgba(77,150,185,0.2)">
+    <img src="https://barkhaus.ph/images/Barkhaus%20Pet%20Hotel%20Logo.png" alt="Barkhaus Pet Services" height="40" style="display:block;margin:0 auto">
+  </td></tr>
+  <tr><td style="padding:28px">
+    <p style="font-weight:700;font-size:22px;color:#F0EDE6;margin:0 0 6px">Hi ${escapeHtml(first.ownerFirstName)}! 🐾</p>
+    <p style="color:#B8D4E0;margin:0 0 22px;line-height:1.65;font-size:13px">
+      Great news — your <strong style="color:#F0EDE6">${details.length} bookings</strong> for <strong style="color:#F0EDE6">${escapeHtml(petList)}</strong> are all set and we're so excited to see you!
+    </p>
+    <div style="margin-bottom:22px">
+      <span style="font-size:11px;font-weight:700;padding:4px 12px;border-radius:999px;background:rgba(107,203,119,0.15);color:#6BCB77;border:0.5px solid #6BCB77">Confirmed</span>
+      <span style="font-size:12px;color:#6AAEC8;font-weight:600;margin-left:8px">Order ${escapeHtml(order.order_ref)}</span>
+      <span style="font-size:11px;color:#6AAEC8;margin-left:8px">· ${bookedAt}</span>
+    </div>
+    ${sections}
+    ${emailCard("Owner details", ownerDetailRows(first))}
+    ${emailCard("Payment summary", payRows, 20)}
+    <div style="background:rgba(255,206,88,0.08);border:0.5px solid rgba(255,206,88,0.25);border-radius:10px;padding:12px 14px;margin-bottom:14px">
+      <p style="margin:0;font-size:13px;color:#B8D4E0;line-height:1.55">⏰ Please arrive <strong style="color:#FFCE58">15 minutes before</strong> each scheduled time to make check-in a breeze!</p>
+    </div>
+    ${policies}
+    <p style="color:#4D96B9;font-size:11px;line-height:1.6;margin:0;padding:10px 14px;background:rgba(77,150,185,0.08);border-radius:8px;border:0.5px solid rgba(77,150,185,0.2)">
+      📭 This is a no-reply email. Please contact your branch by phone or Instagram for changes or cancellations.
+    </p>
+  </td></tr>
+  <tr><td style="border-top:0.5px solid rgba(77,150,185,0.25);padding:18px 28px;background:#0F1C26">
+    <p style="font-size:9px;font-weight:700;color:#6AAEC8;margin:0 0 12px;text-transform:uppercase;letter-spacing:0.12em">Your branch</p>
+    <p style="font-weight:700;font-size:16px;color:#F0EDE6;margin:0 0 3px">Barkhaus ${escapeHtml(first.branch.name)}</p>
+    <p style="font-size:12px;color:#B8D4E0;margin:0 0 3px">${escapeHtml(first.branch.address)}, ${escapeHtml(first.branch.city)}</p>
+    <p style="font-size:12px;color:#6AAEC8;margin:0 0 8px">${escapeHtml(first.branch.hours_weekday)} · ${escapeHtml(first.branch.hours_weekend)}</p>
+    <p style="font-size:12px;color:#4D96B9;font-weight:600;margin:0">📞 ${escapeHtml(first.branch.phone)} &nbsp;·&nbsp; 📸 @barkhausph</p>
+    <hr style="border:none;border-top:0.5px solid rgba(77,150,185,0.2);margin:14px 0">
+    <p style="font-size:11px;color:#4D96B9;text-align:center;margin:0">© 2026 Barkhaus Pet Services · All rights reserved</p>
+  </td></tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>`;
+}
+
 // ── Main handler ──────────────────────────────────────────────
 
 Deno.serve(async (req) => {
@@ -679,7 +1442,16 @@ Deno.serve(async (req) => {
     let description:    string = "";
     let bookingMeta:    Record<string, string> | null = null;
 
-    if (isMaya) {
+    const simulated = isSimulatedRequest(req);
+    if (simulated) console.log("STAGING SIMULATION — skipping Maya verification for", event?.id);
+
+    if (isMaya && simulated) {
+      // Staging only: the event itself is the source of truth, since there is no Maya to ask.
+      paymentId   = event.id || "";
+      paidAmount  = mayaAmount(event);
+      bookingMeta = (event.metadata || null) as Record<string, string> | null;
+      description = "Simulated payment (staging)";
+    } else if (isMaya) {
       const mayaSecret = Deno.env.get("MAYA_SECRET_KEY");
       if (!mayaSecret) throw new Error("MAYA_SECRET_KEY not configured");
 
@@ -785,6 +1557,25 @@ Deno.serve(async (req) => {
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
+    // ── Orders (from 2026-09): one payment for one or more bookings ─────────────
+    // Must run before the payment-ID idempotency check below: every booking in an order shares the
+    // payment ID, so that check would drop the second booking as "already processed".
+    const order = await findOrder(supabase, {
+      checkoutId: isMaya ? mayaCheckoutId(eventData) : null,
+      orderId:    bookingMeta?.orderId || bookingMeta?.order_id || null,
+      orderRef:   bookingMeta?.orderRef || bookingMeta?.order_ref || refNumber,
+    });
+    if (order) {
+      return await handleOrderEvent(supabase, order, {
+        isMaya, provider, eventType: eventType || "", paidEvent, paymentId, paidAmount,
+        paymentChannel: isMaya
+          ? (event.paymentScheme || event.fundSource?.type || "checkout")
+          : (eventAttrs?.source?.type || "qrph"),
+        paymentEventId, checkoutId: isMaya ? mayaCheckoutId(eventData) : null,
+      });
+    }
+
+    // ── Legacy single booking (holds created before orders existed) ──────────────
     // ── Idempotency: bail if this provider payment ID is already recorded ────────
     if (paymentId) {
       const { data: existingPay } = await supabase
@@ -932,470 +1723,24 @@ Deno.serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const body = pending.payload;
-    console.log("Payload service:", body.service, "owner:", body.ownerEmail);
-
-    // ── 1. Branch ──
-    const { data: branch } = await supabase.from("branches")
-      .select("id, name, address, city, hours_weekday, hours_weekend, phone")
-      .ilike("name", body.location === "estancia" ? "%Estancia%" : "%Eastwood%")
-      .single();
-    if (!branch) throw new Error("Branch not found: " + body.location);
-
-    // ── 2. Find existing booking (created by create-payment) ────────────────────
-    let bookingId:         string | null = null;
-    let ownerId:           string | null = null;
-    let petId:             string | null = null;
-    let createdByPaymentFn = false;
-
-    // Try booking_id UUID first (most reliable), then fall back to ref_number.
-    // Both lookups are attempted so a transient UUID miss doesn't incorrectly
-    // trigger the fallback path and create a duplicate booking.
-    let eb: Record<string, any> | null = null;
-    if (bookingIdFromMeta) {
-      const { data } = await supabase.from("bookings")
-        .select("id, ref_number, status, payment_status, owner_id, pet_id")
-        .eq("id", bookingIdFromMeta).maybeSingle();
-      eb = data;
-      if (!eb) console.warn("UUID lookup missed for", bookingIdFromMeta, "— trying ref_number");
-    }
-    if (!eb && refNumber) {
-      const { data } = await supabase.from("bookings")
-        .select("id, ref_number, status, payment_status, owner_id, pet_id")
-        .eq("ref_number", refNumber).maybeSingle();
-      eb = data;
-    }
-
-    // If the event didn't carry a ref_number (e.g. payment.paid omits it while
-    // checkout_session.payment.paid does not), read it from the DB row so that
-    // finalRef, the email subject, and the fallback booking all use the correct
-    // value instead of null → random.
-    // Declared with let so we can reassign; the outer const declarations above
-    // use || null so these are already the best values from the event.
-    let resolvedRef: string | null = refNumber;
-    if (!resolvedRef && eb?.ref_number) resolvedRef = eb.ref_number;
-
-    if (eb) {
-      if (eb.status === "confirmed" && eb.payment_status === "paid") {
-        console.log("Already confirmed:", eb.id, "ref:", eb.ref_number, "— skipping");
-        await supabase.from("pending_bookings").delete().eq("id", pending.id);
-        return new Response(JSON.stringify({ received: true, note: "Already processed", booking_id: eb.id }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      }
-      bookingId          = eb.id;
-      ownerId            = eb.owner_id;
-      petId              = eb.pet_id;
-      createdByPaymentFn = true;
-      console.log("Found booking:", bookingId, "ref:", eb.ref_number, "— will confirm");
-    }
-
-    // ── 3. Membership ──
-    let memberDiscountApplied = false;
-    let memberCodeUsed: string | null = null;
-    if (body.membershipId && ownerId) {
-      const { data: member } = await supabase.from("members").select("id, active")
-        .eq("member_code", body.membershipId.trim().toUpperCase()).maybeSingle();
-      if (member?.active) {
-        memberDiscountApplied = true;
-        memberCodeUsed = body.membershipId.trim().toUpperCase();
-        await supabase.from("members").update({ owner_id: ownerId })
-          .eq("member_code", memberCodeUsed!).is("owner_id", null);
-      }
-    }
-
-    // ── 4. Confirm or create booking ────────────────────────────────────────────
-    const subtotal    = parseInt(body.subtotal)       || 0;
-    const discountAmt = parseInt(body.discountAmount) || 0;
-    const total       = parseInt(body.total)          || subtotal - discountAmt;
-
-    if (createdByPaymentFn && bookingId) {
-      // Atomic status transition: UPDATE WHERE status = 'pending' ensures only one
-      // of the two simultaneous PayMongo events (payment.paid + checkout_session.payment.paid)
-      // successfully claims the booking. The other gets 0 rows back and exits cleanly.
-      const { data: claimed } = await supabase.from("bookings")
-        .update({
-          status:                  "confirmed",
-          payment_status:          "paid",
-          member_discount_applied: memberDiscountApplied,
-          member_code_used:        memberCodeUsed,
-        })
-        .eq("id", bookingId)
-        .eq("status", "pending")      // ← atomic claim guard
-        .select("id")
-        .maybeSingle();
-
-      if (!claimed) {
-        // Another concurrent event already confirmed this booking
-        console.log("Booking already claimed by concurrent event:", bookingId, "— skipping");
-        await supabase.from("pending_bookings").delete().eq("id", pending.id);
-        return new Response(
-          JSON.stringify({ received: true, note: "Concurrent event already processed", booking_id: bookingId }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-
-      // Insert booking_charges so admin panel and email have the full breakdown
-      const primaryCharges = chargesFromPayload(body, subtotal, discountAmt);
-      if (primaryCharges.length > 0) {
-        await supabase.from("booking_charges").insert(
-          primaryCharges.map((c, i) => ({ ...c, booking_id: bookingId!, sort_order: i }))
-        );
-      }
-
-    } else {
-      // ── Fallback: create-payment didn't run or booking row was missing ──────────
-      // Build everything from scratch using the pending_bookings payload.
-
-      const email = body.ownerEmail.trim().toLowerCase();
-      const { data: existingOwner } = await supabase.from("owners").select("id").ilike("email", email).maybeSingle();
-      if (existingOwner) {
-        ownerId = existingOwner.id;
-        await supabase.from("owners").update({
-          first_name: body.ownerFirst, last_name: body.ownerLast,
-          mobile: body.ownerPhone, referral_source: body.ownerSource || null,
-        }).eq("id", ownerId!);
-      } else {
-        const { data: newOwner, error: ownerErr } = await supabase.from("owners").insert({
-          first_name: body.ownerFirst.trim(), last_name: body.ownerLast.trim(),
-          email, mobile: body.ownerPhone.trim(), referral_source: body.ownerSource || null,
-        }).select("id").single();
-        if (ownerErr) throw new Error(`Owner insert failed: ${ownerErr.message}`);
-        ownerId = newOwner.id;
-      }
-
-      if (body.membershipId) {
-        const { data: member } = await supabase.from("members").select("id, active")
-          .eq("member_code", body.membershipId.trim().toUpperCase()).maybeSingle();
-        if (member?.active) {
-          memberDiscountApplied = true;
-          memberCodeUsed = body.membershipId.trim().toUpperCase();
-          await supabase.from("members").update({ owner_id: ownerId })
-            .eq("member_code", memberCodeUsed!).is("owner_id", null);
-        }
-      }
-
-      const petName = body.petName.trim();
-      const { data: existingPet } = await supabase.from("pets").select("id")
-        .eq("owner_id", ownerId!).ilike("name", petName).maybeSingle();
-      if (existingPet) {
-        petId = existingPet.id;
-        await supabase.from("pets").update({
-          animal_type: body.petAnimal || null, gender: body.petGender || null,
-          breed: body.petBreed?.trim() || null,
-          age_value: body.petAge ? parseInt(body.petAge) : null, age_unit: body.petAgeUnit || "years",
-          size: body.petSize || null, medical_notes: body.petMedical?.trim() || null,
-          temperament: body.petTemperament || null,
-        }).eq("id", petId!);
-      } else {
-        const { data: newPet, error: petErr } = await supabase.from("pets").insert({
-          owner_id: ownerId!, name: petName,
-          animal_type: body.petAnimal || null, gender: body.petGender || null,
-          breed: body.petBreed?.trim() || null,
-          age_value: body.petAge ? parseInt(body.petAge) : null, age_unit: body.petAgeUnit || "years",
-          size: body.petSize || null, medical_notes: body.petMedical?.trim() || null,
-          temperament: body.petTemperament || null,
-        }).select("id").single();
-        if (petErr) throw new Error(`Pet insert failed: ${petErr.message}`);
-        petId = newPet.id;
-      }
-
-      const { data: newBooking, error: bookingErr } = await supabase.from("bookings").insert({
-        ref_number:              resolvedRef ?? ("BH-" + Math.random().toString(36).substr(2, 6).toUpperCase()),
-        branch_id:               branch.id,
-        owner_id:                ownerId!, pet_id: petId!,
-        service:                 body.service, status: "confirmed", payment_status: "paid",
-        booking_date:            new Date().toISOString().split("T")[0],   // creation date (service date lives in detail tables)
-        subtotal, discount_amount: discountAmt, total,
-        member_discount_applied: memberDiscountApplied, member_code_used: memberCodeUsed,
-        booking_source:          "online",
-      }).select("id").single();
-      if (bookingErr) throw new Error(`Booking insert failed: ${bookingErr.message}`);
-      bookingId = newBooking.id;
-
-      const fallbackCharges = chargesFromPayload(body, subtotal, discountAmt);
-      if (fallbackCharges.length > 0) {
-        await supabase.from("booking_charges").insert(
-          fallbackCharges.map((c, i) => ({ ...c, booking_id: bookingId!, sort_order: i }))
-        );
-      }
-    }
-
-    // ── 5. Service details ──
-    // Each upsert uses onConflict:"booking_id" so retries are safe.
-    // If the table is missing the UNIQUE constraint the upsert falls back to a
-    // plain INSERT; a duplicate-key error on retry is treated as a non-fatal
-    // warning (the row already exists from the first successful run) rather than
-    // aborting the entire webhook and leaving payment/email undelivered.
-    const upsertDetail = async (table: string, row: Record<string, unknown>) => {
-      const { error } = await (supabase.from(table) as any).upsert(row, { onConflict: "booking_id" });
-      if (error) {
-        // 23505 = unique_violation — row already exists from a prior run; safe to continue
-        if (error.code === "23505" || error.message?.includes("duplicate")) {
-          console.warn(`${table} already exists for booking ${row.booking_id} — skipping duplicate`);
-        } else {
-          throw new Error(`${table} upsert failed: ${error.message}`);
-        }
-      }
-    };
-
-    if (body.service === "hotel") {
-      await upsertDetail("hotel_details", {
-        booking_id: bookingId!, checkin_date: body.hotelCheckin, checkout_date: body.hotelCheckout,
-        dropoff_time: body.hotelDropoff || null, pickup_time: body.hotelPickup || null,
-        pickup_hour: parseInt(body.hotelPickupHour) || 14,
-        room_type: body.hotelRoom || null, room_id: body.hotelRoomId || null,
-        playpark_consent: body.playparkConsent === "yes",
-        feeding_instructions: body.hotelFeeding || null, medications: body.hotelMeds || null,
-        vet_clinic: body.vetClinic || null, vet_contact: body.vetContact || null, vet_address: body.vetAddress || null,
-        emergency_name: body.emergencyName || null, emergency_phone: body.emergencyPhone || null,
-      });
-    }
-    if (body.service === "grooming") {
-      await upsertDetail("grooming_details", {
-        booking_id: bookingId!, timeslot: body.groomSlot,
-        service_date: body.groomDate || null,   // service date lives here (mirrors hotel)
-        preferred_stylist: body.preferredStylist || "any",
-        groomer_id: body.preferredStylistId || null,
-        groom_service_key: body.groomService || "", groom_service_name: body.groomServiceName || "",
-        special_requests: body.groomNotes || null,
-      });
-    }
-    if (body.service === "daycare") {
-      const openTime = body.daycareOpenTime === true;
-      await upsertDetail("daycare_details", {
-        booking_id: bookingId!,
-        service_date: body.daycareDate || null,   // service date lives here (mirrors hotel)
-        dropoff_time: body.daycareDropoff || "", dropoff_hour: parseInt(body.daycareDropoffHour) || 0,
-        pickup_time: openTime ? null : (body.daycarePickup || null),
-        pickup_hour: openTime ? null : (parseInt(body.daycarePickupHour) || null),
-        hours_total: openTime ? 0 : Math.max(0, (parseInt(body.daycarePickupHour)||0) - (parseInt(body.daycareDropoffHour)||0)),
-        open_time: openTime, notes: body.daycareNotes || null,
-      });
-    }
-    if (body.service === "studio") {
-      await upsertDetail("studio_details", {
-        booking_id: bookingId!, timeslot: body.studioSlot || "",
-        service_date: body.studioDate || null,   // service date lives here (mirrors hotel)
-      });
-    }
-
-    // ── 6. Add-ons, vaccines, waivers ──
-    if (body.service === "grooming" && body.addons && Object.keys(body.addons).length > 0) {
-      // Idempotent: create-maya-checkout now pre-inserts these up front, so clear
-      // any existing rows before re-establishing from the authoritative payload.
-      await supabase.from("booking_addons").delete().eq("booking_id", bookingId!);
-      await supabase.from("booking_addons").insert(
-        Object.entries(body.addons as Record<string, number>).map(([key, price]) => ({
-          booking_id: bookingId!, addon_key: key,
-          addon_name: ADDON_NAMES[key] ?? key.replace(/_/g, " "),
-          price: price as number,
-        }))
-      );
-    }
-    // These may have been pre-inserted up front by create-maya-checkout, so each
-    // clears existing rows before re-establishing from the authoritative payload.
-    if (body.vaccines && Object.keys(body.vaccines).length > 0) {
-      await supabase.from("pet_vaccines").delete().eq("booking_id", bookingId!);
-      await supabase.from("pet_vaccines").insert(
-        Object.entries(body.vaccines as Record<string, boolean>).map(([name, confirmed]) => ({
-          booking_id: bookingId!, vaccine_name: name.replace(/_/g, " "), confirmed,
-        }))
-      );
-    }
-    // Vaccine document uploads (paths from get-upload-url, carried in the payload)
-    if (body.vaccineDocuments && Object.keys(body.vaccineDocuments).length > 0) {
-      await supabase.from("vaccine_documents").delete().eq("booking_id", bookingId!);
-      try {
-        const { valid: vaccineAttachmentEntries, missing } = await verifyAttachments(
-          supabase,
-          attachmentEntries(body.vaccineDocuments, body.vaccineFileNames, "vaccine_document"),
-        );
-        if (missing.length) {
-          console.error("Skipping missing vaccine document rows:", missing.map((entry) => entry.rawPath || entry.path).join(", "));
-        }
-        if (vaccineAttachmentEntries.length) {
-          const { error: docErr } = await supabase.from("vaccine_documents").insert(
-            vaccineAttachmentEntries.map(({ path, fileName }) => ({
-              booking_id: bookingId!,
-              file_path:  path,
-              file_name:  fileName,
-            }))
-          );
-          if (docErr) console.error("Vaccine documents insert failed (non-fatal):", docErr.message);
-        }
-      } catch (attachmentErr) {
-        console.error(
-          "Vaccine document verification failed; skipping attachment rows (non-fatal):",
-          attachmentErr instanceof Error ? attachmentErr.message : attachmentErr,
-        );
-      }
-    }
-    // Grooming reference photos ("pegs")
-    if (body.service === "grooming" && body.groomReferenceImages && Object.keys(body.groomReferenceImages).length > 0) {
-      await supabase.from("grooming_reference_images").delete().eq("booking_id", bookingId!);
-      try {
-        const { valid: groomReferenceEntries, missing } = await verifyAttachments(
-          supabase,
-          attachmentEntries(body.groomReferenceImages, body.groomReferenceFileNames, "grooming_reference"),
-        );
-        if (missing.length) {
-          console.error("Skipping missing grooming reference rows:", missing.map((entry) => entry.rawPath || entry.path).join(", "));
-        }
-        if (groomReferenceEntries.length) {
-          const { error: pegErr } = await supabase.from("grooming_reference_images").insert(
-            groomReferenceEntries.map(({ path, fileName }) => ({
-              booking_id: bookingId!,
-              file_path:  path,
-              file_name:  fileName,
-            }))
-          );
-          if (pegErr) console.error("Grooming reference images insert failed (non-fatal):", pegErr.message);
-        }
-      } catch (attachmentErr) {
-        console.error(
-          "Grooming reference verification failed; skipping attachment rows (non-fatal):",
-          attachmentErr instanceof Error ? attachmentErr.message : attachmentErr,
-        );
-      }
-    }
-    await supabase.from("waivers").delete().eq("booking_id", bookingId!);
-    await supabase.from("waivers").insert({
-      booking_id:            bookingId!,
-      general_terms:         body.waiverGeneral        === true,
-      house_rules_accepted:  body.waiverHouseRules == null
-        ? null
-        : body.waiverHouseRules === true || body.waiverHouseRules === "true",
-      grooming_booking_policy: body.service === "grooming"
-        ? body.waiverGroomingPolicy == null
-          ? null
-          : body.waiverGroomingPolicy === true || body.waiverGroomingPolicy === "true"
-        : null,
-      hotel_cancellation_policy: body.service === "hotel"
-        ? body.waiverHotelCancellation == null
-          ? null
-          : body.waiverHotelCancellation === true || body.waiverHotelCancellation === "true"
-        : null,
-      health_declaration:    body.waiverVaccine         === true,
-      senior_medical_waiver: body.waiverSeniorMedical   === true,
-      studio_agreement:      body.waiverStudio          === true,
-      media_consent:         body.waiverMedia           === true,
-      waiver_texts:          body.waiverTexts           || null,
-      waiver_version:        "2.0",
-    });
-
-    // ── 7. Payment record ──
     const paymentChannel = isMaya
       ? (event.paymentScheme || event.fundSource?.type || "checkout")
       : (eventAttrs?.source?.type || "qrph");
-    await supabase.from("payments").insert({
-      booking_id:       bookingId!, amount: paidAmount,
-      type:             "downpayment", method: "online",
-      reference_number: paymentId || null,
-      notes:            `${isMaya ? "Maya" : "PayMongo"} ${paymentChannel} — ${paymentId}`,
-      recorded_by:      `${provider}_webhook`,
+    const result = await finalizePending(supabase, pending, {
+      bookingIdFromMeta, refNumber, paymentId, paymentAmount: paidAmount, paymentChannel, provider, isMaya,
     });
-
-    // ── 8. Delete pending ──
-    await supabase.from("pending_bookings").delete().eq("id", pending.id);
-
-    const finalRef = resolvedRef || "—";
-    console.log("SUCCESS — booking_id:", bookingId, "ref:", finalRef);
-
-    // ── 9. Send confirmation email ──
-    try {
-      let hotelRoomName = body.hotelRoom || null;
-      if (body.service === "hotel" && body.hotelRoomId) {
-        const { data: room } = await supabase.from("rooms").select("name").eq("id", body.hotelRoomId).maybeSingle();
-        if (room?.name) hotelRoomName = room.name;
+    if (result.status === "already") {
+      return new Response(JSON.stringify({ received: true, note: result.note, booking_id: result.bookingId }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+    const bookingId = result.bookingId;
+    const finalRef  = result.ref;
+    if (result.emailDetails) {
+      try {
+        await sendBookingConfirmation(result.emailDetails);
+      } catch (emailErr) {
+        console.error("Email send failed (non-fatal):", emailErr);
       }
-
-      // Build charges from payload — reliable for both primary and fallback paths.
-      // (booking_charges rows may not be queryable yet at this point in the same transaction)
-      const emailCharges = chargesFromPayload(body, subtotal, discountAmt);
-
-      const { data: addonData } = await supabase
-        .from("booking_addons")
-        .select("addon_name, price")
-        .eq("booking_id", bookingId!);
-
-      // Derive vaccine status from the payload (mirrors booking.js logic)
-      const vaccFileCount   = body.vaccineDocuments ? Object.keys(body.vaccineDocuments).length : 0;
-      const bringVaccines   = body.bringVaccines === true || body.bringVaccines === "true";
-      const vaccineStatus   = vaccFileCount > 0
-        ? `${vaccFileCount} file${vaccFileCount > 1 ? "s" : ""} uploaded`
-        : bringVaccines ? "Will bring to venue" : "Not provided";
-
-      await sendBookingConfirmation({
-        ownerEmail:      body.ownerEmail,
-        ownerFirstName:  body.ownerFirst,
-        ownerLastName:   body.ownerLast   || "",
-        ownerMobile:     body.ownerPhone  || "",
-        petName:         body.petName,
-        petAnimal:       body.petAnimal       || null,
-        petGender:       body.petGender       || null,
-        petBreed:        body.petBreed        || null,
-        petAge:          body.petAge          || null,
-        petAgeUnit:      body.petAgeUnit      || "years",
-        petSize:         body.petSize         || null,
-        petTemperament:  body.petTemperament  || null,
-        petMedical:      body.petMedical      || null,
-        membershipId:    body.membershipId    || null,
-        vaccineStatus,
-        vetClinic:       body.vetClinic       || null,
-        vetContact:      body.vetContact      || null,
-        vetAddress:      body.vetAddress      || null,
-        emergencyName:   body.emergencyName   || null,
-        emergencyPhone:  body.emergencyPhone  || null,
-        hotelFeeding:    body.hotelFeeding    || null,
-        hotelMeds:       body.hotelMeds       || null,
-        groomNotes:      body.groomNotes      || null,
-        daycareNotes:    body.daycareNotes    || null,
-        waiverGeneral:       body.waiverGeneral       === true || body.waiverGeneral       === "true",
-        waiverHouseRules: body.waiverHouseRules == null
-          ? null
-          : body.waiverHouseRules === true || body.waiverHouseRules === "true",
-        waiverGroomingPolicy: body.waiverGroomingPolicy == null
-          ? null
-          : body.waiverGroomingPolicy === true || body.waiverGroomingPolicy === "true",
-        waiverHotelCancellation: body.waiverHotelCancellation == null
-          ? null
-          : body.waiverHotelCancellation === true || body.waiverHotelCancellation === "true",
-        waiverVaccine:       body.waiverVaccine       === true || body.waiverVaccine       === "true",
-        waiverSeniorMedical: body.waiverSeniorMedical === true || body.waiverSeniorMedical === "true",
-        waiverStudio:        body.waiverStudio        === true || body.waiverStudio        === "true",
-        waiverMedia:         body.waiverMedia         === true || body.waiverMedia         === "true",
-        waiverPlaypark:      body.waiverPlaypark      === true || body.waiverPlaypark      === "true",
-        seniorWaiverApplicable: !!body.waiverTexts?.senior ||
-          body.waiverSeniorMedical === true || body.waiverSeniorMedical === "true",
-        refNumber:       finalRef,
-        service:         body.service,
-        branch,
-        total,
-        charges:         emailCharges,
-        addonRows:       addonData    || [],
-        groomServiceName: body.groomServiceName || null,
-        addons:           body.addons
-          ? Object.keys(body.addons as Record<string, unknown>)
-              .map((k) => ADDON_NAMES[k] ?? k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()))
-          : [],
-        groomerName:      body.preferredStylist || null,
-        groomDate:        body.groomDate  || null,
-        groomSlot:        body.groomSlot  || null,
-        hotelRoomName,
-        checkinDate:     body.hotelCheckin  || null,
-        checkoutDate:    body.hotelCheckout || null,
-        dropoffTime:     body.hotelDropoff  || null,
-        pickupTime:      body.hotelPickup   || null,
-        playparkConsent: body.playparkConsent === "yes",
-        daycareDate:     body.daycareDate    || null,
-        daycareDropoff:  body.daycareDropoff || null,
-        daycarePickup:   body.daycarePickup  || null,
-        daycareOpenTime: body.daycareOpenTime === true,
-        studioDate: body.studioDate || null,
-        studioSlot: body.studioSlot || null,
-      });
-    } catch (emailErr) {
-      console.error("Email send failed (non-fatal):", emailErr);
     }
 
     return new Response(

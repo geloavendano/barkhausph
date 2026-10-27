@@ -1,0 +1,9 @@
+# The new booking experience used to live under /staging/ while it was a preview on the live site.
+# It is now the main flow, so old links are forwarded (308 keeps the method and tells search engines
+# the move is permanent).
+/staging/booking/*  /booking   308
+/staging/booking    /booking   308
+/staging/account/*  /account/  308
+/staging/account    /account/  308
+/staging/*          /:splat    308
+/staging            /          308

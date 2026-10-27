@@ -58,6 +58,7 @@
   }
 
   function openModal(modal) {
+    if (modal === entryModal && !isAccountPage) syncCreateChoice();
     modal.classList.add('open');
     modal.setAttribute('aria-hidden', 'false');
     document.body.style.overflow = 'hidden';
@@ -68,6 +69,18 @@
     modal.setAttribute('aria-hidden', 'true');
     document.body.style.overflow = '';
     if (modal === entryModal) resetEntryModal();
+  }
+
+  // A verified sign-in without a finished profile keeps every entry option (guest included);
+  // only the create choice changes so the customer can pick up where they left off.
+  function syncCreateChoice() {
+    var choice = entryModal && entryModal.querySelector('[data-create-account-choice]');
+    if (!choice) return;
+    var pending = !!(CustomerApi && CustomerApi.hasSession && CustomerApi.hasSession());
+    choice.querySelector('strong').textContent = pending ? 'Finish creating your account' : 'Create an account';
+    choice.querySelector('small').textContent = pending
+      ? 'Pick up where you left off with your owner and pet details'
+      : 'Save your owner, pet, and vaccine details for future visits';
   }
 
   function modalCard(modal) {
@@ -91,7 +104,7 @@
     localStorage.setItem(MODE_KEY, mode);
     sessionStorage.removeItem('barkhaus_staging_cart');
     sessionStorage.removeItem('barkhaus_staging_context');
-    window.location.href = '/staging/booking/';
+    window.location.href = '/booking';
   }
 
   function renderAccountNav() {
@@ -99,7 +112,7 @@
     var customer = readCustomer();
     if (!customer) {
       accountNav.innerHTML = CustomerApi && CustomerApi.hasSession && CustomerApi.hasSession()
-        ? '<a class="staging-account-pill" href="/staging/account/">Finish creating your account</a>'
+        ? '<a class="staging-account-pill" href="/account/">Finish creating your account</a>'
         : '<button type="button" class="staging-account-pill" data-open-entry>Sign in</button>';
       return;
     }
@@ -200,7 +213,7 @@
         '<option value="">Select…</option><option>Instagram</option><option>Facebook</option><option>TikTok</option><option>Friend or family referral</option><option>Walk-in / saw the branch</option><option>Google search</option><option>Other</option>' +
       '</select></label>' +
       '<div class="staging-form-error" id="entryFormError" hidden></div>' +
-      '<div class="staging-form-actions"><button class="staging-secondary" type="button" data-entry-back>Back</button><button class="staging-primary" type="button" data-owner-next>Continue to pet</button></div>';
+      '<div class="staging-form-actions"><button class="staging-secondary" type="button" data-setup-cancel>Back</button><button class="staging-primary" type="button" data-owner-next>Continue to pet</button></div>';
     document.getElementById('setupSource').value = owner.source || '';
   }
 
@@ -526,7 +539,7 @@
       var result = await api.savePet(pet);
       await api.uploadDocuments(result.petId, petDocumentsDraft);
       localStorage.setItem(MODE_KEY, 'account');
-      window.location.href = '/staging/?account=created';
+      window.location.href = '/?account=created';
     } catch (error) {
       showPetFormError(error.message || 'We could not create your account. Please try again.');
       if (button) { button.disabled = false; button.textContent = 'Create account'; }
@@ -658,7 +671,6 @@
     if (bookingLink) {
       event.preventDefault();
       if (readCustomer()) continueToBooking('account');
-      else if (CustomerApi && CustomerApi.hasSession && CustomerApi.hasSession()) window.location.href = '/staging/account/';
       else openModal(entryModal);
       return;
     }
@@ -708,8 +720,18 @@
         try {
           sendButton.disabled = true;
           sendButton.textContent = 'Sending code…';
-          await requireCustomerApi().sendEmailOtp(email);
-          showOtpForm(email);
+          var sent = await requireCustomerApi().sendEmailOtp(email);
+          // On staging there is no email: sendEmailOtp signs the tester in and returns the session,
+          // so skip the code screen and continue exactly as a verified code would.
+          if (sent && sent.session) {
+            if (sent.profile && (sent.profile.pets || []).length) {
+              localStorage.setItem(MODE_KEY, 'account');
+              window.location.href = '/?account=signed-in';
+            } else if (isAccountPage) beginSetupFromSession();
+            else window.location.href = '/account/';
+          } else {
+            showOtpForm(email);
+          }
         } catch (error) {
           sendButton.disabled = false;
           sendButton.textContent = 'Send one-time code';
@@ -743,9 +765,9 @@
           var verified = await requireCustomerApi().verifyEmailOtp(verify.getAttribute('data-email'), otp);
           if (verified.profile && (verified.profile.pets || []).length) {
             localStorage.setItem(MODE_KEY, 'account');
-            window.location.href = '/staging/?account=signed-in';
+            window.location.href = '/?account=signed-in';
           } else if (isAccountPage) beginSetupFromSession();
-          else window.location.href = '/staging/account/';
+          else window.location.href = '/account/';
         } catch (error) {
           verify.disabled = false;
           verify.textContent = 'Verify code';
@@ -763,6 +785,14 @@
     if (event.target.closest('[data-owner-back]')) showOwnerSetup();
     if (event.target.closest('[data-complete-account]')) finishAccount();
     if (event.target.closest('[data-entry-back]')) resetEntryModal();
+    var setupCancel = event.target.closest('[data-setup-cancel]');
+    if (setupCancel) {
+      // Leaving setup before "Create account" saves nothing, so drop the unfinished sign-in
+      // and return to the original choices, including continuing as a guest.
+      setupCancel.disabled = true;
+      try { await requireCustomerApi().signOut(); } catch (error) { console.warn('Could not clear the unfinished sign-in:', error); }
+      window.location.href = '/?entry=open';
+    }
 
     if (event.target.closest('[data-edit-owner]')) showOwnerEditor();
     if (event.target.closest('[data-save-owner]')) saveOwner();
@@ -853,7 +883,7 @@
       if (isAccountPage) {
         if (state.session && state.profile && (state.profile.pets || []).length) {
           localStorage.setItem(MODE_KEY, 'account');
-          window.location.replace('/staging/?account=signed-in');
+          window.location.replace('/?account=signed-in');
           return;
         }
         if (state.session) {
@@ -873,12 +903,15 @@
         if (state.profile) localStorage.setItem(MODE_KEY, 'account');
         renderAccountNav();
         var params = new URLSearchParams(window.location.search);
-        if (params.get('account') === 'created' && state.profile) {
+        if (params.get('entry') === 'open') {
+          window.history.replaceState({}, '', '/');
+          if (!state.profile) openModal(entryModal);
+        } else if (params.get('account') === 'created' && state.profile) {
           showLandingNotice('Account created. You’re signed in as ' + state.profile.firstName + '. Press Book Now whenever you’re ready.');
-          window.history.replaceState({}, '', '/staging/');
+          window.history.replaceState({}, '', '/');
         } else if (params.get('account') === 'signed-in' && state.profile) {
           showLandingNotice('Welcome back, ' + state.profile.firstName + '. You’re signed in.');
-          window.history.replaceState({}, '', '/staging/');
+          window.history.replaceState({}, '', '/');
         }
       }
     } catch (error) {

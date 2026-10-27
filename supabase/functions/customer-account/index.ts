@@ -31,6 +31,11 @@ function allowedOrigin(req: Request): string {
   const origin = req.headers.get("origin") || "";
   if (
     /^https:\/\/(?:www\.)?barkhaus\.ph$/i.test(origin)
+    // Cloudflare Pages: production build, branch previews and the staging site. These all use the
+    // STAGING database except barkhausph.pages.dev (see env.js), so this only widens where the
+    // browser may call from, never what it may reach.
+    || /^https:\/\/(?:[a-z0-9-]+\.)?barkhausph\.pages\.dev$/i.test(origin)
+    || /^https:\/\/staging\.barkhaus\.ph$/i.test(origin)
     || /^http:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?$/i.test(origin)
   ) return origin;
   return "https://barkhaus.ph";
