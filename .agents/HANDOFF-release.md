@@ -1,5 +1,8 @@
 # Handoff: Barkhaus release (Cloudflare DNS move + customer accounts + multi-service booking)
 
+**RELEASED 27 Oct 2026:** everything in this guide has been executed. Read the Outcome section at the
+top of `.agents/HANDOFF-release-return.md` for what's live and what's still open. The text below is history.
+
 **27 Oct return checkpoint:** read `.agents/HANDOFF-release-return.md` first. Gelo completed backup
 fallback, Auth/DNS prep and a production view RLS fix; two checkout bugs were fixed locally, with
 the backend fix deployed/tested on staging and frontend return/retry browser retest still pending.

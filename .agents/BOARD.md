@@ -5,19 +5,16 @@ teammates. Keep entries short and current.
 
 ## Active
 
-- 2026-10-27 - Codex handed release guidance back at Gelo's request. Read
-  `.agents/HANDOFF-release-return.md` before resuming. Next is push/rebuild and browser test of
-  cart return/retry/edit, then remaining prep gates. No DNS switch/production feature deploy/merge.
-- 2026-10-27 - HANDOFF: release (DNS move to Cloudflare + accounts/orders) is prepared but NOT
-  executed. Next agent: read `.agents/HANDOFF-release.md` first, then the runbook it points to.
-  Branch release/accounts-orders (worktree ../barkhaus-hosting), PR #77 (do not merge before Gate B).
+- 2026-10-27 - RELEASED: accounts + orders + cart are live on barkhaus.ph, served by Cloudflare
+  Pages (PRs #77, #78, #79). Open follow-ups (watch first multi-item orders, MAX_ORDER_ITEMS code
+  default, allowlist cleanup, docs) are listed in the Outcome section at the top of
+  `.agents/HANDOFF-release-return.md`. Nothing is claimed.
 
 ## Claimed Files
 
-- No active Codex claims. Session changes and outstanding verification are handed off in
-  `.agents/HANDOFF-release-return.md`; preserve them for the receiving agent.
+- None. The release worktree `../barkhaus-hosting` has no uncommitted work besides `supabase/.temp/`.
 
-## Release checkpoint
+## Release checkpoint (history: pre-release notes; see the Outcome in HANDOFF-release-return.md)
 
 - FRONTEND RETURN FIX READY, BROWSER RETEST PENDING: expired cart BH-782B7E did release both
   holds, but returned to a permanent checking screen. Cart checkout saved only order_result,
@@ -164,6 +161,11 @@ teammates. Keep entries short and current.
 
 ## Handoffs
 
+- 2026-10-27 - Claude Code: release executed with Gelo. PR #77 merged early, rolled forward (backend
+  deployed 19:13 PHT), Gate B passed on real booking BH-25691C (webhook-recorded), Pages custom domains
+  + www→apex redirect live, `MAX_ORDER_ITEMS=20`, cart ON (#79, real-money 2-item test skipped by
+  Gelo's choice), "A different pet" chip (#78). Details and open items: Outcome section of
+  `.agents/HANDOFF-release-return.md`.
 - 2026-10-26 - Claude Code: release-night prep (branch release/accounts-orders, nothing merged or
   deployed). Verified: production has none of the orders changes; site still on GitHub Pages;
   Cloudflare Pages serving; `pre-orders` = origin/main 1dd0569. Added `MULTI_SERVICE_ENABLED` (off;

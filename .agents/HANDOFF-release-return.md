@@ -1,5 +1,77 @@
 # Return handoff: release preparation, 27 Oct 2026
 
+## OUTCOME: RELEASED 27 Oct 2026 (Claude Code). Read this first; everything below is history.
+
+Accounts, orders (multi-service cart) and the Cloudflare hosting move are **live on production**.
+Do not re-run the runbook. Only the open items at the end of this section remain.
+
+**What happened, in order (times PHT):**
+
+- 04:51: dotPH nameservers switched to Cloudflare (`donald`/`harlee`); zone Active. Records kept grey
+  until Pages was attached. MX/mail A/TXT records unchanged and not proxied.
+- 19:09: **PR #77 was merged by mistake before runbook step B** (GitHub Pages deployed it at once, so
+  the new booking page ran against the old functions). Gelo chose to roll forward rather than revert:
+  - both migrations applied in the dashboard SQL Editor (`20260920130000_booking_orders.sql`, then
+    `20260920140000_payments_reference_unique_per_booking.sql`); psql to production still fails;
+  - `MAX_ORDER_ITEMS=1`; 6 functions deployed 19:13:39–19:13:52 in runbook order
+    (webhook + reconcile `--no-verify-jwt`; checkout last). Verified from outside: per-booking
+    payments index present, old unique rules gone, JWT gates as intended, simulate-payment and
+    staging-signin absent (404).
+  - An unpushed revert of the merge exists on local branch `hotfix/revert-pr77` (restores `pre-orders`
+    exactly). Not needed; delete when convenient.
+- 19:56: **Gate B/D passed with a real customer booking** `BH-25691C` (grooming, ₱850 + ₱20 fee):
+  order paid with 1 item, booking confirmed and paid, one payment row `recorded_by = maya_webhook`,
+  one correct confirmation email (checked by Gelo in Resend).
+- ~21:00: Pages custom domains attached (apex, then `www`); both Active. The apex returned **522 for
+  about 3 minutes** until 21:03:53 while Pages activated it. A Cloudflare Redirect Rule ("WWW to
+  root" template, 301, query string kept) sends `www` to `barkhaus.ph`. Verified: Pages serves
+  `main`; `/booking.html?payment=…&ref=…` → `/booking?…` (params kept); `AGENTS.md`, `CLAUDE.md`,
+  function source and `admin-src` return 404; `/admin/` has `x-robots-tag: noindex`; Let's Encrypt
+  cert for apex + `*.`, valid to 24 Jan 2027; `www` has its own cert.
+- `MAX_ORDER_ITEMS=20` (Gelo: no customer-visible limit; 20 is only an abuse ceiling).
+- **The cart is ON for everyone** (PR #79, `MULTI_SERVICE_ENABLED = true`). Gelo's call: the
+  real-money 2-item test (runbook step E) was **skipped**; 2-item orders were only proven on
+  staging with simulated payments.
+- PR #78 merged: signed-in customers get "＋ A different pet" next to saved pets. No new saving
+  code: `create-maya-checkout` files the booking under the account's email and finds-or-creates the
+  pet by name, so the new pet joins their saved pets (that was already production behaviour).
+- Also merged with #77: leaving account setup keeps "Continue as a guest" (`260ae9a`).
+
+**Kill switches:** `supabase secrets set MAX_ORDER_ITEMS=1 --project-ref dxttnbtfhpanyiyduevn`
+refuses multi-item checkouts immediately (no deploy; singles keep working). To hide the cart,
+set `MULTI_SERVICE_ENABLED = false` in `booking.js` and bump its `?v=` in `booking.html`.
+Rollback of everything: tag `pre-orders` (`1dd0569`) and the runbook's Rollback section.
+
+**Read-only production checks** (no psql): import `query()` from `scripts/export-production-data.py`
+(CLI login via Keychain, Management API). Print statuses/counts only, never customer rows.
+Monitor online bookings only: staff (`booking_source = 'admin'`) bookings never create orders and
+are usually marked paid without a payment row (695 of 712 in the last 60 days), which is normal.
+
+**Open items:**
+
+1. **Watch the first real multi-item orders** (none yet at handoff): order `paid` with
+   `item_count > 1`; every child booking confirmed + paid; one payment row per booking sharing one
+   Maya payment ID, `recorded_by = maya_webhook`; reconcile must not cancel them later; one combined
+   email. Also check that no `pending_bookings` created since 19:13 stay stuck.
+2. Make 20 the code default for `MAX_ORDER_ITEMS` in `create-maya-checkout` (today unset means 5),
+   then Gelo redeploys it (JWT verification ON).
+3. Remove `simulate-payment.html` (and `email-preview.html` if not wanted) from the
+   `scripts/build-site.sh` allowlist; the page is public on production, harmless (its function is 404).
+4. Confirmation email shows "Daily 10AM-10PM · Daily 10AM-10PM" when weekday and weekend hours match
+   (pre-existing; a task was spawned). Needs a webhook redeploy with `--no-verify-jwt`.
+5. Update the AGENTS.md "Deployment model" section (Cloudflare Pages is now live, GitHub Pages is not
+   serving) and add tonight's gotchas to `docs/technical-doc.html` §12: Pages domain activation
+   gives a few minutes of 522; the Redirect Rule dashboard warns that `www` isn't proxied (false:
+   the Pages-managed record is proxied, so deploy anyway and don't create a second record);
+   `?v=` must change with every `booking.js` behaviour change; two `var`s with one name in the
+   same block are one variable (a duplicate success-screen wrapper caused infinite recursion).
+6. In about two weeks: disable GitHub Pages and delete `CNAME`. Later: fix the malformed SPF record;
+   consider making the repo private; delete the old `vercel.json`/`.vercelignore` (ask Gelo).
+7. Staging leftovers from tonight's tests (staging DB only): accounts `setup-exit-test@example.com`
+   and `new-pet-test@example.com` (pets Bruno, Mochi), paid hotel order `BH-59F2F7`.
+
+---
+
 Gelo asked Codex to hand this release back to the other agent. Read this checkpoint before the
 original `.agents/HANDOFF-release.md` and the updated release-night runbook. Do not restart prep.
 Work in `/Users/gelo/Projects/barkhaus-hosting`, branch `release/accounts-orders`; leave the other
@@ -29,7 +101,7 @@ Read-only Supabase MCP diagnostics were authorized during this session.
   before the NS switch; they're imported as proxied, and Flexible SSL in front of GitHub Pages'
   enforced HTTPS loops. Check SSL/TLS mode.
 
-## Resume here
+## Resume here (HISTORY: superseded by the Outcome section above)
 
 **Do not change nameservers, deploy release functions to production, or merge PR #77 yet.**
 The last instruction to Gelo was:
