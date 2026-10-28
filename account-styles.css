@@ -32,6 +32,36 @@
   letter-spacing: .14em;
 }
 
+/* Notice strip from site-notice.js. It scrolls away with the page instead of covering it:
+   on the booking page it sits above the sticky header; on the landing page (data-overlay)
+   it lies over the top of the full-screen hero so the section snapping isn't shifted. */
+.site-notice {
+  position: relative;
+  z-index: 12000;
+  padding: 8px 16px;
+  background: var(--staging-yellow);
+  color: #17232c;
+  font: 700 12px/1.45 "Nunito", sans-serif;
+  text-align: center;
+}
+
+.site-notice a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.site-notice-branch {
+  white-space: nowrap;
+}
+
+.site-notice--overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+}
+
 .staging-account-nav {
   position: absolute;
   top: 56px;
