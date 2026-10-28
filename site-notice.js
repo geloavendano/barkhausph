@@ -15,8 +15,8 @@
   // Write dates with the Philippine offset, e.g. new Date('2026-12-26T00:00:00+08:00'),
   // so the cut-off is the same for every visitor whatever their device's timezone.
   function isNoticeShowing(now) {
-    // Shows until the end of Christmas Day; from 26 Dec (PHT) the strip is gone by itself.
-    return now < new Date('2026-12-26T00:00:00+08:00');
+    // Shows through New Year's Day; from 2 Jan (PHT) the strip is gone by itself.
+    return now < new Date('2027-01-02T00:00:00+08:00');
   }
 
   if (!isNoticeShowing(new Date())) return;
