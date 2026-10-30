@@ -221,6 +221,7 @@ async function requireOwnedPet(supabase: any, ownerId: string, petId: string): P
     .eq("id", petId)
     .eq("owner_id", ownerId)
     .is("customer_archived_at", null)
+    .not("customer_updated_at", "is", null)
     .maybeSingle();
   if (error) throw new Error(`Pet lookup failed: ${error.message}`);
   if (!data) throw new ApiError("Pet not found.", 404);
@@ -243,6 +244,8 @@ async function loadProfile(supabase: any, user: any): Promise<Record<string, unk
     .select("id,name,animal_type,gender,breed,birth_year,birth_month,birth_day,age_value,age_unit,size,medical_notes,temperament,feeding_instructions,medications,vet_clinic,vet_contact,vet_address,emergency_name,emergency_phone,membership_code,vaccine_valid_until,bring_vaccine_records")
     .eq("owner_id", account.owner_id)
     .is("customer_archived_at", null)
+    // Booking-created pets share this table; only an explicit customer save marks a profile.
+    .not("customer_updated_at", "is", null)
     .order("name", { ascending: true });
   if (petsError) throw new Error(`Pet profile lookup failed: ${petsError.message}`);
 
@@ -315,6 +318,7 @@ async function loadProfile(supabase: any, user: any): Promise<Record<string, unk
 
   return {
     authUserId: user.id,
+    petListScope: "customer_saved",
     provider: account.auth_provider || authProvider(user),
     firstName: owner.first_name || "",
     lastName: owner.last_name || "",

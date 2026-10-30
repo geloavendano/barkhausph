@@ -37,7 +37,10 @@
 
   function readCache() {
     try {
-      return JSON.parse(localStorage.getItem(CACHE_KEY) || localStorage.getItem(LEGACY_CACHE_KEY) || 'null');
+      var profile = JSON.parse(localStorage.getItem(CACHE_KEY) || localStorage.getItem(LEGACY_CACHE_KEY) || 'null');
+      // Old caches include booking-only pets. Keep owner details until the profile refresh completes.
+      if (profile && profile.petListScope !== 'customer_saved') profile.pets = [];
+      return profile;
     } catch (error) {
       return null;
     }
