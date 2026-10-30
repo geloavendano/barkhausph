@@ -29,10 +29,11 @@ teammates. Keep entries short and current.
   fixtures: visibility, separate same-name saved pets, ownership, active vaccine docs, legacy
   age-only profile, errors, cache transition), JS syntax, diff check. No live mutation or browser
   sign-in test performed. Read-only production count preview confirms intended row reduction.
-- HUMAN ACTION: deploy `supabase/functions/customer-account/index.ts` from THIS worktree with
-  `supabase functions deploy customer-account --project-ref dxttnbtfhpanyiyduevn` (JWT ON).
-  No DDL/migration or `NOTIFY pgrst` needed. Deploy function before publishing static changes.
-  After deploy + static publication, refresh signed-in account and enter booking: only saved
+- Gelo deployed `customer-account` to production on 30 Oct. Read-only verification confirms
+  version 7 ACTIVE, JWT ON, exact source match to this branch. No DDL/migration or `NOTIFY pgrst`
+  needed. Production count preview: Uno 9 -> 1, Levi 3 -> 1, Bartolome 2 -> 2 customer-saved rows.
+  PR #82 preview check passed; publishing its frontend follows this verified function deployment.
+  After static publication, refresh signed-in account and enter booking: only saved
   profile pets should appear, new/edit saved pet still works, archival removes it, guest booking
   remains available, historical/admin bookings unchanged. Customer-created duplicates stay visible.
 
