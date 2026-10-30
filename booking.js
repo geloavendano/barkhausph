@@ -55,7 +55,9 @@ function hostedPaymentEndpoint() {
   }
 
   function customer() {
-    return readJson(localStorage, CUSTOMER_KEY, null);
+    var profile = readJson(localStorage, CUSTOMER_KEY, null);
+    if (profile && profile.petListScope !== 'customer_saved') profile.pets = [];
+    return profile;
   }
 
   function cart() {
@@ -200,7 +202,7 @@ function hostedPaymentEndpoint() {
         (profile.pets || []).map(function(pet) {
           return '<button type="button" class="staging-pet-chip" data-staging-pet="' + escapeHtml(pet.id) + '">🐾 ' + escapeHtml(pet.name) + '<small>' + escapeHtml(pet.breed || pet.animal) + ' · ' + escapeHtml(PET_SIZE_LABELS[pet.size] || pet.size || '') + '</small></button>';
         }).join('') +
-        '<button type="button" class="staging-pet-chip staging-pet-chip--new" data-staging-new-pet>＋ A different pet<small>We’ll add them to your account after you book</small></button></div>';
+        '<button type="button" class="staging-pet-chip staging-pet-chip--new" data-staging-new-pet>＋ A different pet<small>Enter their details for this booking</small></button></div>';
     });
 
     var ownerPanel = document.getElementById('stagingSavedOwner');

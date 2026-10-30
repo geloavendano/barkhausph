@@ -12,7 +12,30 @@ teammates. Keep entries short and current.
 
 ## Claimed Files
 
-- None. The release worktree `../barkhaus-hosting` has no uncommitted work besides `supabase/.temp/`.
+- None.
+
+## Customer-saved pets handoff — 2026-10-30
+
+- Worktree `/Users/gelo/.codex/worktrees/customer-saved-pets/barkhaus`, branch
+  `codex/customer-saved-pets`, based on origin/main 9752543. Other checkouts left untouched.
+- `customer-account` now scopes profile reads and pet/document mutation ownership checks to
+  unarchived customer-saved pets (`customer_updated_at IS NOT NULL`). This existing marker is
+  set by customer save, including an explicit edit of an old row; only save/archive write it,
+  and production pets has no triggers. Booking-only duplicates excluded; no merging/deleting.
+- API adds `petListScope=customer_saved`; old account and booking caches keep contact details
+  but hide pet lists without this marker. Removed picker promise that guest booking adds a pet
+  to the account. HTML asset versions bumped for changed scripts.
+- Checks passed: customer-saved-pets regression (real API/cache functions against synthetic
+  fixtures: visibility, separate same-name saved pets, ownership, active vaccine docs, legacy
+  age-only profile, errors, cache transition), JS syntax, diff check. No live mutation or browser
+  sign-in test performed. Read-only production count preview confirms intended row reduction.
+- Gelo deployed `customer-account` to production on 30 Oct. Read-only verification confirms
+  version 7 ACTIVE, JWT ON, exact source match to this branch. No DDL/migration or `NOTIFY pgrst`
+  needed. Production count preview: Uno 9 -> 1, Levi 3 -> 1, Bartolome 2 -> 2 customer-saved rows.
+  PR #82 preview check passed; publishing its frontend follows this verified function deployment.
+  After static publication, refresh signed-in account and enter booking: only saved
+  profile pets should appear, new/edit saved pet still works, archival removes it, guest booking
+  remains available, historical/admin bookings unchanged. Customer-created duplicates stay visible.
 
 ## Release checkpoint (history: pre-release notes; see the Outcome in HANDOFF-release-return.md)
 
