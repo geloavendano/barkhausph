@@ -22,4 +22,13 @@ done
 # remove this line to stop publishing it.
 cp -R docs dist/
 
+# Pages meant for Google must never carry a noindex tag. The 27 Oct 2026 release copied the
+# staging pages (noindex) over the landing and booking pages and dropped them from search.
+for page in dist/index.html dist/booking.html dist/faq.html dist/blog/*.html; do
+  if grep -qi '<meta name="robots"[^>]*noindex' "$page"; then
+    echo "build-site: $page has a noindex tag but must stay in Google. Remove it." >&2
+    exit 1
+  fi
+done
+
 echo "build-site: published $(find dist -type f | wc -l | tr -d ' ') files to dist/"
