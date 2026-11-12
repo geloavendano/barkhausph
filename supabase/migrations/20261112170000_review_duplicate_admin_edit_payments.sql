@@ -3,8 +3,9 @@
 --
 -- What happened: when staff saved an edit with Payment status Paid/Partially paid and a payment method
 -- picked, AddBookingPanel inserted a 'balance' payment for the booking's FULL total, even when the
--- booking was already fully paid. Fixed going forward in admin-src (records only what is outstanding;
--- partial payments need an entered amount). Publish that admin build before acting on this.
+-- booking was already fully paid. Fixed going forward in admin-src: an edit now records only the part of
+-- the total not already recorded (nothing if fully paid). Screens, fields and the create path are
+-- unchanged. Publish that admin build before acting on this.
 --
 -- Read-only check on 12 Nov: 15 payments since June were inserted within seconds of an admin edit. All
 -- but these were legitimate first recordings. The suspect rows are all from 17 Jun 2026 (the day the

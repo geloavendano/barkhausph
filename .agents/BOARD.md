@@ -17,12 +17,14 @@ teammates. Keep entries short and current.
 ## Edit records only outstanding payment — 2026-11-12
 
 - Branch `fix/edit-payment-records-outstanding`, stacked on `fix/edit-keeps-convenience-fee` (#85).
-  Add/Edit booking no longer records the full total as a payment on every save: only the outstanding
-  amount (paid), or an entered amount (partially paid). Method fields hidden once fully paid.
+  Corrective only: an admin edit no longer re-records the full total as a payment when it is already
+  recorded; it records only the unrecorded part (full total if nothing is recorded, as before).
+  No change to screens, fields, wording or the create path (Gelo asked for no admin-facing changes).
 - Gelo: merge #85 first, then this; hard-refresh `/admin/`. Optional data review:
   `supabase/migrations/20261112170000_review_duplicate_admin_edit_payments.sql` (3 duplicate ₱8,000 rows
   from 17 Jun; confirm they were test edits before step 2). No deploy, no DDL/NOTIFY.
-- Not done: no in-browser test (admin sign-in needed on staging).
+- Not done: no in-browser test (admin sign-in needed on staging). Known, left as is on purpose:
+  "Partially paid" + method still records the whole unrecorded balance (unchanged behaviour).
 
 ## Edit keeps convenience fee — 2026-11-12
 

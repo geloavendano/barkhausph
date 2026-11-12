@@ -10,7 +10,7 @@ import {
   sbPatchAudit,
   sbPostAudit,
 } from '../../lib/adminAudit'
-import { netPaid, paymentToRecord } from '../../lib/payments'
+import { unrecordedBalance } from '../../lib/payments'
 import { parsePricing, parseRateCalendar, emptyPricing, calcBase, calcLate, calcTotal, keptConvenienceFee, calcNights, calcHotelBreakdown, calcDaycare, hotelSizeKey, isHotelAdditionalNight } from '../../lib/pricing'
 import { groomDurationMins } from '../../lib/grooming'
 import { availableGroomingSlots, availableHotelRooms, availableStudioSlots, buildGroomingSlots, hotelStayDates } from '../../lib/availability'
@@ -101,7 +101,7 @@ function mkBk(branchId) {
     // owner
     ofirst:'', olast:'', oemail:'', ophone:'', osource:'', owner_id:null,
     // booking
-    status:'confirmed', paysts:'unpaid', paymethod:'', payref:'', payamt:'',
+    status:'confirmed', paysts:'unpaid', paymethod:'', payref:'',
     memcode:'', memvalid:false, memtype:'standard',
     wgen:true, whouse:true, wgroompolicy:true, whotelpolicy:true,
     wvacc:true, wmedia:true, anotes:'',
@@ -247,15 +247,14 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
   const auditName = adminDisplayName(currentAdmin)
   // Edit only: this booking's preserved convenience-fee charge rows. null = still loading (save is
   // blocked so a slow fetch can never write a total without the fee).
-  // Edit only: the payments already recorded, so a payment-status change records only what is outstanding.
   // Keyed by booking id so a result for a previously opened booking is never used.
-  const [editLoad, setEditLoad] = useState({ id: null, feeRows: null, payRows: null, err: '' })
-  const editLoadCurrent = editLoad.id != null && editLoad.id === editBooking?.id
-  const editFeeCharges = editLoadCurrent ? editLoad.feeRows : null
-  const editPayments   = editLoadCurrent ? editLoad.payRows : null
-  const editLoadErr    = editLoadCurrent ? editLoad.err     : ''
-  const keptFee     = isEdit ? keptConvenienceFee(editFeeCharges ?? []) : 0
-  const alreadyPaid = isEdit ? netPaid(editPayments ?? []) : 0
+  // Also loads the payments already recorded, so an edit never records the same money twice.
+  const [feeLoad, setFeeLoad] = useState({ id: null, rows: null, payRows: null, err: '' })
+  const feeLoadCurrent = feeLoad.id != null && feeLoad.id === editBooking?.id
+  const editFeeCharges = feeLoadCurrent ? feeLoad.rows    : null
+  const editPayments   = feeLoadCurrent ? feeLoad.payRows : null
+  const editFeeErr     = feeLoadCurrent ? feeLoad.err     : ''
+  const keptFee = isEdit ? keptConvenienceFee(editFeeCharges ?? []) : 0
 
   // Load pricing once
   useEffect(() => {
@@ -276,8 +275,7 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
     setBk(mkBk(branch?.id))
   }, [editBooking, branch?.id])
 
-  // Edit: load the convenience-fee row the edit keeps (online bookings; the order's first booking only)
-  // and the payments already recorded.
+  // Edit: load the convenience-fee row the edit keeps (online bookings; the order's first booking only).
   useEffect(() => {
     const id = editBooking?.id
     if (!id) return
@@ -286,8 +284,8 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
       sbGet('booking_charges', `booking_id=eq.${id}&type=eq.convenience_fee&select=type,amount`),
       sbGet('payments', `booking_id=eq.${id}&select=type,amount`),
     ])
-      .then(([feeRows, payRows]) => { if (active) setEditLoad({ id, feeRows: feeRows ?? [], payRows: payRows ?? [], err: '' }) })
-      .catch(e => { if (active) setEditLoad({ id, feeRows: null, payRows: null, err: `Could not load this booking's charges and payments: ${e.message}` }) })
+      .then(([rows, payRows]) => { if (active) setFeeLoad({ id, rows: rows ?? [], payRows: payRows ?? [], err: '' }) })
+      .catch(e => { if (active) setFeeLoad({ id, rows: null, payRows: null, err: `Could not load this booking's charges: ${e.message}` }) })
     return () => { active = false }
   }, [editBooking?.id])
 
@@ -710,15 +708,13 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
         const b = editBooking
         const pet = Array.isArray(b.pets) ? b.pets[0] : b.pets ?? {}
         const own = Array.isArray(b.owners) ? b.owners[0] : b.owners ?? {}
-        if (editLoadErr) throw new Error(editLoadErr)
+        if (editFeeErr) throw new Error(editFeeErr)
         if (editFeeCharges === null || editPayments === null) throw new Error("Still loading this booking's charges. Try again in a moment.")
         // The convenience_fee charge row survives the edit (see below), so the total keeps it too.
         // calcTotal() is service pricing only and never includes it.
         const editedTotal = total + keptFee
-        const payment = payMethodDb
-          ? paymentToRecord({ paymentStatus: bk.paysts, total: editedTotal, alreadyPaid, enteredAmount: bk.payamt })
-          : { amount: 0, error: '' }
-        if (payment.error) throw new Error(payment.error)
+        // Only what is not already recorded (it used to re-record the full total on every save).
+        const balanceToRecord = unrecordedBalance(editedTotal, editPayments)
         // booking_date is the creation date — left untouched here. The service
         // date is edited on the service detail table below.
         await sbPatch('bookings', `id=eq.${b.id}`, {
@@ -790,8 +786,8 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
         })).filter(r => r.vaccine_name)
         if (vaccRows.length) await sbPost('pet_vaccines', vaccRows)
 
-        if (payment.amount > 0) {
-          await sbPostAudit('payments', { booking_id: b.id, amount: payment.amount, type: 'balance',
+        if (bk.paysts !== 'unpaid' && payMethodDb && balanceToRecord > 0) {
+          await sbPostAudit('payments', { booking_id: b.id, amount: balanceToRecord, type: 'balance',
             method: payMethodDb, reference_number: bk.payref||null, ...paymentAudit(currentAdmin) })
         }
         await sbPostAudit('booking_edits', {
@@ -805,12 +801,6 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
 
       } else {
         // ── CREATE: edge function ──
-        // Validate the payment before the booking exists, so a bad partial amount never leaves a booking
-        // created without its payment.
-        const newPayment = payMethodDb
-          ? paymentToRecord({ paymentStatus: bk.paysts, total, enteredAmount: bk.payamt })
-          : { amount: 0, error: '' }
-        if (newPayment.error) throw new Error(newPayment.error)
         const location = (() => {
           const n = (branch?.name ?? '').toLowerCase()
           if (n.includes('eastwood')) return 'eastwood'
@@ -876,8 +866,8 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
             status: bk.status, payment_status: bk.paysts, booking_source: bk.mode||'admin',
             ...bookingCreatedAudit(currentAdmin),
           })
-          if (newPayment.amount > 0) {
-            await sbPostAudit('payments', { booking_id: data.booking_id, amount: newPayment.amount, type: 'downpayment',
+          if (bk.paysts !== 'unpaid' && payMethodDb) {
+            await sbPostAudit('payments', { booking_id: data.booking_id, amount: total, type: 'downpayment',
               method: payMethodDb, reference_number: bk.payref||null, ...paymentAudit(currentAdmin) })
           }
           try {
@@ -1354,7 +1344,6 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
     const gsvc = GROOM_SVCS.find(x => x.k === bk.gsvc)
     const hasFaceTrimIncluded = bk.svc==='grooming' && bk.gsvc==='premium' && bk.addons['face_trim']
     const hasAssess = bk.svc==='grooming' && Object.keys(bk.addons).some(k => pricing.addons.find(a => a.key===k && a.assessment))
-    const outstanding = Math.max(0, total + keptFee - alreadyPaid)
 
     return (
       <>
@@ -1459,19 +1448,8 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
             <option value="paid">Paid</option>
           </select>
         </FG>
-        {isEdit && bk.paysts !== 'unpaid' && outstanding <= 0 && (
-          <p className={styles.svcLockNote}>
-            Fully paid: {fmt(alreadyPaid)} already recorded. Use Record payment in the booking drawer for extra charges.
-          </p>
-        )}
-        {bk.paysts !== 'unpaid' && outstanding > 0 && (
+        {bk.paysts !== 'unpaid' && (
           <div className={styles.twoCol}>
-            {bk.paysts === 'partially_paid' && (
-              <FG label="Amount received (PHP)">
-                <input className={styles.inp} type="number" min="1" placeholder={`Less than ${fmt(outstanding)}`}
-                  value={bk.payamt} onChange={e => upd('payamt', e.target.value)} />
-              </FG>
-            )}
             <FG label="Payment method">
               <select className={styles.sel} value={bk.paymethod} onChange={e => upd('paymethod', e.target.value)}>
                 <option value="">Select…</option>
