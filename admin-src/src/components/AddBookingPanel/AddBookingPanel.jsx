@@ -10,6 +10,7 @@ import {
   sbPatchAudit,
   sbPostAudit,
 } from '../../lib/adminAudit'
+import { unrecordedBalance } from '../../lib/payments'
 import { parsePricing, parseRateCalendar, emptyPricing, calcBase, calcLate, calcTotal, keptConvenienceFee, calcNights, calcHotelBreakdown, calcDaycare, hotelSizeKey, isHotelAdditionalNight } from '../../lib/pricing'
 import { groomDurationMins } from '../../lib/grooming'
 import { availableGroomingSlots, availableHotelRooms, availableStudioSlots, buildGroomingSlots, hotelStayDates } from '../../lib/availability'
@@ -247,10 +248,12 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
   // Edit only: this booking's preserved convenience-fee charge rows. null = still loading (save is
   // blocked so a slow fetch can never write a total without the fee).
   // Keyed by booking id so a result for a previously opened booking is never used.
-  const [feeLoad, setFeeLoad] = useState({ id: null, rows: null, err: '' })
+  // Also loads the payments already recorded, so an edit never records the same money twice.
+  const [feeLoad, setFeeLoad] = useState({ id: null, rows: null, payRows: null, err: '' })
   const feeLoadCurrent = feeLoad.id != null && feeLoad.id === editBooking?.id
-  const editFeeCharges = feeLoadCurrent ? feeLoad.rows : null
-  const editFeeErr     = feeLoadCurrent ? feeLoad.err  : ''
+  const editFeeCharges = feeLoadCurrent ? feeLoad.rows    : null
+  const editPayments   = feeLoadCurrent ? feeLoad.payRows : null
+  const editFeeErr     = feeLoadCurrent ? feeLoad.err     : ''
   const keptFee = isEdit ? keptConvenienceFee(editFeeCharges ?? []) : 0
 
   // Load pricing once
@@ -277,9 +280,12 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
     const id = editBooking?.id
     if (!id) return
     let active = true
-    sbGet('booking_charges', `booking_id=eq.${id}&type=eq.convenience_fee&select=type,amount`)
-      .then(rows => { if (active) setFeeLoad({ id, rows: rows ?? [], err: '' }) })
-      .catch(e => { if (active) setFeeLoad({ id, rows: null, err: `Could not load this booking's convenience fee: ${e.message}` }) })
+    Promise.all([
+      sbGet('booking_charges', `booking_id=eq.${id}&type=eq.convenience_fee&select=type,amount`),
+      sbGet('payments', `booking_id=eq.${id}&select=type,amount`),
+    ])
+      .then(([rows, payRows]) => { if (active) setFeeLoad({ id, rows: rows ?? [], payRows: payRows ?? [], err: '' }) })
+      .catch(e => { if (active) setFeeLoad({ id, rows: null, payRows: null, err: `Could not load this booking's charges: ${e.message}` }) })
     return () => { active = false }
   }, [editBooking?.id])
 
@@ -703,10 +709,12 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
         const pet = Array.isArray(b.pets) ? b.pets[0] : b.pets ?? {}
         const own = Array.isArray(b.owners) ? b.owners[0] : b.owners ?? {}
         if (editFeeErr) throw new Error(editFeeErr)
-        if (editFeeCharges === null) throw new Error("Still loading this booking's charges. Try again in a moment.")
+        if (editFeeCharges === null || editPayments === null) throw new Error("Still loading this booking's charges. Try again in a moment.")
         // The convenience_fee charge row survives the edit (see below), so the total keeps it too.
         // calcTotal() is service pricing only and never includes it.
         const editedTotal = total + keptFee
+        // Only what is not already recorded (it used to re-record the full total on every save).
+        const balanceToRecord = unrecordedBalance(editedTotal, editPayments)
         // booking_date is the creation date — left untouched here. The service
         // date is edited on the service detail table below.
         await sbPatch('bookings', `id=eq.${b.id}`, {
@@ -778,8 +786,8 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
         })).filter(r => r.vaccine_name)
         if (vaccRows.length) await sbPost('pet_vaccines', vaccRows)
 
-        if (bk.paysts !== 'unpaid' && payMethodDb) {
-          await sbPostAudit('payments', { booking_id: b.id, amount: editedTotal, type: 'balance',
+        if (bk.paysts !== 'unpaid' && payMethodDb && balanceToRecord > 0) {
+          await sbPostAudit('payments', { booking_id: b.id, amount: balanceToRecord, type: 'balance',
             method: payMethodDb, reference_number: bk.payref||null, ...paymentAudit(currentAdmin) })
         }
         await sbPostAudit('booking_edits', {
