@@ -402,9 +402,11 @@ async function createHold(
   }
 
   // ── 5. Store this item's payload in pending_bookings (the webhook builds child records from it) ──
+  // The webhook itemises booking_charges from these amounts, so store the server's, not the browser's:
+  // the browser puts the convenience fee on every cart item, but only the first item carries it.
   const { error: pendingErr } = await supabase.from("pending_bookings").insert({
     ref_number: refNumber,
-    payload:    body,
+    payload:    { ...body, subtotal, discountAmount, convenienceFee, total },
     amount:     total,
     expires_at: ctx.expiresAt,
     payment_provider: "maya",
