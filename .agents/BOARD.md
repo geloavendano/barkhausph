@@ -14,6 +14,17 @@ teammates. Keep entries short and current.
 
 - None.
 
+## Edit keeps convenience fee — 2026-11-12
+
+- Branch `fix/edit-keeps-convenience-fee`. Admin "Edit booking" saved `bookings.total` without the online
+  ₱20 fee while keeping its `convenience_fee` charge row: 770 bookings (86 paid orders + 684 pre-order).
+  Admin edit now adds the kept fee row back (`keptConvenienceFee`), and save waits for that row to load.
+- Gelo, in order: merge so the admin build ships → hard-refresh `/admin/` → run
+  `supabase/migrations/20261112150000_restore_convenience_fee_in_edited_booking_totals.sql`
+  (preview 1a/1b, then step 2 inside BEGIN, check 3, COMMIT). No edge-function deploy, no DDL/NOTIFY.
+- Not done: no in-browser test of the edit panel (needs admin sign-in on staging). Possible separate
+  issue: edit records a full-total `balance` payment when a pay method is picked.
+
 ## Customer-saved pets handoff — 2026-10-30
 
 - Worktree `/Users/gelo/.codex/worktrees/customer-saved-pets/barkhaus`, branch
