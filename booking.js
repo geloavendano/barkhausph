@@ -2655,11 +2655,6 @@ function onHotelRoomChange() {
   calcHotelTotal();
 }
 
-function onHotelMedsChange() {
-  var val = document.getElementById('hotelMeds').value.trim();
-  document.getElementById('hotelMedsNote').style.display = val ? 'block' : 'none';
-}
-
 // ── SECOND CAT ──
 function toggleSecondCat() {
   secondCatVisible = !secondCatVisible;
