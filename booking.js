@@ -256,7 +256,6 @@ function hostedPaymentEndpoint() {
     }
     setProfileValue('hotelFeeding', pet.feeding);
     setProfileValue('hotelMeds', pet.medications);
-    onHotelMedsChange();
     setProfileValue('vetClinic', pet.vetClinic);
     setProfileValue('vetContact', pet.vetContact);
     setProfileValue('vetAddress', pet.vetAddress);
@@ -343,7 +342,6 @@ function hostedPaymentEndpoint() {
     });
     booking.petName = ''; booking.petBreed = ''; booking.petAge = ''; booking.petMedical = '';
     booking.hotelFeeding = ''; booking.hotelMeds = '';
-    onHotelMedsChange();
     booking.vetClinic = ''; booking.vetContact = ''; booking.vetAddress = '';
     booking.emergencyName = ''; booking.emergencyPhone = '';
     booking.vaccines = {};
@@ -2657,15 +2655,6 @@ function onHotelRoomChange() {
   calcHotelTotal();
 }
 
-// Shows the special-care fee note whenever Medications / special care is not blank. Runs on every
-// keystroke and after the field is filled or cleared in code (saved pet, restored booking).
-function onHotelMedsChange() {
-  var field = document.getElementById('hotelMeds');
-  var note = document.getElementById('hotelMedsNote');
-  if (!field || !note) return;
-  note.style.display = field.value.trim() ? 'block' : 'none';
-}
-
 // ── SECOND CAT ──
 function toggleSecondCat() {
   secondCatVisible = !secondCatVisible;
@@ -4061,7 +4050,6 @@ function populateDOMFromBooking(bk) {
   // Hotel care notes
   setVal('hotelFeeding',    bk.hotelFeeding);
   setVal('hotelMeds',       bk.hotelMeds);
-  onHotelMedsChange();
   setVal('vetClinic',       bk.vetClinic);
   setVal('vetContact',      bk.vetContact);
   setVal('vetAddress',      bk.vetAddress);
