@@ -218,3 +218,21 @@ export function calcTotal(bk, p) {
   const disc = bk.memvalid ? Math.round(discountable * rate) : 0
   return { base, disc, late, subtotal, total: subtotal - disc }
 }
+
+/**
+ * The online convenience fee is not a per-service price, so calcTotal() leaves it out (the customer
+ * site's pricing.js has no per-item fee either; booking.js adds one fee per order at checkout). The
+ * fee is recorded as a booking_charges row of type 'convenience_fee' on the order's FIRST booking
+ * only, and admin edits preserve that row. An edit must therefore add it back to bookings.total, or
+ * the total drops below what the customer paid (incident 12 Nov 2026).
+ *
+ * @param {Array<{type: string, amount: number|string|null}>} charges this booking's charge rows
+ * @returns {number} fee (PHP) that bookings.total must keep on top of calcTotal().total
+ */
+export function keptConvenienceFee(charges) {
+  // One fee per booking is the business rule, so a stray duplicate row must not double it: keep the
+  // largest fee row rather than summing.
+  return (charges ?? [])
+    .filter(c => c?.type === 'convenience_fee')
+    .reduce((max, c) => Math.max(max, Number(c.amount) || 0), 0)
+}

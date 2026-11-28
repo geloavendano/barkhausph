@@ -10,7 +10,7 @@ import {
   sbPatchAudit,
   sbPostAudit,
 } from '../../lib/adminAudit'
-import { parsePricing, parseRateCalendar, emptyPricing, calcBase, calcLate, calcTotal, calcNights, calcHotelBreakdown, calcDaycare, hotelSizeKey, isHotelAdditionalNight } from '../../lib/pricing'
+import { parsePricing, parseRateCalendar, emptyPricing, calcBase, calcLate, calcTotal, keptConvenienceFee, calcNights, calcHotelBreakdown, calcDaycare, hotelSizeKey, isHotelAdditionalNight } from '../../lib/pricing'
 import { groomDurationMins } from '../../lib/grooming'
 import { availableGroomingSlots, availableHotelRooms, availableStudioSlots, buildGroomingSlots, hotelStayDates } from '../../lib/availability'
 import styles from './AddBookingPanel.module.css'
@@ -244,6 +244,14 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
   const [err,    setErr]    = useState('')
   const isEdit = !!editBooking
   const auditName = adminDisplayName(currentAdmin)
+  // Edit only: this booking's preserved convenience-fee charge rows. null = still loading (save is
+  // blocked so a slow fetch can never write a total without the fee).
+  // Keyed by booking id so a result for a previously opened booking is never used.
+  const [feeLoad, setFeeLoad] = useState({ id: null, rows: null, err: '' })
+  const feeLoadCurrent = feeLoad.id != null && feeLoad.id === editBooking?.id
+  const editFeeCharges = feeLoadCurrent ? feeLoad.rows : null
+  const editFeeErr     = feeLoadCurrent ? feeLoad.err  : ''
+  const keptFee = isEdit ? keptConvenienceFee(editFeeCharges ?? []) : 0
 
   // Load pricing once
   useEffect(() => {
@@ -263,6 +271,17 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
     setStep(0)
     setBk(mkBk(branch?.id))
   }, [editBooking, branch?.id])
+
+  // Edit: load the convenience-fee row the edit keeps (online bookings; the order's first booking only).
+  useEffect(() => {
+    const id = editBooking?.id
+    if (!id) return
+    let active = true
+    sbGet('booking_charges', `booking_id=eq.${id}&type=eq.convenience_fee&select=type,amount`)
+      .then(rows => { if (active) setFeeLoad({ id, rows: rows ?? [], err: '' }) })
+      .catch(e => { if (active) setFeeLoad({ id, rows: null, err: `Could not load this booking's convenience fee: ${e.message}` }) })
+    return () => { active = false }
+  }, [editBooking?.id])
 
   // Pre-populate for edit
   useEffect(() => {
@@ -683,11 +702,16 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
         const b = editBooking
         const pet = Array.isArray(b.pets) ? b.pets[0] : b.pets ?? {}
         const own = Array.isArray(b.owners) ? b.owners[0] : b.owners ?? {}
+        if (editFeeErr) throw new Error(editFeeErr)
+        if (editFeeCharges === null) throw new Error("Still loading this booking's charges. Try again in a moment.")
+        // The convenience_fee charge row survives the edit (see below), so the total keeps it too.
+        // calcTotal() is service pricing only and never includes it.
+        const editedTotal = total + keptFee
         // booking_date is the creation date — left untouched here. The service
         // date is edited on the service detail table below.
         await sbPatch('bookings', `id=eq.${b.id}`, {
           status: bk.status, payment_status: bk.paysts,
-          subtotal: subtotal, discount_amount: disc, total,
+          subtotal: subtotal, discount_amount: disc, total: editedTotal,
         })
         // Refresh booking_charges — preserve convenience_fee (online bookings), replace the rest.
         // Wrapped in try/catch: booking_charges requires an INSERT RLS policy for admin users.
@@ -755,7 +779,7 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
         if (vaccRows.length) await sbPost('pet_vaccines', vaccRows)
 
         if (bk.paysts !== 'unpaid' && payMethodDb) {
-          await sbPostAudit('payments', { booking_id: b.id, amount: total, type: 'balance',
+          await sbPostAudit('payments', { booking_id: b.id, amount: editedTotal, type: 'balance',
             method: payMethodDb, reference_number: bk.payref||null, ...paymentAudit(currentAdmin) })
         }
         await sbPostAudit('booking_edits', {
@@ -1391,9 +1415,10 @@ export default function AddBookingPanel({ branch, rooms, groomers, studios = [],
         {memMsg && <p className={`${styles.memMsg} ${bk.memvalid ? styles.memOk : ''}`}>{memMsg}</p>}
 
         {disc > 0 && <SRow k="Member discount" v={`-${fmt(disc)}`} disc />}
+        {keptFee > 0 && <SRow k="Convenience fee" v={fmt(keptFee)} />}
         <div className={styles.totalRow}>
           <span>Total</span>
-          <span>{fmt(total)}{hasAssess ? ' + assessment' : bk.svc === 'studio' ? ' (TBD)' : ''}</span>
+          <span>{fmt(total + keptFee)}{hasAssess ? ' + assessment' : bk.svc === 'studio' ? ' (TBD)' : ''}</span>
         </div>
 
         <SectionHead>Status &amp; payment</SectionHead>

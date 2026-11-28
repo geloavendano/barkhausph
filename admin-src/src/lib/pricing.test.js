@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { calcLate, calcTotal, emptyPricing, isHotelAdditionalNight, parsePricing, parseRateCalendar } from './pricing.js'
+import { calcLate, calcTotal, emptyPricing, keptConvenienceFee, isHotelAdditionalNight, parsePricing, parseRateCalendar } from './pricing.js'
 
 function hotelBooking(overrides = {}) {
   return {
@@ -161,4 +161,24 @@ test('renewal members fall back to standard rates without a service override', (
   }
 
   assert.equal(calcTotal(booking, renewalPricing).disc, 60)
+})
+
+test('edit keeps the online convenience fee carried by the booking', () => {
+  assert.equal(keptConvenienceFee([{ type: 'convenience_fee', amount: 20 }]), 20)
+})
+
+test('edit adds no fee to admin bookings or later bookings in an order (no fee row)', () => {
+  assert.equal(keptConvenienceFee([]), 0)
+})
+
+test('only convenience_fee rows count toward the kept fee', () => {
+  assert.equal(keptConvenienceFee([
+    { type: 'base_service', amount: 650 },
+    { type: 'member_discount', amount: 65 },
+  ]), 0)
+})
+
+test('kept fee tolerates PostgREST numeric strings and null amounts', () => {
+  assert.equal(keptConvenienceFee([{ type: 'convenience_fee', amount: '20' }]), 20)
+  assert.equal(keptConvenienceFee([{ type: 'convenience_fee', amount: null }]), 0)
 })
